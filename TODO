@@ -1,0 +1,19 @@
+nf90_nowrite in input when opening a file
+halo in domain
+
+In the case where a coordinate variable cannot be fitted with any kind of relevant dimensional data, or if the model does not want to give such information, it is possible to assign a default value to the standard_name attribute, which is specific to the COMODO file format:
+
+[xyz]_grid_index with x, y, z according the value of the axis attribute ;
+[xyz]_grid_index_at_[uvfw]_location to specify the position of variable on the grid (see Grid placement).
+In this case, the value of the coordinate variable elements should correspond to the coordinate of the data along the given axis, with the convention that the first tracer (cell-centered) point is located at (1,1).
+
+!dx and dy calculation - based on c1 and c2
+
+!milliseconds in timeloop
+!time_step and info_frequency a module variable
+
+!temperature breaks netcdf storing
+
+http://www.teos-10.org/pubs/gsw/html/gsw_grav.html
+
+depth_update() alpha
