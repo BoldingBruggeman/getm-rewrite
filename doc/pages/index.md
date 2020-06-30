@@ -1,5 +1,5 @@
-title: GETM Documentation
-Author: Karsten Bolding
+title: Documentation
+Author: Hans Burchard and Karsten Bolding
 
 FLOM is an initiative to provide a framework containing software components
 needed by all models of lakes and oceans - but typically independent of the 

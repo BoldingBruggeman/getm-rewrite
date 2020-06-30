@@ -13,6 +13,7 @@
    !! use mask or not
    !! check dry calculation
    !! calculate depth in X-points - used in e.g. diffusion eq.
+   !! shall z and zo be part of domain - likely yes
    !! @endnote
 
 SUBMODULE (getm_domain) depth_update_smod
@@ -42,52 +43,58 @@ module SUBROUTINE depth_update(self,z,zo)
 #define USE_MASK
 
 !  T-points
-   do j=self%T%l(2),self%T%u(2)
-      do i=self%T%l(1),self%T%u(1)
+#define TG self%T
+   do j=TG%l(2),TG%u(2)
+      do i=TG%l(1),TG%u(1)
 #ifdef USE_MASK
-      if (self%T%mask(i,j) > 0) then
+      if (TG%mask(i,j) > 0) then
 #endif
-         self%T%D(i,j) = z(i,j)+self%T%H(i,j)
+         TG%D(i,j) = z(i,j)+TG%H(i,j)
 !         dry_z(i,j)=max(0._real64,min(1._real64,(self%T%D(i,j)-_HALF_*d1)*d2i))
 #ifdef USE_MASK
       end if
 #endif
       end do
    end do
+#undef TG
 
 !  U-points
-   do j=self%U%l(2),self%U%u(2)
-      do i=self%U%l(1),self%U%u(1)-1
+#define UG self%U
+   do j=UG%l(2),UG%u(2)
+      do i=UG%l(1),UG%u(1)-1
 #ifdef USE_MASK
-      if (self%U%mask(i,j) > 0) then
+      if (UG%mask(i,j) > 0) then
 #endif
-         x=max(0.25_real64*(zo(i,j)+zo(i+1,j)+z(i,j)+z(i+1,j)),-self%U%H(i,j)+min_depth)
-         self%U%D(i,j) = x+self%U%H(i,j)
+         x=max(0.25_real64*(zo(i,j)+zo(i+1,j)+z(i,j)+z(i+1,j)),-UG%H(i,j)+self%Dmin)
+         UG%D(i,j) = x+UG%H(i,j)
 !         dry_u(i,j) = max(0._real64,min(1._real64,(self%U%DU(i,j)-d1)*d2i))
 #ifdef USE_MASK
       end if
 #endif
       end do
    end do
+#undef UG
 
 !  V-points
-   do j=self%V%l(2),self%V%u(2)-1
-      do i=self%V%l(1),self%V%u(1)
+#define VG self%V
+   do j=VG%l(2),VG%u(2)-1
+      do i=VG%l(1),VG%u(1)
 #ifdef USE_MASK
-      if (self%V%mask(i,j) > 0) then
+      if (VG%mask(i,j) > 0) then
 #endif
-         x=max(0.25_real64*(zo(i,j)+zo(i,j+1)+z(i,j)+z(i,j+1)),-self%V%H(i,j)+min_depth)
-         self%V%D(i,j) = x+self%V%H(i,j)
+         x=max(0.25_real64*(zo(i,j)+zo(i,j+1)+z(i,j)+z(i,j+1)),-VG%H(i,j)+self%Dmin)
+         VG%D(i,j) = x+VG%H(i,j)
 !         dry_v(i,j) = max(0._real64,min(1._real64,(self%V%DV(i,j)-d1)*d2i))
 #ifdef USE_MASK
       end if
 #endif
       end do
    end do
+#undef VG
 
 #if 0
-   d1  = 2*min_depth
-   d2i = _ONE_/(crit_depth-2*min_depth)
+   d1  = 2*Dmin
+   d2i = _ONE_/(Dcrit-2*Dmin)
    do j=jmin-HALO,jmax+HALO
       do i=imin-HALO,imax+HALO
          if (az(i,j) .gt. 0) then

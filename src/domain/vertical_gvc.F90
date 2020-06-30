@@ -66,9 +66,9 @@ module SUBROUTINE init_gvc(self)
    end if
    do j=self%T%l(2),self%T%u(2)
       do i=self%T%l(1),self%T%u(1)
-         HH=max(self%T%sseo(i,j)+self%T%H(i,j),self%min_depth)
+         HH=max(self%T%sseo(i,j)+self%T%H(i,j),self%Dmin)
          alpha=min(&
-                  ((be(kk)-be(kk-1))-self%D_gamma/HH &
+                  ((be(kk)-be(kk-1))-self%Dgamma/HH &
                    *(sig(kk)-sig(kk-1))) &
                    /((be(kk)-be(kk-1))-(sig(kk)-sig(kk-1))),1._real64)
          gga(i,j,0)=-1._real64
@@ -76,7 +76,7 @@ module SUBROUTINE init_gvc(self)
             gga(i,j,k)=alpha*sig(k)+(1.-alpha)*be(k)
 !            if (gga(i,j,k) .lt. gga(i,j,k-1)) then
 !               STDERR kk,(be(kk)-be(kk-1)),(sig(kk)-sig(kk-1))
-!               STDERR D_gamma,HH
+!               STDERR Dgamma,HH
 !               STDERR alpha
 !               STDERR k-1,gga(i,j,k-1),be(k-1),sig(k-1)
 !               STDERR k,gga(i,j,k),be(k),sig(k)
@@ -93,43 +93,49 @@ module SUBROUTINE init_gvc(self)
 !   write(*,*) gga
 !   stop
 !  Here, the initial layer distribution is calculated.
-   do k=1,self%T%kmax
-      do j=self%T%l(2),self%T%u(2)
-         do i=self%T%l(1),self%T%u(1)
-            if (self%T%mask(i,j) > 0) then
-            HH=max(self%T%sseo(i,j)+self%T%H(i,j),self%min_depth)
+#define TG self%T
+   do k=1,TG%kmax
+      do j=TG%l(2),TG%u(2)
+         do i=TG%l(1),TG%u(1)
+            if (TG%mask(i,j) > 0) then
+            HH=max(TG%sseo(i,j)+TG%H(i,j),self%Dmin)
             write(*,*) HH
-            self%T%hn(i,j,k)=HH*(gga(i,j,k)-gga(i,j,k-1))
+            TG%hn(i,j,k)=HH*(gga(i,j,k)-gga(i,j,k-1))
             end if
          end do
       end do
    end do
+#undef TG
 
-   do k=1,self%U%kmax
-      do j=self%U%l(2),self%U%u(2)
-         do i=self%U%l(1),self%U%u(1)-1
-            if (self%U%mask(i,j) > 0) then
-            HH=max(self%U%sseo(i,j)+self%U%H(i,j),self%min_depth)
-            self%U%ho(i,j,k)=HH*0.5*            &
+#define UG self%U
+   do k=1,UG%kmax
+      do j=UG%l(2),UG%u(2)
+         do i=UG%l(1),UG%u(1)-1
+            if (UG%mask(i,j) > 0) then
+            HH=max(UG%sseo(i,j)+UG%H(i,j),self%Dmin)
+            UG%ho(i,j,k)=HH*0.5*            &
              (gga(i,j,k)-gga(i,j,k-1)+gga(i+1,j,k)-gga(i+1,j,k-1))
-            self%U%hn(i,j,k)=self%U%ho(i,j,k)
+            UG%hn(i,j,k)=UG%ho(i,j,k)
             end if
          end do
       end do
    end do
+#undef UG
 
-   do k=1,self%V%kmax
-      do j=self%V%l(2),self%V%u(2)-1
-         do i=self%V%l(1),self%V%u(1)
-            if (self%V%mask(i,j) > 0) then
-            HH=max(self%V%sseo(i,j)+self%V%H(i,j),self%min_depth)
-            self%V%ho(i,j,k)=HH*0.5*            &
+#define VG self%V
+   do k=1,VG%kmax
+      do j=VG%l(2),VG%u(2)-1
+         do i=VG%l(1),VG%u(1)
+            if (VG%mask(i,j) > 0) then
+            HH=max(VG%sseo(i,j)+VG%H(i,j),self%Dmin)
+            VG%ho(i,j,k)=HH*0.5*            &
              (gga(i,j,k)-gga(i,j,k-1)+gga(i,j+1,k)-gga(i,j+1,k-1))
-            self%V%hn(i,j,k)=self%V%ho(i,j,k)
+            VG%hn(i,j,k)=VG%ho(i,j,k)
             end if
          end do
       end do
    end do
+#undef VG
 
    deallocate(be)
    deallocate(ga)
@@ -168,9 +174,9 @@ module SUBROUTINE do_gvc(self,dt)
    do j=self%T%l(2),self%T%u(2)
       do i=self%T%l(1),self%T%u(1)
          if (self%T%mask(i,j) > 0) then
-            r=cord_relax/dt*self%T%H(i,j)/self%maxdepth
+            r=cord_relax/dt*self%T%H(i,j)/self%Dmax
             HH=self%T%ssen(i,j)+self%T%H(i,j)
-            if (HH .lt. self%D_gamma) then
+            if (HH .lt. self%Dgamma) then
                do k=1,self%T%kmax
                   self%T%ho(i,j,k)=self%T%hn(i,j,k)
                   self%T%hn(i,j,k)=HH/self%T%kmax
@@ -197,7 +203,7 @@ module SUBROUTINE do_gvc(self,dt)
       do i=self%U%l(1),self%U%u(1)-1
          if (self%U%mask(i,j) > 0) then
 !KBK         if (au(i,j) .gt. 0) then
-         r=cord_relax/dt*self%U%H(i,j)/self%maxdepth
+         r=cord_relax/dt*self%U%H(i,j)/self%Dmax
          zz=-self%U%H(i,j)
          HH=self%U%ssen(i,j)+self%U%H(i,j)
          do k=1,self%U%kmax-1
@@ -219,7 +225,7 @@ module SUBROUTINE do_gvc(self,dt)
       do i=self%V%l(1),self%V%u(1)
          if (self%V%mask(i,j) > 0) then
 !KBK         if (av(i,j).gt.0) then
-         r=cord_relax/dt*self%V%H(i,j)/self%maxdepth
+         r=cord_relax/dt*self%V%H(i,j)/self%Dmax
          zz=-self%V%H(i,j)
          HH=self%V%ssen(i,j)+self%V%H(i,j)
          do k=1,self%V%kmax-1

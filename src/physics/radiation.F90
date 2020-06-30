@@ -196,7 +196,7 @@ END MODULE getm_radiation
                end do
             end if
             do k=0,kmax
-               rad1d(k)=rad1d(k)*rho_0_cpi                ! note this
+               rad1d(k)=rad1d(k)*rho0_cpi                ! note this
             end do
 
 #endif

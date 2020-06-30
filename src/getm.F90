@@ -5,6 +5,7 @@
 !> (this is done in {\tt init\_temperature}),
 !> and calculating the advection-diffusion-equation, which includes
 !> penetrating short-wave radiation as source term (see {\tt do\_temperature}).
+!> |url|
 
 !> @note
 !>    1. Use __mold__ to allocate arrays
@@ -20,6 +21,7 @@ MODULE getm_model
    !! Code Description:
    !!   Language: Fortran 90.
    !!   This code is written to JULES coding standards v1.
+   !! [egon](|url|/page/science/getm_physics.html)
 
 !   use iso_c_binding
 !   use iso_fortran_env
@@ -28,6 +30,7 @@ MODULE getm_model
    use logging
    use field_manager
    use getm_domain
+   use getm_operators
    use getm_airsea
    use getm_physics
    use getm_dynamics
@@ -53,6 +56,8 @@ MODULE getm_model
       TYPE(type_logging) :: logs
       TYPE(type_field_manager) :: fm
       TYPE(type_getm_domain) :: domain
+      TYPE(type_vertical_diffusion) :: vertical_diffusion
+      TYPE(type_advection) :: advection
       TYPE(type_getm_airsea) :: airsea
       TYPE(type_bathymetry) :: bathymetry
       TYPE(type_getm_physics) :: physics
@@ -132,7 +137,7 @@ SUBROUTINE getm_settings(self)
 
    self%domain%ddl = 1.0_real64
    self%domain%ddu = 2.0_real64
-   self%domain%min_depth = 0.5_real64
+   self%domain%Dmin = 0.5_real64
 
    return
 END SUBROUTINE getm_settings
@@ -225,7 +230,7 @@ SUBROUTINE getm_initialize(self)
    call self%domain%initialize()
    call self%domain%report()
    call self%airsea%initialize(self%domain)
-   call self%physics%initialize(self%domain%T)
+   call self%physics%initialize(self%domain%T,self%advection,self%vertical_diffusion)
    call self%dynamics%initialize(self%domain)
    ! not necessary to use subroutine arguments
    call self%domain%depth_update(self%domain%T%z,self%domain%T%zo)
@@ -249,11 +254,14 @@ SUBROUTINE getm_integrate(self)
 ! Local constants
 
 ! Local variables
-
   integer :: n
   TYPE(datetime) :: sim_time
   TYPE(timedelta) :: dt, remain
   integer :: seconds, milliseconds
+
+!KB
+  real(real64), allocatable :: nuh(:,:,:)
+
 !-----------------------------------------------------------------------------
    if (self%sim_start .gt. self%sim_stop) return
    call self%logs%info('getm_integrate()',level=0)
@@ -275,13 +283,13 @@ SUBROUTINE getm_integrate(self)
       ! call do_input(n)
       ! call do_airsea(n)
       ! total surface stress at T-points
-      ! taus(i,j)=rho_0i*sqrt( tausx(i,j)**2 + tausy(i,j)**2 )
+      ! taus(i,j)=rho0i*sqrt( tausx(i,j)**2 + tausy(i,j)**2 )
 
       ! This is the GETM 2D call order - not carved in stone
       ! call uv_advect(U,V,DU,DV)
       ! uv_diffusion(An_method,U,V,D,DU,DV) ! Has to be called after uv_advect.
       ! call momentum(loop,tausx,tausy,airp)
-      ! Uint and Vint are updated in momentum_2d.F90
+      ! Ui and Vi are updated in momentum_2d.F90
       ! if (have_boundaries) call update_2d_bdy(loop,bdy2d_ramp)
       ! call sealevel(loop)
       ! call depth_update()
@@ -339,7 +347,8 @@ SUBROUTINE getm_integrate(self)
          call self%dynamics%momentum%stresses()
 
          if (self%runtype > 3) then
-            call self%physics%salinity%calculate()
+!KB            call self%physics%salinity%calculate(self%timestep,self%mixing%nuh)
+            call self%physics%salinity%calculate(self%timestep,nuh)
             call self%physics%temperature%calculate()
             !call self%physics%density%calculate()
             !call self%physics%density%buoyancy()
@@ -350,8 +359,8 @@ SUBROUTINE getm_integrate(self)
          !
          call self%dynamics%momentum%slow_terms(self%dynamics%pressure%idpdx,self%dynamics%pressure%idpdy)
          ! reset variables
-         self%dynamics%momentum%Uinto=self%dynamics%momentum%Uint; self%dynamics%momentum%Uint=0._real64
-         self%dynamics%momentum%Vinto=self%dynamics%momentum%Vint; self%dynamics%momentum%Vint=0._real64
+         self%dynamics%momentum%Uio=self%dynamics%momentum%Ui; self%dynamics%momentum%Ui=0._real64
+         self%dynamics%momentum%Vio=self%dynamics%momentum%Vi; self%dynamics%momentum%Vi=0._real64
       end if
 
       call self%output%do_output(sim_time)

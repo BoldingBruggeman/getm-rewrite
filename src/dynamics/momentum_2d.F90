@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 !!{!./pages/momentum_2d.md!}
 
@@ -26,17 +26,17 @@ module SUBROUTINE momentum_x_2d(self,dt,dpdx,taus)
 
 !  Local variables
    integer :: i,j
-   real(real64) :: tausu
+   real(real64) :: tausu, Uloc, cord_curv
 !KB
    real(real64) :: Slr, gammai
-   real(real64) :: min_depth = 0.5_real64
+   real(real64) :: Dmin = 0.5_real64
 !KB
 !---------------------------------------------------------------------------
    call self%logs%info('velocity_2d_x()',level=2)
-#if 1
-   do j=self%domain%U%l(2),self%domain%U%u(2)
-      do i=self%domain%U%l(1),self%domain%U%u(1)
-         if (self%domain%U%mask(i,j) == 1 .or. self%domain%U%mask(i,j) == 2) then
+#define UG self%domain%U
+   do j=UG%l(2),UG%u(2)
+      do i=UG%l(1),UG%u(1)
+         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             tausu = 0.5_real64 * ( taus(i,j) + taus(i+1,j) )
             if (self%U(i,j) .gt. 0._real64) then
                Slr = max( self%Slru(i,j) , 0._real64 )
@@ -45,41 +45,45 @@ module SUBROUTINE momentum_x_2d(self,dt,dpdx,taus)
             end if
             !KB dry_u
             self%U(i,j)=(self%U(i,j) &
-                        -dt*(g*self%domain%U%D(i,j)*dpdx(i,j)+self%dry_u(i,j) &
-                        *(-tausu/rho_0-self%fV(i,j)+self%UEx(i,j)+self%SlUx(i,j)+Slr))) &
-                        /(1._real64+dt*self%ru(i,j)/self%domain%U%D(i,j))
-            self%Uint(i,j)=self%Uint(i,j)+self%U(i,j)
+                        -dt*(g*UG%D(i,j)*dpdx(i,j)+self%dry_u(i,j) &
+                        *(-tausu/rho0-self%fV(i,j)+self%UEx(i,j)+self%SlUx(i,j)+Slr))) &
+                        /(1._real64+dt*self%ru(i,j)/UG%D(i,j))
+            self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)
          end if
       end do
    end do
-#if 0
+
    ! Semi-implicit treatment of Coriolis force for V-momentum eq.
-   do j=jmin,jmax
-      do i=imin,imax
-         if(self%V%av(i,j) .ge. 1) then
-! Espelid et al. [2000], IJNME 49, 1521-1545
+#define TG self%domain%T
+#define VG self%domain%V
+#define XG self%domain%X
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
+         if(VG%mask(i,j) .ge. 1) then
 #ifdef NEW_CORI
+            ! Espelid et al. [2000], IJNME 49, 1521-1545
             Uloc= &
-             ( U(i,j  )/sqrt(DU(i,j  ))+ U(i-1,j  )/sqrt(DU(i-1,j  ))  &
-             + U(i,j+1)/sqrt(DU(i,j+1))+ U(i-1,j+1)/sqrt(DU(i-1,j+1))) &
-               *_QUART_*sqrt(DV(i,j))
+             ( self%U(i,j  )/sqrt(UG%D(i,j  ))+ self%U(i-1,j  )/sqrt(UG%D(i-1,j  ))  &
+             + self%U(i,j+1)/sqrt(UG%D(i,j+1))+ self%U(i-1,j+1)/sqrt(UG%D(i-1,j+1))) &
+               *0.25_real64*sqrt(VG%D(i,j))
 #else
-            Uloc=_QUART_*( U(i-1,j)+U(i,j)+U(i-1,j+1)+U(i,j+1))
+            Uloc=0.25_real64*( self%U(i-1,j)+self%U(i,j)+self%U(i-1,j+1)+self%U(i,j+1))
 #endif
-#if defined(SPHERICAL) || defined(CURVILINEAR)
-            cord_curv=(V(i,j)*(DYX-DYXIM1)-Uloc*(DXCJP1-DXC)) &
-                      /DV(i,j)*ARVD1
-            fU(i,j)=(cord_curv+corv(i,j))*Uloc
-#else
-            fU(i,j)=corv(i,j)*Uloc
-#endif
+            cord_curv=(self%V(i,j)* &
+                       (XG%dy(i,j)-XG%dy(i-1,j)) &
+                      -Uloc*(TG%dx(i,j+1)-TG%dx(i,j))) &
+                      /VG%D(i,j)*VG%inv_area(i,j)
+!            cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j))-Uloc*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%inv_area(i,j)
+            self%fU(i,j)=(cord_curv+VG%cor(i,j))*Uloc
          else
-            fU(i,j)= _ZERO_
+            self%fU(i,j)= 0._real64
          end if
       end do
    end do
-#endif
-#endif
+#undef TG
+#undef UG
+#undef VG
+#undef XG
    return
 END SUBROUTINE momentum_x_2d
 
@@ -103,60 +107,64 @@ module SUBROUTINE momentum_y_2d(self,dt,dpdy,taus)
 
 !  Local variables
    integer :: i,j
-   real(real64) :: tausu
+   real(real64) :: tausv, Vloc, cord_curv
 !KB
    real(real64) :: Slr, gammai
-   real(real64) :: min_depth = 0.5_real64
+   real(real64) :: Dmin = 0.5_real64
 !KB
 !---------------------------------------------------------------------------
-#if 0
    call self%logs%info('momentum_2d_y()',level=2)
 
-   do j=domain%U%l(2),domain%U%u(2)
-      do i=domain%U%l(1),domain%U%u(1)
-         if (domain%U%mask(i,j) == 1 .or. domain%U%mask(i,j) == 2) then
-            tausu = 0.5_real64 * ( taus(i,j) + taus(i+1,j) )
-            if (self%U(i,j) .gt. 0._real64) then
-               Slr = max( self%Slru(i,j) , 0._real64 )
+#define VG self%domain%V
+   do j=VG%l(2),VG%u(2)
+      do i=VG%l(1),VG%u(1)
+         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+            tausv = 0.5_real64 * ( taus(i,j) + taus(i,j+1) )
+            if (self%V(i,j) .gt. 0._real64) then
+               Slr = max( self%Slrv(i,j) , 0._real64 )
             else
-               Slr = min( self%Slru(i,j) , 0._real64 )
+               Slr = min( self%Slrv(i,j) , 0._real64 )
             end if
-            self%U(i,j)=(self%U(i,j) &
-                        -dt*(g*domain%U%D(i,j)*dpdx(i,j)+self%dry_u(i,j) &
-                        *(-tausu/rho_0-self%fV(i,j)+self%UEx(i,j)+self%SlUx(i,j)+Slr))) &
-                        /(1._real64+dt*self%ru(i,j)/domain%U%D(i,j))
-            self%Vint(i,j)=self%Vint(i,j)+self%V(i,j)
+            !KB dry_u
+            self%V(i,j)=(self%V(i,j) &
+                        -dt*(g*VG%D(i,j)*dpdy(i,j)+self%dry_v(i,j) &
+                        *(-tausv/rho0-self%fU(i,j)+self%VEx(i,j)+self%SlVx(i,j)+Slr))) &
+                        /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
+            self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)
          end if
       end do
    end do
-#if 0
-   ! Semi-implicit treatment of Coriolis force for V-momentum eq.
-   do j=jmin,jmax
-      do i=imin,imax
-         if(av(i,j) .ge. 1) then
-! Espelid et al. [2000], IJNME 49, 1521-1545
+
+   ! Semi-implicit treatment of Coriolis force for U-momentum eq.
+#define TG self%domain%T
+#define UG self%domain%U
+#define XG self%domain%X
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         if(UG%mask(i,j) .ge. 1) then
 #ifdef NEW_CORI
-            Uloc= &
-             ( U(i,j  )/sqrt(DU(i,j  ))+ U(i-1,j  )/sqrt(DU(i-1,j  ))  &
-             + U(i,j+1)/sqrt(DU(i,j+1))+ U(i-1,j+1)/sqrt(DU(i-1,j+1))) &
-               *_QUART_*sqrt(DV(i,j))
+            ! Espelid et al. [2000], IJNME 49, 1521-1545
+            Vloc= &
+             ( self%V(i,j  )/sqrt(VG%D(i,j  ))+ self%V(i-1,j  )/sqrt(VG%D(i-1,j  ))  &
+             + self%V(i,j+1)/sqrt(VG%D(i,j+1))+ self%V(i-1,j+1)/sqrt(VG%D(i-1,j+1))) &
+               *0.25_real64*sqrt(UG%D(i,j))
 #else
-            Uloc=_QUART_*( U(i-1,j)+U(i,j)+U(i-1,j+1)+U(i,j+1))
+            Vloc=0.25_real64*( self%V(i-1,j)+self%V(i,j)+self%V(i-1,j+1)+self%V(i,j+1))
 #endif
-#if defined(SPHERICAL) || defined(CURVILINEAR)
-            cord_curv=(V(i,j)*(DYX-DYXIM1)-Uloc*(DXCJP1-DXC)) &
-                      /DV(i,j)*ARVD1
-            fU(i,j)=(cord_curv+corv(i,j))*Uloc
-#else
-            fU(i,j)=corv(i,j)*Uloc
-#endif
+            cord_curv=(Vloc*(TG%dy(i+1,j)-TG%dy(i,j))) &
+                      +self%U(i,j) &
+                      *(XG%dx(i,j)-XG%dx(i,j-1)) &
+                      /UG%D(i,j)*UG%inv_area(i,j)
+            self%fV(i,j)=(cord_curv+UG%cor(i,j))*Vloc
          else
-            fU(i,j)= _ZERO_
+            self%fV(i,j)= 0._real64
          end if
       end do
    end do
-#endif
-#endif
+#undef TG
+#undef UG
+#undef VG
+#undef XG
    return
 END SUBROUTINE momentum_y_2d
 

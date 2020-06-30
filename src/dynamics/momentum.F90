@@ -32,7 +32,7 @@ MODULE getm_momentum
    PRIVATE  ! Private scope by default
 
 !  Module constants
-   real(real64), parameter :: rho_0 = 1025._real64
+   real(real64), parameter :: rho0 = 1025._real64
       !! Reference density
    real(real64), parameter :: g = 9.81_real64
       !! Gravity
@@ -48,21 +48,25 @@ MODULE getm_momentum
 
 #ifdef _STATIC_
       real(real64), dimension(E2DFIELD) :: U, V
-      real(real64), dimension(I3DFIELD) :: uu, vv, w
+      real(real64), dimension(I3DFIELD) :: pk, qk, w
 #else
       real(real64), dimension(:,:), allocatable :: U, V
-      real(real64), dimension(:,:), allocatable :: Uint, Vint
-      real(real64), dimension(:,:), allocatable :: Uinto, Vinto
-      real(real64), dimension(:,:), allocatable :: vel2dx, vel2dy
+      real(real64), dimension(:,:), allocatable :: Ui, Vi
+      real(real64), dimension(:,:), allocatable :: Uio, Vio
+      real(real64), dimension(:,:), allocatable :: u1, v1
       real(real64), dimension(:,:), allocatable :: fU, fV
-      real(real64), dimension(:,:), allocatable :: Slru, Slrv
-      real(real64), dimension(:,:), allocatable :: UEx, VEx
-      real(real64), dimension(:,:), allocatable :: SlUx, SlVx
+      real(real64), dimension(:,:), allocatable :: Slru, Slrv ! Should go away
+      real(real64), dimension(:,:), allocatable :: UEx, VEx ! SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
+      real(real64), dimension(:,:), allocatable :: SxA, SyA ! Slow advection
+      real(real64), dimension(:,:), allocatable :: SxB, SyB ! Slow internal pressure
+      real(real64), dimension(:,:), allocatable :: SxD, SyD ! Slow diffusion
+      real(real64), dimension(:,:), allocatable :: SxF, SyF ! Slow friction
+      real(real64), dimension(:,:), allocatable :: SlUx, SlVx ! Should go away
       real(real64), dimension(:,:), allocatable :: ru, rv
       real(real64), dimension(:,:), allocatable :: dry_u, dry_v
-      real(real64), dimension(:,:,:), allocatable :: uu, vv, ww
-      real(real64), dimension(:,:,:), allocatable :: vel3dx, vel3dy
-      real(real64), dimension(:,:,:), allocatable :: uuEx,vvEx
+      real(real64), dimension(:,:,:), allocatable :: pk, qk, ww
+      real(real64), dimension(:,:,:), allocatable :: uk, vk
+      real(real64), dimension(:,:,:), allocatable :: uuEx,vvEx ! 0
       real(real64), dimension(:,:), allocatable :: taub,taubx, tauby
       real(real64), dimension(:,:), allocatable :: rru,rrv
       real(real64), dimension(:,:), allocatable :: zub,zvb
@@ -97,6 +101,7 @@ MODULE getm_momentum
          real(real64), dimension(:,:), intent(in) :: taus
             !! surface stress in X-direction
       end subroutine momentum_x_2d
+
       module subroutine momentum_y_2d(self,dt,dpdy,taus)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
@@ -106,6 +111,7 @@ MODULE getm_momentum
          real(real64), dimension(:,:), intent(in) :: taus
             !! surface stress in Y-direction
       end subroutine momentum_y_2d
+
       module subroutine momentum_x_3d(self,dt,dpdx,taus)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
@@ -115,6 +121,7 @@ MODULE getm_momentum
          real(real64), dimension(:,:), intent(in) :: taus
             !! surface stress in X-direction
       end subroutine momentum_x_3d
+
       module subroutine momentum_y_3d(self,dt,dpdy,taus)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
@@ -124,36 +131,44 @@ MODULE getm_momentum
          real(real64), dimension(:,:), intent(in) :: taus
             !! surface stress in Y-direction
       end subroutine momentum_y_3d
+
       module subroutine momentum_z_3d(self,dt)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
       end subroutine momentum_z_3d
+
       module subroutine velocities_2d(self)
          class(type_getm_momentum), intent(inout) :: self
       end subroutine velocities_2d
+
       module subroutine velocities_3d(self)
          class(type_getm_momentum), intent(inout) :: self
       end subroutine velocities_3d
+
       module subroutine velocity_shear_frequency(self,num,SS)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), dimension(:,:,:), intent(in) :: num
          real(real64), dimension(:,:,:), intent(inout) :: SS
       end subroutine velocity_shear_frequency
+
       module subroutine stresses(self)
          class(type_getm_momentum), intent(inout) :: self
       end subroutine stresses
+
       module subroutine momentum_register(self)
          class(type_getm_momentum), intent(inout) :: self
       end subroutine momentum_register
-      module subroutine slow_bottom_friction(self)
-         class(type_getm_momentum), intent(inout) :: self
-      end subroutine slow_bottom_friction
+
       module subroutine slow_terms(self,idpdx,idpdy)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), dimension(:,:,:), intent(in) :: idpdx
          real(real64), dimension(:,:,:), intent(in) :: idpdy
       end subroutine slow_terms
+
+      module subroutine slow_bottom_friction(self)
+         class(type_getm_momentum), intent(inout) :: self
+      end subroutine slow_bottom_friction
    END INTERFACE
 
 CONTAINS
@@ -207,16 +222,27 @@ SUBROUTINE momentum_initialize(self,domain)
    kmax = grid_dims%kmax
 #endif
 #ifndef _STATIC_
-   call mm_s('U',self%U,self%domain%U%l(1:2),self%domain%U%u(1:2),def=0._real64,stat=stat)
-   call mm_s('V',self%V,self%domain%V%l(1:2),self%domain%V%u(1:2),def=0._real64,stat=stat)
-   call mm_s('Uint',self%Uint,self%U,def=0._real64,stat=stat)
-   call mm_s('Vint',self%Vint,self%V,def=0._real64,stat=stat)
-   call mm_s('Uinto',self%Uinto,self%U,def=0._real64,stat=stat)
-   call mm_s('Vinto',self%Vinto,self%V,def=0._real64,stat=stat)
-   call mm_s('vel2dx',self%vel2dx,self%U,def=0._real64,stat=stat)
-   call mm_s('vel2dy',self%vel2dy,self%V,def=0._real64,stat=stat)
+#define TG self%domain%T
+#define UG self%domain%U
+#define VG self%domain%V
+   call mm_s('U',self%U,UG%l(1:2),UG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('V',self%V,VG%l(1:2),VG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('Ui',self%Ui,self%U,def=0._real64,stat=stat)
+   call mm_s('Vi',self%Vi,self%V,def=0._real64,stat=stat)
+   call mm_s('Uio',self%Uio,self%U,def=0._real64,stat=stat)
+   call mm_s('Vio',self%Vio,self%V,def=0._real64,stat=stat)
+   call mm_s('u1',self%u1,self%U,def=0._real64,stat=stat)
+   call mm_s('v1',self%v1,self%V,def=0._real64,stat=stat)
    call mm_s('fU',self%fU,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('fV',self%fV,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
+   call mm_s('SxA',self%SxA,self%U,def=0._real64,stat=stat)
+   call mm_s('SyA',self%SyA,self%V,def=0._real64,stat=stat)
+   call mm_s('SxB',self%SxB,self%U,def=0._real64,stat=stat)
+   call mm_s('SyB',self%SyB,self%V,def=0._real64,stat=stat)
+   call mm_s('SxD',self%SxD,self%U,def=0._real64,stat=stat)
+   call mm_s('SyD',self%SyD,self%V,def=0._real64,stat=stat)
+   call mm_s('SxF',self%SxF,self%U,def=0._real64,stat=stat)
+   call mm_s('SyF',self%SyF,self%V,def=0._real64,stat=stat)
    call mm_s('UEx',self%UEx,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('VEx',self%VEx,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('SlUx',self%SlUx,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
@@ -232,13 +258,20 @@ SUBROUTINE momentum_initialize(self,domain)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
    call mm_s('rru',self%rru,self%U,def=0._real64,stat=stat)
    call mm_s('rrv',self%rrv,self%V,def=0._real64,stat=stat)
-   call mm_s('uu',self%uu,self%domain%U%l(1:3),self%domain%U%u(1:3),def=0._real64,stat=stat)
-   call mm_s('vv',self%vv,self%domain%V%l(1:3),self%domain%V%u(1:3),def=0._real64,stat=stat)
-   call mm_s('ww',self%ww,self%domain%T%l(1:3),self%domain%T%u(1:3),def=0._real64,stat=stat)
-   call mm_s('uuEx',self%uuEx,self%domain%U%l(1:3),self%domain%U%u(1:3),def=0._real64,stat=stat)
-   call mm_s('vvEx',self%vvEx,self%domain%V%l(1:3),self%domain%V%u(1:3),def=0._real64,stat=stat)
-!   call mm_s('uuEx',self%uuEx,self%uu,def=0._real64,stat=stat)
-!   call mm_s('vvEx',self%vvEx,self%vv,def=0._real64,stat=stat)
+   call mm_s('zub',self%zub,self%U,def=0._real64,stat=stat)
+   call mm_s('zvb',self%zvb,self%V,def=0._real64,stat=stat)
+   call mm_s('pk',self%pk,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('qk',self%qk,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('uk',self%uk,self%pk,def=0._real64,stat=stat)
+   call mm_s('vk',self%vk,self%qk,def=0._real64,stat=stat)
+   call mm_s('ww',self%ww,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('uuEx',self%uuEx,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('vvEx',self%vvEx,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
+#undef TG
+#undef UG
+#undef VG
+!   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
+!   call mm_s('vvEx',self%vvEx,self%qk,def=0._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%register()
@@ -291,8 +324,8 @@ SUBROUTINE momentum_3d(self,mode_split)
 !  Local variables
    logical, save :: ufirst=.false. ! should likely not have save
 !---------------------------------------------------------------------------
-   self%Uint=self%Uint/mode_split
-   self%Vint=self%Vint/mode_split
+   self%Ui=self%Ui/mode_split
+   self%Vi=self%Vi/mode_split
 
    if(ufirst) then
 !      call self%x_3d(dt,tausx,dpdx)

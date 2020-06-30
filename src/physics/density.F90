@@ -186,9 +186,9 @@ SUBROUTINE buoyancy_calculate(self)
 !  Local constants
    real(real64), parameter :: g = 9.81_real64
       !! g = gravitational acceleration
-   real(real64), parameter :: rho_0 = 1025._real64
-      !! (/ rho_0 /) = reference density
-   real(real64), parameter :: x = g/rho_0
+   real(real64), parameter :: rho0 = 1025._real64
+      !! (/ rho0 /) = reference density
+   real(real64), parameter :: x = g/rho0
 
 !  Local variables
    integer :: i, j, k
@@ -197,7 +197,7 @@ SUBROUTINE buoyancy_calculate(self)
       do j=self%grid%l(2),self%grid%u(2)
          do i=self%grid%l(1),self%grid%u(1)
             if (self%grid%mask(i,j) > 0) then
-               self%buoy(i,j,k) = x*(self%rho(i,j,k)-rho_0)
+               self%buoy(i,j,k) = x*(self%rho(i,j,k)-rho0)
             end  if
          end do
       end do
@@ -230,7 +230,7 @@ SUBROUTINE brunt_vaisala_calculate(self)
    real(real64), allocatable, dimension(:,:,:) :: x
 
    real(real64) :: small_bvf !!!! KB
-   real(real64) :: gravity, rho_0 !!!! KB
+   real(real64) :: gravity, rho0 !!!! KB
    real(real64) :: dz, NNc, NNe, NNn, NNw, NNs
 !-----------------------------------------------------------------------------
    call self%logs%info('brunt_vaisala()',2)
@@ -247,7 +247,7 @@ SUBROUTINE brunt_vaisala_calculate(self)
 #ifdef _OLD_BVF_
                NNc =(self%buoy(i,j,k+1)-self%buoy(i,j,k))/dz
 #else
-               NNc = -gravity / rho_0
+               NNc = -gravity / rho0
                NNc = NNc/dz *(alpha(i,j,k) *(T(i,j,k+1)-T(i,j,k)) &
                          + beta(i,j,k) *(S(i,j,k+1)-S(i,j,k)))
 #endif

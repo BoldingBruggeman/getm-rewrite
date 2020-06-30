@@ -41,13 +41,15 @@ target_link_libraries( getm_domain PUBLIC flom )
 add_library(getm_airsea "")
 target_link_libraries( getm_airsea PRIVATE getm_domain )
 add_library(getm_physics "")
-target_link_libraries( getm_physics PRIVATE getm_airsea getm_domain flom )
+target_link_libraries( getm_physics PRIVATE getm_airsea getm_operators getm_domain flom )
 add_library(getm_dynamics "")
 target_link_libraries( getm_dynamics PRIVATE getm_domain flom )
 add_library(getm_input "")
 target_link_libraries( getm_input PRIVATE getm_domain getm_airsea getm_dynamics flom )
 add_library(getm_output "")
 target_link_libraries( getm_output PRIVATE flom )
+add_library(getm_operators "")
+#target_link_libraries( getm_operators PRIVATE flom )
 # .. and now the executable
 add_executable(getm_exe)
 
@@ -55,7 +57,7 @@ include(src/CMakeLists.txt)
 include(tests/CMakeLists.txt)
 
 target_include_directories( getm_exe PRIVATE ${CMAKE_BINARY_DIR}/modules )
-target_link_libraries( getm_exe PRIVATE getm_domain getm_physics getm_dynamics getm_input getm_output flom )
+target_link_libraries( getm_exe PRIVATE getm_domain getm_operators getm_physics getm_dynamics getm_input getm_output flom )
 
 
 #install(EXPORT stimConfig DESTINATION cmake)

@@ -29,7 +29,7 @@ module SUBROUTINE momentum_x_3d(self,dt,dpdx,taus)
    real(real64) :: tausu
 !KB
    real(real64) :: Slr, gammai
-   real(real64) :: min_depth = 0.5_real64
+   real(real64) :: Dmin = 0.5_real64
 !KB
 !---------------------------------------------------------------------------
    call self%logs%info('velocity_3d_x()',level=2)
@@ -62,7 +62,7 @@ module SUBROUTINE momentum_y_3d(self,dt,dpdy,taus)
    real(real64) :: tausu
 !KB
    real(real64) :: Slr, gammai
-   real(real64) :: min_depth = 0.5_real64
+   real(real64) :: Dmin = 0.5_real64
 !KB
 !---------------------------------------------------------------------------
    call self%logs%info('momentum_3d_y()',level=2)
@@ -97,11 +97,11 @@ module SUBROUTINE momentum_z_3d(self,dt)
             if (self%domain%T%mask(i,j) .eq. 1) then
                   self%ww(i,j,k) = self%ww(i,j,k-1) &
                               -(self%domain%T%hn(i,j,k)-self%domain%T%ho(i,j,k))*dtm1 &
-                              -(self%uu(i,j,k)*self%domain%U%dy(i,j) - self%uu(i-1,j  ,k)*self%domain%U%dy(i-1,j) &
-                               +self%vv(i,j,k)*self%domain%V%dx(i,j) - self%vv(i  ,j-1,k)*self%domain%V%dx(i,j-1)) &
+                              -(self%pk(i,j,k)*self%domain%U%dy(i,j) - self%pk(i-1,j  ,k)*self%domain%U%dy(i-1,j) &
+                               +self%qk(i,j,k)*self%domain%V%dx(i,j) - self%qk(i  ,j-1,k)*self%domain%V%dx(i,j-1)) &
                                *self%domain%T%inv_area(i,j)
-!KB                              -(self%uu(i,j,k)*DYU - self%uu(i-1,j  ,k)*DYUIM1 &
-!KB                               +self%vv(i,j,k)*DXV - self%vv(i  ,j-1,k)*DXVJM1)*ARCD1
+!KB                              -(self%pk(i,j,k)*DYU - self%pk(i-1,j  ,k)*DYUIM1 &
+!KB                               +self%qk(i,j,k)*DXV - self%qk(i  ,j-1,k)*DXVJM1)*ARCD1
             end if
          end do
       end do
@@ -132,9 +132,9 @@ END SUBMODULE momentum_3d_smod
                   ww(i,j,k) =   ww(i,j,k-1)                             &
                               - ( hn(i,j,k) - ho(i,j,k) )*dtm1          &
                               - (                                       &
-                                   uu(i,j,k)*DYU - uu(i-1,j  ,k)*DYUIM1 &
+                                   pk(i,j,k)*DYU - pk(i-1,j  ,k)*DYUIM1 &
 #ifndef SLICE_MODEL
-                                 + vv(i,j,k)*DXV - vv(i  ,j-1,k)*DXVJM1 &
+                                 + qk(i,j,k)*DXV - qk(i  ,j-1,k)*DXVJM1 &
 #endif
                                 )*ARCD1
                end if

@@ -10,7 +10,7 @@ target_sources( getm_domain PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/domain/depth_update.F90
     ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_coordinates.F90
     ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_gvc.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_sigma.F90
+    #${CMAKE_CURRENT_LIST_DIR}/domain/vertical_sigma.F90
 )
 
 #KBset_property( TARGET getm_variables PROPERTY FOLDER variables )
@@ -31,6 +31,7 @@ target_sources( getm_physics PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/physics/temperature.F90
     ${CMAKE_CURRENT_LIST_DIR}/physics/density.F90
     ${CMAKE_CURRENT_LIST_DIR}/physics/mixing.F90
+#    ${CMAKE_CURRENT_LIST_DIR}/physics/diffusion.F90
 )
 
 set_property( TARGET getm_dynamics PROPERTY FOLDER dynamics )
@@ -44,9 +45,8 @@ target_sources( getm_dynamics PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/dynamics/momentum_2d.F90
     ${CMAKE_CURRENT_LIST_DIR}/dynamics/momentum_3d.F90
     ${CMAKE_CURRENT_LIST_DIR}/dynamics/velocities.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/velocity_diffusion.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/shear.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/slow_bottom_friction.F90
+    #${CMAKE_CURRENT_LIST_DIR}/dynamics/velocity_diffusion.F90
+    #${CMAKE_CURRENT_LIST_DIR}/dynamics/shear.F90
     ${CMAKE_CURRENT_LIST_DIR}/dynamics/slow_terms.F90
     ${CMAKE_CURRENT_LIST_DIR}/dynamics/momentum_register.F90
 )
@@ -61,6 +61,15 @@ set_property( TARGET getm_output PROPERTY FOLDER output )
 target_sources( getm_output PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/output/output.F90
 )
+
+set_property( TARGET getm_operators PROPERTY FOLDER operators )
+target_sources( getm_operators PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/operators/operators.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
+)
+
+#add_subdirectory(operators)
 
 set_property( TARGET getm_exe PROPERTY FOLDER getm )
 target_sources( getm_exe PRIVATE

@@ -31,6 +31,7 @@ MODULE getm_salinity
    use logging
    use field_manager
    use getm_domain
+   use getm_operators
 
    IMPLICIT NONE
 
@@ -52,24 +53,26 @@ MODULE getm_salinity
       !! Salinity type
 
       class(type_logging), pointer :: logs
-      class(type_getm_grid), pointer :: G
       class(type_field_manager), pointer :: fm => null()
+      class(type_getm_grid), pointer :: grid
+      class(type_advection), pointer :: advection
+      class(type_vertical_diffusion), pointer :: vertical_diffusion
       TYPE(type_salinity_configuration) :: config
 
 #ifdef _STATIC_
-    real(real64), dimension(I3DFIELD) :: S = 10._real64
+      real(real64), dimension(I3DFIELD) :: S = 10._real64
 #else
-    real(real64), dimension(:,:,:), allocatable :: S
+      real(real64), dimension(:,:,:), allocatable :: S
 #endif
 !> remember to allocate in initialize
-      real(real64), private, dimension(:,:,:), allocatable :: auxo, auxn
-      real(real64), private, dimension(:,:,:), allocatable :: a1,a2,a3,a4
+
+      real(real64) :: cnpar
+      real(real64) :: avmolt
 
       contains
 
       procedure :: configuration => salinity_configuration
       procedure :: initialize => salinity_initialize
-      procedure :: diffusion => salinity_diffusion
       procedure :: calculate => salinity_calculate
 
    end type type_salinity
@@ -106,7 +109,7 @@ END SUBROUTINE salinity_configuration
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE salinity_initialize(self,grid)
+SUBROUTINE salinity_initialize(self,grid,advection,vertical_diffusion)
 
    !! Initialize the salinity field
 
@@ -115,6 +118,8 @@ SUBROUTINE salinity_initialize(self,grid)
 !  Subroutine arguments
    class(type_salinity), intent(inout) :: self
    class(type_getm_grid), intent(in), target :: grid
+   class(type_advection), intent(in), target :: advection
+   class(type_vertical_diffusion), intent(in), target :: vertical_diffusion
       !! grid dimensions in case of dynamic memory allocation
 
 !  Local constants
@@ -125,38 +130,36 @@ SUBROUTINE salinity_initialize(self,grid)
 !---------------------------------------------------------------------------
    call self%logs%info('salinity_initialize()',level=2)
 
-   self%G => grid
+   self%grid => grid
+   self%advection => advection
+   self%vertical_diffusion => vertical_diffusion
 #ifndef _STATIC_
    call mm_s('S',self%S,grid%l,grid%u,def=25._real64,stat=stat)
-   call mm_s('auxo',self%auxo,grid%l,grid%u,def=0._real64,stat=stat)
-   call mm_s('auxn',self%auxn,grid%l,grid%u,def=0._real64,stat=stat)
-!   call mm_s('a1',self%a1, k, i, j, def=0._real64,stat=stat)
-!   call mm_s('a2',self%a2, k, i, j, def=0._real64,stat=stat)
-!   call mm_s('a3',self%a3, k, i, j, def=0._real64,stat=stat)
-!   call mm_s('a4',self%a4, k, i, j, def=0._real64)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('salt', 'g/kg', 'absolute salinity', &
                             standard_name='sea_water_salinity', &
                             category='temperature_and_salinity', &
-                            dimensions=(self%G%dim_3d_ids), &
+                            dimensions=(self%grid%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             part_of_state=.true.)
       call self%fm%send_data('salt', self%S(grid%imin:grid%imax,grid%jmin:grid%jmax,grid%kmin:grid%kmax))
    end if
-   do j=self%G%jmin,self%G%jmax
-      do i=self%G%imin,self%G%imax
-         if (self%G%mask(i,j) ==  0) then
+#define G self%grid
+   do j=G%jmin,G%jmax
+      do i=G%imin,G%imax
+         if (G%mask(i,j) ==  0) then
             self%S(i,j,:) = -9999._real64
          end if
       end do
    end do
+#undef G
    return
 END SUBROUTINE salinity_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE salinity_calculate(self)
+SUBROUTINE salinity_calculate(self,dt,nuh)
 
    !! Advection/diffusion of the salinity field
 
@@ -164,6 +167,8 @@ SUBROUTINE salinity_calculate(self)
 
 !  Subroutine arguments
    class(type_salinity), intent(inout) :: self
+   real(real64), intent(in) :: dt
+   real(real64), dimension(:,:,:), intent(in) :: nuh
 
 !  Local constants
 
@@ -172,105 +177,13 @@ SUBROUTINE salinity_calculate(self)
 !---------------------------------------------------------------------------
    call self%logs%info('salinity_calculate()',level=2)
 
+#define G self%grid
+   call self%advection%calculate(G%mask,G%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
+   call self%vertical_diffusion%calculate(G%mask,G%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
+#undef G
+
    return
 END SUBROUTINE salinity_calculate
-
-!---------------------------------------------------------------------------
-
-SUBROUTINE salinity_diffusion(self,logs,dt,nuh)
-
-   !! Advection/diffusion of the salinity field
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_salinity), intent(out) :: self
-   class(type_logging), intent(in) :: logs
-   real(real64), intent(in) :: dt
-   real(real64), dimension(:,:,:), intent(in) :: nuh
-
-!  Local constants
-
-!  Local variables
-   integer :: i,j,k
-   integer :: imin,imax,jmin,jmax,kmin,kmax
-   real(real64) :: x
-!---------------------------------------------------------------------------
-   call logs%info('salinity_diffusion()',level=2)
-
-   imin = self%G%imin; imax = self%G%imax
-   jmin = self%G%kmin; jmax = self%G%jmax
-   kmin = self%G%kmin; kmax = self%G%kmax
-
-   if (kmax > 1) then  !KB if (grid%S%kmax.gt.1) then
-      do k=kmin,kmax-1
-         do j=jmin,jmax
-            do i=imin,imax
-               if (self%g%mask(i,j) ==  1) then
-!                 !! Auxilury terms, old and new time level,
-                  x = dt*(nuh(i,j,k)+avmols)/ &
-                          (self%g%hn(i,j,k+1)+self%g%hn(i,j,k))
-                  self%auxo(i,j,k)=2._real64*(1-cnpar)*x
-                  self%auxn(i,j,k)=2._real64*   cnpar *x
-               end if
-            end do
-         end do
-      end do
-
-!     Matrix elements for surface layer
-      k=kmax
-      do j=jmin,jmax
-         do i=imin,imax
-            if (self%g%mask(i,j) ==  1) then
-               self%a1(k,i,j)=-self%auxn(i,j,k-1)
-               self%a2(k,i,j)=self%g%hn(i,j,k)+self%auxn(i,j,k-1)
-               self%a4(k,i,j)=self%S(i,j,k)*(self%g%hn(i,j,k)-self%auxo(i,j,k-1))+self%S(i,j,k-1)*self%auxo(i,j,k-1)
-            end if
-         end do
-      end do
-
-!     Matrix elements for inner layers
-!      do k=kmin,kmax-1
-      do k=2,kmax-1
-         do j=jmin,jmax
-            do i=imin,imax
-               if (self%g%mask(i,j) ==  1) then
-                  self%a3(k,i,j)=-self%auxn(i,j,k  )
-                  self%a1(k,i,j)=-self%auxn(i,j,k-1)
-                  self%a2(k,i,j)=self%g%hn(i,j,k)+self%auxn(i,j,k)+self%auxn(i,j,k-1)
-                  self%a4(k,i,j)=self%S(i,j,k+1)*self%auxo(i,j,k) &
-                       +self%S(i,j,k  )*(self%g%hn(i,j,k)-self%auxo(i,j,k)-self%auxo(i,j,k-1)) &
-                       +self%S(i,j,k-1)*self%auxo(i,j,k-1)
-               end if
-            end do
-         end do
-      end do
-
-!     Matrix elements for bottom layer
-      k=1
-      do j=jmin,jmax
-         do i=imin,imax
-            if (self%g%mask(i,j) ==  1) then
-               self%a3(k,i,j)=-self%auxn(i,j,k  )
-               self%a2(k,i,j)=self%g%hn(i,j,k)+self%auxn(i,j,k)
-               self%a4(k,i,j)=self%S(i,j,k+1)*self%auxo(i,j,k)                              &
-                    +self%S(i,j,k  )*(self%g%hn(i,j,k)-self%auxo(i,j,k))
-            end if
-         end do
-      end do
-
-   end if
-
-#if 0
-   call getm_tridiagonal(kmax,1,kmax,a1,a2,a3,a4,Res)
-
-   do k=1,kmax
-      S(i,j,k)=Res(k)
-   end do
-#endif
-
-   return
-END SUBROUTINE salinity_diffusion
 
 !---------------------------------------------------------------------------
 

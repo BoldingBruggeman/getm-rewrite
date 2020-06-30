@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 !SUBMODULE (getm_domain) vertical_coordinates_smod
 SUBMODULE (getm_domain : vertical_coordinates_smod) vertical_sigma_smod

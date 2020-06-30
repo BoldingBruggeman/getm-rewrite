@@ -81,7 +81,7 @@ module SUBROUTINE uv_depths(self)
                case (1)
                   self%U%H(i,j)=min(self%T%H(i,j),self%T%H(i+1,j))
                case (2)
-                  if (self%T%H(i,j) .lt. d_crit .or. self%T%H(i+1,j) .lt. d_crit) then
+                  if (self%T%H(i,j) .lt. Dcrit .or. self%T%H(i+1,j) .lt. Dcrit) then
                      self%U%H(i,j)=min(self%T%H(i,j),self%T%H(i+1,j))
                   else
                      self%U%H(i,j) = 0.5_real64 * ( self%T%H(i,j) + self%T%H(i+1,j) )
@@ -116,7 +116,7 @@ module SUBROUTINE uv_depths(self)
                case (1)
                   self%V%H(i,j)=min(self%T%H(i,j),self%T%H(i,j+1))
                case (2)
-                  if (self%T%H(i,j) .lt. d_crit .or. self%T%H(i,j+1) .lt. d_crit) then
+                  if (self%T%H(i,j) .lt. Dcrit .or. self%T%H(i,j+1) .lt. Dcrit) then
                      self%V%H(i,j)=min(self%T%H(i,j),self%T%H(i,j+1))
                   else
                      self%V%H(i,j) = 0.5_real64 * ( self%T%H(i,j) + self%T%H(i,j+1) )

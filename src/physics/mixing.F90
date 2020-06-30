@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 #ifdef _STATIC_
 #include "dimensions.h"
@@ -203,7 +203,3 @@ END SUBROUTINE mixing_calculate
 !---------------------------------------------------------------------------
 
 END MODULE getm_mixing
-
-!>
-!>
-

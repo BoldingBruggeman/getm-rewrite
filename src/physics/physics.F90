@@ -25,6 +25,7 @@ MODULE getm_physics
    use logging
    use field_manager
    use getm_domain, only: type_getm_grid
+   use getm_operators
    use getm_radiation, only: type_radiation
    use getm_salinity, only: type_salinity
    use getm_temperature, only: type_temperature
@@ -94,7 +95,7 @@ END SUBROUTINE physics_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE physics_initialize(self,grid)
+SUBROUTINE physics_initialize(self,grid,advection,vertical_diffusion)
 
    !! Initialize all dynamical components
 
@@ -103,6 +104,8 @@ SUBROUTINE physics_initialize(self,grid)
 !  Subroutine arguments
    class(type_getm_physics), intent(inout) :: self
    class(type_getm_grid), intent(in), target :: grid
+   class(type_advection), intent(in), target :: advection
+   class(type_vertical_diffusion), intent(in), target :: vertical_diffusion
 
 !  Local constants
 
@@ -118,7 +121,7 @@ SUBROUTINE physics_initialize(self,grid)
 !   kmin = grid%kmin; kmax = grid%kmax
 
 !KB   call self%radiation%initialize(logs,grid)
-   call self%salinity%initialize(grid)
+   call self%salinity%initialize(grid,advection,vertical_diffusion)
    call self%temperature%initialize(grid)
    call self%density%initialize(grid)
    call self%density%density(self%salinity%S,self%temperature%T)

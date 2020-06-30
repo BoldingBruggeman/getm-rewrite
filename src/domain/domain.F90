@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 !>  This module provides all variables related to the bathymetry and
 !>  model grid. The public subroutine $init\_domain()$ is called once
@@ -57,11 +57,11 @@ integer, parameter :: halo=2
    real(real64), parameter :: deg2rad = pi/180._real64
       !! degrees to radians conversion
    real(real64), parameter :: Hland = -10._real64
-   real(real64), parameter :: min_depth = 0.5_real64
+!KB   real(real64), parameter :: Dmin = 0.5_real64
 
 !  Module types and variables
    integer :: vel_depth_method = 0
-   real(real64) :: d_crit=2._real64
+   real(real64) :: Dcrit=2._real64
 
    type, public :: type_grid_config
       !! author: Karsten Bolding
@@ -149,9 +149,9 @@ integer, parameter :: halo=2
       integer ::id_dim_xi, id_dim_yi, id_dim_zi
          !! dimension ids for the interface points
 
-      real(real64) :: min_depth
-      real(real64) :: D_gamma
-      real(real64) :: maxdepth
+      real(real64) :: Dmin
+      real(real64) :: Dgamma
+      real(real64) :: Dmax
       logical :: gamma_surf
       real(real64) :: ddl=-1._real64, ddu=-1._real64
 
@@ -433,7 +433,7 @@ SUBROUTINE start_3d(self)
    do j=self%U%l(2),self%U%l(2)
       do i=self%U%l(1),self%U%l(1)-1
          self%U%ssen(i,j)=0.25*(self%T%sseo(i,j)+self%T%sseo(i+1,j)+self%T%ssen(i,j)+self%T%ssen(i+1,j))
-         self%U%ssen(i,j)=max(self%U%ssen(i,j),-self%U%H(i,j)+self%min_depth)
+         self%U%ssen(i,j)=max(self%U%ssen(i,j),-self%U%H(i,j)+self%Dmin)
       end do
    end do
    self%U%ho=self%U%hn
@@ -442,7 +442,7 @@ SUBROUTINE start_3d(self)
    do j=self%V%l(2),self%V%l(2)-1
       do i=self%V%l(1),self%V%l(1)
          self%V%ssen(i,j)=0.25*(self%T%sseo(i,j)+self%T%sseo(i,j+1)+self%T%ssen(i,j)+self%T%ssen(i,j+1))
-         self%V%ssen(i,j)=max(self%V%ssen(i,j),-self%U%H(i,j)+self%min_depth)
+         self%V%ssen(i,j)=max(self%V%ssen(i,j),-self%U%H(i,j)+self%Dmin)
       end do
    end do
    self%V%ho=self%V%hn

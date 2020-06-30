@@ -33,3 +33,9 @@ add_executable(test_uv_depths EXCLUDE_FROM_ALL
               )
 target_link_libraries(test_uv_depths PRIVATE getm_domain flom)
 add_dependencies( test_all_loms ${test_all_loms}  test_uv_depths )
+
+add_executable(test_vertical_diffusion EXCLUDE_FROM_ALL
+               ${CMAKE_CURRENT_LIST_DIR}/test_vertical_diffusion.F90
+              )
+target_link_libraries(test_vertical_diffusion PRIVATE getm_physics)
+add_dependencies( test_all_loms ${test_all_loms}  test_vertical_diffusion )

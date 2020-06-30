@@ -1,5 +1,4 @@
 ! Copyright (C) 2020 Bolding & Bruggeman
-!!! !!{!./geostrophic/code/output.md!}
 
 MODULE getm_output
 

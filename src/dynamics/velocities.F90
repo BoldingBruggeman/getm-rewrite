@@ -21,13 +21,17 @@ module SUBROUTINE velocities_2d(self)
 !---------------------------------------------------------------------------
    call self%logs%info('velocities_2d()',level=2)
 
-   where (self%domain%U%mask > 0)
-      self%vel2dx = self%U/self%domain%U%D
+#define UG self%domain%U
+   where (UG%mask > 0)
+      self%u1 = self%U/UG%D
    end where
+#undef UG
 
-   where (self%domain%V%mask > 0)
-      self%vel2dy = self%V/self%domain%V%D
+#define VG self%domain%V
+   where (VG%mask > 0)
+      self%v1 = self%V/VG%D
    end where
+#undef VG
 
    return
 END SUBROUTINE velocities_2d
@@ -48,25 +52,29 @@ module SUBROUTINE velocities_3d(self)
    integer :: i,j,k
 !---------------------------------------------------------------------------
    call self%logs%info('velocities_3d()',level=2)
-   do k=self%domain%U%l(3),self%domain%U%u(3)
-      do j=self%domain%U%l(2),self%domain%U%u(2)
-         do i=self%domain%U%l(1),self%domain%U%u(1)
-            if (self%domain%U%mask(i,j) > 0) then
-               self%vel3dx(i,j,k) = self%uu(i,j,k)/self%domain%U%hn(i,j,k)
+#define UG self%domain%U
+   do k=UG%l(3),UG%u(3)
+      do j=UG%l(2),UG%u(2)
+         do i=UG%l(1),UG%u(1)
+            if (UG%mask(i,j) > 0) then
+               self%uk(i,j,k) = self%pk(i,j,k)/UG%hn(i,j,k)
             end  if
          end do
       end do
    end do
+#undef UG
 
-   do k=self%domain%V%l(3),self%domain%V%u(3)
-      do j=self%domain%V%l(2),self%domain%V%u(2)
-         do i=self%domain%V%l(1),self%domain%V%u(1)
-            if (self%domain%V%mask(i,j) > 0) then
-               self%vel3dy(i,j,k) = self%vv(i,j,k)/self%domain%V%hn(i,j,k)
+#define VG self%domain%V
+   do k=VG%l(3),VG%u(3)
+      do j=VG%l(2),VG%u(2)
+         do i=VG%l(1),VG%u(1)
+            if (VG%mask(i,j) > 0) then
+               self%vk(i,j,k) = self%qk(i,j,k)/VG%hn(i,j,k)
             end  if
          end do
       end do
    end do
+#undef VG
 
    return
 END SUBROUTINE velocities_3d
@@ -103,26 +111,26 @@ module SUBROUTINE velocity_shear_frequency(self,num,SS)
 #ifndef NEW_SS
                ! This is an older version which we should keep here.
                SS(i,j,k)=0.5_real64* ( &
-                   ((self%vel3dx(i  ,j,k+1)-self%vel3dx(i  ,j,k)) &
+                   ((self%uk(i  ,j,k+1)-self%uk(i  ,j,k)) &
                    /(0.5_real64*(UG%hn(i  ,j,k+1)+UG%hn(i  ,j,k))))**2 &
-                  +((self%vel3dx(i-1,j,k+1)-self%vel3dx(i-1,j,k)) &
+                  +((self%uk(i-1,j,k+1)-self%uk(i-1,j,k)) &
                    /(0.5_real64*(UG%hn(i-1,j,k+1)+UG%hn(i-1,j,k))))**2 &
-                  +((self%vel3dy(i,j  ,k+1)-self%vel3dy(i,j  ,k)) &
+                  +((self%vk(i,j  ,k+1)-self%vk(i,j  ,k)) &
                    /(0.5_real64*(VG%hn(i,j  ,k+1)+VG%hn(i,j  ,k))))**2 &
-                  +((self%vel3dy(i,j-1,k+1)-self%vel3dy(i,j-1,k)) &
+                  +((self%vk(i,j-1,k+1)-self%vk(i,j-1,k)) &
                    /(0.5_real64*(VG%hn(i,j-1,k+1)+VG%hn(i,j-1,k))))**2 &
                                      )
 #else
                ! This version should better conserve energy.
                SS(i,j,k)=0.5_real64* &
                   ( &
-                   (self%vel3dx(i  ,j,k+1)-self%vel3dx(i  ,j,k))**2 &
+                   (self%uk(i  ,j,k+1)-self%uk(i  ,j,k))**2 &
                    /(UG%hn(i  ,j,k+1)+UG%hn(i  ,j,k))*(num(i,j,k)+num(i+1,j,k)) &
-                  +(self%vel3dx(i-1,j,k+1)-self%vel3dx(i-1,j,k))**2 &
+                  +(self%uk(i-1,j,k+1)-self%uk(i-1,j,k))**2 &
                    /(UG%hn(i-1,j,k+1)+UG%hn(i-1,j,k))*(num(i-1,j,k)+num(i,j,k)) &
-                  +(self%vel3dy(i,j  ,k+1)-self%vel3dy(i,j  ,k))**2 &
+                  +(self%vk(i,j  ,k+1)-self%vk(i,j  ,k))**2 &
                    /(VG%hn(i,j  ,k+1)+VG%hn(i,j  ,k))*(num(i,j,k)+num(i,j+1,k)) &
-                  +(self%vel3dy(i,j-1,k+1)-self%vel3dy(i,j-1,k))**2 &
+                  +(self%vk(i,j-1,k+1)-self%vk(i,j-1,k))**2 &
                    /(VG%hn(i,j-1,k+1)+VG%hn(i,j-1,k))*(num(i,j-1,k)+num(i,j,k)) &
                   )/(0.5_real64*(TG%hn(i,j,k)+TG%hn(i,j,k+1)))/num(i,j,k)
 #endif
@@ -137,27 +145,27 @@ module SUBROUTINE velocity_shear_frequency(self,num,SS)
 ! This is an older version which we should keep here.
 #ifndef NEW_SS
               SS(i,j,k)=_HALF_* (                                             &
-                   ( (uu(i,j,k+1)/hun(i,j,k+1)-uu(i,j,k)/hun(i,j,k))          &
+                   ( (pk(i,j,k+1)/hun(i,j,k+1)-pk(i,j,k)/hun(i,j,k))          &
                    /(_HALF_*(hun(i,j,k+1)+hun(i,j,k))) )**2                   &
-                +  ( (uu(i-1,j,k+1)/hun(i-1,j,k+1)-uu(i-1,j,k)/hun(i-1,j,k))  &
+                +  ( (pk(i-1,j,k+1)/hun(i-1,j,k+1)-pk(i-1,j,k)/hun(i-1,j,k))  &
                    /(_HALF_*(hun(i-1,j,k+1)+hun(i-1,j,k))) )**2               &
-                +  ( (vv(i,j,k+1)/hvn(i,j,k+1)-vv(i,j,k)/hvn(i,j,k))          &
+                +  ( (qk(i,j,k+1)/hvn(i,j,k+1)-qk(i,j,k)/hvn(i,j,k))          &
                    /(_HALF_*(hvn(i,j,k+1)+hvn(i,j,k))) )**2                   &
-                +  ( (vv(i,j-1,k+1)/hvn(i,j-1,k+1)-vv(i,j-1,k)/hvn(i,j-1,k))  &
+                +  ( (qk(i,j-1,k+1)/hvn(i,j-1,k+1)-qk(i,j-1,k)/hvn(i,j-1,k))  &
                    /(_HALF_*(hvn(i,j-1,k+1)+hvn(i,j-1,k))) )**2               &
                             )
 #else
 ! This version should better conserve energy.
               SS(i,j,k)=0.5_real64* ( &
-                   (uu(i,j,k+1)/hun(i,j,k+1)-uu(i,j,k)/hun(i,j,k))**2 &
+                   (pk(i,j,k+1)/hun(i,j,k+1)-pk(i,j,k)/hun(i,j,k))**2 &
                    /(0.25_real64*(hun(i,j,k+1)+hun(i,j,k))*(num(i,j,k)+num(i+1,j,k)) &
-               +  (uu(i-1,j,k+1)/hun(i-1,j,k+1)-uu(i-1,j,k)/hun(i-1,j,k))**2  &
+               +  (pk(i-1,j,k+1)/hun(i-1,j,k+1)-pk(i-1,j,k)/hun(i-1,j,k))**2  &
                   /(_HALF_*(hun(i-1,j,k+1)+hun(i-1,j,k)))                     &
                    *_HALF_*(num(i-1,j,k)+num(i,j,k))                          &
-                +  (vv(i,j,k+1)/hvn(i,j,k+1)-vv(i,j,k)/hvn(i,j,k))**2         &
+                +  (qk(i,j,k+1)/hvn(i,j,k+1)-qk(i,j,k)/hvn(i,j,k))**2         &
                    /(_HALF_*(hvn(i,j,k+1)+hvn(i,j,k)))                        &
                     *_HALF_*(num(i,j,k)+num(i,j+1,k))                         &
-                +  (vv(i,j-1,k+1)/hvn(i,j-1,k+1)-vv(i,j-1,k)/hvn(i,j-1,k))**2 &
+                +  (qk(i,j-1,k+1)/hvn(i,j-1,k+1)-qk(i,j-1,k)/hvn(i,j-1,k))**2 &
                    /(_HALF_*(hvn(i,j-1,k+1)+hvn(i,j-1,k)))                    &
                     *_HALF_*(num(i,j-1,k)+num(i,j,k))                         &
                             )/(_HALF_*(hn(i,j,k)+hn(i,j,k+1)))/num(i,j,k)
@@ -195,7 +203,7 @@ module SUBROUTINE stresses(self)
       do i=UG%l(1)+1,UG%u(1)
          if (UG%mask(i,j) > 0) then
             !k = kumin(i,j) ! bottom index
-            self%taubx(i,j) = -self%vel3dx(i,j,k)*self%rru(i,j) ! momentum flux
+            self%taubx(i,j) = -self%uk(i,j,k)*self%rru(i,j) ! momentum flux
          end if
       enddo
    enddo
@@ -207,7 +215,7 @@ module SUBROUTINE stresses(self)
       do i=VG%l(1)+1,VG%u(1)
          if (VG%mask(i,j) > 0) then
             !k          = kvmin(i,j) ! bottom index
-            self%tauby(i,j) = -self%vel3dy(i,j,k)*self%rrv(i,j) ! momentum flux
+            self%tauby(i,j) = -self%vk(i,j,k)*self%rrv(i,j) ! momentum flux
          end if
       enddo
    enddo
@@ -227,16 +235,18 @@ module SUBROUTINE stresses(self)
 #endif
          ! total bottom stress at T-points
          self%taub(i,j)=sqrt(0.5_real64*( &
-                   (self%vel3dx(i-1,j  ,k)*self%rru(i-1,j  ))**2 &
-                  +(self%vel3dx(i  ,j  ,k)*self%rru(i  ,j  ))**2 &
-                  +(self%vel3dy(i  ,j-1,k)*self%rrv(i  ,j-1))**2 &
-                  +(self%vel3dy(i  ,j  ,k)*self%rrv(i  ,j  ))**2))
+                   (self%uk(i-1,j  ,k)*self%rru(i-1,j  ))**2 &
+                  +(self%uk(i  ,j  ,k)*self%rru(i  ,j  ))**2 &
+                  +(self%vk(i  ,j-1,k)*self%rrv(i  ,j-1))**2 &
+                  +(self%vk(i  ,j  ,k)*self%rrv(i  ,j  ))**2))
          end if
       end do
    end do
 #undef TG
    return
 END SUBROUTINE stresses
+
+#if 0
 
 !---------------------------------------------------------------------------
 
@@ -279,6 +289,7 @@ module SUBROUTINE destag_velocities_3d(self)
 
    return
 END SUBROUTINE destag_velocities_3d
+#endif
 
 !---------------------------------------------------------------------------
 

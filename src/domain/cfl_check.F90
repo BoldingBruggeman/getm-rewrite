@@ -44,12 +44,13 @@ module SUBROUTINE cfl_check(self)
    character(len=256) :: msg
 !-----------------------------------------------------------------------------
    call self%logs%info('cfl_check()',level=2)
-   do j=self%T%l(2),self%T%u(2)
-      do i=self%T%l(1),self%T%u(1)
-         if (self%T%mask(i,j) .ge. 1 .and. self%T%H(i,j) .gt. 0._real64) then
-            c = sqrt(g*self%T%H(i,j))
-            dt = (self%T%dx(i,j)*self%T%dy(i,j))/(sqrt(2._real64)*c &
-                 *sqrt(self%T%dx(i,j)*self%T%dx(i,j)+self%T%dy(i,j)*self%T%dy(i,j)))
+#define TG self%T
+   do j=TG%l(2),TG%u(2)
+      do i=TG%l(1),TG%u(1)
+         if (TG%mask(i,j) .ge. 1 .and. TG%H(i,j) .gt. 0._real64) then
+            c = sqrt(g*TG%H(i,j))
+            dt = (TG%dx(i,j)*TG%dy(i,j)) &
+                /(sqrt(2._real64)*c*sqrt(TG%dx(i,j)*TG%dx(i,j)+TG%dy(i,j)*TG%dy(i,j)))
             if (dt .lt. self%maxdt) then
                pos(1)=i
                pos(2)=j
@@ -59,6 +60,7 @@ module SUBROUTINE cfl_check(self)
          end if
       end do
    end do
+#undef TG
    write(msg,'(A,2I5)')  'position: ',pos
    call self%logs%info(trim(msg),level=3)
    write(msg,'(A,F9.2)') 'depth:   ',hmax

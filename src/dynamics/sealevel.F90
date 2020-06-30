@@ -1,6 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman
 
-!! Calculate the timer varying sealevel using ...
+!! Calculate the time varying sealevel using ...
 
 MODULE getm_sealevel
 
@@ -114,50 +114,48 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
 !---------------------------------------------------------------------------
    call self%logs%info('sealevel_calculate()',level=2)
 #define TG self%domain%T
-#define DXV self%domain%V%dx
-#define DYU self%domain%U%dy
+#define UG self%domain%U
+#define VG self%domain%V
    TG%zo = TG%z
    do j=TG%l(2)+1,TG%u(2)
       do i=TG%l(1)+1,TG%u(1)
          if (TG%mask(i,j) > 0) then
             TG%z(i,j)=TG%z(i,j) &
-                     -dt*((U(i,j)*DYU(i,j)-U(i-1,j  )*DYU(i-1,j)) &
-                         +(V(i,j)*DXV(i,j)-V(i  ,j-1)*DXV(i,j-1))) &
+                     -dt*((U(i,j)*UG%dy(i,j)-U(i-1,j  )*UG%dy(i-1,j)) &
+                         +(V(i,j)*VG%dx(i,j)-V(i  ,j-1)*VG%dx(i,j-1))) &
                          *TG%inv_area(i,j)
 !                         *TG%inv_area(i,j) &
 !                         +dt*fwf(i,j)
          end if
       end do
    end do
-#undef DXV
-#undef DYU
+
 ! U-points
-#define UG self%domain%U
    UG%zo = UG%z
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
          if (UG%mask(i,j) > 0) then
             UG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i+1,j) &
                                       +TG%z(i,j)+TG%z(i+1,j)), &
-                                      -UG%H(i,j)+self%domain%min_depth)
+                                      -UG%H(i,j)+self%domain%Dmin)
          end if
       end do
    end do
-#undef UG
+
 ! V-points
-#define VG self%domain%V
    VG%zo = VG%z
    do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)-1
          if (VG%mask(i,j) > 0) then
             VG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i,j+1) &
                                       +TG%z(i,j)+TG%z(i,j+1)), &
-                                      -VG%H(i,j)+self%domain%min_depth)
+                                      -VG%H(i,j)+self%domain%Dmin)
          end if
       end do
    end do
-#undef VG
 #undef TG
+#undef UG
+#undef VG
    return
 END SUBROUTINE sealevel_calculate
 

@@ -40,8 +40,8 @@ module SUBROUTINE momentum_register(self)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('V', self%V)
 #if 0
-   call fm%register('uu', 'm2/s', 'transport in local x-direction (3D)', standard_name='', dimensions=(/id_dim_z/), data3d=uu(_3D_W_), category='3d', output_level=output_level_debug, part_of_state=.true.)
-   call fm%register('vv', 'm2/s', 'transport in local y-direction (3D)', standard_name='', dimensions=(/id_dim_z/), data3d=vv(_3D_W_), category='3d', output_level=output_level_debug, part_of_state=.true.)
+   call fm%register('pk', 'm2/s', 'transport in local x-direction (3D)', standard_name='', dimensions=(/id_dim_z/), data3d=pk(_3D_W_), category='3d', output_level=output_level_debug, part_of_state=.true.)
+   call fm%register('qk', 'm2/s', 'transport in local y-direction (3D)', standard_name='', dimensions=(/id_dim_z/), data3d=qk(_3D_W_), category='3d', output_level=output_level_debug, part_of_state=.true.)
 #endif
    call self%logs%info('done',level=2)
    return
