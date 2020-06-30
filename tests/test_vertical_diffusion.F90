@@ -4,7 +4,7 @@ PROGRAM test_vertical_diffusion
    !! Testing calculation of depth at U and V points
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
-   use diffusion, only: type_vertical_diffusion
+   use getm_operators, only: type_vertical_diffusion
    IMPLICIT NONE
 
 !  Local constants
@@ -13,7 +13,7 @@ PROGRAM test_vertical_diffusion
    integer, parameter :: Nmax=100
 
 !  Local variables
-   type(type_vertical_diffusion) :: diff
+   type(type_vertical_diffusion) :: vertical_diffusion
    integer :: mask(imin:imax,jmin:jmax)
    real(real64) :: z(imin:imax,jmin:jmax,kmin:kmax)
    real(real64) :: dz(imin:imax,jmin:jmax,kmin:kmax)
@@ -41,7 +41,7 @@ PROGRAM test_vertical_diffusion
    end do
    var(:,:,kmax)= -1._real64
 
-   call diff%initialize(var)
+   call vertical_diffusion%initialize(var)
 
 !   write(*,*) lbound(var,1), ubound(var,1)                                                                                                                                          
 !   write(*,*) lbound(var,2), ubound(var,2)                                                                                                                                          
@@ -53,13 +53,13 @@ PROGRAM test_vertical_diffusion
 
    do n=1,Nmax
 !   do n=1,1
-      call diff%diffusion(mask,dz,dt,cnpar,avmol,nuh,var)
+      call vertical_diffusion%calculate(mask,dz,dt,cnpar,avmol,nuh,var)
          write(100,*) n,var(i,j,55)
    end do
    do k=1,kmax
       write(110,*) k,var(i,j,k)
    end do
 
-   write(*,*) diff%matrix_time/Nmax,diff%tridiag_time/Nmax
+   write(*,*) vertical_diffusion%matrix_time/Nmax,vertical_diffusion%tridiag_time/Nmax
 
 END PROGRAM test_vertical_diffusion
