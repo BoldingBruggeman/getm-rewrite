@@ -54,9 +54,9 @@ MODULE getm_salinity
 
       class(type_logging), pointer :: logs
       class(type_field_manager), pointer :: fm => null()
-      class(type_getm_grid), pointer :: grid
-      class(type_advection), pointer :: advection
-      class(type_vertical_diffusion), pointer :: vertical_diffusion
+      class(type_getm_grid), pointer :: grid => null()
+      class(type_advection), pointer :: advection => null()
+      class(type_vertical_diffusion), pointer :: vertical_diffusion => null()
       TYPE(type_salinity_configuration) :: config
 
 #ifdef _STATIC_
@@ -118,8 +118,8 @@ SUBROUTINE salinity_initialize(self,grid,advection,vertical_diffusion)
 !  Subroutine arguments
    class(type_salinity), intent(inout) :: self
    class(type_getm_grid), intent(in), target :: grid
-   class(type_advection), intent(in), target :: advection
-   class(type_vertical_diffusion), intent(in), target :: vertical_diffusion
+   class(type_advection), intent(in), optional, target :: advection
+   class(type_vertical_diffusion), intent(in), optional, target :: vertical_diffusion
       !! grid dimensions in case of dynamic memory allocation
 
 !  Local constants
@@ -131,8 +131,12 @@ SUBROUTINE salinity_initialize(self,grid,advection,vertical_diffusion)
    call self%logs%info('salinity_initialize()',level=2)
 
    self%grid => grid
-   self%advection => advection
-   self%vertical_diffusion => vertical_diffusion
+   if (present(advection)) then
+      self%advection => advection
+   end if
+   if (present(vertical_diffusion)) then
+      self%vertical_diffusion => vertical_diffusion
+   end if
 #ifndef _STATIC_
    call mm_s('S',self%S,grid%l,grid%u,def=25._real64,stat=stat)
 #endif
