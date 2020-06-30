@@ -1,0 +1,778 @@
+! Copyright (C) 2020 Bolding & Bruggeman
+
+!>  This module provides all variables related to the bathymetry and
+!>  model grid. The public subroutine $init\_domain()$ is called once
+!>  and upon successful completion the bathymetry has been read and
+!>  optionally modified, the calculation masks have been setup and
+!>  all grid related variables have been initialised.\newline
+!>  The $domain$-module depends on another module doing the actual
+!>  reading of variables from files. This is provided through the
+!>  generic subroutine $read\_topo\_file$. This subroutine takes two
+!>  parameters - 1) a fileformat and 2) a filename. Adding a new
+!>  input file format is thus straight forward and can be done
+!>  without any changes to $domain$.
+!>  Public variables defined in this module is used through out the
+!>  code.
+!>  @note
+!>  Hej kurt
+!>  @endnote
+!>  @bug
+!>  Hej kurt
+!>  @endbug
+!>  @warning
+!>  Hej kurt
+!>  @endwarning
+!>  @todo
+!>  Hej kurt
+!>  @endtodo
+
+#define HALO 0
+!> @note
+!> HALO set to 0
+!> @endnote
+
+MODULE getm_domain
+
+   USE, INTRINSIC :: ISO_FORTRAN_ENV
+   use grid_module
+   use memory_manager
+   use logging
+
+   IMPLICIT NONE
+
+   PRIVATE  ! Private scope by default
+
+!  Module constants
+   integer, parameter :: halo = 2
+      !! Allocate all arrays with halo zones
+   integer, parameter :: cartesian=1, spherical=2, curvilinear=3
+      !! Fortran precision
+   real(real64), parameter :: g = 9.81_real64
+      !! Gravity
+   real(real64), parameter :: rearth_default = 6378815._real64
+   real(real64), parameter :: rearth = 6378815._real64
+      !! Earth radius
+   real(real64), parameter :: pi = atan(1._real64)*4._real64
+      !! \( \pi \)
+   real(real64), parameter :: deg2rad = pi/180._real64
+      !! degrees to radians conversion
+   real(real64), parameter :: Hland = -10._real64
+   real(real64), parameter :: min_depth = 0.5_real64
+
+!  Module types and variables
+   integer :: vel_depth_method = 0
+   real(real64) :: d_crit=2._real64
+
+   type, public :: type_grid_config
+      !! author: Karsten Bolding
+      !! version: v0.1
+      !!
+      !! Grid configuration
+
+      character(len=256) :: bathymetry = "bathymetry.nc"
+   end type type_grid_config
+
+   type, public, extends(type_3d_grid) :: type_getm_grid
+      !! author: Karsten Bolding
+      !! version: v0.1
+      !!
+      !! The GETM calculation grid
+
+      integer :: iextr=-1,jextr=-1
+        !!  global grid extend
+      integer :: ilg=-1,ihg=-1,jlg=-1,jhg=-1
+        !!  global index range
+      integer :: ill=-1,ihl=-1,jll=-1,jhl=-1
+        !!  local index range
+
+      real(real64), dimension(:), allocatable :: c1,c2
+        !! cordinate variables from NetCDF file
+      real(real64), dimension(:,:), allocatable :: lon,lat
+        !! longitude and latitude of grid
+      real(real64), dimension(:,:), allocatable :: dlon,dlat
+        !! grid spacing in degrees
+      real(real64), dimension(:,:), allocatable :: x,y
+        !! cartesian cordinates off grid - e.g. UTM
+      real(real64), dimension(:,:), allocatable :: dx,dy
+        !! grid spacing in meters
+      real(real64), dimension(:,:), allocatable :: cor
+        !! Coriolis term
+      real(real64), dimension(:,:), allocatable :: area,inv_area
+        !! grid area in m2 and inverse area
+      real(real64), dimension(:,:), allocatable :: H
+        !! undisturbed water depth
+      integer, dimension(:,:), allocatable :: mask
+        !! mask=0 -> land
+      real(real64), dimension(:,:), allocatable :: D
+        !! total water depth - time varying
+      real(real64), dimension(:,:,:), allocatable :: ho, hn
+        !! layer heights - old and new time step
+      real(real64), dimension(:,:,:), allocatable :: zf, zc
+        !! depth to grid faces and grid centers
+       logical :: is_initialized = .false.
+
+      contains
+
+!      procedure :: initialize => grid_initialize
+!      procedure, public :: uv_depths => grid_uv_depths
+!      procedure :: print => grid_print
+      procedure :: configure => grid_configure
+      procedure :: print_info => grid_print_info
+      procedure :: print_mask => grid_print_mask
+      procedure :: report => grid_report
+   end type type_getm_grid
+
+   TYPE, public :: type_getm_domain
+      integer :: domain_type
+      logical :: domain_ready = .false.
+      real(real64) :: maxdt=huge(1._real64)
+         !! Cartesian, spherical or curvi-linear
+         !! Infer from NetCDF bathymetry file
+      TYPE(type_getm_grid) :: S, U, V, X
+         !! C-grid
+         !! S, U, V, X grid - Scalar, U-momentum, V-momentum and corners
+
+      contains
+
+      procedure :: configure => domain_configure
+      procedure :: report => domain_report
+      procedure :: uv_depth => uv_depth
+      procedure :: cfl_check => cfl_check
+      procedure :: depth_update => depth_update
+   end type type_getm_domain
+
+   INTERFACE
+      module subroutine metrics(self)
+         class(type_getm_domain), intent(inout) :: self
+      end subroutine metrics
+
+      module subroutine uv_depth(self,logs)
+         class(type_getm_domain), intent(inout) :: self
+         class(type_logging), intent(in) :: logs
+      end subroutine uv_depth
+
+      module subroutine cfl_check(self,logs)
+         class(type_getm_domain), intent(inout) :: self
+         class(type_logging), intent(in) :: logs
+      end subroutine cfl_check
+
+      module subroutine depth_update(self,logs,z,zo)
+         class(type_getm_domain), intent(inout) :: self
+         class(type_logging), intent(in) :: logs
+         real(real64), dimension(:,:), intent(in) :: z,zo
+      end subroutine depth_update
+   END INTERFACE
+
+
+!  Public members
+!KB   public metrics, uv_depth, cfl_check, depth_update
+
+!-----------------------------------------------------------------------------
+
+CONTAINS
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
+
+   !! Configure the type_grid 
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_grid), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+   integer, intent(in), optional :: imin,imax
+   integer, intent(in), optional :: jmin,jmax
+   integer, intent(in), optional :: kmin,kmax
+   integer, intent(in), dimension(3), optional :: halo
+      !! grid dim in case of dynamic memory allocation
+
+!  Local constants
+
+!  Local variables
+!-----------------------------------------------------------------------
+   if (self%is_initialized) return
+   call logs%info('grid_configure()',level=1)
+
+   call self%type_3d_grid%create(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
+
+!KB   self%is_initialized = .true.
+   return
+END SUBROUTINE grid_configure
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE grid_report(self,logs,unit,header)
+
+   !! Report the configured domain
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_grid), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+   integer, intent(in) :: unit
+   character(len=*), intent(in) :: header
+
+!  Local constants
+
+!  Local variables
+!-----------------------------------------------------------------------
+   call logs%info('grid_report()',level=2)
+
+   call logs%costum(unit,trim(header))
+   call self%print(unit)
+   call logs%costum(unit,'mask')
+   call self%print_mask(unit)
+   call logs%costum(unit,'')
+   return
+END SUBROUTINE grid_report
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE grid_print_info(self,logs)
+   class(type_getm_grid), intent(in) :: self
+   class(type_logging), intent(in) :: logs
+
+   character(len=16) :: str
+
+   call self%type_3d_grid%print(1)
+
+#if 0
+#if _STATIC_
+   logs%info('Grid dim (static):', level=1)
+#else
+   logs%info('Grid dim (dynamic):', level=1)
+#endif
+   write(str,'(I05)') self%dims%imin; 
+   call logs%info('imin = ', level=2, msg2=trim(str))
+   write(str,'(I05)') self%dims%imax; 
+   call logs%info('imax = ', level=2, msg2=trim(str))
+   write(str,'(I05)') self%dims%jmin; 
+   call logs%info('jmin = ', level=2, msg2=trim(str))
+   write(str,'(I05)') self%dims%jmax; 
+   call logs%info('jmax = ', level=2, msg2=trim(str))
+#endif
+
+   return
+END SUBROUTINE grid_print_info
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE grid_print_mask(self,unit)
+
+!> @todo
+!> grid_print_mask: allow for other masks as well
+!> @endtodo
+
+  IMPLICIT NONE
+
+! Subroutine arguments
+   class(type_getm_grid), intent(in) :: self
+   integer, intent(in) :: unit
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+!-----------------------------------------------------------------------------
+#if 0
+   do j=jmax+HALO,jmin-HALO,-1
+!      write(0,'(5000(i1,1x))') (mask(i,j), i=imin,imax)
+      write(unit,'(5000(i1))') (mask(i,j), i=imin-HALO,imax+HALO,1)
+   end do
+#else
+   do j=self%u(2)-halo,self%l(2)+halo,-1
+!      write(0,'(5000(i1,1x))') (mask(i,j), i=imin,imax)
+      write(unit,'(5000(i1))') (self%mask(i,j), i=self%l(1)+halo,self%u(1)-halo)
+   end do
+#endif
+   return
+END SUBROUTINE grid_print_mask
+
+!-----------------------------------------------------------------------------
+
+!> domain_configure should be a module precedure
+
+SUBROUTINE domain_configure(self,logs)
+
+   !! Configure the type_grid 
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+
+!  Local constants
+
+!  Local variables
+   integer :: imin,imax,jmin,jmax,kmin,kmax
+!-----------------------------------------------------------------------
+   call logs%info('domain_configure()',level=1)
+
+!  The S grid should be initialized during the reading of bathymetry
+!  call self%S%create(imin-halo,imax+halo,jmin-halo,jmax+halo,kmin,kmax)
+   imin = self%S%imin; imax = self%S%imax
+   jmin = self%S%jmin; jmax = self%S%jmax
+   kmin = self%S%kmin; kmax = self%S%kmax
+
+   call self%U%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%S%halo)
+   call self%V%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%S%halo)
+   call self%X%configure(logs,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%S%halo)
+
+   call allocate_variables(self)
+
+!  set local and global grid extend
+   self%S%ill=self%S%l(1); self%S%ihl=self%S%u(1)
+   self%S%jll=self%S%l(2); self%S%jhl=self%S%u(2)
+
+!KB   call self%uv_depths(logs)
+
+!KB   call self%cfl_check(logs)
+
+!KB   call self%metrics()
+
+   self%domain_ready = .true.
+
+!>  @todo
+!>  various modifications - boundaries, mask and bathymetry
+!>  part_domain
+!>  @endtodo
+
+   return
+END SUBROUTINE domain_configure
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE domain_report(self,logs)
+
+   !! Report the configured domain
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+
+!  Local constants
+   integer, parameter :: sunit=100
+   integer, parameter :: uunit=101
+   integer, parameter :: vunit=102
+   integer, parameter :: xunit=103
+
+!  Local variables
+!-----------------------------------------------------------------------
+   call logs%info('domain_report()',level=1)
+
+   if (.not. self%domain_ready) then
+      write(*,*) 'domain is not - fully - configured'
+   else
+      call self%S%report(logs,sunit,'S-grid info: ')
+      call self%U%report(logs,uunit,'U-grid info: ')
+      call self%V%report(logs,vunit,'V-grid info: ')
+      call self%X%report(logs,xunit,'X-grid info: ')
+   end if
+   return
+END SUBROUTINE domain_report
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE allocate_variables(self)
+   !! Allocate all domain related variables
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+!-----------------------------------------------------------------------------
+#ifndef _STATIC_
+   ! S-grid
+   call allocate_grid_variables(self%S)
+   ! U-grid
+   call allocate_grid_variables(self%U)
+   ! V-grid
+   call allocate_grid_variables(self%V)
+   ! X-grid
+   call allocate_grid_variables(self%X)
+#endif
+   return
+END SUBROUTINE allocate_variables
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE allocate_grid_variables(self)
+   !! Allocate all domain related variables
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_grid), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: stat
+!-----------------------------------------------------------------------------
+#ifndef _STATIC_
+   call mm_s('H',self%H,self%l(1:2),self%u(1:2),def=-10._real64,stat=stat)
+   call mm_s('x',self%x,self%H,def=-9999._real64,stat=stat)
+   call mm_s('y',self%y,self%H,def=-9999._real64,stat=stat)
+   call mm_s('dx',self%dx,self%H,def=-9999._real64,stat=stat)
+   call mm_s('dy',self%dy,self%H,def=-9999._real64,stat=stat)
+   call mm_s('lon',self%lon,self%H,def=-9999._real64,stat=stat)
+   call mm_s('lat',self%lat,self%H,def=-9999._real64,stat=stat)
+   call mm_s('dlon',self%dlon,self%H,def=-9999._real64,stat=stat)
+   call mm_s('dlat',self%dlat,self%H,def=-9999._real64,stat=stat)
+   call mm_s('area',self%area,self%H,def=-9999._real64,stat=stat)
+   call mm_s('inv_area',self%inv_area,self%H,def=-9999._real64,stat=stat)
+   call mm_s('cor',self%cor,self%H,def=-9999._real64,stat=stat)
+   call mm_s('mask',self%mask,self%l(1:2),self%u(1:2),def=0,stat=stat)
+   call mm_s('D',self%D,self%H,def=-9999._real64,stat=stat)
+#if 0   
+   call mm_s('hn',self%hn,self%l(1:3),self%u(1:3),def=-9999._real64)
+   call mm_s('ho',self%ho,self%hn,def=-9999._real64)
+   call mm_s('zf',self%zf,self%hn,def=-9999._real64)
+   call mm_s('zc',self%zc,self%S%hn,def=-9999._real64)
+#endif        
+#endif
+   return
+END SUBROUTINE allocate_grid_variables
+
+#if 0
+!-----------------------------------------------------------------------------
+
+SUBROUTINE metrics(self)
+   !! Allocate all domain related variables
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j,k
+   real(real64) :: dx,dy
+   real(real64) :: dlon,dlat
+!-----------------------------------------------------------------------------
+
+!  calculate missing fields - will depend on the domain_type 
+!  and what is read from bathymetry.nc
+   select case (self%domain_type)
+      case(cartesian)
+!KB         write(*,*) self%S%c1(1)
+!KB         write(*,*) self%S%c1(100)
+         dx = (self%S%c1(100) - self%S%c1(1))/99
+!KB         write(*,*) self%S%c2(1)
+!KB         write(*,*) self%S%c2(30)
+         dy = (self%S%c2(30) - self%S%c2(1))/29
+!KB         write(*,*) dx,dy
+         self%S%dx = dx; self%S%dy = dy
+         self%U%dx = dx; self%U%dy = dy
+         self%V%dx = dx; self%V%dy = dy
+         self%X%dx = dx; self%X%dy = dy
+         if (allocated(self%S%lon) .and. allocated (self%S%lat)) then
+            write(*,*) 'longitude and latitude at u and v points'
+            do j=self%S%jll,self%S%jhl
+               do i=self%S%ill,self%S%ihl-1
+                  self%U%lat(i,j) = 0.5_real64 * ( self%S%lat(i,j) + self%S%lat(i+1,j) )
+               end do
+            end do
+            do j=self%S%jll,self%S%jhl-1
+               do i=self%S%ill,self%S%ihl
+                  self%V%lat(i,j) = 0.5_real64 * ( self%S%lat(i,j) + self%S%lat(i,j+1) )
+               end do
+            end do
+         end if
+      case(spherical)
+         dlon = (self%S%c1(100) - self%S%c1(1))/99
+         dlat = (self%S%c2(30) - self%S%c2(1))/29
+!KB         write(*,*) 'dlon, dlat ',dlon,dlat
+         do j=self%S%jll+halo,self%S%jhl-halo
+            do i=self%S%ill+halo,self%S%ihl-halo
+               self%S%lon(i,j) = self%S%c1(i)
+               self%S%lat(i,j) = self%S%c2(j)
+               self%S%dx(i,j) = deg2rad*dlon*rearth*cos(deg2rad*self%S%lat(i,j))
+!               self%V%dx(i,j) = deg2rad*dlon*rearth*cos(deg2rad*self%X%lat(i,j))
+            end do
+         end do
+         self%S%dy = deg2rad*dlat*rearth
+
+         self%U%dx = self%S%dx
+         self%U%dy = self%S%dy
+
+         self%V%dy = self%S%dy
+
+         self%X%dx = self%V%dx
+         self%X%dy = self%S%dy
+#if 0         
+      case(curvilinear)
+#endif
+      case default
+         stop 'emil' 
+   end select
+
+!  calculate various metrics- will depend on the domain_type 
+   select case (self%domain_type)
+      case(cartesian)
+         self%S%area = self%S%dx*self%S%dy
+         self%U%area = self%U%dx*self%U%dy
+         self%V%area = self%V%dx*self%V%dy
+         self%X%area = self%X%dx*self%X%dy
+      case(spherical)
+            write(*,*) 'longitude and latitude at u and v points'
+#if 0
+      case(curvilinear)
+#endif
+      case default
+         stop 'egon' 
+   end select
+
+   self%S%inv_area = 1._real64/self%S%area
+   self%U%inv_area = 1._real64/self%U%area
+   self%V%inv_area = 1._real64/self%V%area
+   self%X%inv_area = 1._real64/self%X%area
+   return
+END SUBROUTINE metrics
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE uv_depths(self,logs)
+
+!> In this routine which is called once during the model initialisation,
+!> the bathymetry value in the U- and the V-points are calculated from the
+!> bathymetry values in the T-points. The interpolation depends on the value
+!> which is given to {\tt vel\_depth\_method}:
+!>
+!> \begin{equation}
+!> H^u_{i,j} = \left\{
+!> \begin{array}{ll}
+!> \displaystyle
+!> \frac12 \left(H_{i,j}+H_{i+1,j}\right), &
+!> \displaystyle
+!> \mbox{ for vel_depth_method } =0, \\ \\
+!> \displaystyle
+!> \min\left\{H_{i,j}+H_{i+1,j}\right\}, &
+!> \displaystyle
+!> \mbox{ for vel_depth_method } =1, \\ \\
+!> \displaystyle
+!> \min\left\{H_{i,j}+H_{i+1,j}\right\}, &
+!> \displaystyle
+!> \mbox{ for vel_depth_method } =2 \mbox{ and } \min\{H_{i,j}i,H_{i+1,j}\}<D_{crit} \\ \\
+!> \displaystyle
+!> \frac12 \left(H_{i,j}+H_{i+1,j}\right), &
+!> \displaystyle
+!> \mbox{ for vel_depth_method } =2 \mbox{ and } \min\{H_{i,j},H_{i+1,j}\}\geq D_{crit} \\ \\
+!> \end{array}
+!> \right.
+!> \end{equation}
+!>
+!> The calculation of  \(H^v_{i,j}\) is done accordingly.
+!> 
+!> The options 1 and 2 for **vel\_depth\_method** may help to stabilise
+!> calculations when drying and flooding is involved.
+!> 
+
+  IMPLICIT NONE
+
+! Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+
+! Local constants
+
+! Local variables
+   integer :: i,j
+!-----------------------------------------------------------------------------
+   call logs%info('uv_depths()',level=2)
+
+   do j=self%U%l(2),self%U%u(2)
+      do i=self%U%l(1),self%U%u(1)-1
+         select case (vel_depth_method)
+            case (0)
+               self%U%H(i,j) = 0.5_real64 * ( self%S%H(i,j) + self%S%H(i+1,j) )
+            case (1)
+               self%U%H(i,j)=min(self%S%H(i,j),self%S%H(i+1,j))
+            case (2)
+               if (self%S%H(i,j) .lt. d_crit .or. self%S%H(i+1,j) .lt. d_crit) then
+                  self%U%H(i,j)=min(self%S%H(i,j),self%S%H(i+1,j))
+               else
+                  self%U%H(i,j) = 0.5_real64 * ( self%S%H(i,j) + self%S%H(i+1,j) )
+               end if
+         end select
+      end do
+   end do
+
+   do j=self%V%l(2),self%V%u(2)-1
+      do i=self%V%l(1),self%V%u(1)
+         select case (vel_depth_method)
+            case (0)
+               self%V%H(i,j) = 0.5_real64 * ( self%S%H(i,j) + self%S%H(i,j+1) )
+            case (1)
+               self%V%H(i,j)=min(self%S%H(i,j),self%S%H(i,j+1))
+            case (2)
+               if (self%S%H(i,j) .lt. d_crit .or. self%S%H(i,j+1) .lt. d_crit) then
+                  self%V%H(i,j)=min(self%S%H(i,j),self%S%H(i,j+1))
+               else
+                  self%V%H(i,j) = 0.5_real64 * ( self%S%H(i,j) + self%S%H(i,j+1) )
+               end if
+         end select
+      end do
+   end do
+
+   return
+END SUBROUTINE uv_depths
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE cfl_check(self,logs)
+
+   !! This routine loops over all horizontal grid points and calculated the
+   !! maximum time step according to the shallow water criterium by
+   !! \cite{BECKERSea93}:
+   !!
+   !! \begin{equation}
+   !! \Delta t_{\max} = \min_{i,j} \left\{\frac{\Delta x_{i,j} \Delta y_{i,j}}
+   !! {\sqrt{2} c_{i,j} \sqrt{\Delta x_{i,j}^2+ \Delta y_{i,j}^2}}\right\}
+   !! \end{equation}
+   !!
+   !! with the local Courant number
+   !!
+   !! \begin{equation}
+   !! c_{i,j}=\sqrt{g H_{i,j}},
+   !! \end{equation}
+   !!
+   !! where $g$ is the gravitational acceleration and $H_{i,j}$ is the local
+   !! bathymetry value. In case that the chosen micro time step $\Delta t_m$
+   !! is larger than $\Delta t_{\max}$, the program will be aborted. In any
+   !! the CFL diagnostics will be written to standard output.
+
+  IMPLICIT NONE
+
+! Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+   real(real64) :: c,dt
+   integer, dimension(2) :: pos
+   real(real64) :: hmax
+   character(len=256) :: msg
+!-----------------------------------------------------------------------------
+   do j=self%S%l(2),self%S%u(2)
+      do i=self%S%l(1),self%S%u(1)
+         if (self%S%mask(i,j) .ge. 1 .and. self%S%H(i,j) .gt. 0._real64) then
+            c = sqrt(g*self%S%H(i,j))
+            dt = (self%S%dx(i,j)*self%S%dy(i,j))/(sqrt(2._real64)*c &
+                 *sqrt(self%S%dx(i,j)*self%S%dx(i,j)+self%S%dy(i,j)*self%S%dy(i,j)))
+            if (dt .lt. self%maxdt) then
+               pos(1)=i
+               pos(2)=j
+               hmax=self%S%H(i,j)
+               self%maxdt=dt
+            end if
+         end if
+      end do
+   end do
+   call logs%info('cfl_check()',level=2)
+   write(msg,'(A,2I5)')  'position: ',pos
+   call logs%info(trim(msg),level=3)
+   write(msg,'(A,F9.2)') 'depth:   ',hmax
+   call logs%info(trim(msg),level=3)
+   write(msg,'(A,F9.2)') 'maxdt:   ',self%maxdt
+   call logs%info(trim(msg),level=3)
+   return
+END SUBROUTINE cfl_check
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE domain_depth_update(self,logs,z,zo)
+
+   !! This routine which is called at every micro time step updates all
+   !! necessary depth related information. These are the water depths in the
+   !! T-, U- and V-points, {\tt D}, {\tt DU} and {\tt DV}, respectively,
+   !! and the drying value $\alpha$ defined in equation (\ref{alpha})
+   !! on page \pageref{alpha} in the T-, the U- and the V-points
+   !! ({\tt dry\_z}, {\tt dry\_u} and {\tt dry\_v}).
+   !!
+   !! When working with the option {\tt SLICE\_MODEL}, the water depths in the
+   !! V-points are mirrored from $j=2$ to $j=1$ and $j=3$. 
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+   real(real64), dimension(:,:), intent(in) :: z,zo
+
+!  Local constants
+
+!  Local variables
+   real(real64) :: x
+   integer :: i,j
+!---------------------------------------------------------------------------
+   call logs%info('depth_update()',level=2)
+
+!  S-points   
+   do j=self%S%l(2),self%S%u(2)
+      do i=self%S%l(1),self%S%u(1)
+#ifdef USE_MASK
+      if (self%S%mask(i,j) > 0) then
+#endif
+         self%S%D(i,j) = z(i,j)+self%S%H(i,j)
+#ifdef USE_MASK
+      end if
+#endif
+      end do
+   end do
+
+!  U-points   
+   do j=self%U%l(2),self%U%u(2)
+      do i=self%U%l(1),self%U%u(1)-1
+#ifdef USE_MASK
+      if (self%U%mask(i,j) > 0) then
+#endif
+         x=max(0.25_real64*(zo(i,j)+zo(i+1,j)+z(i,j)+z(i+1,j)),-self%U%H(i,j)+min_depth)
+         self%U%D(i,j) = x+self%U%H(i,j)
+#ifdef USE_MASK
+      end if
+#endif
+      end do
+   end do
+
+!  V-points   
+   do j=self%V%l(2),self%V%u(2)-1
+      do i=self%V%l(1),self%V%u(1)
+#ifdef USE_MASK
+      if (self%V%mask(i,j) > 0) then
+#endif
+         x=max(0.25_real64*(zo(i,j)+zo(i,j+1)+z(i,j)+z(i,j+1)),-self%V%H(i,j)+min_depth)
+         self%V%D(i,j) = x+self%V%H(i,j)
+#ifdef USE_MASK
+      end if
+#endif
+      end do
+   end do
+
+   return
+END SUBROUTINE domain_depth_update
+
+#endif
+!---------------------------------------------------------------------------
+
+END MODULE getm_domain
+
+
+#if 0
+#include "x2uvc.F90"
+#endif

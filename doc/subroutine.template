@@ -1,0 +1,30 @@
+!>
+!>
+
+SUBROUTINE < name >(< argument list >)
+
+   !! Feeds your cats and dogs, if enough food is available. If not enough
+   !! food is available, some of your pets will get angry.
+
+  < Module imports >
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   integer, intent(in)  :: cats
+      !! The number of cats to keep track of.
+
+!  Local constants
+
+!  Local variables
+
+
+!-----------------------------------------------------------------------------
+
+
+  < Executable code >
+
+
+    return
+END SUBROUTINE <name>
+
