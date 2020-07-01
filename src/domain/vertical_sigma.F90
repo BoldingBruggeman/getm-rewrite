@@ -76,42 +76,48 @@ module SUBROUTINE do_sigma(self)
 !-----------------------------------------------------------------------------
    call self%logs%info('do_sigma()',level=3)
    !! why not ho=hn as sseo=ssen
-   do j=self%T%l(2),self%T%u(2)
-      do i=self%T%l(1),self%T%u(1)
-         if (self%T%mask(i,j) > 0) then
-            self%T%ho(i,j,:)=(self%T%sseo(i,j)+self%T%H(i,j))*dga(:)
-            self%T%hn(i,j,:)=(self%T%ssen(i,j)+self%T%H(i,j))*dga(:)
-!            self%T%ho(i,j,:)=(self%T%H(i,j))*dga(:)
-!            self%T%hn(i,j,:)=(self%T%H(i,j))*dga(:)
+#define TG self%T
+   do j=TG%l(2),TG%u(2)
+      do i=TG%l(1),TG%u(1)
+         if (TG%mask(i,j) > 0) then
+            TG%ho(i,j,:)=(TG%sseo(i,j)+TG%H(i,j))*dga(:)
+            TG%hn(i,j,:)=(TG%ssen(i,j)+TG%H(i,j))*dga(:)
+!            TG%ho(i,j,:)=(TG%H(i,j))*dga(:)
+!            TG%hn(i,j,:)=(TG%H(i,j))*dga(:)
          end if
       end do
    end do
+#undef TG
 
    !! why not ho=hn as sseo=ssen
    !! if ssen and H are updated in halo zones - extend to all domain
    !! what about mask
-   do j=self%U%l(2),self%U%u(2)
-      do i=self%U%l(1),self%U%u(1)-1
-         if (self%U%mask(i,j) > 0) then
-            self%U%ho(i,j,:)=(self%U%sseo(i,j)+self%U%H(i,j))*dga(:)
-            self%U%hn(i,j,:)=(self%U%ssen(i,j)+self%U%H(i,j))*dga(:)
-            self%U%ho(i,j,:)=(self%U%H(i,j))*dga(:) ! KB
-            self%U%hn(i,j,:)=(self%U%H(i,j))*dga(:) ! KB
+#define UG self%U
+   do j=UG%l(2),UG%u(2)
+      do i=UG%l(1),UG%u(1)-1
+         if (UG%mask(i,j) > 0) then
+            UG%ho(i,j,:)=(UG%sseo(i,j)+UG%H(i,j))*dga(:)
+            UG%hn(i,j,:)=(UG%ssen(i,j)+UG%H(i,j))*dga(:)
+            UG%ho(i,j,:)=(UG%H(i,j))*dga(:) ! KB
+            UG%hn(i,j,:)=(UG%H(i,j))*dga(:) ! KB
          end if
       end do
    end do
+#undef UG
 
    !! if ssen and H are updated in halo zones - extend to all domain
-   do j=self%V%l(2),self%V%u(2)-1
-      do i=self%V%l(1),self%V%u(1)
-         if (self%V%mask(i,j) > 0) then
-            self%V%ho(i,j,:)=(self%U%sseo(i,j)+self%V%H(i,j))*dga(:)
-            self%V%hn(i,j,:)=(self%U%ssen(i,j)+self%V%H(i,j))*dga(:)
-            self%V%ho(i,j,:)=(self%V%H(i,j))*dga(:) ! KB
-            self%V%hn(i,j,:)=(self%V%H(i,j))*dga(:) ! KB
+#define VG self%V
+   do j=VG%l(2),VG%u(2)-1
+      do i=VG%l(1),VG%u(1)
+         if (VG%mask(i,j) > 0) then
+            VG%ho(i,j,:)=(VG%H(i,j))*dga(:)
+            VG%hn(i,j,:)=(VG%H(i,j))*dga(:)
+            VG%ho(i,j,:)=(VG%H(i,j))*dga(:) ! KB
+            VG%hn(i,j,:)=(VG%H(i,j))*dga(:) ! KB
          end if
       end do
    end do
+#undef VG
    return
 END SUBROUTINE do_sigma
 
