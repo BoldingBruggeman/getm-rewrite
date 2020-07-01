@@ -10,13 +10,8 @@ target_sources( getm_domain PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/domain/depth_update.F90
     ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_coordinates.F90
     ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_gvc.F90
-    #${CMAKE_CURRENT_LIST_DIR}/domain/vertical_sigma.F90
+    ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_sigma.F90
 )
-
-#KBset_property( TARGET getm_variables PROPERTY FOLDER variables )
-#KBtarget_sources( getm_variables PRIVATE
-    #KB${CMAKE_CURRENT_LIST_DIR}/variables/variables.F90
-#KB)
 
 set_property( TARGET getm_airsea PROPERTY FOLDER airsea )
 target_sources( getm_airsea PRIVATE
