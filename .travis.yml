@@ -1,0 +1,21 @@
+dist: bionic
+language: python
+os: linux
+
+addons:
+   apt:
+      packages:
+#         - netcdf-bin libnetcdf-dev openmpi-bin libopenmpi-dev gfortran
+         - netcdf-bin libnetcdf-dev gfortran
+
+python:
+  - '3.6'
+
+script:
+  - mkdir build && cd build
+  - cmake ../ -DCMAKE_Fortran_COMPILER=gfortran
+  - make
+
+branches:
+  only:
+  - devel
