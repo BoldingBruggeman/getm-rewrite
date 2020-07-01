@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
    !! This routine loops over all horizontal grid points and calculated the
    !! maximum time step according to the shallow water criterium by
    !! \cite{BECKERSea93}:

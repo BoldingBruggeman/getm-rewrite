@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard and Hans Burchard
 
 #ifdef _STATIC_
 #include "dimensions.h"

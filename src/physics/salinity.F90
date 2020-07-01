@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 !> In this module, the salinity equation is processed by
 !> reading in the namelist {\tt salt} and initialising the salinity field

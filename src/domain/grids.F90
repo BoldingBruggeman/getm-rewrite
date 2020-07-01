@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 !>  This module provides all variables related to the bathymetry and
 

@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
    !! This routine which is called at every micro time step updates all
    !! necessary depth related information. These are the water depths in the
    !! T-, U- and V-points, {\tt D}, {\tt DU} and {\tt DV}, respectively,

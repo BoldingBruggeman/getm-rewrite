@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 !> In this routine which is called once during the model initialisation,
 !> the bathymetry value in the U- and the V-points are calculated from the
