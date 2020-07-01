@@ -1,3 +1,5 @@
+# issues with submodules
+
 dist: bionic
 language: python
 os: linux
