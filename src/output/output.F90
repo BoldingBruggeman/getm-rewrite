@@ -30,6 +30,7 @@ MODULE getm_output
    contains
       procedure :: configure => configure_output
       procedure :: initialize => initialize_output
+      procedure :: prepare_output => prepare_output
       procedure :: do_output => do_output
       procedure :: julian_day => getm_julian_day
       procedure :: calendar_date => getm_calendar_date
@@ -81,11 +82,37 @@ SUBROUTINE initialize_output(self,fm)
    call self%logs%info('output_initialize()',level=1)
    self%fm => fm
    allocate(type_getm_output::output_manager_host)
-!   call self%fm%list()
+!KB   call self%fm%list()
    call output_manager_init(self%fm,title)
    call self%logs%info('done',level=1)
    return
 END SUBROUTINE initialize_output
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE prepare_output(self,t,n)
+   !! Save data to NetCDF files
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_output), intent(inout) :: self
+   type(datetime), intent(in) :: t
+   integer, intent(in) :: n
+
+!  Local constants
+
+!  Local variables
+   integer :: julday
+   integer :: secs, microsecs
+!-----------------------------------------------------------------------------
+   call self%logs%info('do_output()',level=2)
+   call self%julian_day(t%getYear(),t%getMonth(),t%getDay(),julday)
+   secs = 3600*t%getHour()+60*t%getMinute()+t%getSecond()
+   microsecs = 1000*t%getmilliSecond()
+   call output_manager_prepare_save(julday,secs,microsecs,n)
+   return
+END SUBROUTINE prepare_output
 
 !-----------------------------------------------------------------------------
 
