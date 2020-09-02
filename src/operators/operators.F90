@@ -17,6 +17,7 @@ MODULE getm_operators
    !!   Solves the - vertical - diffusion equation.
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
+   USE getm_domain
 
    IMPLICIT NONE
 
@@ -32,8 +33,8 @@ MODULE getm_operators
 
       integer, private :: imin,imax,jmin,jmax,kmin,kmax
 
-      real(real64) :: matrix_time
-      real(real64) :: tridiag_time
+!KB      real(real64) :: matrix_time
+!KB      real(real64) :: tridiag_time
 
       contains
 
@@ -43,20 +44,16 @@ MODULE getm_operators
    end type type_advection
 
    INTERFACE
-      module subroutine advection_initialize(self,var)
+      module subroutine advection_initialize(self,scheme)
          class(type_advection), intent(inout) :: self
-         real(real64), dimension(:,:,:), intent(in) :: var
-            !! variable to be diffused
+         integer, intent(in) :: scheme
       end subroutine advection_initialize
 
-      module subroutine advection_calculate(self,mask,dz,dt,cnpar,avmol,nuh,var)
+      module subroutine advection_calculate(self,scheme,domain,dt,var)
          class(type_advection), intent(inout) :: self
-         integer, dimension(:,:), intent(in) :: mask
-         real(real64), dimension(:,:,:), intent(in) :: dz
+         integer, intent(in) :: scheme
+         class(type_getm_domain), intent(in) :: domain
          real(real64), intent(in) :: dt
-         real(real64), intent(in) :: cnpar
-         real(real64), intent(in) :: avmol
-         real(real64), dimension(:,:,:), intent(in) :: nuh
          real(real64), dimension(:,:,:), intent(inout) :: var
       end subroutine advection_calculate
    END INTERFACE

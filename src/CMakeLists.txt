@@ -61,6 +61,7 @@ set_property( TARGET getm_operators PROPERTY FOLDER operators )
 target_sources( getm_operators PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/operators/operators.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/advection.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
 )
 
