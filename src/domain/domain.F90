@@ -387,23 +387,26 @@ SUBROUTINE domain_report(self)
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
 
-!  Local constants
-   integer, parameter :: sunit=100
-   integer, parameter :: uunit=101
-   integer, parameter :: vunit=102
-   integer, parameter :: xunit=103
-
 !  Local variables
+   integer :: gridunit
 !-----------------------------------------------------------------------
    call self%logs%info('domain_report()',level=1)
 
    if (.not. self%domain_ready) then
       write(*,*) 'domain is not - fully - configured'
    else
-      call self%T%report(self%logs,sunit,'S-grid info: ')
-      call self%U%report(self%logs,uunit,'U-grid info: ')
-      call self%V%report(self%logs,vunit,'V-grid info: ')
-      call self%X%report(self%logs,xunit,'X-grid info: ')
+      open(newunit=gridunit,file='sgrid.dat')
+      call self%T%report(self%logs,gridunit,'S-grid info: ')
+      close(gridunit)
+      open(newunit=gridunit,file='ugrid.dat')
+      call self%U%report(self%logs,gridunit,'U-grid info: ')
+      close(gridunit)
+      open(newunit=gridunit,file='vgrid.dat')
+      call self%V%report(self%logs,gridunit,'V-grid info: ')
+      close(gridunit)
+      open(newunit=gridunit,file='xgrid.dat')
+      call self%X%report(self%logs,gridunit,'X-grid info: ')
+      close(gridunit)
    end if
    call self%logs%info('done',level=1)
    return
