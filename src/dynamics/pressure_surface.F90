@@ -27,24 +27,30 @@ module SUBROUTINE pressure_surface(self,z,sp)
    real(real64) :: gammai= 10., Dmin=0.5_real64
 !---------------------------------------------------------------------------
    call self%logs%info('pressure_external()',level=2)
-   do j=self%domain%U%l(2),self%domain%U%u(2)
-      do i=self%domain%U%l(1),self%domain%U%u(1)
-         if (self%domain%U%mask(i,j) == 1 .or. self%domain%U%mask(i,j) == 2) then
-            zp = max( z(i+1,j) , -self%domain%T%H(i  ,j)+min( Dmin , self%domain%T%D(i+1,j) ) )
-            zm = max( z(i  ,j) , -self%domain%T%H(i+1,j)+min( Dmin , self%domain%T%D(i  ,j) ) )
-            self%dpdx(i,j) = ( zp - zm + (sp(i+1,j)-sp(i,j))*gammai ) / self%domain%U%dx(i,j)
+#define TG self%domain%T
+#define UG self%domain%U
+   do j=UG%l(2),UG%u(2)
+      do i=UG%l(1),UG%u(1)
+         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+            zp = max( z(i+1,j) , -TG%H(i  ,j)+min( Dmin , TG%D(i+1,j) ) )
+            zm = max( z(i  ,j) , -TG%H(i+1,j)+min( Dmin , TG%D(i  ,j) ) )
+            self%dpdx(i,j) = ( zp - zm + (sp(i+1,j)-sp(i,j))*gammai ) / UG%dx(i,j)
          end if
       end do
    end do
-   do j=self%domain%V%l(2),self%domain%V%u(2)
-      do i=self%domain%V%l(1),self%domain%V%u(1)
-         if (self%domain%V%mask(i,j) == 1 .or. self%domain%V%mask(i,j) == 2) then
-            zp = max( z(i,j+1) , -self%domain%T%H(i  ,j)+min( Dmin , self%domain%T%D(i,j+1) ) )
-            zm = max( z(i,j  ) , -self%domain%T%H(i,j+1)+min( Dmin , self%domain%T%D(i,j  ) ) )
-            self%dpdy(i,j) = ( zp - zm + (sp(i,j+1)-sp(i,j))*gammai ) / self%domain%V%dy(i,j)
+#undef UG
+#define VG self%domain%V
+   do j=VG%l(2),VG%u(2)
+      do i=VG%l(1),VG%u(1)
+         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+            zp = max( z(i,j+1) , -TG%H(i  ,j)+min( Dmin , TG%D(i,j+1) ) )
+            zm = max( z(i,j  ) , -TG%H(i,j+1)+min( Dmin , TG%D(i,j  ) ) )
+            self%dpdy(i,j) = ( zp - zm + (sp(i,j+1)-sp(i,j))*gammai ) / VG%dy(i,j)
          end if
       end do
    end do
+#undef VG
+#undef TG
    return
 END SUBROUTINE pressure_surface
 
