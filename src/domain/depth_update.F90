@@ -24,13 +24,12 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE depth_update(self,z,zo)
+module SUBROUTINE depth_update(self)
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
-   real(real64), dimension(:,:), intent(in) :: z,zo
 
 !  Local constants
 
@@ -49,14 +48,13 @@ module SUBROUTINE depth_update(self,z,zo)
 #ifdef USE_MASK
       if (TG%mask(i,j) > 0) then
 #endif
-         TG%D(i,j) = z(i,j)+TG%H(i,j)
+         TG%D(i,j) = TG%z(i,j)+TG%H(i,j)
 !         dry_z(i,j)=max(0._real64,min(1._real64,(self%T%D(i,j)-_HALF_*d1)*d2i))
 #ifdef USE_MASK
       end if
 #endif
       end do
    end do
-#undef TG
 
 !  U-points
 #define UG self%U
@@ -65,7 +63,7 @@ module SUBROUTINE depth_update(self,z,zo)
 #ifdef USE_MASK
       if (UG%mask(i,j) > 0) then
 #endif
-         x=max(0.25_real64*(zo(i,j)+zo(i+1,j)+z(i,j)+z(i+1,j)),-UG%H(i,j)+self%Dmin)
+         x=max(0.25_real64*(TG%zo(i,j)+TG%zo(i+1,j)+TG%z(i,j)+TG%z(i+1,j)),-UG%H(i,j)+self%Dmin)
          UG%D(i,j) = x+UG%H(i,j)
 !         dry_u(i,j) = max(0._real64,min(1._real64,(self%U%DU(i,j)-d1)*d2i))
 #ifdef USE_MASK
@@ -82,7 +80,7 @@ module SUBROUTINE depth_update(self,z,zo)
 #ifdef USE_MASK
       if (VG%mask(i,j) > 0) then
 #endif
-         x=max(0.25_real64*(zo(i,j)+zo(i,j+1)+z(i,j)+z(i,j+1)),-VG%H(i,j)+self%Dmin)
+         x=max(0.25_real64*(TG%zo(i,j)+TG%zo(i,j+1)+TG%z(i,j)+TG%z(i,j+1)),-VG%H(i,j)+self%Dmin)
          VG%D(i,j) = x+VG%H(i,j)
 !         dry_v(i,j) = max(0._real64,min(1._real64,(self%V%DV(i,j)-d1)*d2i))
 #ifdef USE_MASK
@@ -91,6 +89,7 @@ module SUBROUTINE depth_update(self,z,zo)
       end do
    end do
 #undef VG
+#undef TG
 
 #if 0
    d1  = 2*Dmin

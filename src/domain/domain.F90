@@ -187,9 +187,8 @@ integer, parameter :: halo=2
          class(type_getm_domain), intent(inout) :: self
       end subroutine cfl_check
 
-      module subroutine depth_update(self,z,zo)
+      module subroutine depth_update(self)
          class(type_getm_domain), intent(inout) :: self
-         real(real64), dimension(:,:), intent(in) :: z,zo
       end subroutine depth_update
 
 !      module subroutine init_vertical(self,z,zo)

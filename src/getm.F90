@@ -232,8 +232,7 @@ SUBROUTINE getm_initialize(self)
    call self%airsea%initialize(self%domain)
    call self%physics%initialize(self%domain%T,self%advection,self%vertical_diffusion)
    call self%dynamics%initialize(self%domain)
-   ! not necessary to use subroutine arguments
-   call self%domain%depth_update(self%domain%T%z,self%domain%T%zo)
+   call self%domain%depth_update()
    call self%output%initialize(self%fm)
    call self%logs%info('done')
 !   call self%fm%list()
@@ -279,6 +278,7 @@ SUBROUTINE getm_integrate(self)
       sim_time = sim_time + dt
       self%logs%global_info_silence = mod(n,self%info_frequency) .ne. 0
       call self%logs%info(sim_time%isoformat(),level=1)
+      call self%output%prepare_output(sim_time,n)
 
       ! call do_input(n)
       ! call do_airsea(n)
@@ -300,11 +300,12 @@ SUBROUTINE getm_integrate(self)
       call self%dynamics%momentum%do_2d(self%timestep,self%dynamics%pressure%dpdx,self%airsea%taux, &
                                                       self%dynamics%pressure%dpdy,self%airsea%tauy)
 #else
-      call self%dynamics%momentum%x_2d(self%timestep,self%dynamics%pressure%dpdx,self%airsea%taux)
-      call self%dynamics%momentum%y_2d(self%timestep,self%dynamics%pressure%dpdy,self%airsea%tauy)
+!KB      call self%dynamics%momentum%x_2d(self%timestep,self%dynamics%pressure%dpdx,self%airsea%taux)
+!KB      call self%dynamics%momentum%y_2d(self%timestep,self%dynamics%pressure%dpdy,self%airsea%tauy)
 #endif
       call self%dynamics%sealevel%update(self%timestep,self%dynamics%momentum%U,self%dynamics%momentum%V)
-      call self%domain%depth_update(self%domain%T%z,self%domain%T%zo)
+!KB      self%domain%T%z(20:80,5:15) = n*0.01 ! this work z is updated in .nc file
+      call self%domain%depth_update()
 
       if (mod(n,self%mode_split) == 0) then ! 3D calculations
          ! This is the GETM 3D call order - not carved in stone
@@ -365,7 +366,6 @@ SUBROUTINE getm_integrate(self)
 
       call self%output%do_output(sim_time)
       remain = self%sim_stop - sim_time
-!      write(*,*) remain%total_seconds()
    end do
    call self%logs%info('done',level=0)
    return
