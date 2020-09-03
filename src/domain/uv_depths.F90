@@ -55,7 +55,7 @@ module SUBROUTINE uv_depths(self)
 ! Local variables
    integer :: i,j
 !-----------------------------------------------------------------------------
-   call self%logs%info('uv_depths()',level=2)
+   if (associated(self%logs)) call self%logs%info('uv_depths()',level=2)
    ! U-mask
    do j=self%U%jmin,self%U%jmax
       do i=self%U%imin,self%U%imax-1
@@ -129,7 +129,7 @@ module SUBROUTINE uv_depths(self)
    self%T%D = self%T%H
    self%U%D = self%U%H
    self%V%D = self%V%H
-   call self%logs%info('done',level=2)
+   if (associated(self%logs)) call self%logs%info('done',level=2)
    return
 END SUBROUTINE uv_depths
 

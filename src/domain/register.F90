@@ -22,7 +22,8 @@ module SUBROUTINE register(self)
    integer :: i,j,k
    type (type_field), pointer :: f
 !-----------------------------------------------------------------------------
-   call self%logs%info('register()',level=2)
+   if (.not. associated(self%fm)) return
+   if (associated(self%logs)) call self%logs%info('register()',level=2)
    select case (self%domain_type)
       case (1)
          call self%fm%register('x', 'm', 'x-axis', &
@@ -233,7 +234,7 @@ module SUBROUTINE register(self)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hvn', self%V%hn)
-   call self%logs%info('done',level=2)
+   if (associated(self%logs)) call self%logs%info('done',level=2)
    return
 END SUBROUTINE register
 

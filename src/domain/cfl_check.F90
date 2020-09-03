@@ -43,7 +43,7 @@ module SUBROUTINE cfl_check(self)
    real(real64) :: hmax
    character(len=256) :: msg
 !-----------------------------------------------------------------------------
-   call self%logs%info('cfl_check()',level=2)
+   if (associated(self%logs)) call self%logs%info('cfl_check()',level=2)
 #define TG self%T
    do j=TG%l(2),TG%u(2)
       do i=TG%l(1),TG%u(1)
@@ -61,13 +61,15 @@ module SUBROUTINE cfl_check(self)
       end do
    end do
 #undef TG
-   write(msg,'(A,2I5)')  'position: ',pos
-   call self%logs%info(trim(msg),level=3)
-   write(msg,'(A,F9.2)') 'depth:   ',hmax
-   call self%logs%info(trim(msg),level=3)
-   write(msg,'(A,F9.2)') 'maxdt:   ',self%maxdt
-   call self%logs%info(trim(msg),level=3)
-   call self%logs%info('done',level=2)
+   if (associated(self%logs)) then
+      write(msg,'(A,2I5)')  'position: ',pos
+      call self%logs%info(trim(msg),level=3)
+      write(msg,'(A,F9.2)') 'depth:   ',hmax
+      call self%logs%info(trim(msg),level=3)
+      write(msg,'(A,F9.2)') 'maxdt:   ',self%maxdt
+      call self%logs%info(trim(msg),level=3)
+      call self%logs%info('done',level=2)
+   end if
    return
 END SUBROUTINE cfl_check
 

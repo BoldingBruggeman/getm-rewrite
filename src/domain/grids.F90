@@ -18,7 +18,7 @@ module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
 
 !  Subroutine arguments
    class(type_getm_grid), intent(inout) :: self
-   class(type_logging), intent(in) :: logs
+   class(type_logging), intent(in), optional :: logs
    integer, intent(in), optional :: imin,imax
    integer, intent(in), optional :: jmin,jmax
    integer, intent(in), optional :: kmin,kmax
@@ -30,7 +30,7 @@ module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
 !  Local variables
 !-----------------------------------------------------------------------
    if (self%is_initialized) return
-   call logs%info('grid_configure()',level=2)
+   if (present(logs)) call logs%info('grid_configure()',level=2)
 
    call self%type_3d_grid%create(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
 
@@ -56,7 +56,9 @@ module SUBROUTINE grid_report(self,logs,unit,header)
 
 !  Local variables
 !-----------------------------------------------------------------------
-   call logs%info('grid_report()',level=2)
+!KB
+   return
+!KB   if (associated(self%logs)) call logs%info('grid_report()',level=2)
 
    call logs%costum(unit,trim(header))
    call self%print(unit)

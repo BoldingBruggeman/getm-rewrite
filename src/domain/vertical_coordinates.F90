@@ -40,14 +40,14 @@ module SUBROUTINE init_vertical(self)
 
 !  Local variables
 !-----------------------------------------------------------------------------
-   call self%logs%info('init_vertical()',level=2)
+   if (associated(self%logs)) call self%logs%info('init_vertical()',level=2)
 
    where (self%T%mask > 0)
       self%T%ssen=self%T%z
    end where
 
 !KB   call init_sigma(self)
-   call init_gvc(self)
+!KB   call init_gvc(self)
 
    return
 END SUBROUTINE init_vertical
@@ -67,10 +67,10 @@ module SUBROUTINE do_vertical(self)
 !  Local variables
 real(real64) :: dt
 !-----------------------------------------------------------------------------
-   call self%logs%info('do_vertical()',level=2)
+   if (associated(self%logs)) call self%logs%info('do_vertical()',level=2)
 
 !KB   call do_sigma(self)
-   call do_gvc(self,dt)
+!KB   call do_gvc(self,dt)
 
    return
 END SUBROUTINE do_vertical

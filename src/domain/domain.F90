@@ -132,7 +132,7 @@ integer, parameter :: halo=2
    end type type_getm_grid
 
    TYPE, public :: type_getm_domain
-      class(type_logging), pointer :: logs
+      class(type_logging), pointer :: logs => null()
       class(type_field_manager), pointer :: fm => null()
 
       integer :: domain_type
@@ -206,7 +206,7 @@ integer, parameter :: halo=2
 
       module subroutine grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
          class(type_getm_grid), intent(inout) :: self
-         class(type_logging), intent(in) :: logs
+         class(type_logging), intent(in), optional :: logs
          integer, intent(in), optional :: imin,imax
          integer, intent(in), optional :: jmin,jmax
          integer, intent(in), optional :: kmin,kmax
@@ -249,7 +249,7 @@ SUBROUTINE domain_configure(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
+   class(type_logging), intent(in), target, optional :: logs
    TYPE(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
@@ -258,8 +258,10 @@ SUBROUTINE domain_configure(self,logs,fm)
    integer :: imin,imax,jmin,jmax,kmin,kmax
    logical :: tgrid,ugrid, vgrid, xgrid
 !-----------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('domain_configure()',level=1)
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('domain_configure()',level=1)
+   end if
    if (present(fm)) then
       self%fm => fm
    end if
@@ -280,7 +282,7 @@ SUBROUTINE domain_configure(self,logs,fm)
 
    self%domain_ready = self%T%grid_ready .and. self%U%grid_ready .and. &
                        self%V%grid_ready .and. self%X%grid_ready
-   call self%logs%info('done',level=1)
+   if (associated(self%logs)) call self%logs%info('done',level=1)
    return
 END SUBROUTINE domain_configure
 
@@ -300,7 +302,7 @@ SUBROUTINE domain_initialize(self)
 !  Local variables
    integer :: stat
 !-----------------------------------------------------------------------
-   call self%logs%info('domain_initialize()',level=1)
+   if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
 
    call allocate_variables(self)
 
@@ -342,7 +344,7 @@ SUBROUTINE domain_initialize(self)
 !>  part_domain
 !>  @endtodo
 
-   call self%logs%info('done',level=1)
+   if (associated(self%logs)) call self%logs%info('done',level=1)
    return
 END SUBROUTINE domain_initialize
 
@@ -361,7 +363,7 @@ SUBROUTINE allocate_variables(self)
 !  Local variables
 !-----------------------------------------------------------------------------
 #ifndef _STATIC_
-   call self%logs%info('allocate_variables()',level=2)
+   if (associated(self%logs)) call self%logs%info('allocate_variables()',level=2)
    ! T-grid
    call allocate_grid_variables(self%T)
    ! U-grid
@@ -370,7 +372,7 @@ SUBROUTINE allocate_variables(self)
    call allocate_grid_variables(self%V)
    ! X-grid
    call allocate_grid_variables(self%X)
-   call self%logs%info('done',level=2)
+   if (associated(self%logs)) call self%logs%info('done',level=2)
 #endif
    return
 END SUBROUTINE allocate_variables
@@ -389,7 +391,7 @@ SUBROUTINE domain_report(self)
 !  Local variables
    integer :: gridunit
 !-----------------------------------------------------------------------
-   call self%logs%info('domain_report()',level=1)
+   if (associated(self%logs)) call self%logs%info('domain_report()',level=1)
 
    if (.not. self%domain_ready) then
       write(*,*) 'domain is not - fully - configured'
@@ -407,7 +409,7 @@ SUBROUTINE domain_report(self)
       call self%X%report(self%logs,gridunit,'X-grid info: ')
       close(gridunit)
    end if
-   call self%logs%info('done',level=1)
+   if (associated(self%logs)) call self%logs%info('done',level=1)
    return
 END SUBROUTINE domain_report
 

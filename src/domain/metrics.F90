@@ -23,7 +23,7 @@ module SUBROUTINE metrics(self)
    real(real64) :: dx,dy
    real(real64) :: dlon,dlat
 !-----------------------------------------------------------------------------
-   call self%logs%info('metrics()',level=2)
+   if (associated(self%logs)) call self%logs%info('metrics()',level=2)
 
 !  might need to be changed if we go for a different C-grid layout
    if (self%domain_type == cartesian .or. self%domain_type .eq. spherical) then
@@ -110,7 +110,7 @@ module SUBROUTINE metrics(self)
    self%U%inv_area = 1._real64/self%U%area
    self%V%inv_area = 1._real64/self%V%area
    self%X%inv_area = 1._real64/self%X%area
-   call self%logs%info('done',level=2)
+   if (associated(self%logs)) call self%logs%info('done',level=2)
    return
 END SUBROUTINE metrics
 
