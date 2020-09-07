@@ -17,7 +17,7 @@ MODULE getm_operators
    !!   Solves the - vertical - diffusion equation.
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
-   USE getm_domain
+!   USE getm_domain
 
    IMPLICIT NONE
 
@@ -39,7 +39,10 @@ MODULE getm_operators
       contains
 
       procedure :: initialize => advection_initialize
-      procedure :: calculate => advection_calculate
+      procedure :: advection_calculate_1d
+      procedure :: advection_calculate_2d
+      procedure :: advection_calculate_3d
+      generic   :: calculate => advection_calculate_1d, advection_calculate_2d, advection_calculate_3d
 
    end type type_advection
 
@@ -49,13 +52,29 @@ MODULE getm_operators
          integer, intent(in) :: scheme
       end subroutine advection_initialize
 
-      module subroutine advection_calculate(self,scheme,domain,dt,var)
+      module subroutine advection_calculate_1d(self, dt, f, h, arcd1, u, hu, dyu, dxu, mask_flux, mask_update)
          class(type_advection), intent(inout) :: self
-         integer, intent(in) :: scheme
-         class(type_getm_domain), intent(in) :: domain
          real(real64), intent(in) :: dt
-         real(real64), dimension(:,:,:), intent(inout) :: var
-      end subroutine advection_calculate
+         real(real64), intent(in) :: h(:), arcd1(:), u(:), hu(:), dyu(:), dxu(:)
+         logical, intent(in)      :: mask_flux(:), mask_update(:)
+         real(real64), intent(inout) :: f(:)
+      end subroutine advection_calculate_1d
+
+      module subroutine advection_calculate_2d(self, dt, f, h, arcd1, u, hu, dyu, dxu, v, hv, dxv, dyv, mask_uflux, mask_vflux, mask_update)
+         class(type_advection), intent(inout) :: self
+         real(real64), intent(in) :: dt
+         real(real64), intent(in) :: h(:,:), arcd1(:,:), u(:,:), hu(:,:), dyu(:,:), dxu(:,:), v(:,:), hv(:,:), dxv(:,:), dyv(:,:)
+         logical, intent(in)      :: mask_uflux(:,:), mask_vflux(:,:), mask_update(:,:)
+         real(real64), intent(inout) :: f(:,:)
+      end subroutine advection_calculate_2d
+
+      module subroutine advection_calculate_3d(self, dt, f, h, arcd1, u, hu, dyu, dxu, v, hv, dxv, dyv, w, mask_uflux, mask_vflux, mask_update)
+         class(type_advection), intent(inout) :: self
+         real(real64), intent(in) :: dt
+         real(real64), intent(in) :: h(:,:,:), arcd1(:,:), u(:,:,:), hu(:,:,:), dyu(:,:), dxu(:,:), v(:,:,:), hv(:,:,:), dxv(:,:), dyv(:,:), w(:,:,:)
+         logical, intent(in)      :: mask_uflux(:,:), mask_vflux(:,:), mask_update(:,:)
+         real(real64), intent(inout) :: f(:,:,:)
+      end subroutine advection_calculate_3d
    END INTERFACE
 
    type, public :: type_vertical_diffusion

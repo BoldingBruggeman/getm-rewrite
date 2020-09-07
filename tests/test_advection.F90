@@ -82,6 +82,12 @@ write(*,*) var(:,50,1)
 !KB   do n=1,Nmax
 !KB!   do n=1,1
 !KB      call advection%calculate(domain%ugrid,u,domain%vgrid,v,domain%tgrid,var,dt)
+!KK      ! This would be 2D advection: CAN YOU ADD HOW TO GET THE METRICS?
+!KK      ! masks are logicals (in this test case probably au.eq.1, av.eq.1, az.eq.1)
+!KK      call advection%calculate(dt, var(:,:,1), h(:,:,1), arcd1, u(:,:,1), hu(:,:,1), dyu, dxu, v(:,:,1), hv(:,:,1), dxv, dyv, mask_uflux, mask_vflux, mask_update)
+!KK      ! TODO: Better would be something like ...
+!KK      !call var%advection%calculate(dt)
+!KK      ! TODO: ... where the scheme and all velocities, metrics and masks specific for var are already set (for velocities and layer heights pointers to updated arrays)
 !KB         write(100,*) n,var(i,j,55)
 !KB   end do
 

@@ -182,7 +182,7 @@ SUBROUTINE salinity_calculate(self,dt,nuh)
    call self%logs%info('salinity_calculate()',level=2)
 
 #define G self%grid
-   call self%advection%calculate(G%mask,G%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
+   !call self%advection%calculate(G%mask,G%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
    call self%vertical_diffusion%calculate(G%mask,G%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
 #undef G
 

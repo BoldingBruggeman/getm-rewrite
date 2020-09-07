@@ -26,6 +26,9 @@ if( NOT GETM_USE_STATIC )
 option(GETM_USE_STATIC "Static compilation (domain size is set at compile time)" OFF)
 endif()
 
+if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+  add_compile_options(-ffree-line-length-none)
+endif()
 add_compile_options(-pg -g)
 #target_link_options(add PRIVATE -pg -g)
 
