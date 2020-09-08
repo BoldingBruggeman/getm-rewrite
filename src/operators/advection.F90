@@ -81,7 +81,7 @@ MODULE PROCEDURE advection_calculate_1d
    if (.NOT.allocated(h_1d)) allocate(h_1d(imin:imax))
 
    h_1d(imin:imax) = h(:)
-   call advection_directional_split(dt, f, h_1d(imin:imax), arcd1, u, hu, dyu, dxu, mask_flux, mask_update)
+   call advection_directional_split(dt, f, h_1d(imin:imax), arcd1, u, hu, dyu, dxu, az, au)
 
    return
 END PROCEDURE advection_calculate_1d
@@ -113,15 +113,15 @@ MODULE PROCEDURE advection_calculate_2d
 
    h_2d(imin:imax,jmin:jmax) = h(:,:)
    do j=jmin,jmax
-      call advection_directional_split(dt/2, f(:,j), h_2d(imin:imax,j), arcd1(:,j), u(:,j), hu(:,j), dyu(:,j), dxu(:,j), mask_uflux(:,j), mask_update(:,j))
+      call advection_directional_split(dt/2, f(:,j), h_2d(imin:imax,j), arcd1(:,j), u(:,j), hu(:,j), dyu(:,j), dxu(:,j), az(:,j), au(:,j))
    end do
 !  TODO: halo-update
    do i=imin,imax
-      call advection_directional_split(dt  , f(i,:), h_2d(i,jmin:jmax), arcd1(i,:), v(i,:), hv(i,:), dxv(i,:), dyv(i,:), mask_vflux(i,:), mask_update(:,j))
+      call advection_directional_split(dt  , f(i,:), h_2d(i,jmin:jmax), arcd1(i,:), v(i,:), hv(i,:), dxv(i,:), dyv(i,:), az(i,:), av(:,j))
    end do
 !  TODO: halo-update
    do j=jmin,jmax
-      call advection_directional_split(dt/2, f(:,j), h_2d(imin:imax,j), arcd1(:,j), u(:,j), hu(:,j), dyu(:,j), dxu(:,j), mask_uflux(:,j), mask_update(:,j))
+      call advection_directional_split(dt/2, f(:,j), h_2d(imin:imax,j), arcd1(:,j), u(:,j), hu(:,j), dyu(:,j), dxu(:,j), az(:,j), au(:,j))
    end do
 
    return
@@ -136,7 +136,7 @@ MODULE PROCEDURE advection_calculate_3d
 
 !  Local variables
    real(real64), allocatable, save :: h_3d(:,:,:), dzw(:), ones(:)
-   logical, allocatable, save      :: trues(:)
+   integer, allocatable, save      :: ones_int(:)
    integer :: imin, imax, jmin, jmax, kmin, kmax, i, j, k
 !---------------------------------------------------------------------------
 
@@ -156,45 +156,45 @@ MODULE PROCEDURE advection_calculate_3d
 
    if (allocated(dzw)) then
       if (kmin.LT.lbound(dzw,dim=1) .OR. ubound(dzw,dim=1).LT.kmax) then
-         deallocate(dzw, ones, trues)
+         deallocate(dzw, ones, ones_int)
       end if
    end if
    if (.NOT.allocated(dzw)) then
-      allocate(dzw(kmin:kmax), ones(kmin:kmax), trues(kmin:kmax))
+      allocate(dzw(kmin:kmax), ones(kmin:kmax), ones_int(kmin:kmax))
       ones(:) = 1
-      trues(:) = .true.
+      ones_int(:) = 1
    end if
 
    h_3d(imin:imax,jmin:jmax,kmin:kmax) = h(:,:,:)
    do k=kmin,kmax
       do j=jmin,jmax
-         call advection_directional_split(dt/2, f(:,j,k), h_3d(imin:imax,j,k), arcd1(:,j), u(:,j,k), hu(:,j,k), dyu(:,j), dxu(:,j), mask_uflux(:,j), mask_update(:,j))
+         call advection_directional_split(dt/2, f(:,j,k), h_3d(imin:imax,j,k), arcd1(:,j), u(:,j,k), hu(:,j,k), dyu(:,j), dxu(:,j), az(:,j), au(:,j))
       end do
    end do
 !  TODO: halo-update
    do k=kmin,kmax
       do i=imin,imax
-         call advection_directional_split(dt/2, f(i,:,k), h_3d(i,jmin:jmax,k), arcd1(i,:), v(i,:,k), hv(i,:,k), dxv(i,:), dyv(i,:), mask_vflux(i,:), mask_update(:,j))
+         call advection_directional_split(dt/2, f(i,:,k), h_3d(i,jmin:jmax,k), arcd1(i,:), v(i,:,k), hv(i,:,k), dxv(i,:), dyv(i,:), az(i,:), av(:,j))
       end do
    end do
    do j=jmin,jmax
       do i=imin,imax
-         if (mask_update(i,j)) then
+         if (az(i,j).eq.1) then
             dzw(kmin:kmax-1) = 0.5 * ( h_3d(i,j,kmin:kmax-1) + h_3d(i,j,kmin+1:kmax) )
-            call advection_directional_split(dt, f(i,j,:), h_3d(i,j,kmin:kmax), ones(kmin:kmax), w(i,j,:), ones(kmin:kmax), ones(kmin:kmax), dzw(kmin:kmax), trues(kmin:kmax), trues(kmin:kmax))
+            call advection_directional_split(dt, f(i,j,:), h_3d(i,j,kmin:kmax), ones(kmin:kmax), w(i,j,:), ones(kmin:kmax), ones(kmin:kmax), dzw(kmin:kmax), ones_int(kmin:kmax), ones_int(kmin:kmax))
          end if
       end do
    end do
 !  TODO: halo-update
    do k=kmin,kmax
       do i=imin,imax
-         call advection_directional_split(dt/2, f(i,:,k), h_3d(i,jmin:jmax,k), arcd1(i,:), v(i,:,k), hv(i,:,k), dxv(i,:), dyv(i,:), mask_vflux(i,:), mask_update(:,j))
+         call advection_directional_split(dt/2, f(i,:,k), h_3d(i,jmin:jmax,k), arcd1(i,:), v(i,:,k), hv(i,:,k), dxv(i,:), dyv(i,:), az(i,:), av(:,j))
       end do
    end do
 !  TODO: halo-update
    do k=kmin,kmax
       do j=jmin,jmax
-         call advection_directional_split(dt/2, f(:,j,k), h_3d(imin:imax,j,k), arcd1(:,j), u(:,j,k), hu(:,j,k), dyu(:,j), dxu(:,j), mask_uflux(:,j), mask_update(:,j))
+         call advection_directional_split(dt/2, f(:,j,k), h_3d(imin:imax,j,k), arcd1(:,j), u(:,j,k), hu(:,j,k), dyu(:,j), dxu(:,j), az(:,j), au(:,j))
       end do
    end do
 
@@ -203,14 +203,14 @@ END PROCEDURE advection_calculate_3d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE advection_directional_split(dt, f, h, arcd1, u, hu, dyu, dxu, mask_flux, mask_update)
+SUBROUTINE advection_directional_split(dt, f, h, arcd1, u, hu, dyu, dxu, az, au)
 
    IMPLICIT NONE
 
    ! Subroutine arguments
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: arcd1(:), u(:), hu(:), dyu(:), dxu(:)
-   logical, intent(in)      :: mask_flux(:), mask_update(:)
+   integer, intent(in)      :: az(:), au(:)
    real(real64), intent(inout) :: f(:), h(:)
 
 !  Local constants
@@ -241,13 +241,13 @@ SUBROUTINE advection_directional_split(dt, f, h, arcd1, u, hu, dyu, dxu, mask_fl
 
 !  TODO: (vertical) interation!!!
    do i=imin,imax-1
-      if (mask_flux(i)) then
+      if (au(i).eq.1 .or. au(i).eq.2) then
          if (u(i) .gt. 0) then
             cfl = u(i)*dt/dxu(i)
             fu  = f(i)
             fuu = fu
             if (i.GT.imin) then
-               if (mask_flux(i-1)) fuu = f(i-1)
+               if (au(i-1).eq.1 .or. au(i-1).eq.2) fuu = f(i-1)
             end if
             fd = f(i+1)
          else
@@ -255,7 +255,7 @@ SUBROUTINE advection_directional_split(dt, f, h, arcd1, u, hu, dyu, dxu, mask_fl
             fu  = f(i+1)
             fuu = fu
             if (i.LT.imax-1) then
-               if (mask_flux(i+1)) fuu = f(i+2)
+               if (au(i+1).eq.1 .or. au(i+1).eq.2) fuu = f(i+2)
             end if
             fd = f(i)
          end if
@@ -265,7 +265,7 @@ SUBROUTINE advection_directional_split(dt, f, h, arcd1, u, hu, dyu, dxu, mask_fl
    end do
 
    do i=imin,imax
-      if (mask_update(i)) then
+      if (az(i).eq.1) then
          hfo = h(i)*f(i)
          h(i) = h(i) - dt*( QU(i)-QU(i-1) )*arcd1(i)
          advn = ( uflux(i)-uflux(i-1) )*arcd1(i)
