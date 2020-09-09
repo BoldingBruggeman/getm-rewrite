@@ -1,6 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
-SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
+SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,au,dxu,dyu,hu,u,az,A,dt,h,f)
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
 
@@ -8,7 +8,10 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
 
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
-   real(real64), intent(in) :: dxu(:,:), dyu(:,:), hu(:,:), u(:,:), A(:,:)
+   integer, intent(in) :: au(:,:)
+   real(real64), intent(in) :: dxu(:,:), dyu(:,:), hu(:,:), u(:,:)
+   integer, intent(in) :: az(:,:)
+   real(real64), intent(in) :: A(:,:)
    real(real64), intent(in) :: dt
    real(real64), intent(inout) :: h(:,:), f(:,:)
 
@@ -16,34 +19,44 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
    integer, parameter :: scheme=12
 
 !  Local variables
+#ifdef _AUTOMATIC_
+   real(real64) :: flux(imin:imax,jmin:jmax)
+   real(real64) :: QU(imin:imax,jmin:jmax)
+#else
+   real(real64), allocatable :: flux(:,:), QU(:,:)
+#endif
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
    integer :: i, j
 !---------------------------------------------------------------------------
 
+#ifndef _AUTOMATIC_
+   allocate(flux(imin:imax,jmin:jmax), QU(imin:imax,jmin:jmax))
+#endif
+
    ! the provided velocity MUST be ZERO at land!
-!KB   self%QU  (imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
-!KB   self%QU  (imin:imax,:) = u(:,:) * hu(:,:) * dyu(:,:)
-!KB   self%flux(imin-1:imax,:) = 0
+   QU(imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
+!KB   self%QU  (imin:imax,:) = u(:,:) * hu(:,:) * dyu(:,:) ! to KK - why not in the main loops?
+   flux(imin-1:imax,:) = 0
 
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
       do i=imin,imax-1
-!KB         if (au(i).eq.1 .or. au(i).eq.2) then
+         if (au(i,j) == 1 .or. au(i,j) == 2) then
             cfl = abs(u(i,j)*dt/dxu(i,j))
             if (u(i,j) .gt. 0) then
                fu  = f(i,j)
                fuu = fu
-               if (i.GT.imin) then
-!KB                  if (au(i-1).eq.1 .or. au(i-1).eq.2) fuu = f(i-1,j)
+               if (i > imin) then
+                  if (au(i-1,j) == 1 .or. au(i-1,j) == 2) fuu = f(i-1,j)
                end if
                fd = f(i+1,j)
             else
                fu  = f(i+1,j)
                fuu = fu
-               if (i.LT.imax-1) then
-!KB                  if (au(i+1).eq.1 .or. au(i+1).eq.2) fuu = f(i+2,j)
+               if (i < imax-1) then
+                  if (au(i+1,j) == 1 .or. au(i+1,j) == 2) fuu = f(i+2,j)
                end if
                fd = f(i,j)
             end if
@@ -59,29 +72,26 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
 !#endif
-
-#if 0
-            uflux(i,j) = QU(i)*fu
-#endif
-#if 0
-            fu = adv_reconstruct(scheme,cfl,fuu,fu,fd)
-!KB            uflux(i,j) = QU(i)*fu
-#endif
-!KB         end if
+            QU(i,j) = u(i,j) * hu(i,j) * dyu(i,j) ! to KK - here instead?
+            flux(i,j) = QU(i,j)*fu
+         end if
       end do
    end do
 
    do j=jmin,jmax
       do i=imin,imax
-!KB         if (az(i).eq.1) then
+         if (az(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
-!KB            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j)
-!KB            advn = ( uflux(i,j)-uflux(i-1,j) )*A(i,j) ! KB
+            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j) !KB
+            advn = ( flux(i,j)-flux(i-1,j) )*A(i,j) !KB
             f(i,j) = ( hfo - dt*advn ) / h(i,j)
-!KB         end if
+         end if
       end do
    end do
 
+#ifndef _AUTOMATIC_
+   deallocate(flux, QU)
+#endif
    return
 END SUBROUTINE _U_SUB_NAME_
 

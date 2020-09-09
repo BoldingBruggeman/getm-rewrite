@@ -31,10 +31,11 @@ MODULE getm_operators
       !! version: v0.1
       !!
 
-      integer, private :: imin,imax,jmin,jmax,kmin,kmax
+!KB      integer, private :: imin,imax,jmin,jmax,kmin,kmax
+!KB      real(real64), allocatable, private :: flux(:,:), QU(:,:)
 
-!KB      real(real64) :: matrix_time
-!KB      real(real64) :: tridiag_time
+      real(real64) :: flux_time
+      real(real64) :: adv_time
 
       contains
 
@@ -52,8 +53,9 @@ MODULE getm_operators
          integer, intent(in) :: scheme
       end subroutine advection_initialize
 
-      module subroutine advection_calculate_2d(self, ugrid, u, vgrid, v, dt, tgrid, f)
+      module subroutine advection_calculate_2d(self, scheme, ugrid, u, vgrid, v, dt, tgrid, f)
          class(type_advection), intent(inout) :: self
+         integer, intent(in) :: scheme
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:), v(:,:)
          real(real64), intent(in) :: dt
@@ -61,8 +63,9 @@ MODULE getm_operators
          real(real64), intent(inout) :: f(:,:)
       end subroutine advection_calculate_2d
 
-      module subroutine advection_calculate_3d(self, ugrid, u, vgrid, v, dt, tgrid, f)
+      module subroutine advection_calculate_3d(self, scheme, ugrid, u, vgrid, v, dt, tgrid, f)
          class(type_advection), intent(inout) :: self
+         integer, intent(in) :: scheme
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:,:), v(:,:,:)
          real(real64), intent(in) :: dt

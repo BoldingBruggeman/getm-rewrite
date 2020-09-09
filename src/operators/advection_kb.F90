@@ -27,6 +27,17 @@ INTERFACE
    end subroutine do_gvc
 #endif
 END INTERFACE
+#if 1
+ENUM, BIND(C)
+  ENUMERATOR :: SPLIT_ADVECTION_SCHEMES=0
+  ENUMERATOR :: SUPERBEE=1
+  ENUMERATOR :: P2_PDM=2
+  ENUMERATOR :: SPLMAX13=3
+  ENUMERATOR :: HSIMT=4
+  ENUMERATOR :: MUSCL=5
+  ENUMERATOR :: UPSTREAM=6
+END ENUM
+#endif
 
 !-----------------------------------------------------------------------------
 
@@ -60,11 +71,12 @@ END SUBROUTINE advection_initialize
 
 !---------------------------------------------------------------------------
 
-MODULE subroutine advection_calculate_2d(self,ugrid,u,vgrid,v,dt,tgrid,f)
+MODULE subroutine advection_calculate_2d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
 
    IMPLICIT NONE
 
    class(type_advection), intent(inout) :: self
+   integer, intent(in) :: scheme
    type(type_getm_grid), intent(in) :: ugrid, vgrid
    real(real64), intent(in) :: u(:,:), v(:,:)
    real(real64), intent(in) :: dt
@@ -75,6 +87,19 @@ MODULE subroutine advection_calculate_2d(self,ugrid,u,vgrid,v,dt,tgrid,f)
 
 !  Local variables
 !---------------------------------------------------------------------------
+   select case (scheme)
+      case (SUPERBEE)
+         call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                          ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
+                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+         call v_advection_superbee()
+      case (UPSTREAM)
+         call u_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                          ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
+                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+         call v_advection_upstream()
+   end select
+#if 0
    call u_advection(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                     ugrid%dx,ugrid%dy,ugrid%D,u, &
                     tgrid%inv_area,dt/2,tgrid%D,f)
@@ -82,18 +107,20 @@ MODULE subroutine advection_calculate_2d(self,ugrid,u,vgrid,v,dt,tgrid,f)
 !KB   call v_advection(dt,vgrid%dx,vgrid%dy,vgrid%D,v,tgrid%A,mask_flux,mask_update,tgrid%D,f)
 
    call u_advection(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
-                    ugrid%dx,ugrid%dy,ugrid%D,u, &
+                    ugrid%dx,ugrid%dy,ugrid%mask,ugrid%D,u, &
                     tgrid%inv_area,dt/2,tgrid%D,f)
+#endif
    return
 END SUBROUTINE advection_calculate_2d
 
 !---------------------------------------------------------------------------
 
-MODULE subroutine advection_calculate_3d(self,ugrid,u,vgrid,v,dt,tgrid,f)
+MODULE subroutine advection_calculate_3d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
 
    IMPLICIT NONE
 
    class(type_advection), intent(inout) :: self
+   integer, intent(in) :: scheme
    type(type_getm_grid), intent(in) :: ugrid, vgrid
    real(real64), intent(in) :: u(:,:,:), v(:,:,:)
    real(real64), intent(in) :: dt
@@ -105,20 +132,40 @@ MODULE subroutine advection_calculate_3d(self,ugrid,u,vgrid,v,dt,tgrid,f)
 !  Local variables
    integer :: k
 !---------------------------------------------------------------------------
-   do k=tgrid%kmin,tgrid%kmax
-      call u_advection(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
-                       ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                       tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
-!KB      call v_advection(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
+   select case (scheme)
+      case (SUPERBEE)
+         do k=tgrid%kmin,tgrid%kmax
+            call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                             ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
+                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+            call v_advection_superbee()
+!KB      call v_advection_superbee(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
 !KB      call w_advection(dt,)
-!KB      call v_advection(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
-      call u_advection(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
-                       ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                       tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
-   end do
+!KB      call v_advection_superbee(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
+            call v_advection_superbee()
+            call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                             ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
+                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+         end do
+      case (UPSTREAM)
+         do k=tgrid%kmin,tgrid%kmax
+            call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                             ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
+                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+            call v_advection_upstream()
+!KB      call v_advection_upstream(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
+!KB      call w_advection(dt,)
+!KB      call v_advection_upstream(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
+            call v_advection_upstream()
+            call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                             ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
+                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+         end do
+   end select
    return
 END SUBROUTINE advection_calculate_3d
 
+#if 0
 !---------------------------------------------------------------------------
 
 SUBROUTINE u_advection(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
@@ -135,15 +182,14 @@ SUBROUTINE u_advection(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
    integer, parameter :: scheme=12
 
 !  Local variables
-   real(real64), allocatable, save :: uflux(:,:), QU(:,:)
    real(real64)                    :: cfl, fu, fuu, fd, hfo, advn
    integer :: i, j
 !---------------------------------------------------------------------------
 
    ! the provided velocity MUST be ZERO at land!
-!KB   QU   (imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
-!KB   QU   (imin:imax) = u(:) * hu(:) * dyu(:)
-   uflux(imin-1:imax,:) = 0
+!KB   self%QU  (imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
+!KB   self%QU  (imin:imax,:) = u(:,:) * hu(:,:) * dyu(:,:)
+!KB   self%flux(imin-1:imax,:) = 0
 
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
@@ -175,8 +221,8 @@ SUBROUTINE u_advection(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
       do i=imin,imax
 !KB         if (az(i).eq.1) then
             hfo = h(i,j)*f(i,j)
-            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j)
-            advn = ( uflux(i,j)-uflux(i-1,j) )*A(i,j) ! KB
+!KB            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j)
+!KB            advn = ( uflux(i,j)-uflux(i-1,j) )*A(i,j) ! KB
             f(i,j) = ( hfo - dt*advn ) / h(i,j)
 !KB         end if
       end do
@@ -185,7 +231,6 @@ SUBROUTINE u_advection(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
    return
 END SUBROUTINE u_advection
 
-#if 0
 !---------------------------------------------------------------------------
 
 SUBROUTINE v_advection(dt, f, h, arcd1, u, hu, dyu, dxu, mask_flux, mask_update)
@@ -266,6 +311,7 @@ SUBROUTINE v_advection(dt, f, h, arcd1, u, hu, dyu, dxu, mask_flux, mask_update)
 END SUBROUTINE v_advection
 #endif
 
+#if 0
 !---------------------------------------------------------------------------
 
 PURE real(real64) FUNCTION adv_reconstruct(scheme,cfl,fuu,fu,fd)
@@ -321,6 +367,7 @@ PURE real(real64) FUNCTION adv_reconstruct(scheme,cfl,fuu,fu,fd)
 
    return
 END FUNCTION adv_reconstruct
+#endif
 
 !---------------------------------------------------------------------------
 
