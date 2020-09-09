@@ -63,7 +63,8 @@ if (USE_KB)
 target_sources( getm_operators PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/operators/operators_kb.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/advection_kb.F90
-#    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_superbee.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
 )
 else()

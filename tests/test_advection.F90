@@ -28,6 +28,7 @@ PROGRAM test_advection
    integer :: i,j,k,n
    real(real64) :: x0=Lx/2, y0=Ly/2
    real(real64) :: dx=Lx/(imax-imin), dy=Ly/(jmax-jmin)
+   integer :: scheme=1
    integer :: stat
 !-----------------------------------------------------------------------------
 !KB   call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=/0,0,0/)
@@ -81,12 +82,13 @@ write(*,*) var(:,50,1)
 
 !KB   do n=1,Nmax
 !KB!   do n=1,1
-!KB      call advection%calculate(domain%ugrid,u,domain%vgrid,v,domain%tgrid,var,dt)
+      call advection%calculate(1,domain%U,u,domain%V,v,dt,domain%T,var)
 !KK      ! This would be 2D advection: CAN YOU ADD HOW TO GET THE METRICS?
-!KK      call advection%calculate(dt, var(:,:,1), h(:,:,1), arcd1, u(:,:,1), hu(:,:,1), dyu, dxu, v(:,:,1), hv(:,:,1), dxv, dyv, az, au, av)
-!KK      ! TODO: Better would be something like ...
-!KK      !call var%advection%calculate(dt)
-!KK      ! TODO: ... where the scheme and all velocities, metrics and masks specific for var are already set (for velocities and layer heights pointers to updated arrays)
+!KB      ! Due to overloading the call for 2D is the same except that u,v,var must be 2D arrays - 
+!KB      ! when we have w_advection we will add that to the 3D call
+!KB      ! to advect velocities we must construct metrics for the 'velocity' point and interpolate velocities
+!KB      ! call advection%calculate(1,.....................,dt,domain%U,U)
+!KB      ! call advection%calculate(1,.....................,dt,domain%V,V)
 !KB         write(100,*) n,var(i,j,55)
 !KB   end do
 
