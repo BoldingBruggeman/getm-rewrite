@@ -52,27 +52,27 @@ MODULE getm_operators
          integer, intent(in) :: scheme
       end subroutine advection_initialize
 
-      module subroutine advection_calculate_1d(self, dt, f, h, arcd1, u, hu, dyu, dxu, mask_flux, mask_update)
+      module subroutine advection_calculate_1d(self, dt, f, h, arcd1, u, hu, dyu, dxu, az, au)
          class(type_advection), intent(inout) :: self
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: h(:), arcd1(:), u(:), hu(:), dyu(:), dxu(:)
-         logical, intent(in)      :: mask_flux(:), mask_update(:)
+         integer, intent(in)      :: az(:), au(:)
          real(real64), intent(inout) :: f(:)
       end subroutine advection_calculate_1d
 
-      module subroutine advection_calculate_2d(self, dt, f, h, arcd1, u, hu, dyu, dxu, v, hv, dxv, dyv, mask_uflux, mask_vflux, mask_update)
+      module subroutine advection_calculate_2d(self, dt, f, h, arcd1, u, hu, dyu, dxu, v, hv, dxv, dyv, az, au, av)
          class(type_advection), intent(inout) :: self
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: h(:,:), arcd1(:,:), u(:,:), hu(:,:), dyu(:,:), dxu(:,:), v(:,:), hv(:,:), dxv(:,:), dyv(:,:)
-         logical, intent(in)      :: mask_uflux(:,:), mask_vflux(:,:), mask_update(:,:)
+         integer, intent(in)      :: az(:,:), au(:,:), av(:,:)
          real(real64), intent(inout) :: f(:,:)
       end subroutine advection_calculate_2d
 
-      module subroutine advection_calculate_3d(self, dt, f, h, arcd1, u, hu, dyu, dxu, v, hv, dxv, dyv, w, mask_uflux, mask_vflux, mask_update)
+      module subroutine advection_calculate_3d(self, dt, f, h, arcd1, u, hu, dyu, dxu, v, hv, dxv, dyv, w, az, au, av)
          class(type_advection), intent(inout) :: self
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: h(:,:,:), arcd1(:,:), u(:,:,:), hu(:,:,:), dyu(:,:), dxu(:,:), v(:,:,:), hv(:,:,:), dxv(:,:), dyv(:,:), w(:,:,:)
-         logical, intent(in)      :: mask_uflux(:,:), mask_vflux(:,:), mask_update(:,:)
+         integer, intent(in)      :: az(:,:), au(:,:), av(:,:)
          real(real64), intent(inout) :: f(:,:,:)
       end subroutine advection_calculate_3d
    END INTERFACE
