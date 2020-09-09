@@ -37,7 +37,7 @@ add_dependencies( test_all_getm ${test_all_getm}  test_uv_depths )
 add_executable(test_advection EXCLUDE_FROM_ALL
                ${CMAKE_CURRENT_LIST_DIR}/test_advection.F90
               )
-target_link_libraries(test_advection PRIVATE getm_operators)
+target_link_libraries(test_advection PRIVATE getm_operators getm_domain flom)
 add_dependencies( test_all_getm ${test_all_getm}  test_advection )
 
 add_executable(test_vertical_diffusion EXCLUDE_FROM_ALL
