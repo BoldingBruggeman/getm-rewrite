@@ -58,12 +58,22 @@ target_sources( getm_output PRIVATE
 )
 
 set_property( TARGET getm_operators PROPERTY FOLDER operators )
+set(USE_KB on)
+if (USE_KB)
 target_sources( getm_operators PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/operators/operators.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/operators_kb.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_kb.F90
+#    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
+)
+else()
+target_sources( getm_operators PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/operators/getm_operators.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/advection.F90
 #    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
 )
+endif()
 
 #add_subdirectory(operators)
 
