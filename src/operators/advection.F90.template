@@ -1,0 +1,89 @@
+! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
+
+SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
+
+   USE, INTRINSIC :: ISO_FORTRAN_ENV
+
+   IMPLICIT NONE
+
+   ! Subroutine arguments
+   integer, intent(in) :: imin,imax,jmin,jmax
+   real(real64), intent(in) :: dxu(:,:), dyu(:,:), hu(:,:), u(:,:), A(:,:)
+   real(real64), intent(in) :: dt
+   real(real64), intent(inout) :: h(:,:), f(:,:)
+
+!  Local constants
+   integer, parameter :: scheme=12
+
+!  Local variables
+   real(real64) :: cfl, fu, fuu, fd, hfo, advn
+   real(real64) :: deltaf, deltafu, ratio
+   real(real64) :: limiter
+   integer :: i, j
+!---------------------------------------------------------------------------
+
+   ! the provided velocity MUST be ZERO at land!
+!KB   self%QU  (imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
+!KB   self%QU  (imin:imax,:) = u(:,:) * hu(:,:) * dyu(:,:)
+!KB   self%flux(imin-1:imax,:) = 0
+
+!  TODO: (vertical) interation!!!
+   do j=jmin,jmax
+      do i=imin,imax-1
+!KB         if (au(i).eq.1 .or. au(i).eq.2) then
+            cfl = abs(u(i,j)*dt/dxu(i,j))
+            if (u(i,j) .gt. 0) then
+               fu  = f(i,j)
+               fuu = fu
+               if (i.GT.imin) then
+!KB                  if (au(i-1).eq.1 .or. au(i-1).eq.2) fuu = f(i-1,j)
+               end if
+               fd = f(i+1,j)
+            else
+               fu  = f(i+1,j)
+               fuu = fu
+               if (i.LT.imax-1) then
+!KB                  if (au(i+1).eq.1 .or. au(i+1).eq.2) fuu = f(i+2,j)
+               end if
+               fd = f(i,j)
+            end if
+!#if _SCHEME_ != UPSTREAM
+            deltaf  = fd - fu
+            deltafu = fu - fuu
+            if (deltaf*deltafu .gt. 0) then
+               ratio = deltafu / deltaf   ! slope ratio
+               _LIMITER1_
+               _LIMITER2_
+               _LIMITER3_
+               _LIMITER4_
+               fu = fu + 0.5*limiter*(1-cfl)*deltaf
+            end if
+!#endif
+
+#if 0
+            uflux(i,j) = QU(i)*fu
+#endif
+#if 0
+            fu = adv_reconstruct(scheme,cfl,fuu,fu,fd)
+!KB            uflux(i,j) = QU(i)*fu
+#endif
+!KB         end if
+      end do
+   end do
+
+   do j=jmin,jmax
+      do i=imin,imax
+!KB         if (az(i).eq.1) then
+            hfo = h(i,j)*f(i,j)
+!KB            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j)
+!KB            advn = ( uflux(i,j)-uflux(i-1,j) )*A(i,j) ! KB
+            f(i,j) = ( hfo - dt*advn ) / h(i,j)
+!KB         end if
+      end do
+   end do
+
+   return
+END SUBROUTINE _U_SUB_NAME_
+
+SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
+END SUBROUTINE _V_SUB_NAME_
