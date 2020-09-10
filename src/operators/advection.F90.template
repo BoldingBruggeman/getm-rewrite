@@ -1,6 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
-SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,au,dxu,dyu,hu,u,az,A,dt,h,f)
+SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
 
@@ -8,9 +8,9 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,au,dxu,dyu,hu,u,az,A,dt,h,f)
 
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
-   integer, intent(in) :: au(:,:)
+   integer, intent(in) :: umask(:,:)
    real(real64), intent(in) :: dxu(:,:), dyu(:,:), hu(:,:), u(:,:)
-   integer, intent(in) :: az(:,:)
+   integer, intent(in) :: tmask(:,:)
    real(real64), intent(in) :: A(:,:)
    real(real64), intent(in) :: dt
    real(real64), intent(inout) :: h(:,:), f(:,:)
@@ -43,20 +43,20 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,au,dxu,dyu,hu,u,az,A,dt,h,f)
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
       do i=imin,imax-1
-         if (au(i,j) == 1 .or. au(i,j) == 2) then
+         if (umask(i,j) == 1 .or. umask(i,j) == 2) then
             cfl = abs(u(i,j)*dt/dxu(i,j))
             if (u(i,j) .gt. 0) then
                fu  = f(i,j)
                fuu = fu
                if (i > imin) then
-                  if (au(i-1,j) == 1 .or. au(i-1,j) == 2) fuu = f(i-1,j)
+                  if (umask(i-1,j) == 1 .or. umask(i-1,j) == 2) fuu = f(i-1,j)
                end if
                fd = f(i+1,j)
             else
                fu  = f(i+1,j)
                fuu = fu
                if (i < imax-1) then
-                  if (au(i+1,j) == 1 .or. au(i+1,j) == 2) fuu = f(i+2,j)
+                  if (umask(i+1,j) == 1 .or. umask(i+1,j) == 2) fuu = f(i+2,j)
                end if
                fd = f(i,j)
             end if
@@ -80,7 +80,7 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,au,dxu,dyu,hu,u,az,A,dt,h,f)
 
    do j=jmin,jmax
       do i=imin,imax
-         if (az(i,j) == 1) then
+         if (tmask(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
             h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j) !KB
             advn = ( flux(i,j)-flux(i-1,j) )*A(i,j) !KB
@@ -97,3 +97,65 @@ END SUBROUTINE _U_SUB_NAME_
 
 SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
 END SUBROUTINE _V_SUB_NAME_
+
+SUBROUTINE _W_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
+END SUBROUTINE _W_SUB_NAME_
+
+
+#if 0
+!---------------------------------------------------------------------------
+
+PURE real(real64) FUNCTION adv_reconstruct(scheme,cfl,fuu,fu,fd)
+
+   IMPLICIT NONE
+
+   integer,intent(in)  :: scheme
+   real(real64),intent(in) :: cfl,fuu,fu,fd
+!
+! !DEFINED PARAMETERS:
+   integer, parameter :: SUPERBEE=4, P2_PDM=6, SPLMAX13=13, HSIMT=12, MUSCL=5
+   real(real64),parameter :: one3rd = 1.0_real64 / 3
+   real(real64),parameter :: one6th = 1.0_real64 / 6
+! !LOCAL VARIABLES:
+   real(real64)           :: ratio,limiter,kappa,x,deltaf,deltafu
+!
+!---------------------------------------------------------------------------
+
+   adv_reconstruct = fu
+
+   deltaf  = fd - fu
+   deltafu = fu - fuu
+
+   if (deltaf*deltafu .gt. 0) then
+
+      ratio = deltafu / deltaf   ! slope ratio
+
+      select case (scheme)
+         case (SUPERBEE)
+            limiter = MAX( MIN( 2*ratio , 1.0_real64 ) , MIN( ratio , 2.0_real64 ) )
+         case (P2_PDM)
+            x = one6th*(1-2*cfl)
+            limiter = (0.5+x) + (0.5-x)*ratio
+            limiter = MIN( 2*ratio/(cfl+1.d-10) , limiter , 2/(1-cfl) )
+         case (SPLMAX13)
+            limiter = MIN( 2*ratio , one3rd*MAX( 1+2*ratio , 2+ratio ) , 2.0_real64 )
+         case (HSIMT) ! Wu and Zhu (2010, OCEMOD)
+            kappa = 1 - cfl
+            x = 0.25*( kappa - one3rd/kappa )
+            limiter = (0.5+x) + (0.5-x)*ratio ! can become negative!!!
+            limiter = MAX( 0.0_real64 , limiter )
+            limiter = MIN( 2*ratio , limiter , 2.0_real64 )
+         case (MUSCL)
+            limiter = MIN( 2*ratio , 0.5*(1+ratio) , 2.0_real64 )
+         case default
+!           UPSTREAM
+            limiter = 0
+      end select
+
+      adv_reconstruct = fu + 0.5*limiter*(1-cfl)*deltaf
+
+   end if
+
+   return
+END FUNCTION adv_reconstruct
+#endif

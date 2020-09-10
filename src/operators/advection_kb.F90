@@ -27,7 +27,7 @@ INTERFACE
    end subroutine do_gvc
 #endif
 END INTERFACE
-#if 1
+
 ENUM, BIND(C)
   ENUMERATOR :: SPLIT_ADVECTION_SCHEMES=0
   ENUMERATOR :: SUPERBEE=1
@@ -37,7 +37,6 @@ ENUM, BIND(C)
   ENUMERATOR :: MUSCL=5
   ENUMERATOR :: UPSTREAM=6
 END ENUM
-#endif
 
 !-----------------------------------------------------------------------------
 
@@ -99,17 +98,6 @@ MODULE subroutine advection_calculate_2d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
                           tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
          call v_advection_upstream()
    end select
-#if 0
-   call u_advection(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
-                    ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%inv_area,dt/2,tgrid%D,f)
-
-!KB   call v_advection(dt,vgrid%dx,vgrid%dy,vgrid%D,v,tgrid%A,mask_flux,mask_update,tgrid%D,f)
-
-   call u_advection(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
-                    ugrid%dx,ugrid%dy,ugrid%mask,ugrid%D,u, &
-                    tgrid%inv_area,dt/2,tgrid%D,f)
-#endif
    return
 END SUBROUTINE advection_calculate_2d
 
@@ -140,7 +128,7 @@ MODULE subroutine advection_calculate_3d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
                              tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
             call v_advection_superbee()
 !KB      call v_advection_superbee(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
-!KB      call w_advection(dt,)
+            call w_advection_superbee()
 !KB      call v_advection_superbee(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
             call v_advection_superbee()
             call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
@@ -149,225 +137,21 @@ MODULE subroutine advection_calculate_3d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
          end do
       case (UPSTREAM)
          do k=tgrid%kmin,tgrid%kmax
-            call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+            call u_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
                              tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
             call v_advection_upstream()
 !KB      call v_advection_upstream(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
-!KB      call w_advection(dt,)
+            call w_advection_upstream()
 !KB      call v_advection_upstream(dt/2,vgrid%dx,vgrid%dy,vgrid%h(:,:,k),v(:,:,k),tgrid%A,mask_flux,mask_update,tgrid%h(:,:,k),f)
             call v_advection_upstream()
-            call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+            call u_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
                              tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
          end do
    end select
    return
 END SUBROUTINE advection_calculate_3d
-
-#if 0
-!---------------------------------------------------------------------------
-
-SUBROUTINE u_advection(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
-
-   IMPLICIT NONE
-
-   ! Subroutine arguments
-   integer, intent(in) :: imin,imax,jmin,jmax
-   real(real64), intent(in) :: dxu(:,:), dyu(:,:), hu(:,:), u(:,:), A(:,:)
-   real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(:,:), f(:,:)
-
-!  Local constants
-   integer, parameter :: scheme=12
-
-!  Local variables
-   real(real64)                    :: cfl, fu, fuu, fd, hfo, advn
-   integer :: i, j
-!---------------------------------------------------------------------------
-
-   ! the provided velocity MUST be ZERO at land!
-!KB   self%QU  (imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
-!KB   self%QU  (imin:imax,:) = u(:,:) * hu(:,:) * dyu(:,:)
-!KB   self%flux(imin-1:imax,:) = 0
-
-!  TODO: (vertical) interation!!!
-   do j=jmin,jmax
-      do i=imin,imax-1
-!KB         if (au(i).eq.1 .or. au(i).eq.2) then
-            cfl = abs(u(i,j)*dt/dxu(i,j))
-            if (u(i,j) .gt. 0) then
-               fu  = f(i,j)
-               fuu = fu
-               if (i.GT.imin) then
-!KB                  if (au(i-1).eq.1 .or. au(i-1).eq.2) fuu = f(i-1,j)
-               end if
-               fd = f(i+1,j)
-            else
-               fu  = f(i+1,j)
-               fuu = fu
-               if (i.LT.imax-1) then
-!KB                  if (au(i+1).eq.1 .or. au(i+1).eq.2) fuu = f(i+2,j)
-               end if
-               fd = f(i,j)
-            end if
-            fu = adv_reconstruct(scheme,cfl,fuu,fu,fd)
-!KB            uflux(i,j) = QU(i)*fu
-!KB         end if
-      end do
-   end do
-
-   do j=jmin,jmax
-      do i=imin,imax
-!KB         if (az(i).eq.1) then
-            hfo = h(i,j)*f(i,j)
-!KB            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j)
-!KB            advn = ( uflux(i,j)-uflux(i-1,j) )*A(i,j) ! KB
-            f(i,j) = ( hfo - dt*advn ) / h(i,j)
-!KB         end if
-      end do
-   end do
-
-   return
-END SUBROUTINE u_advection
-
-!---------------------------------------------------------------------------
-
-SUBROUTINE v_advection(dt, f, h, arcd1, u, hu, dyu, dxu, mask_flux, mask_update)
-!KBSUBROUTINE v_advection(dt,dxv,dyv,hv,v,A,mask_flux,mask_update,h,f)
-
-   IMPLICIT NONE
-
-   ! Subroutine arguments
-   real(real64), intent(in) :: dt
-   real(real64), intent(in) :: dxv(:,:), dyv(:,:), hv(:,:), v(:,:), A(:,:)
-   logical, intent(in)      :: mask_flux(:,:), mask_update(:,:)
-   real(real64), intent(inout) :: h(:,:), f(:,:)
-
-!  Local constants
-   integer, parameter              :: scheme=12
-
-!  Local variables
-   real(real64), allocatable, save :: uflux(:), QU(:)
-      real(real64)                    :: cfl, fu, fuu, fd, hfo, advn
-   integer :: i,j
-!---------------------------------------------------------------------------
-
-! u is velocity!!!
-
-   imin = lbound(f,dim=1)
-   imax = ubound(f,dim=1)
-
-   if (allocated(uflux)) then
-      if (imin-1.LT.lbound(uflux,dim=1) .OR. ubound(uflux,dim=1).LT.imax) then
-         deallocate(uflux, QU)
-      end if
-   end if
-   if (.NOT.allocated(uflux)) allocate(uflux(imin-1:imax), QU(imin-1:imax))
-
-!  the provided velocity MUST be ZERO at land!
-   QU   (imin-1) = 0 ! assume staggered u-fields [imin:imax]
-   QU   (imin:imax) = u(:) * hu(:) * dyu(:)
-   uflux(imin-1:imax) = 0
-
-!  TODO: (vertical) interation!!!
-   do j=jmin,jmax
-      do i=imin,imax-1
-         if (mask_flux(i)) then
-            cfl = abs(u(i)*dt/dxu(i))
-            if (u(i) .gt. 0) then
-               fu  = f(i)
-               fuu = fu
-               if (i.GT.imin) then
-                  if (mask_flux(i-1)) fuu = f(i-1)
-               end if
-               fd = f(i+1)
-            else
-               fu  = f(i+1)
-               fuu = fu
-               if (i.LT.imax-1) then
-                  if (mask_flux(i+1)) fuu = f(i+2)
-               end if
-               fd = f(i)
-            end if
-            fu = adv_reconstruct(scheme,cfl,fuu,fu,fd)
-            uflux(i) = QU(i)*fu
-         end if
-      end do
-   end do
-
-   do j=jmin,jmax
-      do i=imin,imax
-         if (mask_update(i)) then
-            hfo = h(i,j)*f(i,j)
-            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i,j-1) )*arcd1(i,j)
-            advn = ( uflux(i,j)-uflux(i,j-1) )*arcd1(i,j)
-            f(i,j) = ( hfo - dt*advn ) / h(i,j)
-         end if
-      end do
-   end do
-
-   return
-END SUBROUTINE v_advection
-#endif
-
-#if 0
-!---------------------------------------------------------------------------
-
-PURE real(real64) FUNCTION adv_reconstruct(scheme,cfl,fuu,fu,fd)
-
-   IMPLICIT NONE
-
-   integer,intent(in)  :: scheme
-   real(real64),intent(in) :: cfl,fuu,fu,fd
-!
-! !DEFINED PARAMETERS:
-   integer, parameter :: SUPERBEE=4, P2_PDM=6, SPLMAX13=13, HSIMT=12, MUSCL=5
-   real(real64),parameter :: one3rd = 1.0_real64 / 3
-   real(real64),parameter :: one6th = 1.0_real64 / 6
-! !LOCAL VARIABLES:
-   real(real64)           :: ratio,limiter,kappa,x,deltaf,deltafu
-!
-!---------------------------------------------------------------------------
-
-   adv_reconstruct = fu
-
-   deltaf  = fd - fu
-   deltafu = fu - fuu
-
-   if (deltaf*deltafu .gt. 0) then
-
-      ratio = deltafu / deltaf   ! slope ratio
-
-      select case (scheme)
-         case (SUPERBEE)
-            limiter = MAX( MIN( 2*ratio , 1.0_real64 ) , MIN( ratio , 2.0_real64 ) )
-         case (P2_PDM)
-            x = one6th*(1-2*cfl)
-            limiter = (0.5+x) + (0.5-x)*ratio
-            limiter = MIN( 2*ratio/(cfl+1.d-10) , limiter , 2/(1-cfl) )
-         case (SPLMAX13)
-            limiter = MIN( 2*ratio , one3rd*MAX( 1+2*ratio , 2+ratio ) , 2.0_real64 )
-         case (HSIMT) ! Wu and Zhu (2010, OCEMOD)
-            kappa = 1 - cfl
-            x = 0.25*( kappa - one3rd/kappa )
-            limiter = (0.5+x) + (0.5-x)*ratio ! can become negative!!!
-            limiter = MAX( 0.0_real64 , limiter )
-            limiter = MIN( 2*ratio , limiter , 2.0_real64 )
-         case (MUSCL)
-            limiter = MIN( 2*ratio , 0.5*(1+ratio) , 2.0_real64 )
-         case default
-!           UPSTREAM
-            limiter = 0
-      end select
-
-      adv_reconstruct = fu + 0.5*limiter*(1-cfl)*deltaf
-
-   end if
-
-   return
-END FUNCTION adv_reconstruct
-#endif
 
 !---------------------------------------------------------------------------
 
