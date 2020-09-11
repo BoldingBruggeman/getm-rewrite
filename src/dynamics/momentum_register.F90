@@ -26,7 +26,7 @@ module SUBROUTINE momentum_register(self)
    call self%fm%register('U', 'm2/s', 'transport in local x-direction', &
                          standard_name='', &
                          dimensions=(self%domain%U%dim_2d_ids), &
-                         output_level=output_level_debug, &
+!KB                         output_level=output_level_debug, &
                          part_of_state=.true., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
@@ -34,7 +34,7 @@ module SUBROUTINE momentum_register(self)
    call self%fm%register('V', 'm2/s', 'transport in local y-direction', &
                          standard_name='', &
                          dimensions=(self%domain%V%dim_2d_ids), &
-                         output_level=output_level_debug, &
+  !KB                       output_level=output_level_debug, &
                          part_of_state=.true., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')

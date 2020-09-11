@@ -78,7 +78,7 @@ MODULE getm_momentum
       procedure :: initialize => momentum_initialize
       procedure :: x_2d => momentum_x_2d
       procedure :: y_2d => momentum_y_2d
-!KB      procedure :: do_2d => momentum_2d
+      procedure :: do_2d => momentum_2d
       procedure :: do_3d => momentum_3d
       procedure :: do_w => momentum_z_3d
       procedure :: vel_2d => velocities_2d
