@@ -47,6 +47,8 @@ MODULE getm_airsea
       class(type_field_manager), pointer :: fm
       class(type_getm_domain), pointer :: domain
 
+      real(real64) :: taux0=0._real64, tauy0=0._real64
+
 #ifdef _STATIC_
       real(real64), dimension(E2DFIELD) :: p = 10._real64
 #else
@@ -64,6 +66,7 @@ MODULE getm_airsea
 
       procedure :: configure => airsea_configure
       procedure :: initialize => airsea_initialize
+      procedure :: update => airsea_update
 
    end type type_getm_airsea
 
@@ -111,17 +114,71 @@ SUBROUTINE airsea_initialize(self,domain)
 
 !  Local variables
    integer :: stat
+   type (type_field), pointer :: f
 !-----------------------------------------------------------------------
    self%domain => domain
 #ifndef _STATIC_
    call mm_s('swr',self%swr,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('albedo',self%albedo,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('taux',self%taux,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('tauy',self%taux,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
+   call mm_s('tauy',self%tauy,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('sp',self%sp,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
 #endif
+
+   call self%fm%register('sp', 'Pa', 'atmospheric surface pressure', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_2d_ids), &
+!KB                         output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='airsea', field=f)
+   call self%fm%send_data('sp', self%sp)
+   call self%fm%register('tausx', 'Pa', 'surface stress - x', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_2d_ids), &
+!KB                         output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='airsea', field=f)
+   call self%fm%send_data('tausx', self%taux)
+   call self%fm%register('tausy', 'Pa', 'surface stress - y', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_2d_ids), &
+!KB                         output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='airsea', field=f)
+   call self%fm%send_data('tausy', self%tauy)
    return
 END SUBROUTINE airsea_initialize
+
+!-----------------------------------------------------------------------
+
+SUBROUTINE airsea_update(self,n)
+
+   !! Update the meteo variables
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_airsea), intent(inout) :: self
+   integer, intent(in) :: n
+
+!  Local constants
+   real(real64) :: p0=101325._real64
+
+!  Local variables
+   integer :: i,j
+   real(real64) :: dpdx, dpdy
+!-----------------------------------------------------------------------
+   dpdx = n*1._real64/(self%domain%T%u(1)-self%domain%T%l(1))
+   dpdy = n*1._real64/(self%domain%T%u(2)-self%domain%T%l(2))
+   do j=self%domain%T%l(2),self%domain%T%u(2)
+      do i=self%domain%T%l(1),self%domain%T%u(1)
+         self%sp(i,j) = p0+i*dpdx+j*dpdy
+         self%taux(i,j) = (1._real64+n)/10._real64*self%taux0
+         self%tauy(i,j) = (1+n)/10*self%tauy0
+      end do
+   end do
+   return
+END SUBROUTINE airsea_update
 
 !-----------------------------------------------------------------------
 
