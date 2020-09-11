@@ -112,6 +112,7 @@ SUBROUTINE pressure_initialize(self,domain)
 !  Local variables
    integer :: imin,imax,jmin,jmax,kmax
    integer :: stat
+   type (type_field), pointer :: f
 !---------------------------------------------------------------------------
    call self%logs%info('pressure_initialize()',level=2)
    self%domain => domain
@@ -121,6 +122,20 @@ SUBROUTINE pressure_initialize(self,domain)
    call mm_s('idpdx',self%idpdx,self%domain%T%l(1:3),self%domain%T%u(1:3),def=0._real64,stat=stat)
    call mm_s('idpdy',self%idpdy,self%domain%T%l(1:3),self%domain%T%u(1:3),def=0._real64,stat=stat)
 #endif
+   call self%fm%register('dpdx', 'Pa/m', 'surface pressure gradient - x', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_2d_ids), &
+ !KB                        output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='airsea', field=f)
+   call self%fm%send_data('dpdx', self%dpdx)
+   call self%fm%register('dpdy', 'Pa/m', 'surface pressure gradient - y', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_2d_ids), &
+ !KB                        output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='airsea', field=f)
+  call self%fm%send_data('dpdy', self%dpdy)
    return
 END SUBROUTINE pressure_initialize
 
