@@ -127,17 +127,22 @@ SUBROUTINE getm_settings(self)
    call get_command_argument(1,self%bathymetry%depth%f)
    self%bathymetry%depth%v = 'bathymetry'
 #endif
-   self%runtype = 4
+   self%runtype = 1
    self%info_frequency = 3
    self%mode_split = 20
-   self%mode_split = 6
+   self%mode_split = 100000
    self%timestep = 3600._real64
+   self%timestep = 10._real64
    self%sim_start = strptime("2020-01-01 00:00:00", time_format)
    self%sim_stop = strptime("2020-01-01 12:00:00", time_format)
+   self%sim_stop = strptime("2020-01-01 00:02:00", time_format)
 
    self%domain%ddl = 1.0_real64
    self%domain%ddu = 2.0_real64
    self%domain%Dmin = 0.5_real64
+
+   self%airsea%taux0 = 0.001_real64
+   self%airsea%tauy0 = 0.001_real64
 
    return
 END SUBROUTINE getm_settings
@@ -235,7 +240,7 @@ SUBROUTINE getm_initialize(self)
    call self%domain%depth_update()
    call self%output%initialize(self%fm)
    call self%logs%info('done')
-!   call self%fm%list()
+!KB   call self%fm%list()
    return
 END SUBROUTINE getm_initialize
 
@@ -281,7 +286,7 @@ SUBROUTINE getm_integrate(self)
       call self%output%prepare_output(sim_time,n)
 
       ! call do_input(n)
-      ! call do_airsea(n)
+      call self%airsea%update(n)
       ! total surface stress at T-points
       ! taus(i,j)=rho0i*sqrt( tausx(i,j)**2 + tausy(i,j)**2 )
 
@@ -295,19 +300,14 @@ SUBROUTINE getm_integrate(self)
       ! call depth_update()
 
       ! diffusion/advectio is still missing
+
       call self%dynamics%pressure%surface(self%domain%T%z,self%airsea%sp)
-#if 0
       call self%dynamics%momentum%do_2d(self%timestep,self%dynamics%pressure%dpdx,self%airsea%taux, &
                                                       self%dynamics%pressure%dpdy,self%airsea%tauy)
-#else
-!KB      call self%dynamics%momentum%x_2d(self%timestep,self%dynamics%pressure%dpdx,self%airsea%taux)
-!KB      call self%dynamics%momentum%y_2d(self%timestep,self%dynamics%pressure%dpdy,self%airsea%tauy)
-#endif
       call self%dynamics%sealevel%update(self%timestep,self%dynamics%momentum%U,self%dynamics%momentum%V)
-!KB      self%domain%T%z(20:80,5:15) = n*0.01 ! this work z is updated in .nc file
       call self%domain%depth_update()
 
-      if (mod(n,self%mode_split) == 0) then ! 3D calculations
+      if (self%runtype > 1 .and. mod(n,self%mode_split) == 0) then ! 3D calculations
          ! This is the GETM 3D call order - not carved in stone
          ! call start_macro()
          ! huo=hun; hvo=hvn
