@@ -15,7 +15,7 @@ MODULE getm_density
    use memory_manager
    use logging
    use field_manager
-   use getm_domain, only: type_getm_grid
+   use getm_domain, only: type_getm_domain
 !KB   use getm_variables
 
    IMPLICIT NONE
@@ -32,7 +32,7 @@ MODULE getm_density
       !! Density type
 
       class(type_logging), pointer :: logs
-      class(type_getm_grid), pointer :: grid
+      class(type_getm_domain), pointer :: domain
       class(type_field_manager), pointer :: fm => null()
 
 #ifdef _STATIC_
@@ -79,7 +79,7 @@ END SUBROUTINE density_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE density_initialize(self,grid)
+SUBROUTINE density_initialize(self,domain)
 
    !! Feeds your cats and dogs, if enough food is available. If not enough
    !! food is available, some of your pets will get angry.
@@ -88,7 +88,7 @@ SUBROUTINE density_initialize(self,grid)
 
 !  Subroutine arguments
    class(type_density), intent(inout) :: self
-   class(type_getm_grid), intent(in), target :: grid
+   class(type_getm_domain), intent(in), target :: domain
 
 !  Local constants
 
@@ -97,22 +97,23 @@ SUBROUTINE density_initialize(self,grid)
    integer :: stat
 !-----------------------------------------------------------------------------
    call self%logs%info('density_initialize()',2)
-   self%grid => grid
+   self%domain => domain
+   TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
-   call mm_s('rho',self%rho,grid%l,grid%u,def=-9999._real64,stat=stat)
+   call mm_s('rho',self%rho,TG%l,TG%u,def=-9999._real64,stat=stat)
    call mm_s('buoy',self%buoy,self%rho,def=-9999._real64,stat=stat)
    call mm_s('NN',self%NN,self%rho,def=-9999._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('rho', 'kg/m3', 'density', &
                             standard_name='sea_water_temperature', &
-                            dimensions=(self%grid%dim_3d_ids), &
+                            dimensions=(TG%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             category='temperature_and_salinity')
       call self%fm%send_data('rho', self%rho)
       call self%fm%register('buoy', 'm/s2', 'buoyancy', &
                             standard_name='', &
-                            dimensions=(self%grid%dim_3d_ids), &
+                            dimensions=(TG%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             category='temperature_and_salinity')
       call self%fm%send_data('buoy', self%buoy)
@@ -125,7 +126,8 @@ SUBROUTINE density_initialize(self,grid)
 !         end if
 !      end do
 !   end do
-   return
+   end associate TGrid
+
 END SUBROUTINE density_initialize
 
 !---------------------------------------------------------------------------
@@ -154,15 +156,17 @@ SUBROUTINE density_calculate(self,S,T,p)
 !KB   call plogs%info('density_calculate()',2)
 
 #if 1
-   do k=self%grid%l(3),self%grid%u(3)
-      do j=self%grid%l(2),self%grid%u(2)
-         do i=self%grid%l(1),self%grid%u(1)
-            if (self%grid%mask(i,j) > 0) then
+   TGrid: associate( TG => self%domain%T )
+   do k=TG%l(3),TG%u(3)
+      do j=TG%l(2),TG%u(2)
+         do i=TG%l(1),TG%u(1)
+            if (TG%mask(i,j) > 0) then
                self%rho(i,j,k) = gsw_rho(S(i,j,k), T(i,j,k), 0._real64)
             end  if
          end do
       end do
    end do
+   end associate TGrid
 #else
    if (present(p)) then
       self%rho = gsw_rho(S,T,p)
@@ -193,16 +197,17 @@ SUBROUTINE buoyancy_calculate(self)
 !  Local variables
    integer :: i, j, k
 !-----------------------------------------------------------------------------
-   do k=self%grid%l(3),self%grid%u(3)
-      do j=self%grid%l(2),self%grid%u(2)
-         do i=self%grid%l(1),self%grid%u(1)
-            if (self%grid%mask(i,j) > 0) then
+   TGrid: associate( TG => self%domain%T )
+   do k=TG%l(3),TG%u(3)
+      do j=TG%l(2),TG%u(2)
+         do i=TG%l(1),TG%u(1)
+            if (TG%mask(i,j) > 0) then
                self%buoy(i,j,k) = x*(self%rho(i,j,k)-rho0)
             end  if
          end do
       end do
    end do
-  return
+   end associate TGrid
 END SUBROUTINE buoyancy_calculate
 
 !---------------------------------------------------------------------------
@@ -235,14 +240,13 @@ SUBROUTINE brunt_vaisala_calculate(self)
 !-----------------------------------------------------------------------------
    call self%logs%info('brunt_vaisala()',2)
 
-#ifndef NO_BAROCLINIC
-#define G self%grid
-   do j=G%jmin-1,G%jmax+1
-      do i=G%imin-1,G%imax+1
-         if (G%mask(i,j) .ge. 1 ) then
-            self%NN(i,j,G%kmax) = small_bvf
-            do k=G%kmax-1,1,-1
-               dz=0.5_real64*(G%hn(i,j,k+1)+G%hn(i,j,k))
+   TGrid: associate( TG => self%domain%T )
+   do j=TG%jmin-1,TG%jmax+1
+      do i=TG%imin-1,TG%imax+1
+         if (TG%mask(i,j) .ge. 1 ) then
+            self%NN(i,j,TG%kmax) = small_bvf
+            do k=TG%kmax-1,1,-1
+               dz=0.5_real64*(TG%hn(i,j,k+1)+TG%hn(i,j,k))
 #define _OLD_BVF_
 #ifdef _OLD_BVF_
                NNc =(self%buoy(i,j,k+1)-self%buoy(i,j,k))/dz
@@ -276,27 +280,27 @@ SUBROUTINE brunt_vaisala_calculate(self)
    end do
 
 #ifdef SMOOTH_BVF_HORI
-   do j=G%jmin,G%jmax
-      do i=G%imin,G%imax
-         if (G%mask(i,j) .ge. 1 ) then
-            do k=G%kmax-1,1,-1
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+         if (TG%mask(i,j) .ge. 1 ) then
+            do k=TG%kmax-1,1,-1
                NNc = NN(i,j,k)
-               if (G%mask(i+1,j) .ge. 1) then
+               if (TG%mask(i+1,j) .ge. 1) then
                   NNe= NN(i+1,j,k)
                else
                   NNe=NNc
                end if
-               if (G%mask(i-1,j) .ge. 1) then
+               if (TG%mask(i-1,j) .ge. 1) then
                   NNw= NN(i-1,j,k)
                else
                   NNw=NNc
                end if
-               if (G%mask(i,j+1) .ge. 1) then
+               if (TG%mask(i,j+1) .ge. 1) then
                   NNn= NN(i,j+1,k)
                else
                   NNn=NNc
                end if
-               if (G%mask(i,j-1) .ge. 1) then
+               if (TG%mask(i,j-1) .ge. 1) then
                   NNs= NN(i,j-1,k)
                else
                   NNs=NNc
@@ -307,9 +311,8 @@ SUBROUTINE brunt_vaisala_calculate(self)
       end do
    end do
 #endif
-#endif
-#undef G
-  return
+   end associate TGrid
+
 END SUBROUTINE brunt_vaisala_calculate
 
 !---------------------------------------------------------------------------

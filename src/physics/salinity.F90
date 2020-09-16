@@ -54,7 +54,7 @@ MODULE getm_salinity
 
       class(type_logging), pointer :: logs
       class(type_field_manager), pointer :: fm => null()
-      class(type_getm_grid), pointer :: grid => null()
+      class(type_getm_domain), pointer :: domain => null()
       class(type_advection), pointer :: advection => null()
       class(type_vertical_diffusion), pointer :: vertical_diffusion => null()
       TYPE(type_salinity_configuration) :: config
@@ -109,7 +109,7 @@ END SUBROUTINE salinity_configuration
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE salinity_initialize(self,grid,advection,vertical_diffusion)
+SUBROUTINE salinity_initialize(self,domain,advection,vertical_diffusion)
 
    !! Initialize the salinity field
 
@@ -117,7 +117,7 @@ SUBROUTINE salinity_initialize(self,grid,advection,vertical_diffusion)
 
 !  Subroutine arguments
    class(type_salinity), intent(inout) :: self
-   class(type_getm_grid), intent(in), target :: grid
+   class(type_getm_domain), intent(in), target :: domain
    class(type_advection), intent(in), optional, target :: advection
    class(type_vertical_diffusion), intent(in), optional, target :: vertical_diffusion
       !! grid dimensions in case of dynamic memory allocation
@@ -130,40 +130,41 @@ SUBROUTINE salinity_initialize(self,grid,advection,vertical_diffusion)
 !---------------------------------------------------------------------------
    call self%logs%info('salinity_initialize()',level=2)
 
-   self%grid => grid
+   self%domain => domain
    if (present(advection)) then
       self%advection => advection
    end if
    if (present(vertical_diffusion)) then
       self%vertical_diffusion => vertical_diffusion
    end if
+
+   TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
-   call mm_s('S',self%S,grid%l,grid%u,def=25._real64,stat=stat)
+   call mm_s('S',self%S,TG%l,TG%u,def=25._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('salt', 'g/kg', 'absolute salinity', &
                             standard_name='sea_water_salinity', &
                             category='temperature_and_salinity', &
-                            dimensions=(self%grid%dim_3d_ids), &
+                            dimensions=(TG%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             part_of_state=.true.)
-      call self%fm%send_data('salt', self%S(grid%imin:grid%imax,grid%jmin:grid%jmax,grid%kmin:grid%kmax))
+      call self%fm%send_data('salt', self%S(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
-#define G self%grid
-   do j=G%jmin,G%jmax
-      do i=G%imin,G%imax
-         if (G%mask(i,j) ==  0) then
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+         if (TG%mask(i,j) ==  0) then
             self%S(i,j,:) = -9999._real64
          end if
       end do
    end do
-#undef G
-   return
+   end associate TGrid
+
 END SUBROUTINE salinity_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE salinity_calculate(self,dt,nuh)
+SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
 
    !! Advection/diffusion of the salinity field
 
@@ -172,6 +173,7 @@ SUBROUTINE salinity_calculate(self,dt,nuh)
 !  Subroutine arguments
    class(type_salinity), intent(inout) :: self
    real(real64), intent(in) :: dt
+   real(real64), dimension(:,:,:), intent(in) :: uk,vk
    real(real64), dimension(:,:,:), intent(in) :: nuh
 
 !  Local constants
@@ -181,12 +183,16 @@ SUBROUTINE salinity_calculate(self,dt,nuh)
 !---------------------------------------------------------------------------
    call self%logs%info('salinity_calculate()',level=2)
 
-#define G self%grid
-   !call self%advection%calculate(G%mask,G%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
-   call self%vertical_diffusion%calculate(G%mask,G%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
-#undef G
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   call self%advection%calculate(1,UG,uk,VG,vk,dt,TG,self%S)
+   end associate VGrid
+   end associate UGrid
+   !scheme,ugrid,u,vgrid,v,dt,tgrid,f
+   call self%vertical_diffusion%calculate(TG%mask,TG%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
+   end associate TGrid
 
-   return
 END SUBROUTINE salinity_calculate
 
 !---------------------------------------------------------------------------

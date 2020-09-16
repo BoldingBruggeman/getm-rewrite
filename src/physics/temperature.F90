@@ -26,6 +26,7 @@ MODULE getm_temperature
    use logging
    use field_manager
    use getm_domain
+   use getm_operators
 
    IMPLICIT NONE
 
@@ -33,8 +34,10 @@ MODULE getm_temperature
 
 !  Module constants
    integer, parameter :: tunit = 20
+   real(real64), parameter :: avmols = 0._real64
 
 !  Module types and variables
+   real(real64) :: cnpar
    type, public :: type_temperature_configuration
       character(len=256) :: f = "temperature.nc"
    end type type_temperature_configuration
@@ -46,8 +49,10 @@ MODULE getm_temperature
       !! Temperature type
 
       class(type_logging), pointer :: logs
-      class(type_getm_grid), pointer :: G
+      class(type_getm_domain), pointer :: domain
       class(type_field_manager), pointer :: fm => null()
+      class(type_advection), pointer :: advection => null()
+      class(type_vertical_diffusion), pointer :: vertical_diffusion => null()
       TYPE(type_temperature_configuration) :: config
 
 #ifdef _STATIC_
@@ -61,8 +66,6 @@ MODULE getm_temperature
       procedure :: configuration => temperature_configuration
       procedure :: initialize => temperature_initialize
       procedure :: calculate => temperature_calculate
-      procedure :: advection => temperature_advection
-      procedure :: vertical_diffusion => temperature_vertical_diffusion
 
    end type type_temperature
 
@@ -97,7 +100,7 @@ END SUBROUTINE temperature_configuration
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE temperature_initialize(self,grid)
+SUBROUTINE temperature_initialize(self,domain,advection,vertical_diffusion)
 
    !! Initialize the temperature field
 
@@ -105,7 +108,9 @@ SUBROUTINE temperature_initialize(self,grid)
 
 !  Subroutine arguments
    class(type_temperature), intent(inout) :: self
-   class(type_getm_grid), intent(in), target :: grid
+   class(type_getm_domain), intent(in), target :: domain
+   class(type_advection), intent(in), optional, target :: advection
+   class(type_vertical_diffusion), intent(in), optional, target :: vertical_diffusion
 
 !  Local constants
 
@@ -114,28 +119,36 @@ SUBROUTINE temperature_initialize(self,grid)
    integer :: stat
 !---------------------------------------------------------------------------
    call self%logs%info('temperature_initialize()',level=2)
-   self%G => grid
+   self%domain => domain
+   if (present(advection)) then
+      self%advection => advection
+   end if
+   if (present(vertical_diffusion)) then
+      self%vertical_diffusion => vertical_diffusion
+   end if
 !   self%T = null()
+   TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
-   call mm_s('T',self%T,self%G%l,self%G%u,def=15._real64,stat=stat)
+   call mm_s('T',self%T,TG%l,TG%u,def=15._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('temp', 'Celsius', 'potential temperature', &
                             standard_name='sea_water_temperature', &
                             category='temperature_and_salinity', &
-                            dimensions=(self%G%dim_3d_ids), &
+                            dimensions=(TG%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             part_of_state=.true.)
-      call self%fm%send_data('temp', self%T(grid%imin:grid%imax,grid%jmin:grid%jmax,grid%kmin:grid%kmax))
+      call self%fm%send_data('temp', self%T(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
-   do j=self%G%jmin,self%G%jmax
-      do i=self%G%imin,self%G%imax
-         if (self%G%mask(i,j) ==  0) then
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+         if (TG%mask(i,j) ==  0) then
             self%T(i,j,:) = -9999._real64
          end if
       end do
    end do
-   return
+   end associate TGrid
+
 END SUBROUTINE temperature_initialize
 
 !---------------------------------------------------------------------------
@@ -170,7 +183,7 @@ END SUBROUTINE temperature_initialize
 !> equation by means of a tri-diagonal solver.
 
 
-SUBROUTINE temperature_calculate(self)
+SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh)
 
    !! Advection/diffusion of the temperature field
 
@@ -178,6 +191,9 @@ SUBROUTINE temperature_calculate(self)
 
 !  Subroutine arguments
    class(type_temperature), intent(inout) :: self
+   real(real64), intent(in) :: dt
+   real(real64), dimension(:,:,:), intent(in) :: uk,vk
+   real(real64), dimension(:,:,:), intent(in) :: nuh
 
 !  Local constants
 
@@ -186,7 +202,15 @@ SUBROUTINE temperature_calculate(self)
 !---------------------------------------------------------------------------
    call self%logs%info('temperature_calculate()',level=2)
 
-   return
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   call self%advection%calculate(1,UG,uk,VG,vk,dt,TG,self%T)
+   end associate VGrid
+   end associate UGrid
+   call self%vertical_diffusion%calculate(TG%mask,TG%hn,dt,cnpar,avmols,nuh,self%T)
+   end associate TGrid
+
 END SUBROUTINE temperature_calculate
 
 !---------------------------------------------------------------------------

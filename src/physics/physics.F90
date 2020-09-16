@@ -24,7 +24,7 @@ MODULE getm_physics
    use iso_fortran_env
    use logging
    use field_manager
-   use getm_domain, only: type_getm_grid
+   use getm_domain, only: type_getm_grid, type_getm_domain
    use getm_operators
    use getm_radiation, only: type_radiation
    use getm_salinity, only: type_salinity
@@ -95,7 +95,7 @@ END SUBROUTINE physics_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE physics_initialize(self,grid,advection,vertical_diffusion)
+SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
 
    !! Initialize all dynamical components
 
@@ -103,7 +103,7 @@ SUBROUTINE physics_initialize(self,grid,advection,vertical_diffusion)
 
 !  Subroutine arguments
    class(type_getm_physics), intent(inout) :: self
-   class(type_getm_grid), intent(in), target :: grid
+   class(type_getm_domain), intent(in), target :: domain
    class(type_advection), intent(in), target :: advection
    class(type_vertical_diffusion), intent(in), target :: vertical_diffusion
 
@@ -121,9 +121,9 @@ SUBROUTINE physics_initialize(self,grid,advection,vertical_diffusion)
 !   kmin = grid%kmin; kmax = grid%kmax
 
 !KB   call self%radiation%initialize(logs,grid)
-   call self%salinity%initialize(grid,advection,vertical_diffusion)
-   call self%temperature%initialize(grid)
-   call self%density%initialize(grid)
+   call self%salinity%initialize(domain,advection,vertical_diffusion)
+   call self%temperature%initialize(domain)
+   call self%density%initialize(domain)
    call self%density%density(self%salinity%S,self%temperature%T)
    call self%density%buoyancy()
    call self%logs%info('done',level=1)

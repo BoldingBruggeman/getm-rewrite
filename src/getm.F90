@@ -235,7 +235,7 @@ SUBROUTINE getm_initialize(self)
    call self%domain%initialize()
    call self%domain%report()
    call self%airsea%initialize(self%domain)
-   call self%physics%initialize(self%domain%T,self%advection,self%vertical_diffusion)
+   call self%physics%initialize(self%domain,self%advection,self%vertical_diffusion)
    call self%dynamics%initialize(self%domain)
    call self%domain%depth_update()
    call self%output%initialize(self%fm)
@@ -352,10 +352,10 @@ SUBROUTINE getm_integrate(self)
 
          if (self%runtype > 3) then
 !KB            call self%physics%salinity%calculate(self%timestep,self%mixing%nuh)
-!KB            call self%physics%salinity%calculate(self%timestep,nuh)
-            call self%physics%temperature%calculate()
-            !call self%physics%density%calculate()
-            !call self%physics%density%buoyancy()
+            call self%physics%salinity%calculate(self%timestep,self%dynamics%momentum%pk,self%dynamics%momentum%qk,nuh)
+            call self%physics%temperature%calculate(self%timestep,self%dynamics%momentum%pk,self%dynamics%momentum%qk,nuh)
+            call self%physics%density%density(self%physics%salinity%S,self%physics%temperature%T)
+            call self%physics%density%buoyancy()
          end if
 
          call self%dynamics%momentum%slow_bottom_friction()
