@@ -21,19 +21,22 @@ module SUBROUTINE velocities_2d(self)
 !---------------------------------------------------------------------------
    call self%logs%info('velocities_2d()',level=2)
 
-#define UG self%domain%U
+   UGrid: associate( UG => self%domain%U )
    where (UG%mask > 0)
       self%u1 = self%U/UG%D
+   else where
+      self%u1 = 0._real64
    end where
-#undef UG
+   end associate UGrid
 
-#define VG self%domain%V
+   VGrid: associate( VG => self%domain%V )
    where (VG%mask > 0)
       self%v1 = self%V/VG%D
+   else where
+      self%v1 = 0._real64
    end where
-#undef VG
+   end associate VGrid
 
-   return
 END SUBROUTINE velocities_2d
 
 !---------------------------------------------------------------------------
@@ -52,30 +55,34 @@ module SUBROUTINE velocities_3d(self)
    integer :: i,j,k
 !---------------------------------------------------------------------------
    call self%logs%info('velocities_3d()',level=2)
-#define UG self%domain%U
+
+   UGrid: associate( UG => self%domain%U )
    do k=UG%l(3),UG%u(3)
       do j=UG%l(2),UG%u(2)
          do i=UG%l(1),UG%u(1)
             if (UG%mask(i,j) > 0) then
                self%uk(i,j,k) = self%pk(i,j,k)/UG%hn(i,j,k)
+            else
+               self%uk(i,j,k) = 0._real64
             end  if
          end do
       end do
    end do
-#undef UG
+   end associate UGrid
 
-#define VG self%domain%V
+   VGrid: associate( VG => self%domain%V )
    do k=VG%l(3),VG%u(3)
       do j=VG%l(2),VG%u(2)
          do i=VG%l(1),VG%u(1)
             if (VG%mask(i,j) > 0) then
                self%vk(i,j,k) = self%qk(i,j,k)/VG%hn(i,j,k)
+            else
+               self%vk(i,j,k) = 0._real64
             end  if
          end do
       end do
    end do
-#undef VG
-
+   end associate VGrid
    return
 END SUBROUTINE velocities_3d
 
@@ -100,9 +107,9 @@ module SUBROUTINE velocity_shear_frequency(self,num,SS)
    call self%logs%info('stresses()',level=2)
 ! Just use already calculated velocities
 #if 1
-#define TG self%domain%T
-#define UG self%domain%U
-#define VG self%domain%V
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax
          if (TG%mask(i,j) .ge. 1 ) then
@@ -138,9 +145,9 @@ module SUBROUTINE velocity_shear_frequency(self,num,SS)
          end if
       end do
    end do
-#undef TG
-#undef UG
-#undef VG
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
 #else
 ! This is an older version which we should keep here.
 #ifndef NEW_SS
@@ -198,7 +205,7 @@ module SUBROUTINE stresses(self)
 
    k=1
 !  x-component of bottom momentum flux at U-points
-#define UG self%domain%U
+   UGrid: associate( UG => self%domain%U )
    do j=UG%l(2)+1,UG%u(2)
       do i=UG%l(1)+1,UG%u(1)
          if (UG%mask(i,j) > 0) then
@@ -207,10 +214,10 @@ module SUBROUTINE stresses(self)
          end if
       enddo
    enddo
-#undef UG
+   end associate UGrid
 
 !  y-component of bottom momentum flux at V-points
-#define VG self%domain%V
+   VGrid: associate( VG => self%domain%V )
    do j=VG%l(2)+1,VG%u(2)
       do i=VG%l(1)+1,VG%u(1)
          if (VG%mask(i,j) > 0) then
@@ -219,10 +226,10 @@ module SUBROUTINE stresses(self)
          end if
       enddo
    enddo
-#undef VG
+   end associate VGrid
 
 !  stress magnitude
-#define TG self%domain%T
+   TGrid: associate( TG => self%domain%T )
    do j=TG%l(2)+1,TG%u(2)
       do i=TG%l(1)+1,TG%u(1)
          if (TG%mask(i,j) > 0) then
@@ -242,8 +249,7 @@ module SUBROUTINE stresses(self)
          end if
       end do
    end do
-#undef TG
-   return
+   end associate TGrid
 END SUBROUTINE stresses
 
 #if 0

@@ -45,7 +45,7 @@ module SUBROUTINE momentum_x_2d(self,dt,dpdx,taus)
 !KB
 !---------------------------------------------------------------------------
    call self%logs%info('velocity_2d_x()',level=2)
-#define UG self%domain%U
+   UGrid: associate( UG => self%domain%U )
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
@@ -66,9 +66,9 @@ module SUBROUTINE momentum_x_2d(self,dt,dpdx,taus)
    end do
 
    ! Semi-implicit treatment of Coriolis force for V-momentum eq.
-#define TG self%domain%T
-#define VG self%domain%V
-#define XG self%domain%X
+   XGrid: associate( XG => self%domain%X )
+   TGrid: associate( TG => self%domain%T )
+   VGrid: associate( VG => self%domain%V )
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if(VG%mask(i,j) .ge. 1) then
@@ -92,10 +92,10 @@ module SUBROUTINE momentum_x_2d(self,dt,dpdx,taus)
          end if
       end do
    end do
-#undef TG
-#undef UG
-#undef VG
-#undef XG
+   end associate VGrid
+   end associate TGrid
+   end associate XGrid
+   end associate UGrid
    return
 END SUBROUTINE momentum_x_2d
 
@@ -127,7 +127,7 @@ module SUBROUTINE momentum_y_2d(self,dt,dpdy,taus)
 !---------------------------------------------------------------------------
    call self%logs%info('momentum_2d_y()',level=2)
 
-#define VG self%domain%V
+   VGrid: associate( VG => self%domain%V )
    do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
@@ -148,9 +148,9 @@ module SUBROUTINE momentum_y_2d(self,dt,dpdy,taus)
    end do
 
    ! Semi-implicit treatment of Coriolis force for U-momentum eq.
-#define TG self%domain%T
-#define UG self%domain%U
-#define XG self%domain%X
+   XGrid: associate( XG => self%domain%X )
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if(UG%mask(i,j) .ge. 1) then
@@ -173,10 +173,10 @@ module SUBROUTINE momentum_y_2d(self,dt,dpdy,taus)
          end if
       end do
    end do
-#undef TG
-#undef UG
-#undef VG
-#undef XG
+   end associate UGrid
+   end associate TGrid
+   end associate XGrid
+   end associate VGrid
    return
 END SUBROUTINE momentum_y_2d
 

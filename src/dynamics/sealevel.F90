@@ -113,9 +113,9 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
    integer :: i,j
 !---------------------------------------------------------------------------
    call self%logs%info('sealevel_calculate()',level=2)
-#define TG self%domain%T
-#define UG self%domain%U
-#define VG self%domain%V
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
    TG%zo = TG%z
    do j=TG%l(2)+1,TG%u(2)
       do i=TG%l(1)+1,TG%u(1)
@@ -153,9 +153,9 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
          end if
       end do
    end do
-#undef TG
-#undef UG
-#undef VG
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
    return
 END SUBROUTINE sealevel_calculate
 

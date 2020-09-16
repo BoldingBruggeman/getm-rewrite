@@ -87,8 +87,8 @@ module SUBROUTINE diffusion_driver(self,An_method,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_
 #endif
 
    ! Central for dx(2*Am*dx(U/DU))
-#define TG self%domain%T
-#define UG self%domain%U
+   UGrid: associate( UG => self%domain%U )
+   TGrid: associate( TG => self%domain%T )
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax+1 ! work2d defined on T-points
          work2d(i,j)=0._real64
@@ -108,10 +108,10 @@ module SUBROUTINE diffusion_driver(self,An_method,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_
          end if
       end do
    end do
-#undef TG
+   end associate TGrid
 
    ! Central for dy(Am*(dy(U/DU)+dx(V/DV)))
-#define XG self%domain%X
+   XGrid: associate( XG => self%domain%X )
    do j=XG%jmin-1,XG%jmax ! work2d defined on X-points
       do i=XG%imin,XG%imax
          work2d(i,j)=0._real64
@@ -134,12 +134,10 @@ module SUBROUTINE diffusion_driver(self,An_method,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_
          end if
       end do
    end do
-#undef XG
-#undef UG
+   end associate UGrid
 
    ! Central for dx(Am*(dy(U/DU)+dx(V/DV)))
-#define XG self%domain%X
-#define VG self%domain%V
+   VGrid: associate( VG => self%domain%V )
    do j=XG%jmin,XG%jmax
       do i=XG%imin-1,XG%imax ! work2d defined on X-points
          work2d(i,j)=0._real64
@@ -161,11 +159,12 @@ module SUBROUTINE diffusion_driver(self,An_method,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_
          end if
       end do
    end do
-#undef XG
+   end associate XGrid
 
    ! Central for dy(2*Am*dy(V/DV))
-#define TG self%domain%T
-#define VG self%domain%V
+   VGrid: associate( VG => self%domain%V )
+   TGrid: associate( TG => self%domain%T )
+
    do j=TG%jmin,TG%jmax+1 ! work2d defined on T-points
       do i=TG%imin,TG%imax
          work2d(i,j)=0._real64
@@ -180,7 +179,7 @@ module SUBROUTINE diffusion_driver(self,An_method,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_
          end if
       end do
    end do
-#undef TG
+   end associate TGrid
    do j=VG%jmin,VG%jmax ! VEx defined on V-points
       do i=VG%imin,VG%imax
          if (VG%mask(i,j).eq.1 .or. VG%mask(i,j).eq.2) then
@@ -188,7 +187,7 @@ module SUBROUTINE diffusion_driver(self,An_method,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_
          end if
       end do
    end do
-#undef VG
+   end associate VGrid
 
 #if 0
    if (present(hsd_u)) then
@@ -200,7 +199,6 @@ module SUBROUTINE diffusion_driver(self,An_method,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_
 #endif
    return
 END SUBROUTINE diffusion_driver
-
 
 !---------------------------------------------------------------------------
 

@@ -239,9 +239,11 @@ SUBROUTINE momentum_initialize(self,domain)
    kmax = grid_dims%kmax
 #endif
 #ifndef _STATIC_
-#define TG self%domain%T
-#define UG self%domain%U
-#define VG self%domain%V
+   XGrid: associate( XG => self%domain%X )
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+
    call mm_s('U',self%U,UG%l(1:2),UG%u(1:2),def=0._real64,stat=stat)
    call mm_s('V',self%V,VG%l(1:2),VG%u(1:2),def=0._real64,stat=stat)
    call mm_s('Ui',self%Ui,self%U,def=0._real64,stat=stat)
@@ -285,9 +287,6 @@ SUBROUTINE momentum_initialize(self,domain)
    call mm_s('uuEx',self%uuEx,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
    call mm_s('vvEx',self%vvEx,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
 !KB Uadv, Vadv
-#undef TG
-#undef UG
-#undef VG
 !   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
 !   call mm_s('vvEx',self%vvEx,self%qk,def=0._real64,stat=stat)
 #endif
@@ -295,11 +294,7 @@ SUBROUTINE momentum_initialize(self,domain)
       call self%register()
    end if
 
-   ! Grids for U and V advection
-   XGrid: associate( XG => self%domain%X )
-   TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
+   ! Grids for U and V advection - updates of time varying fields in advection calling routine
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
