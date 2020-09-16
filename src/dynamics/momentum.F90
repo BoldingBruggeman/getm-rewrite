@@ -26,6 +26,7 @@ MODULE getm_momentum
    use logging
    use field_manager
    use getm_domain
+   use getm_operators
 
    IMPLICIT NONE
 
@@ -44,6 +45,7 @@ MODULE getm_momentum
 
       class(type_logging), pointer :: logs
       class(type_field_manager), pointer :: fm
+      class(type_advection), pointer :: advection => null()
       class(type_getm_domain), pointer :: domain
 
 #ifdef _STATIC_
@@ -53,6 +55,7 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: U, V
       real(real64), dimension(:,:), allocatable :: Ui, Vi
       real(real64), dimension(:,:), allocatable :: Uio, Vio
+      real(real64), dimension(:,:), allocatable :: Uadv,Vadv
       real(real64), dimension(:,:), allocatable :: u1, v1
       real(real64), dimension(:,:), allocatable :: fU, fV
       real(real64), dimension(:,:), allocatable :: Slru, Slrv ! Should go away
@@ -65,12 +68,12 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: ru, rv
       real(real64), dimension(:,:), allocatable :: dry_u, dry_v
       real(real64), dimension(:,:,:), allocatable :: pk, qk, ww
+      real(real64), dimension(:,:,:), allocatable :: pkadv, qkadv
       real(real64), dimension(:,:,:), allocatable :: uk, vk
       real(real64), dimension(:,:,:), allocatable :: uuEx,vvEx ! 0
       real(real64), dimension(:,:), allocatable :: taub,taubx, tauby
       real(real64), dimension(:,:), allocatable :: rru,rrv
       real(real64), dimension(:,:), allocatable :: zub,zvb
-      real(real64), dimension(:,:), allocatable :: Uadv,Vadv
       type(type_getm_grid) :: uadvgrid,vadvgrid
 #endif
 
@@ -214,7 +217,7 @@ END SUBROUTINE momentum_configuration
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE momentum_initialize(self,domain)
+SUBROUTINE momentum_initialize(self,domain,advection)
 
    !! Initialize all dynamical components
 
@@ -223,21 +226,19 @@ SUBROUTINE momentum_initialize(self,domain)
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
    TYPE(type_getm_domain), intent(inout), target :: domain
+   class(type_advection), intent(in), optional, target :: advection
 
 !  Local constants
 
 !  Local variables
    integer :: i,j,k
-   integer :: imin,imax,jmin,jmax,kmax
    integer :: stat
 !---------------------------------------------------------------------------
    call self%logs%info('momentum_initialize()',level=2)
    self%domain => domain
-#if 0
-   imin = grid_dims%imin; imax = grid_dims%imax
-   jmin = grid_dims%jmin; jmax = grid_dims%jmax
-   kmax = grid_dims%kmax
-#endif
+   if (present(advection)) then
+      self%advection => advection
+   end if
 #ifndef _STATIC_
    XGrid: associate( XG => self%domain%X )
    TGrid: associate( TG => self%domain%T )
@@ -286,8 +287,6 @@ SUBROUTINE momentum_initialize(self,domain)
    call mm_s('ww',self%ww,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
    call mm_s('uuEx',self%uuEx,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
    call mm_s('vvEx',self%vvEx,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
-   call mm_s('Uadv',self%Uadv,self%U,def=0._real64,stat=stat)
-   call mm_s('Vadv',self%Vadv,self%V,def=0._real64,stat=stat)
 !   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
 !   call mm_s('vvEx',self%vvEx,self%qk,def=0._real64,stat=stat)
 #endif
@@ -296,6 +295,21 @@ SUBROUTINE momentum_initialize(self,domain)
    end if
 
    ! Grids for U and V advection - updates of time varying fields in advection calling routine
+!   call mm_s('uadvmask',self%uadvgrid%mask,TG%mask,def=0._real64,stat=stat)
+   call mm_s('uadvdx',self%uadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+   call mm_s('uadvdy',self%uadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+   call mm_s('uadvD',self%uadvgrid%D,TG%D,def=0._real64,stat=stat)
+   call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+
+   call mm_s('vadvdx',self%vadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+   call mm_s('vadvdy',self%vadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+   call mm_s('vadvD',self%vadvgrid%D,TG%D,def=0._real64,stat=stat)
+   call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+
+   call mm_s('Uadv',self%Uadv,self%U,def=0._real64,stat=stat)
+   call mm_s('Vadv',self%Vadv,self%V,def=0._real64,stat=stat)
+   call mm_s('pkadv',self%pkadv,self%pk,def=0._real64,stat=stat)
+   call mm_s('qkadv',self%qkadv,self%qk,def=0._real64,stat=stat)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this

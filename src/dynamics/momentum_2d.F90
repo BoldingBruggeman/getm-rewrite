@@ -12,6 +12,8 @@
 !> SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
 
 !> to be consistent with the old GETM documentation
+!>
+!> still need to allocate masks for advection grids
 !> @endnote
 
 SUBMODULE (getm_momentum) momentum_2d_smod
@@ -208,7 +210,7 @@ module SUBROUTINE uv_advection_2d(self,dt)
          self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
       end do
    end do
-!   call self%advection%calculate(1,self%uadvgrid,Uself%adv,self%vadvgrid,self%Vadv,dt,self%ugrid,self%U)
+   call self%advection%calculate(1,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,UG,self%U)
 
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
@@ -218,7 +220,7 @@ module SUBROUTINE uv_advection_2d(self,dt)
          self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
       end do
    end do
-!   call self%advection%calculate(1,self%uadvgrid,Uadv,self%vadvgrid,self%Vadv,dt,self%vgrid,self%V)
+   call self%advection%calculate(1,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,VG,self%V)
    end associate VGrid
    end associate UGrid
    end associate TGrid

@@ -36,7 +36,6 @@ module SUBROUTINE momentum_x_3d(self,dt,dpdx,taus)
 #if 0
 
 #endif
-   return
 END SUBROUTINE momentum_x_3d
 
 !---------------------------------------------------------------------------
@@ -68,7 +67,6 @@ module SUBROUTINE momentum_y_3d(self,dt,dpdy,taus)
    call self%logs%info('momentum_3d_y()',level=2)
 #if 0
 #endif
-   return
 END SUBROUTINE momentum_y_3d
 
 !---------------------------------------------------------------------------
@@ -106,7 +104,6 @@ module SUBROUTINE momentum_z_3d(self,dt)
          end do
       end do
    end do
-   return
 END SUBROUTINE momentum_z_3d
 
 !---------------------------------------------------------------------------
@@ -143,8 +140,6 @@ END SUBROUTINE momentum_z_3d
 #endif
 !$OMP END DO
    end do
-
-   return
 END SUBROUTINE momentum_z_3d
 #endif
 
@@ -172,26 +167,25 @@ module SUBROUTINE uv_advection_3d(self,dt)
       do i=UG%imin,UG%imax
          self%uadvgrid%hn(i,j,:) = TG%hn(i+1,j,:)
          self%vadvgrid%hn(i,j,:) = XG%hn(i,j,:)
-!KB         self%Uadv(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i+1,j,:))
-!KB         self%Vadv(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i+1,j,:))
+         self%pkadv(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i+1,j,:))
+         self%qkadv(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i+1,j,:))
       end do
    end do
-!KB   call self%advection%calculate(1,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,self%ugrid,self%U)
+   call self%advection%calculate(1,self%uadvgrid,self%pkadv,self%vadvgrid,self%qkadv,dt,UG,self%pk)
 
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%hn(i,j,:) = XG%hn(i,j,:)
          self%vadvgrid%hn(i,j,:) = TG%hn(i,j+1,:)
-!KB         self%Uadv(i,j) = 0.5_real64*(self%pk(i,j,:) + self%pk(i,j+1,:))
-!KB         self%Vadv(i,j) = 0.5_real64*(self%qk(i,j,:) + self%qk(i,j+1,:))
+         self%pkadv(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i,j+1,:))
+         self%qkadv(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i,j+1,:))
       end do
    end do
-!KB   call self%advection%calculate(1,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,self%vgrid,self%V)
+   call self%advection%calculate(1,self%uadvgrid,self%pkadv,self%vadvgrid,self%qkadv,dt,VG,self%qk)
    end associate VGrid
    end associate UGrid
    end associate TGrid
    end associate XGrid
-   return
 END SUBROUTINE uv_advection_3d
 
 !---------------------------------------------------------------------------
