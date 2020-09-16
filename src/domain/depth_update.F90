@@ -13,7 +13,7 @@
    !! use mask or not
    !! check dry calculation
    !! calculate depth in X-points - used in e.g. diffusion eq.
-   !! shall z and zo be part of domain - likely yes
+   !! dry_{z,u,v} ---> alpha (consistent with old GETM documentation)
    !! @endnote
 
 SUBMODULE (getm_domain) depth_update_smod
