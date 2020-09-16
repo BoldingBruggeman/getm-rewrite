@@ -2,6 +2,18 @@
 
 !!{!./pages/momentum_2d.md!}
 
+!> @note
+!> self%UEx(i,j)+self%SlUx(i,j)+Slr
+!> and
+!> self%VEx(i,j)+self%SlVx(i,j)+Slr
+
+!> should be replaced with:
+
+!> SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
+
+!> to be consistent with the old GETM documentation
+!> @endnote
+
 SUBMODULE (getm_momentum) momentum_2d_smod
 
 CONTAINS
@@ -167,6 +179,52 @@ module SUBROUTINE momentum_y_2d(self,dt,dpdy,taus)
 #undef XG
    return
 END SUBROUTINE momentum_y_2d
+
+!---------------------------------------------------------------------------
+
+module SUBROUTINE uv_advection_2d(self,dt)
+   !! 3D velocities
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+!---------------------------------------------------------------------------
+   XGrid: associate( XG => self%domain%X )
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%D(i,j)  = TG%D(i+1,j)
+         self%vadvgrid%D(i,j)  = XG%D(i,j)
+         self%Uadv(i,j) = 0.5_real64*(self%U(i,j) + self%U(i+1,j))
+         self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
+      end do
+   end do
+!   call self%advection%calculate(1,self%uadvgrid,Uself%adv,self%vadvgrid,self%Vadv,dt,self%ugrid,self%U)
+
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%D(i,j)  = XG%D(i,j)
+         self%vadvgrid%D(i,j)  = TG%D(i,j+1)
+         self%Uadv(i,j) = 0.5_real64*(self%U(i,j) + self%U(i,j+1))
+         self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
+      end do
+   end do
+!   call self%advection%calculate(1,self%uadvgrid,Uadv,self%vadvgrid,self%Vadv,dt,self%vgrid,self%V)
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
+   end associate XGrid
+   return
+END SUBROUTINE uv_advection_2d
 
 !---------------------------------------------------------------------------
 

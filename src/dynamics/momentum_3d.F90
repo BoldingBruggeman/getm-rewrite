@@ -111,8 +111,6 @@ END SUBROUTINE momentum_z_3d
 
 !---------------------------------------------------------------------------
 
-END SUBMODULE momentum_3d_smod
-
 #if 0
 #ifdef CALC_HALO_WW
 #ifndef SLICE_MODEL
@@ -149,3 +147,53 @@ END SUBMODULE momentum_3d_smod
    return
 END SUBROUTINE momentum_z_3d
 #endif
+
+!---------------------------------------------------------------------------
+
+module SUBROUTINE uv_advection_3d(self,dt)
+   !! 3D velocities
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j,k
+!---------------------------------------------------------------------------
+   XGrid: associate( XG => self%domain%X )
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%hn(i,j,:) = TG%hn(i+1,j,:)
+         self%vadvgrid%hn(i,j,:) = XG%hn(i,j,:)
+!KB         self%Uadv(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i+1,j,:))
+!KB         self%Vadv(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i+1,j,:))
+      end do
+   end do
+!KB   call self%advection%calculate(1,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,self%ugrid,self%U)
+
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%hn(i,j,:) = XG%hn(i,j,:)
+         self%vadvgrid%hn(i,j,:) = TG%hn(i,j+1,:)
+!KB         self%Uadv(i,j) = 0.5_real64*(self%pk(i,j,:) + self%pk(i,j+1,:))
+!KB         self%Vadv(i,j) = 0.5_real64*(self%qk(i,j,:) + self%qk(i,j+1,:))
+      end do
+   end do
+!KB   call self%advection%calculate(1,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,self%vgrid,self%V)
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
+   end associate XGrid
+   return
+END SUBROUTINE uv_advection_3d
+
+!---------------------------------------------------------------------------
+
+END SUBMODULE momentum_3d_smod

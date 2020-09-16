@@ -267,6 +267,7 @@ SUBROUTINE getm_integrate(self)
   real(real64), allocatable :: nuh(:,:,:)
 
 !-----------------------------------------------------------------------------
+!KB   Momentum: associate( momentum => self%dynamics%momentum )
    if (self%sim_start .gt. self%sim_stop) return
    call self%logs%info('getm_integrate()',level=0)
 
@@ -301,6 +302,8 @@ SUBROUTINE getm_integrate(self)
 
       ! diffusion/advectio is still missing
 
+      call self%dynamics%momentum%advection_2d(self%timestep)
+!KB      call momentum%advection_2d(self%timestep)
       call self%dynamics%pressure%surface(self%domain%T%z,self%airsea%sp)
       call self%dynamics%momentum%do_2d(self%timestep,self%dynamics%pressure%dpdx,self%airsea%taux, &
                                                       self%dynamics%pressure%dpdy,self%airsea%tauy)
@@ -349,7 +352,7 @@ SUBROUTINE getm_integrate(self)
 
          if (self%runtype > 3) then
 !KB            call self%physics%salinity%calculate(self%timestep,self%mixing%nuh)
-            call self%physics%salinity%calculate(self%timestep,nuh)
+!KB            call self%physics%salinity%calculate(self%timestep,nuh)
             call self%physics%temperature%calculate()
             !call self%physics%density%calculate()
             !call self%physics%density%buoyancy()
@@ -368,6 +371,7 @@ SUBROUTINE getm_integrate(self)
       remain = self%sim_stop - sim_time
    end do
    call self%logs%info('done',level=0)
+!KB   end associate Momentum
    return
 END SUBROUTINE getm_integrate
 

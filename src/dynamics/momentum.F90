@@ -70,6 +70,8 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: taub,taubx, tauby
       real(real64), dimension(:,:), allocatable :: rru,rrv
       real(real64), dimension(:,:), allocatable :: zub,zvb
+      real(real64), dimension(:,:), allocatable :: Uadv,Vadv
+      type(type_getm_grid) :: uadvgrid,vadvgrid
 #endif
 
       contains
@@ -78,6 +80,8 @@ MODULE getm_momentum
       procedure :: initialize => momentum_initialize
       procedure :: x_2d => momentum_x_2d
       procedure :: y_2d => momentum_y_2d
+      procedure :: advection_2d => uv_advection_2d
+      procedure :: advection_3d => uv_advection_3d
       procedure :: do_2d => momentum_2d
       procedure :: do_3d => momentum_3d
       procedure :: do_w => momentum_z_3d
@@ -111,6 +115,18 @@ MODULE getm_momentum
          real(real64), dimension(:,:), intent(in) :: taus
             !! surface stress in Y-direction
       end subroutine momentum_y_2d
+
+      module subroutine uv_advection_2d(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      end subroutine uv_advection_2d
+
+      module subroutine uv_advection_3d(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      end subroutine uv_advection_3d
 
       module subroutine momentum_x_3d(self,dt,dpdx,taus)
          class(type_getm_momentum), intent(inout) :: self
@@ -211,6 +227,7 @@ SUBROUTINE momentum_initialize(self,domain)
 !  Local constants
 
 !  Local variables
+   integer :: i,j,k
    integer :: imin,imax,jmin,jmax,kmax
    integer :: stat
 !---------------------------------------------------------------------------
@@ -267,6 +284,7 @@ SUBROUTINE momentum_initialize(self,domain)
    call mm_s('ww',self%ww,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
    call mm_s('uuEx',self%uuEx,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
    call mm_s('vvEx',self%vvEx,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
+!KB Uadv, Vadv
 #undef TG
 #undef UG
 #undef VG
@@ -276,6 +294,38 @@ SUBROUTINE momentum_initialize(self,domain)
    if (associated(self%fm)) then
       call self%register()
    end if
+
+   ! Grids for U and V advection
+   XGrid: associate( XG => self%domain%X )
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
+         self%uadvgrid%dx(i,j) = TG%dx(i+1,j)
+         self%uadvgrid%dy(i,j) = TG%dy(i+1,j)
+         self%vadvgrid%dx(i,j) = XG%dx(i,j)
+         self%vadvgrid%dy(i,j) = XG%dy(i,j)
+         self%Uadv(i,j) = 0.5_real64*(self%U(i,j) + self%U(i+1,j))
+         self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
+      end do
+   end do
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%dx(i,j) = XG%dx(i,j)
+         self%uadvgrid%dy(i,j) = XG%dy(i,j)
+         self%vadvgrid%mask(i,j) = TG%mask(i,j+1) ! check this
+         self%vadvgrid%dx(i,j) = TG%dx(i,j+1)
+         self%vadvgrid%dy(i,j) = TG%dy(i,j+1)
+         self%Uadv(i,j) = 0.5_real64*(self%U(i,j) + self%U(i,j+1))
+         self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
+      end do
+   end do
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
+   end associate XGrid
    return
 END SUBROUTINE momentum_initialize
 
