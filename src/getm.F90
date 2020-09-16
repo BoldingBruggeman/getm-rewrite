@@ -351,11 +351,20 @@ SUBROUTINE getm_integrate(self)
          call self%dynamics%momentum%stresses()
 
          if (self%runtype > 3) then
-!KB            call self%physics%salinity%calculate(self%timestep,self%mixing%nuh)
-            call self%physics%salinity%calculate(self%timestep,self%dynamics%momentum%pk,self%dynamics%momentum%qk,nuh)
-            call self%physics%temperature%calculate(self%timestep,self%dynamics%momentum%pk,self%dynamics%momentum%qk,nuh)
-            call self%physics%density%density(self%physics%salinity%S,self%physics%temperature%T)
-            call self%physics%density%buoyancy()
+            xSalinity: associate( salinity => self%physics%salinity )
+            xTemperature: associate( temperature => self%physics%temperature )
+            xDensity: associate( density => self%physics%density )
+            xMomentum: associate( momentum => self%dynamics%momentum )
+
+            call salinity%calculate(self%timestep,momentum%pk,momentum%qk,nuh)
+            call temperature%calculate(self%timestep,momentum%pk,momentum%qk,nuh)
+            call density%density(salinity%S,temperature%T)
+            call density%buoyancy()
+
+            end associate xMomentum
+            end associate xDensity
+            end associate xTemperature
+            end associate xSalinity
          end if
 
          call self%dynamics%momentum%slow_bottom_friction()
