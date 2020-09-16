@@ -286,7 +286,8 @@ SUBROUTINE momentum_initialize(self,domain)
    call mm_s('ww',self%ww,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
    call mm_s('uuEx',self%uuEx,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
    call mm_s('vvEx',self%vvEx,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
-!KB Uadv, Vadv
+   call mm_s('Uadv',self%Uadv,self%U,def=0._real64,stat=stat)
+   call mm_s('Vadv',self%Vadv,self%V,def=0._real64,stat=stat)
 !   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
 !   call mm_s('vvEx',self%vvEx,self%qk,def=0._real64,stat=stat)
 #endif
