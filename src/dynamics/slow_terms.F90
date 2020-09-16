@@ -27,7 +27,7 @@ module SUBROUTINE slow_terms(self,idpdx,idpdy)
 !---------------------------------------------------------------------------
    call self%logs%info('slow_terms()',level=2)
 
-#define UG self%domain%U
+   UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
@@ -61,9 +61,9 @@ module SUBROUTINE slow_terms(self,idpdx,idpdy)
          end if
       end do
    end do
-#undef UG
+   end associate UGrid
 
-#define VG self%domain%V
+   VGrid: associate( VG => self%domain%V )
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then
@@ -97,8 +97,8 @@ module SUBROUTINE slow_terms(self,idpdx,idpdy)
          end if
       end do
    end do
-#undef VG
-   return
+   end associate VGrid
+
 END SUBROUTINE slow_terms
 
 !---------------------------------------------------------------------------
@@ -129,7 +129,9 @@ module SUBROUTINE slow_bottom_friction(self)
    self%zub = 0.01_real64
    self%zvb = 0.01_real64
 
-#define UG self%domain%U
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)
          if (UG%mask(i,j) .ge. 1) then
@@ -139,9 +141,7 @@ module SUBROUTINE slow_bottom_friction(self)
          end if
       end do
    end do
-#undef UG
 
-#define VG self%domain%V
    do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) .ge. 1) then
@@ -151,9 +151,7 @@ module SUBROUTINE slow_bottom_friction(self)
          end if
       end do
    end do
-#undef VG
 
-#define UG self%domain%U
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)
          if (UG%mask(i,j) .ge. 1) then
@@ -176,9 +174,7 @@ module SUBROUTINE slow_bottom_friction(self)
          end if
       end do
    end do
-#undef UG
 
-#define VG self%domain%V
    do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) .ge. 1) then
@@ -202,8 +198,10 @@ module SUBROUTINE slow_bottom_friction(self)
          end if
       end do
    end do
-#undef VG
-   return
+
+   end associate VGrid
+   end associate UGrid
+
 END SUBROUTINE slow_bottom_friction
 
 !---------------------------------------------------------------------------
