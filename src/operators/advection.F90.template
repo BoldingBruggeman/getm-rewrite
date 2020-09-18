@@ -1,5 +1,19 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
+!> @note
+!> array indices!!!!!
+!> @endnote
+
+#define _AUTOMATIC_
+
+!KB MODULE _MODULE_NAME_
+
+!---------------------------------------------------------------------------
+
+!KB CONTAINS
+
+!---------------------------------------------------------------------------
+
 SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
@@ -8,20 +22,19 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
 
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
-   integer, intent(in) :: umask(:,:)
-   real(real64), intent(in) :: dxu(:,:), dyu(:,:), hu(:,:), u(:,:)
-   integer, intent(in) :: tmask(:,:)
-   real(real64), intent(in) :: A(:,:)
+   integer, intent(in) :: umask(imin:imax,jmin:jmax)
+   real(real64), intent(in) :: dxu(imin:imax,jmin:jmax), dyu(imin:imax,jmin:jmax), hu(imin:imax,jmin:jmax), u(imin:imax,jmin:jmax)
+   integer, intent(in) :: tmask(imin:imax,jmin:jmax)
+   real(real64), intent(in) :: A(imin:imax,jmin:jmax)
    real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(:,:), f(:,:)
+   real(real64), intent(inout) :: h(imin:imax,jmin:jmax), f(imin:imax,jmin:jmax)
 
 !  Local constants
-   integer, parameter :: scheme=12
 
 !  Local variables
 #ifdef _AUTOMATIC_
-   real(real64) :: flux(imin:imax,jmin:jmax)
-   real(real64) :: QU(imin:imax,jmin:jmax)
+   real(real64) :: flux(imin-1:imax,jmin:jmax)
+   real(real64) :: QU(imin-1:imax,jmin:jmax)
 #else
    real(real64), allocatable :: flux(:,:), QU(:,:)
 #endif
@@ -30,19 +43,18 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
    real(real64) :: limiter
    integer :: i, j
 !---------------------------------------------------------------------------
-
 #ifndef _AUTOMATIC_
-   allocate(flux(imin:imax,jmin:jmax), QU(imin:imax,jmin:jmax))
+   allocate(flux(imin-1:imax,jmin:jmax), QU(imin-1:imax,jmin:jmax))
 #endif
 
    ! the provided velocity MUST be ZERO at land!
    QU(imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
-!KB   self%QU  (imin:imax,:) = u(:,:) * hu(:,:) * dyu(:,:) ! to KK - why not in the main loops?
-   flux(imin-1:imax,:) = 0
+   flux(imin-1:imax,:) = 0._real64
 
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
       do i=imin,imax-1
+         QU(i,j) = u(i,j) * hu(i,j) * dyu(i,j)
          if (umask(i,j) == 1 .or. umask(i,j) == 2) then
             cfl = abs(u(i,j)*dt/dxu(i,j))
             if (u(i,j) .gt. 0) then
@@ -60,7 +72,7 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
                end if
                fd = f(i,j)
             end if
-!#if _SCHEME_ != UPSTREAM
+
             deltaf  = fd - fu
             deltafu = fu - fuu
             if (deltaf*deltafu .gt. 0) then
@@ -71,8 +83,6 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
                _LIMITER4_
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
-!#endif
-            QU(i,j) = u(i,j) * hu(i,j) * dyu(i,j) ! to KK - here instead?
             flux(i,j) = QU(i,j)*fu
          end if
       end do
@@ -89,18 +99,108 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
       end do
    end do
 
-#ifndef _AUTOMATIC_
-   deallocate(flux, QU)
-#endif
+!#ifndef _AUTOMATIC_
+!   deallocate(flux, QU)
+!#endif
    return
 END SUBROUTINE _U_SUB_NAME_
 
-SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
+SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,A,dt,h,f)
+   USE, INTRINSIC :: ISO_FORTRAN_ENV
+
+   IMPLICIT NONE
+
+   ! Subroutine arguments
+   integer, intent(in) :: imin,imax,jmin,jmax
+   integer, intent(in) :: vmask(imin:imax,jmin:jmax)
+   real(real64), intent(in) :: dxv(imin:imax,jmin:jmax), dyv(imin:imax,jmin:jmax), hv(imin:imax,jmin:jmax), v(imin:imax,jmin:jmax)
+   integer, intent(in) :: tmask(imin:imax,jmin:jmax)
+   real(real64), intent(in) :: A(imin:imax,jmin:jmax)
+   real(real64), intent(in) :: dt
+   real(real64), intent(inout) :: h(imin:imax,jmin:jmax), f(imin:imax,jmin:jmax)
+
+!  Local constants
+
+!  Local variables
+#ifdef _AUTOMATIC_
+   real(real64) :: flux(imin:imax,jmin-1:jmax)
+   real(real64) :: QV(imin:imax,jmin-1:jmax)
+#else
+   real(real64), allocatable :: flux(:,:), QV(:,:)
+#endif
+   real(real64) :: cfl, fu, fuu, fd, hfo, advn
+   real(real64) :: deltaf, deltafu, ratio
+   real(real64) :: limiter
+   integer :: i, j
+!---------------------------------------------------------------------------
+#ifndef _AUTOMATIC_
+   allocate(flux(imin:imax,jmin-1:jmax), QV(imin:imax,jmin-1:jmax))
+#endif
+
+   ! the provided velocity MUST be ZERO at land!
+   QV(:,jmin-1) = 0 ! assume staggered u-fields [imin:imax]
+   flux(:,jmin-1:jmax) = 0._real64
+
+!  TODO: (vertical) interation!!!
+   do j=jmin,jmax-1
+      do i=imin,imax
+         QV(i,j) = v(i,j) * hv(i,j) * dxv(i,j)
+         if (vmask(i,j) == 1 .or. vmask(i,j) == 2) then
+            cfl = abs(v(i,j)*dt/dyv(i,j))
+            if (v(i,j) .gt. 0) then
+               fu  = f(i,j)
+               fuu = fu
+               if (j > jmin) then
+                  if (vmask(i,j-1) == 1 .or. vmask(i,j-1) == 2) fuu = f(i,j-1)
+               end if
+               fd = f(i,j+1)
+            else
+               fu  = f(i,j+1)
+               fuu = fu
+               if (j < jmax-1) then
+                  if (vmask(i,j+1) == 1 .or. vmask(i,j+1) == 2) fuu = f(i,j+2)
+               end if
+               fd = f(i,j)
+            end if
+
+            deltaf  = fd - fu
+            deltafu = fu - fuu
+            if (deltaf*deltafu .gt. 0) then
+               ratio = deltafu / deltaf   ! slope ratio
+               _LIMITER1_
+               _LIMITER2_
+               _LIMITER3_
+               _LIMITER4_
+               fu = fu + 0.5*limiter*(1-cfl)*deltaf
+            end if
+
+            flux(i,j) = QV(i,j)*fu
+         end if
+      end do
+   end do
+
+   do j=jmin,jmax
+      do i=imin,imax
+         if (tmask(i,j) == 1) then
+            hfo = h(i,j)*f(i,j)
+            h(i,j) = h(i,j) - dt*( QV(i,j)-QV(i,j-1) )*A(i,j) !KB
+            advn = ( flux(i,j)-flux(i,j-1) )*A(i,j) !KB
+            f(i,j) = ( hfo - dt*advn ) / h(i,j)
+         end if
+      end do
+   end do
+
+!#ifndef _AUTOMATIC_
+!   deallocate(flux, QV)
+!#endif
+   return
 END SUBROUTINE _V_SUB_NAME_
 
-SUBROUTINE _W_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,u,A,dt,h,f)
+!SUBROUTINE _W_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,w,A,dt,h,f)
+SUBROUTINE _W_SUB_NAME_()
 END SUBROUTINE _W_SUB_NAME_
 
+!KB END MODULE _MODULE_NAME_
 
 #if 0
 !---------------------------------------------------------------------------

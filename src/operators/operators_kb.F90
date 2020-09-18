@@ -31,8 +31,7 @@ MODULE getm_operators
       !! version: v0.1
       !!
 
-!KB      integer, private :: imin,imax,jmin,jmax,kmin,kmax
-!KB      real(real64), allocatable, private :: flux(:,:), QU(:,:)
+      real(real64), allocatable, private :: flux(:,:), QU(:,:)
 
       real(real64) :: flux_time
       real(real64) :: adv_time

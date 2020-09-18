@@ -49,17 +49,17 @@ SUBROUTINE configure_output(self,logs)
 
 ! Subroutine arguments
    class(type_getm_output), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
+   class(type_logging), intent(in), optional, target :: logs
 
 ! Local constants
 
 ! Local variables
    integer :: n
 !-----------------------------------------------------------------------------
-   self%logs => logs
+   if (present(logs)) self%logs => logs
    call self%logs%info('output_configure()',level=1)
    call init_epoch()
-   call self%logs%info('done',level=1)
+   if (associated(self%logs)) call self%logs%info('done',level=1)
    return
 END SUBROUTINE configure_output
 
@@ -79,16 +79,12 @@ SUBROUTINE initialize_output(self,fm)
 !  Local variables
    character(len=128) :: title='getm'
 !-----------------------------------------------------------------------------
-   if (associated(self%logs)) then
-      call self%logs%info('output_initialize()',level=1)
-   end if
+   if (associated(self%logs)) call self%logs%info('output_initialize()',level=1)
    self%fm => fm
    allocate(type_getm_output::output_manager_host)
 !KB   call self%fm%list()
    call output_manager_init(self%fm,title)
-   if (associated(self%logs)) then
-      call self%logs%info('done',level=1)
-   end if
+   if (associated(self%logs)) call self%logs%info('done',level=1)
    return
 END SUBROUTINE initialize_output
 
@@ -110,7 +106,7 @@ SUBROUTINE prepare_output(self,t,n)
    integer :: julday
    integer :: secs, microsecs
 !-----------------------------------------------------------------------------
-   call self%logs%info('do_output()',level=2)
+   if (associated(self%logs)) call self%logs%info('do_output()',level=2)
    call self%julian_day(t%getYear(),t%getMonth(),t%getDay(),julday)
    secs = 3600*t%getHour()+60*t%getMinute()+t%getSecond()
    microsecs = 1000*t%getmilliSecond()
