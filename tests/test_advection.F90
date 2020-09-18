@@ -73,6 +73,7 @@ CONTAINS
       call mm_s('c2',domain%T%c2,domain%T%l(2),domain%T%u(2),stat=stat)
       call mm_s('H',domain%T%H,domain%T%l(1:2),domain%T%u(1:2),stat=stat)
       call mm_s('mask',domain%T%mask,domain%T%l(1:2),domain%T%u(1:2),stat=stat)
+write(*,*) x0,y0
       do i=imin,imax
          domain%T%c1(i) = (i-1)*dx-x0
       end do
@@ -95,7 +96,7 @@ CONTAINS
       call fm%register_dimension('time',id=id_dim_time)
       call fm%initialize(prepend_by_default=(/id_dim_lon,id_dim_lat/),append_by_default=(/id_dim_time/))
       call fm%register('u','m/s','u-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=u)
-      call fm%register('v','m/s','v-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=u)
+      call fm%register('v','m/s','v-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=v)
       call fm%register('f','','scalar',data2d=var)
 !KB      call fm%list()
       call output%initialize(fm)
@@ -107,13 +108,8 @@ CONTAINS
       ! divergence free velocity field
       do j=jmin,jmax
          do i=imin,imax
-#if 0
-            u(i,j,:) = -omega*domain%U%c2(j)
-            v(i,j,:) =  omega*domain%V%c1(i)
-#else
             u(i,j) = -omega*domain%U%c2(j)
             v(i,j) =  omega*domain%V%c1(i)
-#endif
          end do
       end do
    end subroutine velocity_field
