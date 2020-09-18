@@ -25,7 +25,7 @@ MODULE getm_output
       !! used as reference time for Julian Days calculations
 
    type, public, extends(type_output_manager_host) :: type_getm_output
-      class(type_logging), pointer :: logs
+      class(type_logging), pointer :: logs => null()
       class(type_field_manager), pointer :: fm
    contains
       procedure :: configure => configure_output
@@ -79,12 +79,16 @@ SUBROUTINE initialize_output(self,fm)
 !  Local variables
    character(len=128) :: title='getm'
 !-----------------------------------------------------------------------------
-   call self%logs%info('output_initialize()',level=1)
+   if (associated(self%logs)) then
+      call self%logs%info('output_initialize()',level=1)
+   end if
    self%fm => fm
    allocate(type_getm_output::output_manager_host)
 !KB   call self%fm%list()
    call output_manager_init(self%fm,title)
-   call self%logs%info('done',level=1)
+   if (associated(self%logs)) then
+      call self%logs%info('done',level=1)
+   end if
    return
 END SUBROUTINE initialize_output
 
@@ -131,7 +135,9 @@ SUBROUTINE do_output(self,t)
    integer :: julday
    integer :: secs, microsecs
 !-----------------------------------------------------------------------------
-   call self%logs%info('do_output()',level=2)
+   if (associated(self%logs)) then
+      call self%logs%info('do_output()',level=2)
+   end if
    call self%julian_day(t%getYear(),t%getMonth(),t%getDay(),julday)
    secs = 3600*t%getHour()+60*t%getMinute()+t%getSecond()
    microsecs = 1000*t%getmilliSecond()
