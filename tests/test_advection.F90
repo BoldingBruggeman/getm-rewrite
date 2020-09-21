@@ -17,6 +17,7 @@ PROGRAM test_advection
    integer, parameter :: imin=1, imax=101, jmin=1, jmax=101, kmin=0, kmax=25
    real(real64), parameter :: tmax=10._real64
    integer, parameter :: Nmax=100
+   integer, parameter :: nsave=25
 
 !  Local variables
    type(type_getm_domain) :: domain
@@ -29,8 +30,8 @@ PROGRAM test_advection
    real(real64) :: u(imin:imax,jmin:jmax,kmin:kmax), v(imin:imax,jmin:jmax,kmin:kmax)
    real(real64) :: var(imin:imax,jmin:jmax,kmin:kmax)
 #else
-   real(real64) :: u(imin:imax,jmin:jmax), v(imin:imax,jmin:jmax)
-   real(real64) :: var(imin:imax,jmin:jmax)
+   real(real64) :: u(imin-1:imax+1,jmin-1:jmax+1), v(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64) :: var(imin-1:imax+1,jmin-1:jmax+1)
 #endif
    integer :: i,j,k,n
    real(real64) :: x0=Lx/2, y0=Ly/2
@@ -44,7 +45,7 @@ PROGRAM test_advection
    call domain_setup()
    call field_manager_setup()
    call velocity_field()
-   call initial_conditions()
+   call initial_conditions(initial_method)
 
    call output%do_output(t)
 !KB   call advection%initialize(var)
@@ -54,12 +55,23 @@ PROGRAM test_advection
    n = 1*(nint(timestep-int(tmax/Nmax)))
    dt= timedelta(seconds=int(tmax/Nmax),milliseconds=100)
 !KB   do n=1,Nmax
+   do n=1,10000
+      t=t+dt
+      write(*,*) n,' of',Nmax
+      call advection%calculate(1,domain%U,u,domain%V,v,timestep,domain%T,var)
+      if (mod(n,nsave) == 0) call output%do_output(t)
+   end do
+
+#if 0 
+   initial_method=2
+   call initial_conditions(initial_method)
    do n=1,25
       t=t+dt
       write(*,*) n,' of',Nmax
       call advection%calculate(1,domain%U,u,domain%V,v,timestep,domain%T,var)
-      call output%do_output(t)
+      if (mod(n,nsave) == 0) call output%do_output(t)
    end do
+#endif
 
 !-----------------------------------------------------------------------------
 
@@ -68,12 +80,11 @@ CONTAINS
 !-----------------------------------------------------------------------------
 
    subroutine domain_setup()
-      call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax)
+      call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=(/1,1,0/))
       call mm_s('c1',domain%T%c1,domain%T%l(1),domain%T%u(1),stat=stat)
       call mm_s('c2',domain%T%c2,domain%T%l(2),domain%T%u(2),stat=stat)
       call mm_s('H',domain%T%H,domain%T%l(1:2),domain%T%u(1:2),stat=stat)
       call mm_s('mask',domain%T%mask,domain%T%l(1:2),domain%T%u(1:2),stat=stat)
-write(*,*) x0,y0
       do i=imin,imax
          domain%T%c1(i) = (i-1)*dx-x0
       end do
@@ -95,9 +106,12 @@ write(*,*) x0,y0
       call fm%register_dimension('y',jmax-jmin+1,id=id_dim_lat)
       call fm%register_dimension('time',id=id_dim_time)
       call fm%initialize(prepend_by_default=(/id_dim_lon,id_dim_lat/),append_by_default=(/id_dim_time/))
-      call fm%register('u','m/s','u-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=u)
-      call fm%register('v','m/s','v-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=v)
-      call fm%register('f','','scalar',data2d=var)
+      call fm%register('dx','m','grid spacing - x',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%dx(imin:imax,jmin:jmax))
+      call fm%register('dy','m','grid spacing - y',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%dy(imin:imax,jmin:jmax))
+      call fm%register('H','m','depth',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%H(imin:imax,jmin:jmax))
+      call fm%register('u','m/s','u-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=u(imin:imax,jmin:jmax),fill_value=0._real64)
+      call fm%register('v','m/s','v-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=v(imin:imax,jmin:jmax),fill_value=0._real64)
+      call fm%register('f','','scalar',data2d=var(imin:imax,jmin:jmax),fill_value=-99._real64)
 !KB      call fm%list()
       call output%initialize(fm)
    end subroutine field_manager_setup
@@ -106,27 +120,45 @@ write(*,*) x0,y0
 
    subroutine velocity_field()
       ! divergence free velocity field
+      u = 0._real64
+      v = 0._real64
       do j=jmin,jmax
          do i=imin,imax
-            u(i,j) = -omega*domain%U%c2(j)
-            v(i,j) =  omega*domain%V%c1(i)
+            if (domain%U%mask(i,j) > 0) then
+               u(i,j) = -omega*domain%U%c2(j)
+            end if
+            if (domain%V%mask(i,j) > 0) then
+               v(i,j) =  omega*domain%V%c1(i)
+            end if
          end do
       end do
    end subroutine velocity_field
 
 !-----------------------------------------------------------------------------
 
-   subroutine initial_conditions()
+   subroutine initial_conditions(method)
+      integer, intent(in) :: method
       ! initial condition
-      select case(initial_method)
+      var = -99._real64
+      select case(method)
          case (1)
 #if 0
-            var(:,:,:)= 1._real64
+            where (domain%T%mask > 0)
+               var(:,:,:)= 1._real64
+            end where
             var(imin+40:imax-40,jmin+40:imax-40,:) = 5._real64
 #else
-            var(:,:)= 1._real64
-            var(imin+40:imax-40,jmin+40:imax-40) = 5._real64
+            where (domain%T%mask > 0)
+               var(:,:)= 1._real64
+            end where
+            var(imin+55:imax-25,jmin+40:imax-40) = 5._real64
 #endif
+         case (2)
+            do j=30,70
+               do i=30,70
+!KB                  var(i,j) = 1._real64+4._real64*exp( -0.025*((x-x0)**2+(y-y0)**2))
+               end do
+            end do
       end select
    end subroutine initial_conditions
 

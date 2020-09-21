@@ -22,12 +22,12 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
 
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
-   integer, intent(in) :: umask(imin:imax,jmin:jmax)
-   real(real64), intent(in) :: dxu(imin:imax,jmin:jmax), dyu(imin:imax,jmin:jmax), hu(imin:imax,jmin:jmax), u(imin:imax,jmin:jmax)
-   integer, intent(in) :: tmask(imin:imax,jmin:jmax)
-   real(real64), intent(in) :: A(imin:imax,jmin:jmax)
+   integer, intent(in) :: umask(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64), intent(in) :: dxu(imin-1:imax+1,jmin-1:jmax+1), dyu(imin-1:imax+1,jmin-1:jmax+1), hu(imin-1:imax+1,jmin-1:jmax+1), u(imin-1:imax+1,jmin-1:jmax+1)
+   integer, intent(in) :: tmask(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64), intent(in) :: A(imin-1:imax+1,jmin-1:jmax+1)
    real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(imin:imax,jmin:jmax), f(imin:imax,jmin:jmax)
+   real(real64), intent(inout) :: h(imin-1:imax+1,jmin-1:jmax+1), f(imin-1:imax+1,jmin-1:jmax+1)
 
 !  Local constants
 
@@ -93,7 +93,7 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
          if (tmask(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
             h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*A(i,j) !KB
-            advn = ( flux(i,j)-flux(i-1,j) )*A(i,j) !KB
+            advn = ( flux(i,j)-flux(i-1,j) )/A(i,j) !KB
             f(i,j) = ( hfo - dt*advn ) / h(i,j)
          end if
       end do
@@ -112,12 +112,12 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,A,dt,h,f)
 
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
-   integer, intent(in) :: vmask(imin:imax,jmin:jmax)
-   real(real64), intent(in) :: dxv(imin:imax,jmin:jmax), dyv(imin:imax,jmin:jmax), hv(imin:imax,jmin:jmax), v(imin:imax,jmin:jmax)
-   integer, intent(in) :: tmask(imin:imax,jmin:jmax)
-   real(real64), intent(in) :: A(imin:imax,jmin:jmax)
+   integer, intent(in) :: vmask(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64), intent(in) :: dxv(imin-1:imax+1,jmin-1:jmax+1), dyv(imin-1:imax+1,jmin-1:jmax+1), hv(imin-1:imax+1,jmin-1:jmax+1), v(imin-1:imax+1,jmin-1:jmax+1)
+   integer, intent(in) :: tmask(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64), intent(in) :: A(imin-1:imax+1,jmin-1:jmax+1)
    real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(imin:imax,jmin:jmax), f(imin:imax,jmin:jmax)
+   real(real64), intent(inout) :: h(imin-1:imax+1,jmin-1:jmax+1), f(imin-1:imax+1,jmin-1:jmax+1)
 
 !  Local constants
 
@@ -184,7 +184,7 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,A,dt,h,f)
          if (tmask(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
             h(i,j) = h(i,j) - dt*( QV(i,j)-QV(i,j-1) )*A(i,j) !KB
-            advn = ( flux(i,j)-flux(i,j-1) )*A(i,j) !KB
+            advn = ( flux(i,j)-flux(i,j-1) )/A(i,j) !KB
             f(i,j) = ( hfo - dt*advn ) / h(i,j)
          end if
       end do
