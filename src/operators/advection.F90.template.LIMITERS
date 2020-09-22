@@ -78,7 +78,10 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
             deltafu = fu - fuu
             if (deltaf*deltafu .gt. 0) then
                ratio = deltafu / deltaf   ! slope ratio
-#include "limiters.h"
+               _LIMITER1_
+               _LIMITER2_
+               _LIMITER3_
+               _LIMITER4_
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
             flux(i,j) = QU(i,j)*fu
@@ -182,7 +185,14 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
             deltafu = fu - fuu
             if (deltaf*deltafu .gt. 0) then
                ratio = deltafu / deltaf   ! slope ratio
+#if 0
+               _LIMITER1_
+               _LIMITER2_
+               _LIMITER3_
+               _LIMITER4_
+#else
 #include "limiters.h"
+#endif
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
             flux(i,j) = QV(i,j)*fu
@@ -229,3 +239,60 @@ END SUBROUTINE _W_SUB_NAME_
 
 !KB END MODULE _MODULE_NAME_
 
+#if 0
+!---------------------------------------------------------------------------
+
+PURE real(real64) FUNCTION adv_reconstruct(scheme,cfl,fuu,fu,fd)
+
+   IMPLICIT NONE
+
+   integer,intent(in)  :: scheme
+   real(real64),intent(in) :: cfl,fuu,fu,fd
+!
+! !DEFINED PARAMETERS:
+   integer, parameter :: SUPERBEE=4, P2_PDM=6, SPLMAX13=13, HSIMT=12, MUSCL=5
+   real(real64),parameter :: one3rd = 1.0_real64 / 3
+   real(real64),parameter :: one6th = 1.0_real64 / 6
+! !LOCAL VARIABLES:
+   real(real64)           :: ratio,limiter,kappa,x,deltaf,deltafu
+!
+!---------------------------------------------------------------------------
+
+   adv_reconstruct = fu
+
+   deltaf  = fd - fu
+   deltafu = fu - fuu
+
+   if (deltaf*deltafu .gt. 0) then
+
+      ratio = deltafu / deltaf   ! slope ratio
+
+      select case (scheme)
+         case (SUPERBEE)
+            limiter = MAX( MIN( 2*ratio , 1.0_real64 ) , MIN( ratio , 2.0_real64 ) )
+         case (P2_PDM)
+            x = one6th*(1-2*cfl)
+            limiter = (0.5+x) + (0.5-x)*ratio
+            limiter = MIN( 2*ratio/(cfl+1.d-10) , limiter , 2/(1-cfl) )
+         case (SPLMAX13)
+            limiter = MIN( 2*ratio , one3rd*MAX( 1+2*ratio , 2+ratio ) , 2.0_real64 )
+         case (HSIMT) ! Wu and Zhu (2010, OCEMOD)
+            kappa = 1 - cfl
+            x = 0.25*( kappa - one3rd/kappa )
+            limiter = (0.5+x) + (0.5-x)*ratio ! can become negative!!!
+            limiter = MAX( 0.0_real64 , limiter )
+            limiter = MIN( 2*ratio , limiter , 2.0_real64 )
+         case (MUSCL)
+            limiter = MIN( 2*ratio , 0.5*(1+ratio) , 2.0_real64 )
+         case default
+!           UPSTREAM
+            limiter = 0
+      end select
+
+      adv_reconstruct = fu + 0.5*limiter*(1-cfl)*deltaf
+
+   end if
+
+   return
+END FUNCTION adv_reconstruct
+#endif

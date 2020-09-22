@@ -1,4 +1,4 @@
-#define _SCHEME_ UPSTREAM
+#define  UPSTREAM
 #define _LIMITER1_ limiter = 0._real64
 #define _LIMITER2_
 #define _LIMITER3_
@@ -10,3 +10,4 @@
 #define _W_SUB_NAME_ w_advection_upstream
 
 #include "advection.F90.template"
+#undef UPSTREAM

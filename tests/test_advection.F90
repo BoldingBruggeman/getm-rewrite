@@ -1,5 +1,8 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
+!! [[advection_kb.F90]]
+!! [[advection.F90.template]]
+
 PROGRAM test_advection
    !! Testing advection in a divergence free solenoidal flow field
 
@@ -16,8 +19,8 @@ PROGRAM test_advection
    real(real64), parameter :: Lx=100._real64, Ly=100._real64
    integer, parameter :: imin=1, imax=101, jmin=1, jmax=101, kmin=0, kmax=25
    real(real64), parameter :: tmax=10._real64
-   integer, parameter :: Nmax=100
-   integer, parameter :: nsave=25
+   integer, parameter :: Nmax=1000
+   integer, parameter :: nsave=1
 
 !  Local variables
    type(type_getm_domain) :: domain
@@ -26,14 +29,8 @@ PROGRAM test_advection
    TYPE(type_getm_output) :: output
    integer :: initial_method=1
    real(real64) :: omega=0.01
-#if 0
-   real(real64) :: u(imin:imax,jmin:jmax,kmin:kmax), v(imin:imax,jmin:jmax,kmin:kmax)
-   real(real64) :: var(imin:imax,jmin:jmax,kmin:kmax)
-#else
    real(real64) :: u(imin-1:imax+1,jmin-1:jmax+1), v(imin-1:imax+1,jmin-1:jmax+1)
    real(real64) :: var(imin-1:imax+1,jmin-1:jmax+1)
-#endif
-   integer :: i,j,k,n
    real(real64) :: x0=Lx/2, y0=Ly/2
    real(real64) :: dx=Lx/(imax-imin), dy=Ly/(jmax-jmin)
    integer :: scheme=1
@@ -41,37 +38,29 @@ PROGRAM test_advection
    type(datetime) :: t
    type(timedelta) :: dt
    real(real64) :: timestep
+   integer :: i,j,k,n
 !-----------------------------------------------------------------------------
    call domain_setup()
    call field_manager_setup()
    call velocity_field()
-   call initial_conditions(initial_method)
+   call initial_conditions(3)
 
    call output%do_output(t)
 !KB   call advection%initialize(var)
 
 !KB - time needs a fix
    timestep = tmax/Nmax
+   timestep = 1._real64
    n = 1*(nint(timestep-int(tmax/Nmax)))
    dt= timedelta(seconds=int(tmax/Nmax),milliseconds=100)
-!KB   do n=1,Nmax
-   do n=1,10000
+   dt= timedelta(seconds=1,milliseconds=0)
+   do n=1,Nmax
+!KB      if (n == Nmax) call initial_conditions(2)
       t=t+dt
       write(*,*) n,' of',Nmax
-      call advection%calculate(1,domain%U,u,domain%V,v,timestep,domain%T,var)
+      call advection%calculate(4,domain%U,u,domain%V,v,timestep,domain%T,var)
       if (mod(n,nsave) == 0) call output%do_output(t)
    end do
-
-#if 0 
-   initial_method=2
-   call initial_conditions(initial_method)
-   do n=1,25
-      t=t+dt
-      write(*,*) n,' of',Nmax
-      call advection%calculate(1,domain%U,u,domain%V,v,timestep,domain%T,var)
-      if (mod(n,nsave) == 0) call output%do_output(t)
-   end do
-#endif
 
 !-----------------------------------------------------------------------------
 
@@ -111,6 +100,7 @@ CONTAINS
       call fm%register('H','m','depth',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%H(imin:imax,jmin:jmax))
       call fm%register('u','m/s','u-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=u(imin:imax,jmin:jmax),fill_value=0._real64)
       call fm%register('v','m/s','v-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=v(imin:imax,jmin:jmax),fill_value=0._real64)
+      call fm%register('D','','depth',data2d=domain%T%D(imin:imax,jmin:jmax),fill_value=-99._real64)
       call fm%register('f','','scalar',data2d=var(imin:imax,jmin:jmax),fill_value=-99._real64)
 !KB      call fm%list()
       call output%initialize(fm)
@@ -138,27 +128,37 @@ CONTAINS
 
    subroutine initial_conditions(method)
       integer, intent(in) :: method
+
+      real(real64) :: x,y,x0=-25._real64,y0=0._real64
       ! initial condition
       var = -99._real64
       select case(method)
          case (1)
-#if 0
-            where (domain%T%mask > 0)
-               var(:,:,:)= 1._real64
-            end where
-            var(imin+40:imax-40,jmin+40:imax-40,:) = 5._real64
-#else
             where (domain%T%mask > 0)
                var(:,:)= 1._real64
             end where
             var(imin+55:imax-25,jmin+40:imax-40) = 5._real64
-#endif
          case (2)
-            do j=30,70
-               do i=30,70
-!KB                  var(i,j) = 1._real64+4._real64*exp( -0.025*((x-x0)**2+(y-y0)**2))
+            do j=jmin,jmax
+               do i=imin,imax
+                  if (domain%T%mask(i,j) > 0) then
+                     x=domain%T%c1(i)
+                     y=domain%T%c2(j)
+                     var(i,j) = 1._real64+4._real64*exp( -0.025*((x-x0)**2+(y-y0)**2))
+                  end if
                end do
             end do
+         case (3)
+            do j=jmin,jmax
+               do i=imin,imax
+                  if (domain%T%mask(i,j) > 0) then
+                     x=domain%T%c1(i)
+                     y=domain%T%c2(j)
+                     var(i,j) = 1._real64+4._real64*exp( -0.025*((x-x0)**2+(y-y0)**2))
+                  end if
+               end do
+            end do
+            var(imin+65:imax-15,jmin+40:imax-40) = 5._real64
       end select
    end subroutine initial_conditions
 

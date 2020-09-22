@@ -1,4 +1,4 @@
-#define _SCHEME_ SUPERBEE
+#define SUPERBEE
 #define _LIMITER1_ limiter = MAX( MIN( 2*ratio , 1.0_real64 ) , MIN( ratio , 2.0_real64 ) )
 #define _LIMITER2_
 #define _LIMITER3_

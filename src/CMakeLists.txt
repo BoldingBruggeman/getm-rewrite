@@ -58,20 +58,23 @@ target_sources( getm_output PRIVATE
 )
 
 set_property( TARGET getm_operators PROPERTY FOLDER operators )
-set(USE_KB on)
-if (USE_KB)
+set(USE_KNUT off)
+if (USE_KNUT)
 target_sources( getm_operators PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/operators/operators_kb.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_kb.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_superbee.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/operators_knut.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_knut.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
 )
 else()
 target_sources( getm_operators PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/operators/getm_operators.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/operators.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/advection.F90
-#    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_superbee.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_p2_pdm.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_splmax13.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_hsimt.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_muscl.F90
+    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
     ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
 )
 endif()
