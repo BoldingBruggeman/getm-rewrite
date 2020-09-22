@@ -19,7 +19,7 @@ PROGRAM test_advection
    real(real64), parameter :: Lx=100._real64, Ly=100._real64
    integer, parameter :: imin=1, imax=101, jmin=1, jmax=101, kmin=0, kmax=25
    real(real64), parameter :: tmax=10._real64
-   integer, parameter :: Nmax=1000
+   integer, parameter :: Nmax=1260
    integer, parameter :: nsave=1
 
 !  Local variables
@@ -58,7 +58,7 @@ PROGRAM test_advection
 !KB      if (n == Nmax) call initial_conditions(2)
       t=t+dt
       write(*,*) n,' of',Nmax
-      call advection%calculate(4,domain%U,u,domain%V,v,timestep,domain%T,var)
+      call advection%calculate(6,domain%U,u,domain%V,v,timestep,domain%T,var)
       if (mod(n,nsave) == 0) call output%do_output(t)
    end do
 
