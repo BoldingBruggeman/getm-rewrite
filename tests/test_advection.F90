@@ -33,13 +33,28 @@ PROGRAM test_advection
    real(real64) :: var(imin-1:imax+1,jmin-1:jmax+1)
    real(real64) :: x0=Lx/2, y0=Ly/2
    real(real64) :: dx=Lx/(imax-imin), dy=Ly/(jmax-jmin)
-   integer :: scheme=1
+   integer :: scheme
    integer :: stat
    type(datetime) :: t
    type(timedelta) :: dt
    real(real64) :: timestep
    integer :: i,j,k,n
+   character(len=4) :: arg
 !-----------------------------------------------------------------------------
+   if (command_argument_count() .ne. 1 ) then
+      write(*,*) 'ERROR, must be called like:'
+      write(*,*)' test_advection [1-6]'
+      write(*,*)'   1 -> HSIMT'
+      write(*,*)'   2 -> MUSCL'
+      write(*,*)'   3 -> P2_PDM'
+      write(*,*)'   4 -> SPLMAX13'
+      write(*,*)'   5 -> SUPERBEE'
+      write(*,*)'   6 -> UPSTREAM'
+      stop 1
+   end if
+   call get_command_argument(1,arg)
+   read(arg,*,iostat=stat) scheme
+
    call domain_setup()
    call field_manager_setup()
    call velocity_field()
@@ -55,12 +70,12 @@ PROGRAM test_advection
    dt= timedelta(seconds=int(tmax/Nmax),milliseconds=100)
    dt= timedelta(seconds=1,milliseconds=0)
    do n=1,Nmax
-!KB      if (n == Nmax) call initial_conditions(2)
       t=t+dt
       write(*,*) n,' of',Nmax
-      call advection%calculate(6,domain%U,u,domain%V,v,timestep,domain%T,var)
+      call advection%calculate(scheme,domain%U,u,domain%V,v,timestep,domain%T,var)
       if (mod(n,nsave) == 0) call output%do_output(t)
    end do
+   write(*,*) 'advection scheme: ',scheme
 
 !-----------------------------------------------------------------------------
 
