@@ -30,12 +30,12 @@ module SUBROUTINE metrics(self)
       dx = (self%T%c1(self%T%imax) - self%T%c1(self%T%imin))/(self%T%imax-self%T%imin)
       dy = (self%T%c2(self%T%jmax) - self%T%c2(self%T%jmin))/(self%T%jmax-self%T%jmin)
       dlon = dx; dlat = dy
-      do n=1,size(self%T%c1)
+      do n=lbound(self%T%c1,1),ubound(self%T%c1,1)
          self%U%c1(n) = self%T%c1(n)-dx/2._real64
          self%V%c1(n) = self%T%c1(n)
          self%X%c1(n) = self%T%c1(n)-dx/2._real64
       end do
-      do n=1,size(self%T%c2)
+      do n=lbound(self%T%c2,1),ubound(self%T%c2,1)
          self%U%c2(n) = self%T%c2(n)
          self%V%c2(n) = self%T%c2(n)-dx/2._real64
          self%X%c2(n) = self%T%c2(n)-dx/2._real64
