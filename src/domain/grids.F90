@@ -57,14 +57,13 @@ module SUBROUTINE grid_report(self,logs,unit,header)
 !  Local variables
 !-----------------------------------------------------------------------
 !KB
-   return
 !KB   if (associated(self%logs)) call logs%info('grid_report()',level=2)
 
-   call logs%costum(unit,trim(header))
+!KB   call logs%costum(unit,trim(header))
    call self%print(unit)
-   call logs%costum(unit,'mask')
+!KB   call logs%costum(unit,'mask')
    call self%print_mask(unit)
-   call logs%costum(unit,'')
+!KB   call logs%costum(unit,'')
    return
 END SUBROUTINE grid_report
 
@@ -157,6 +156,49 @@ module SUBROUTINE allocate_grid_variables(self)
 #endif
    return
 END SUBROUTINE allocate_grid_variables
+
+!-----------------------------------------------------------------------------
+
+module SUBROUTINE deallocate_grid_variables(self)
+   !! Allocate all domain related variables
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_grid), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: stat
+!-----------------------------------------------------------------------------
+#ifndef _STATIC_
+   deallocate(self%H)
+   deallocate(self%x)
+   deallocate(self%y)
+   deallocate(self%dx)
+   deallocate(self%dy)
+   deallocate(self%lon)
+   deallocate(self%lat)
+   deallocate(self%dlon)
+   deallocate(self%dlat)
+   deallocate(self%area)
+   deallocate(self%inv_area)
+   deallocate(self%cor)
+   deallocate(self%mask)
+   deallocate(self%z)
+   deallocate(self%zo)
+   deallocate(self%D)
+   deallocate(self%ssen)
+   deallocate(self%sseo)
+   deallocate(self%hn)
+   deallocate(self%ho)
+#if 0
+   call deallocate(self%zf,self%hn,def=-9999._real64,stat=stat)
+   call deallocate(self%zc,self%S%hn,def=-9999._real64,stat=stat)
+#endif
+#endif
+END SUBROUTINE deallocate_grid_variables
 
 !---------------------------------------------------------------------------
 

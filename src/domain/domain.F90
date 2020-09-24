@@ -168,6 +168,7 @@ integer, parameter :: halo=2
       procedure :: start_3d => start_3d
       procedure :: init_vertical => init_vertical
       procedure :: do_vertical => do_vertical
+      procedure :: cleanup => domain_cleanup
    end type type_getm_domain
 
    INTERFACE
@@ -233,6 +234,9 @@ integer, parameter :: halo=2
       module subroutine allocate_grid_variables(self)
          class(type_getm_grid), intent(inout) :: self
       end subroutine allocate_grid_variables
+      module subroutine deallocate_grid_variables(self)
+         class(type_getm_grid), intent(inout) :: self
+      end subroutine deallocate_grid_variables
    END INTERFACE
 
 !-----------------------------------------------------------------------------
@@ -364,18 +368,39 @@ SUBROUTINE allocate_variables(self)
 !-----------------------------------------------------------------------------
 #ifndef _STATIC_
    if (associated(self%logs)) call self%logs%info('allocate_variables()',level=2)
-   ! T-grid
    call allocate_grid_variables(self%T)
-   ! U-grid
    call allocate_grid_variables(self%U)
-   ! V-grid
    call allocate_grid_variables(self%V)
-   ! X-grid
    call allocate_grid_variables(self%X)
    if (associated(self%logs)) call self%logs%info('done',level=2)
 #endif
    return
 END SUBROUTINE allocate_variables
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE deallocate_variables(self)
+   !! Allocate all domain related variables
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+!-----------------------------------------------------------------------------
+#ifndef _STATIC_
+   if (associated(self%logs)) call self%logs%info('deallocate_variables()',level=2)
+   call deallocate_grid_variables(self%T)
+   call deallocate_grid_variables(self%U)
+   call deallocate_grid_variables(self%V)
+   call deallocate_grid_variables(self%X)
+   if (associated(self%logs)) call self%logs%info('done',level=2)
+#endif
+   return
+END SUBROUTINE deallocate_variables
 
 !-----------------------------------------------------------------------------
 
@@ -452,6 +477,25 @@ SUBROUTINE start_3d(self)
    self%V%ho=self%V%hn
    return
 END SUBROUTINE start_3d
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE domain_cleanup(self)
+   !! Clean-up the domain module
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+!-----------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('cleanup()',level=2)
+
+   call deallocate_variables(self)
+END SUBROUTINE domain_cleanup
 
 !---------------------------------------------------------------------------
 
