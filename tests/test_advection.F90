@@ -87,8 +87,8 @@ CONTAINS
       call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=(/1,1,0/))
       call mm_s('c1',domain%T%c1,domain%T%l(1),domain%T%u(1),stat=stat)
       call mm_s('c2',domain%T%c2,domain%T%l(2),domain%T%u(2),stat=stat)
-      call mm_s('H',domain%T%H,domain%T%l(1:2),domain%T%u(1:2),stat=stat)
-      call mm_s('mask',domain%T%mask,domain%T%l(1:2),domain%T%u(1:2),stat=stat)
+      call mm_s('H',domain%T%H,domain%T%l(1:2),domain%T%u(1:2),def=-99._real64,stat=stat)
+      call mm_s('mask',domain%T%mask,domain%T%l(1:2),domain%T%u(1:2),def=0,stat=stat)
       do i=imin,imax
          domain%T%c1(i) = (i-1)*dx-x0
       end do
