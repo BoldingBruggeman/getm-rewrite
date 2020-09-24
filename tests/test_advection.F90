@@ -76,6 +76,7 @@ PROGRAM test_advection
       if (mod(n,nsave) == 0) call output%do_output(t)
    end do
    write(*,*) 'advection scheme: ',scheme
+   call domain%cleanup()
 
 !-----------------------------------------------------------------------------
 

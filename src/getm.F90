@@ -400,6 +400,7 @@ SUBROUTINE getm_finalize(self)
 ! Local variables
 !-----------------------------------------------------------------------------
    call self%logs%info('getm_finalize()')
+   call self%domain%cleanup()
    call self%logs%info('done')
    return
 END SUBROUTINE getm_finalize
