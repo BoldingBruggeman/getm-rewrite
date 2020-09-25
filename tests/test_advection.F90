@@ -6,7 +6,8 @@
 PROGRAM test_advection
    !! Testing advection in a divergence free solenoidal flow field
 
-   USE, INTRINSIC :: ISO_FORTRAN_ENV
+!KB   USE, INTRINSIC :: ISO_FORTRAN_ENV
+   USE ISO_FORTRAN_ENV
    use datetime_module
    use memory_manager
    use field_manager
@@ -41,20 +42,7 @@ PROGRAM test_advection
    integer :: i,j,k,n
    character(len=4) :: arg
 !-----------------------------------------------------------------------------
-   if (command_argument_count() .ne. 1 ) then
-      write(*,*) 'ERROR, must be called like:'
-      write(*,*)' test_advection [1-6]'
-      write(*,*)'   1 -> HSIMT'
-      write(*,*)'   2 -> MUSCL'
-      write(*,*)'   3 -> P2_PDM'
-      write(*,*)'   4 -> SPLMAX13'
-      write(*,*)'   5 -> SUPERBEE'
-      write(*,*)'   6 -> UPSTREAM'
-      stop 1
-   end if
-   call get_command_argument(1,arg)
-   read(arg,*,iostat=stat) scheme
-
+   call parse_argument()
    call domain_setup()
    call field_manager_setup()
    call velocity_field()
@@ -81,6 +69,32 @@ PROGRAM test_advection
 !-----------------------------------------------------------------------------
 
 CONTAINS
+
+!-----------------------------------------------------------------------------
+
+   subroutine parse_argument()
+      if (command_argument_count() .ne. 1 ) then
+         write(*,*)' test_advection [1-6] | -h'
+         stop 0
+      end if
+      call get_command_argument(1,arg)
+      if (trim(arg) == '-h') then
+         write(*,*)'   1 -> HSIMT'
+         write(*,*)'   2 -> MUSCL'
+         write(*,*)'   3 -> P2_PDM'
+         write(*,*)'   4 -> SPLMAX13'
+         write(*,*)'   5 -> SUPERBEE'
+         write(*,*)'   6 -> UPSTREAM'
+         write(*,*) 'Compiler: ',compiler_version()
+         stop 0
+      else
+         read(arg,*,iostat=stat) scheme
+         if (scheme < 1 .or. scheme > 6) then
+            write(*,*) 'Error: argument must be in [1-6] - provided',scheme
+            stop 1
+         end if
+      end if
+   end subroutine parse_argument
 
 !-----------------------------------------------------------------------------
 
