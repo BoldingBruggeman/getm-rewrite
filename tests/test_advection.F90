@@ -7,7 +7,7 @@ PROGRAM test_advection
    !! Testing advection in a divergence free solenoidal flow field
 
 !KB   USE, INTRINSIC :: ISO_FORTRAN_ENV
-   USE ISO_FORTRAN_ENV
+   USE :: ISO_FORTRAN_ENV
    use datetime_module
    use memory_manager
    use field_manager
@@ -18,9 +18,8 @@ PROGRAM test_advection
 
 !  Local constants
    real(real64), parameter :: Lx=100._real64, Ly=100._real64
+   real(real64), parameter :: pi=3.1415926535897932384626433832795_real64
    integer, parameter :: imin=1, imax=101, jmin=1, jmax=101, kmin=0, kmax=25
-   real(real64), parameter :: tmax=10._real64
-   integer, parameter :: Nmax=1260
    integer, parameter :: nsave=1
 
 !  Local variables
@@ -29,13 +28,19 @@ PROGRAM test_advection
    TYPE(type_field_manager) :: fm
    TYPE(type_getm_output) :: output
    integer :: initial_method=1
-   real(real64) :: omega=0.01
+   real(real64) :: omega=0.01_real64
+   real(real64) :: cfl=1.0_real64
+   real(real64) :: umax
+   real(real64) :: tmax
+   real(real64) :: dt_cfl
    real(real64) :: u(imin-1:imax+1,jmin-1:jmax+1), v(imin-1:imax+1,jmin-1:jmax+1)
    real(real64) :: var(imin-1:imax+1,jmin-1:jmax+1)
    real(real64) :: x0=Lx/2, y0=Ly/2
    real(real64) :: dx=Lx/(imax-imin), dy=Ly/(jmax-jmin)
    integer :: scheme
+   integer :: no_of_revolutions=5
    integer :: stat
+   integer :: Nmax
    type(datetime) :: t
    type(timedelta) :: dt
    real(real64) :: timestep
@@ -47,24 +52,32 @@ PROGRAM test_advection
    call field_manager_setup()
    call velocity_field()
    call initial_conditions(3)
-
    call output%do_output(t)
-!KB   call advection%initialize(var)
 
-!KB - time needs a fix
+   umax=omega*Lx/2
+   dt_cfl=cfl*min(dx,dy)/umax
+   Nmax=no_of_revolutions*nint(2*pi/omega/dt_cfl)
+   tmax=no_of_revolutions*2*pi/omega
    timestep = tmax/Nmax
-   timestep = 1._real64
-   n = 1*(nint(timestep-int(tmax/Nmax)))
-   dt= timedelta(seconds=int(tmax/Nmax),milliseconds=100)
-   dt= timedelta(seconds=1,milliseconds=0)
+   dt= timedelta(seconds=int(tmax/Nmax),milliseconds=int(1000*(timestep-int(tmax/Nmax))))
    do n=1,Nmax
       t=t+dt
       write(*,*) n,' of',Nmax
       call advection%calculate(scheme,domain%U,u,domain%V,v,timestep,domain%T,var)
       if (mod(n,nsave) == 0) call output%do_output(t)
    end do
-   write(*,*) 'advection scheme: ',scheme
    call domain%cleanup()
+
+   write(*,*) 'advection scheme: ',scheme
+   write(*,*) 'Lx, ly:           ',Lx,Ly
+   write(*,*) 'dx, dy:           ',dx,dy
+   write(*,*) 'omega:            ',omega
+   write(*,*) 'max velocity:     ',umax
+   write(*,*) 'timestep:         ',dt_cfl
+   write(*,*) '# of revolutions: ',no_of_revolutions
+   write(*,*) '# of timesteps:   ',Nmax
+   write(*,*)
+   write(*,*) 'Compiler: ',compiler_version()
 
 !-----------------------------------------------------------------------------
 
@@ -73,8 +86,8 @@ CONTAINS
 !-----------------------------------------------------------------------------
 
    subroutine parse_argument()
-      if (command_argument_count() .ne. 1 ) then
-         write(*,*)' test_advection [1-6] | -h'
+      if (command_argument_count() .lt. 1 ) then
+         write(*,*)' test_advection [1-6] <N> | -h'
          stop 0
       end if
       call get_command_argument(1,arg)
@@ -85,6 +98,7 @@ CONTAINS
          write(*,*)'   4 -> SPLMAX13'
          write(*,*)'   5 -> SUPERBEE'
          write(*,*)'   6 -> UPSTREAM'
+         write(*,*)'   N -> number (integer) of revolutions - optional - default=5'
          write(*,*) 'Compiler: ',compiler_version()
          stop 0
       else
@@ -92,6 +106,10 @@ CONTAINS
          if (scheme < 1 .or. scheme > 6) then
             write(*,*) 'Error: argument must be in [1-6] - provided',scheme
             stop 1
+         end if
+         if (command_argument_count() .eq. 2 ) then
+            call get_command_argument(2,arg)
+            read(arg,*,iostat=stat) no_of_revolutions
          end if
       end if
    end subroutine parse_argument
@@ -184,11 +202,12 @@ CONTAINS
                   if (domain%T%mask(i,j) > 0) then
                      x=domain%T%c1(i)
                      y=domain%T%c2(j)
-                     var(i,j) = 1._real64+4._real64*exp( -0.025*((x-x0)**2+(y-y0)**2))
+                     var(i,j) = 1._real64+4._real64*exp( -0.010*((x-x0)**2+(y-y0)**2))
                   end if
                end do
             end do
-            var(imin+65:imax-15,jmin+40:imax-40) = 5._real64
+            var(imin+65:imax-15,jmin+40:jmax-40) = 5._real64
+            var(imin+72:imax-15,jmin+47:jmax-47) = 1._real64
       end select
    end subroutine initial_conditions
 
