@@ -156,6 +156,9 @@ MODULE PROCEDURE advection_calculate_2d
                           tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
          call v_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
+                          tgrid%mask,tgrid%inv_area,dt,tgrid%D,f)
+         call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+                          ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
    end select
    return
