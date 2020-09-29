@@ -43,6 +43,6 @@ add_dependencies( test_all_getm ${test_all_getm}  test_advection )
 add_executable(test_vertical_diffusion EXCLUDE_FROM_ALL
                ${CMAKE_CURRENT_LIST_DIR}/test_vertical_diffusion.F90
               )
-target_link_libraries(test_vertical_diffusion PRIVATE getm_physics)
+target_link_libraries(test_vertical_diffusion PRIVATE getm_output getm_operators  getm_physics flom)
 add_dependencies( test_all_getm ${test_all_getm}  test_vertical_diffusion )
 

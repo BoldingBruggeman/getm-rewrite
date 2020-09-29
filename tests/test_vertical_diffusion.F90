@@ -3,7 +3,10 @@
 PROGRAM test_vertical_diffusion
    !! Testing calculation of depth at U and V points
 
-   USE, INTRINSIC :: ISO_FORTRAN_ENV
+   USE :: ISO_FORTRAN_ENV
+   use datetime_module
+   use field_manager
+   use getm_output
    use getm_operators, only: type_vertical_diffusion
    IMPLICIT NONE
 
@@ -11,35 +14,37 @@ PROGRAM test_vertical_diffusion
    integer, parameter :: imin=1, imax=100, jmin=1, jmax=100, kmin=0, kmax=100
    real(real64), parameter :: tmax=10._real64
    integer, parameter :: Nmax=100
+   integer, parameter :: nsave=1
 
 !  Local variables
    type(type_vertical_diffusion) :: vertical_diffusion
+   type(type_field_manager) :: fm
+   type(type_getm_output) :: output
    integer :: mask(imin:imax,jmin:jmax)
    real(real64) :: z(imin:imax,jmin:jmax,kmin:kmax)
    real(real64) :: dz(imin:imax,jmin:jmax,kmin:kmax)
-   real(real64) :: dt, cnpar, avmol
    real(real64) :: nuh(imin:imax,jmin:jmax,kmin:kmax)
    real(real64) :: var(imin:imax,jmin:jmax,kmin:kmax)
 
+   type(datetime) :: t
+   type(timedelta) :: dt
+   real(real64) :: Nsecs, timestep, cnpar, avmol
    integer :: i,j,k,n
 !-----------------------------------------------------------------------------
 
+   call parse_argument()
+   call field_manager_setup()
+   call initial_conditions(1)
+   call output%do_output(t)
+
    mask = 1
-   dt=tmax/Nmax
+   timestep=0.1_real64
+   Nsecs=Nmax*timestep
    cnpar=0.5_real64
    avmol=1._real64
-   nuh = 0._real64
+   nuh = 0.1_real64
 
-   ! initial condition
-   i=1; j=1
-   z(:,:,0)= -kmax*1._real64
-   dz(:,:,:) = 1._real64
-   var(:,:,0)= 1._real64
-   do k=1,kmax
-     z(:,:,k)= z(:,:,k-1)+dz(:,:,k)
-     var(:,:,k)=tanh(-(z(i,j,k)+50._real64))
-   end do
-   var(:,:,kmax)= -1._real64
+   dt= timedelta(seconds=int(timestep),milliseconds=int(1000*(timestep-int(timestep))))
 
    call vertical_diffusion%initialize(var)
 
@@ -47,19 +52,67 @@ PROGRAM test_vertical_diffusion
 !   write(*,*) lbound(var,2), ubound(var,2)                                                                                                                                          
 !   write(*,*) lbound(var,3), ubound(var,3)                                                                                                                                          
 
-   do k=1,kmax
-      write(105,*) k,var(i,j,k)
-   end do
-
    do n=1,Nmax
-!   do n=1,1
-      call vertical_diffusion%calculate(mask,dz,dt,cnpar,avmol,nuh,var)
-         write(100,*) n,var(i,j,55)
-   end do
-   do k=1,kmax
-      write(110,*) k,var(i,j,k)
+      t=t+dt
+      write(*,*) n,' of ',Nmax
+      call vertical_diffusion%calculate(mask,dz,timestep,cnpar,avmol,nuh,var)
+write(*,*) var(50,50,::5)
+      if (mod(n,nsave) == 0) call output%do_output(t)
    end do
 
    write(*,*) vertical_diffusion%matrix_time/Nmax,vertical_diffusion%tridiag_time/Nmax
+   write(*,*) 'Compiler: ',compiler_version()
+
+!-----------------------------------------------------------------------------
+
+CONTAINS
+
+!-----------------------------------------------------------------------------
+
+   subroutine parse_argument()
+   end subroutine parse_argument
+
+!-----------------------------------------------------------------------------
+
+
+   subroutine field_manager_setup()
+      integer, parameter :: i=imax/2,j=jmax/2
+      call fm%register_dimension('x',imax-imin+1,id=id_dim_lon)
+      call fm%register_dimension('y',jmax-jmin+1,id=id_dim_lat)
+      call fm%register_dimension('z',kmax-kmin+1,id=id_dim_z)
+      call fm%register_dimension('time',id=id_dim_time)
+      call fm%initialize(prepend_by_default=(/id_dim_lon,id_dim_lat,id_dim_z/),append_by_default=(/id_dim_time/))
+      call fm%register('nuh','m2/s','difusion',dimensions=(/id_dim_lon,id_dim_lat,id_dim_z/),no_default_dimensions=.true.,data3d=nuh)
+      call fm%register('f','','scalar',data3d=var,fill_value=-99._real64)
+!KB      call fm%list()
+      call output%initialize(fm)
+   end subroutine field_manager_setup
+
+!-----------------------------------------------------------------------------
+
+!   subroutine field_manager_setup()
+!   end subroutine field_manager_setup
+
+!-----------------------------------------------------------------------------
+
+   subroutine initial_conditions(method)
+      integer, intent(in) :: method
+      ! initial condition
+      select case(method)
+         case (1)
+            i=1; j=1
+            z(:,:,0)= -kmax*1._real64
+            dz(:,:,:) = 1._real64
+            var(:,:,0)= 1._real64
+            do k=1,kmax
+              z(:,:,k)= z(:,:,k-1)+dz(:,:,k)
+              var(:,:,k)=tanh(-(z(i,j,k)+50._real64))
+            end do
+            var(:,:,kmax)= -1._real64
+      end select
+   end subroutine initial_conditions
+
+!-----------------------------------------------------------------------------
 
 END PROGRAM test_vertical_diffusion
+
