@@ -84,8 +84,22 @@ module SUBROUTINE vertical_diffusion_calculate(self,mask,dz,dt,cnpar,avmol,nuh,v
 
    if (self%kmax == 1) return
 
-matrix: block
+#if 0
+write(*,*) self%imin,self%imax
+write(*,*) self%jmin,self%jmax
+write(*,*) self%kmin,self%kmax
+write(*,*) lbound(dz)
+write(*,*) ubound(dz)
+write(*,*) lbound(nuh)
+write(*,*) ubound(nuh)
+write(*,*) lbound(var)
+write(*,*) ubound(var)
+write(*,*) var(1,1,self%kmin),var(1,1,self%kmax)
+stop
+#endif
+
    ! Setting up the matrix
+   matrix: block
    real(real64) :: x
    real(real64) :: matrix_start, matrix_end
    call cpu_time(matrix_start)
@@ -109,15 +123,14 @@ matrix: block
          if (mask(i,j) ==  1) then
             self%a1(ORDER)=-self%auxn(i,j,k-1)
             self%a2(ORDER)=dz(i,j,k)+self%auxn(i,j,k-1)
-            self%a4(ORDER)=var(i,j,k  )*(dz(i,j,k)-self%auxo(i,j,k-1)) &
-                          +var(i,j,k-1)*self%auxo(i,j,k-1)
+            self%a4(ORDER)=var(i,j,k)*(dz(i,j,k)-self%auxo(i,j,k-1))+var(i,j,k-1)*self%auxo(i,j,k-1)
          end if
       end do
    end do
 
    ! Matrix elements for inner layers
    ! do k=kmin,kmax-1
-   do k=2,self%kmax-1
+   do k=self%kmin+1,self%kmax-1
       do j=self%jmin,self%jmax
          do i=self%imin,self%imax
             if (mask(i,j) ==  1) then
@@ -133,21 +146,21 @@ matrix: block
    end do
 
    ! Matrix elements for bottom layer
-   k=1
+   k=self%kmin
    do j=self%jmin,self%jmax
       do i=self%imin,self%imax
          if (mask(i,j) ==  1) then
-            self%a3(ORDER)=-self%auxn(i,j,k  )
+            self%a3(ORDER)=-self%auxn(i,j,k)
             self%a2(ORDER)=dz(i,j,k)+self%auxn(i,j,k)
-            self%a4(ORDER)=var(i,j,k+1)*self%auxo(i,j,k)+var(i,j,k  )*(dz(i,j,k)-self%auxo(i,j,k))
+            self%a4(ORDER)=var(i,j,k+1)*self%auxo(i,j,k)+var(i,j,k)*(dz(i,j,k)-self%auxo(i,j,k))
          end if
       end do
    end do
    call cpu_time(matrix_end)
    self%matrix_time = self%matrix_time + matrix_end - matrix_start
-end block matrix
+   end block matrix
 
-tridiagonal: block
+   tridiagonal: block
    ! Solving the tridiagonal system
    real(real64) :: ru(self%kmax), qu(self%kmax)
    real(real64) :: tridiag_start, tridiag_end
@@ -158,7 +171,6 @@ tridiagonal: block
 #ifdef _NORMAL_ORDER_
             ru(self%kmax)=self%a1(i,j,self%kmax)/self%a2(i,j,self%kmax)
             qu(self%kmax)=self%a4(i,j,self%kmax)/self%a2(i,j,self%kmax)
-
             do k=self%kmax-1,self%kmin+1,-1
                ru(k)=self%a1(i,j,k)/(self%a2(i,j,k)-self%a3(i,j,k)*ru(k+1))
                qu(k)=(self%a4(i,j,k)-self%a3(i,j,k)*qu(k+1))/(self%a2(i,j,k)-self%a3(i,j,k)*ru(k+1))
@@ -185,8 +197,7 @@ tridiagonal: block
    end do
    call cpu_time(tridiag_end)
    self%tridiag_time = self%tridiag_time + tridiag_end - tridiag_start
-end block tridiagonal
-   return
+   end block tridiagonal
 END SUBROUTINE vertical_diffusion_calculate
 
 #undef _NORMAL_ORDER_

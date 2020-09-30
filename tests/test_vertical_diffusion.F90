@@ -11,7 +11,7 @@ PROGRAM test_vertical_diffusion
    IMPLICIT NONE
 
 !  Local constants
-   integer, parameter :: imin=1, imax=100, jmin=1, jmax=100, kmin=0, kmax=100
+   integer, parameter :: imin=1, imax=100, jmin=1, jmax=100, kmin=1, kmax=100
    real(real64), parameter :: tmax=10._real64
    integer, parameter :: Nmax=100
    integer, parameter :: nsave=1
@@ -42,7 +42,7 @@ PROGRAM test_vertical_diffusion
    Nsecs=Nmax*timestep
    cnpar=0.5_real64
    avmol=1._real64
-   nuh = 0.1_real64
+   nuh = 9.1_real64
 
    dt= timedelta(seconds=int(timestep),milliseconds=int(1000*(timestep-int(timestep))))
 
@@ -56,11 +56,17 @@ PROGRAM test_vertical_diffusion
       t=t+dt
       write(*,*) n,' of ',Nmax
       call vertical_diffusion%calculate(mask,dz,timestep,cnpar,avmol,nuh,var)
-write(*,*) var(50,50,::5)
+!KB      call vertical_diffusion%calculate(mask,dz(:,:,1:),timestep,cnpar,avmol,nuh(:,:,1:),var(:,:,1:))
+!KBwrite(*,*) var(50,50,::5)
       if (mod(n,nsave) == 0) call output%do_output(t)
    end do
 
-   write(*,*) vertical_diffusion%matrix_time/Nmax,vertical_diffusion%tridiag_time/Nmax
+   write(*,*)
+   write(*,*) 'domain size (i,j,k): ',imax-imin+1,jmax-jmin+1,kmax-kmin+1
+   write(*,*) 'timing (pr timestep)'
+   write(*,*) 'matrix setup:        ',vertical_diffusion%matrix_time/Nmax
+   write(*,*) 'tri-diagonal solver: ',vertical_diffusion%tridiag_time/Nmax
+   write(*,*)
    write(*,*) 'Compiler: ',compiler_version()
 
 !-----------------------------------------------------------------------------
@@ -83,7 +89,7 @@ CONTAINS
       call fm%register_dimension('time',id=id_dim_time)
       call fm%initialize(prepend_by_default=(/id_dim_lon,id_dim_lat,id_dim_z/),append_by_default=(/id_dim_time/))
       call fm%register('nuh','m2/s','difusion',dimensions=(/id_dim_lon,id_dim_lat,id_dim_z/),no_default_dimensions=.true.,data3d=nuh)
-      call fm%register('f','','scalar',data3d=var,fill_value=-99._real64)
+      call fm%register('f','-','scalar',data3d=var,fill_value=-99._real64)
 !KB      call fm%list()
       call output%initialize(fm)
    end subroutine field_manager_setup
@@ -108,6 +114,7 @@ CONTAINS
               z(:,:,k)= z(:,:,k-1)+dz(:,:,k)
               var(:,:,k)=tanh(-(z(i,j,k)+50._real64))
             end do
+!KB            var(:,:,kmax)= -4._real64
             var(:,:,kmax)= -1._real64
       end select
    end subroutine initial_conditions
