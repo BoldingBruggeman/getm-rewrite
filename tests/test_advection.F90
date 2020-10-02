@@ -28,8 +28,9 @@ PROGRAM test_advection
    TYPE(type_field_manager) :: fm
    TYPE(type_getm_output) :: output
    integer :: initial_method=1
-   real(real64) :: omega=0.01_real64
+   real(real64) :: period=600.
    real(real64) :: cfl=1.0_real64
+   real(real64) :: omega
    real(real64) :: umax
    real(real64) :: tmax
    real(real64) :: dt_cfl
@@ -47,6 +48,7 @@ PROGRAM test_advection
    integer :: i,j,k,n
    character(len=4) :: arg
 !-----------------------------------------------------------------------------
+   omega=2*pi/period
    call parse_argument()
    call domain_setup()
    call field_manager_setup()
