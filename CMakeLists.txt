@@ -52,7 +52,7 @@ target_link_libraries( getm_input PRIVATE getm_domain getm_airsea getm_dynamics 
 add_library(getm_output "")
 target_link_libraries( getm_output PRIVATE flom )
 add_library(getm_operators "")
-#target_link_libraries( getm_operators PRIVATE flom )
+target_link_libraries( getm_operators PRIVATE getm_domain )
 # .. and now the executable
 add_executable(getm_exe)
 
