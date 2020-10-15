@@ -20,6 +20,7 @@ PROGRAM test_advection
    real(real64), parameter :: Lx=100._real64, Ly=100._real64
    real(real64), parameter :: pi=3.1415926535897932384626433832795_real64
    integer, parameter :: imin=1, imax=101, jmin=1, jmax=101, kmin=0, kmax=25
+   integer, parameter :: halo=1
    integer, parameter :: nsave=1
 
 !  Local variables
@@ -34,8 +35,8 @@ PROGRAM test_advection
    real(real64) :: umax
    real(real64) :: tmax
    real(real64) :: dt_cfl
-   real(real64) :: u(imin-1:imax+1,jmin-1:jmax+1), v(imin-1:imax+1,jmin-1:jmax+1)
-   real(real64) :: var(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64) :: u(imin-halo:imax+halo,jmin-halo:jmax+halo), v(imin-halo:imax+halo,jmin-halo:jmax+halo)
+   real(real64) :: var(imin-halo:imax+halo,jmin-halo:jmax+halo)
    real(real64) :: x0=Lx/2, y0=Ly/2
    real(real64) :: dx=Lx/(imax-imin), dy=Ly/(jmax-jmin)
    integer :: scheme
@@ -120,7 +121,7 @@ CONTAINS
 !-----------------------------------------------------------------------------
 
    subroutine domain_setup()
-      call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=(/1,1,0/))
+      call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=(/halo,halo,0/))
       call mm_s('c1',domain%T%c1,domain%T%l(1),domain%T%u(1),stat=stat)
       call mm_s('c2',domain%T%c2,domain%T%l(2),domain%T%u(2),stat=stat)
       call mm_s('H',domain%T%H,domain%T%l(1:2),domain%T%u(1:2),def=-99._real64,stat=stat)
