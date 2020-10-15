@@ -7,6 +7,6 @@
 #define _MODULE_NAME_ advection_superbee
 #define _U_SUB_NAME_ u_advection_superbee
 #define _V_SUB_NAME_ v_advection_superbee
-#define _W_SUB_NAME_ W_advection_superbee
+#define _W_SUB_NAME_ w_advection_superbee
 
 #include "advection.F90.template"
