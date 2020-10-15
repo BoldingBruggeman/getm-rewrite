@@ -19,7 +19,7 @@ PROGRAM test_advection
 !  Local constants
    real(real64), parameter :: Lx=100._real64, Ly=100._real64
    real(real64), parameter :: pi=3.1415926535897932384626433832795_real64
-   integer, parameter :: imin=1, imax=101, jmin=1, jmax=101, kmin=0, kmax=25
+   integer, parameter :: imin=1, imax=100, jmin=1, jmax=100, kmin=0, kmax=25
    integer, parameter :: halo=1
    integer, parameter :: nsave=1
 
@@ -38,7 +38,7 @@ PROGRAM test_advection
    real(real64) :: u(imin-halo:imax+halo,jmin-halo:jmax+halo), v(imin-halo:imax+halo,jmin-halo:jmax+halo)
    real(real64) :: var(imin-halo:imax+halo,jmin-halo:jmax+halo)
    real(real64) :: x0=Lx/2, y0=Ly/2
-   real(real64) :: dx=Lx/(imax-imin), dy=Ly/(jmax-jmin)
+   real(real64) :: dx=Lx/(imax-imin+1), dy=Ly/(jmax-jmin+1)
    integer :: scheme
    integer :: no_of_revolutions=5
    integer :: stat
