@@ -94,6 +94,7 @@ CONTAINS
       end if
       call get_command_argument(1,arg)
       if (trim(arg) == '-h') then
+         write(*,*)' test_advection [1-6] <N> | -h'
          write(*,*)'   1 -> HSIMT'
          write(*,*)'   2 -> MUSCL'
          write(*,*)'   3 -> P2_PDM'
