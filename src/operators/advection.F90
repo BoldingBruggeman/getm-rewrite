@@ -215,36 +215,41 @@ MODULE PROCEDURE advection_calculate_3d
          do k=tgrid%kmin,tgrid%kmax
             call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
             call v_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
-!            call w_advection_superbee()
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
+         end do
+         call w_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                                   tgrid%kmax, w, tgrid%mask, dt, h, f)
+         do k=tgrid%kmin,tgrid%kmax
             call v_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
             call u_advection_superbee(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
          end do
       case (UPSTREAM)
          do k=tgrid%kmin,tgrid%kmax
             call u_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
             call v_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
-!            call w_advection_upstream()
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
+         end do
+         call w_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
+                                   tgrid%kmax, w, tgrid%mask, dt, h, f)
+         do k=tgrid%kmin,tgrid%kmax
             call v_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
             call u_advection_upstream(tgrid%ill,tgrid%ihl,tgrid%jll,tgrid%jhl, &
                              ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                             tgrid%mask,tgrid%inv_area,dt/2,tgrid%hn(:,:,k),f(:,:,k))
+                             tgrid%mask,tgrid%inv_area,dt/2,h(:,:,k),f(:,:,k))
          end do
    end select
-   return
 #if 0
 END SUBROUTINE advection_calculate_3d
 #else

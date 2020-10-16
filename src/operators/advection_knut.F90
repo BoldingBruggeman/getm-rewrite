@@ -180,7 +180,7 @@ MODULE PROCEDURE advection_calculate_3d
    do j=jmin,jmax
       do i=imin,imax
          if (az(i,j).eq.1) then
-            dzw(kmin:kmax-1) = 0.5 * ( h_3d(i,j,kmin:kmax-1) + h_3d(i,j,kmin+1:kmax) )
+            dzw(kmin:kmax-1) = MIN( h_3d(i,j,kmin:kmax-1) , h_3d(i,j,kmin+1:kmax) )
             call advection_directional_split(dt, f(i,j,:), h_3d(i,j,kmin:kmax), ones(kmin:kmax), w(i,j,:), ones(kmin:kmax), ones(kmin:kmax), dzw(kmin:kmax), ones_int(kmin:kmax), ones_int(kmin:kmax))
          end if
       end do

@@ -197,8 +197,157 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    return
 END SUBROUTINE _V_SUB_NAME_
 
-!SUBROUTINE _W_SUB_NAME_(imin,imax,jmin,jmax,dxu,dyu,hu,w,iA,dt,h,f)
-SUBROUTINE _W_SUB_NAME_()
+SUBROUTINE _W_SUB_NAME_(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
+
+   USE, INTRINSIC :: ISO_FORTRAN_ENV
+
+   IMPLICIT NONE
+
+   ! Subroutine arguments
+   integer, intent(in) :: imin, imax, jmin, jmax, kmax
+   real(real64), intent(in) :: w(imin-1:imax+1,jmin-1:jmax+1,0:kmax)
+   integer, intent(in) :: tmask(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64), intent(in) :: dt
+   real(real64), target, intent(inout) :: h(imin-1:imax+1,jmin-1:jmax+1,0:kmax), f(imin-1:imax+1,jmin-1:jmax+1,0:kmax)
+
+!  Local constants
+   integer, parameter :: itersmax=200
+
+!  Local variables
+#ifdef _AUTOMATIC_
+   real(real64), dimension(0:kmax) :: flux, cfl0, cfls
+   real(real64), dimension(0:kmax), target :: haux, faux
+#else
+   real(real64), dimension(:), allocatable, save :: flux, cfl0, cfls
+   real(real64), dimension(:), allocatable, target, save :: haux, faux
+#endif
+   real(real64), dimension(:), pointer :: p_haux, p_faux, p1d
+   real(real64) :: itersm1, dtk
+   real(real64) :: cfl, fu, fuu, fd, hfo, advn
+   real(real64) :: deltaf, deltafu, ratio
+   real(real64) :: limiter
+   integer :: i, j, k, it, iters, iters_new
+   logical, save :: first=.true.
+!---------------------------------------------------------------------------
+
+   if (first) then
+#ifndef _AUTOMATIC_
+      allocate(flux(0:kmax), cfl0(0:kmax), cfls(0:kmax), haux(0:kmax), faux(0:kmax))
+#endif
+      first = .false.
+   end if
+
+   flux(0   ) = 0._real64
+   flux(kmax) = 0._real64
+
+
+   do j=jmin,jmax
+      do i=imin,imax
+         if (tmask(i,j) .eq. 1) then
+
+            do k=1,kmax-1
+               cfl0(k) = ABS( w(i,j,k) ) * dt / MIN( h(i,j,k) , h(i,j,k+1) )
+            end do
+
+            iters = 1
+            itersm1 = 1._real64
+            dtk = dt
+
+            p_haux => haux
+            p_faux => faux
+
+            it = 1
+
+            do while (it .le. iters)
+
+               if (it .eq. 1) then
+                  haux = h(i,j,:)
+                  faux = f(i,j,:)
+                  cfls = cfl0
+               else
+                  do k=1,kmax-1
+                     cfls(k) = ABS( w(i,j,k) ) * dt / MIN( haux(k) , haux(k+1) )
+                  end do
+               end if
+
+               if (iters .lt. itersmax) then
+!                 estimate number of iterations by maximum cfl number in water column
+                  cfl = MAXVAL( cfls(1-0:kmax-1) )
+                  iters_new = MAX( 1 , CEILING( cfl ) )
+                  if (iters_new .gt. iters) then
+                     if (iters_new .gt. itersmax) then
+                        !STDERR 'adv_split_w: too many iterations needed: ',iters_new
+                        !STDERR '             at global i j = ',ioff+i,joff+j
+                        !STDERR '             cfl=',real(cfl/itersmax)
+                        iters = itersmax
+                     else
+                        iters = iters_new
+                     end if
+                     itersm1 = 1._real64 / iters
+                     dtk = dt * itersm1
+                     if (it .gt. 1) then
+#ifdef DEBUG
+                        !STDERR 'adv_split_w: restart iterations during it=',it
+                        !STDERR 'i=',i,' j=',j,':',iters
+#endif
+                        it = 1
+                        cycle
+                     end if
+                  end if
+               end if
+
+!              Calculating w-interface fluxes !
+               do k=1,kmax-1
+                  cfl = cfls(k)*itersm1
+                  if (w(i,j,k) .gt. 0) then
+                     fu = faux(k)
+                     if (k .gt. 1) then
+                        fuu = faux(k-1)
+                     else
+                        fuu = fu
+                     end if
+                     fd  = faux(k+1)
+                  else
+                     fu = faux(k+1)
+                     if (k .lt. kmax-1) then
+                        fuu = faux(k+2)
+                     else
+                        fuu = fu
+                     end if
+                     fd  = faux(k  )
+                  end if
+                  deltaf  = fd - fu
+                  deltafu = fu - fuu
+                  if (deltaf*deltafu .gt. 0) then
+                     ratio = deltafu / deltaf   ! slope ratio
+#include "limiters.h"
+                     fu = fu + 0.5*limiter*(1-cfl)*deltaf
+                  end if
+                  flux(k) = w(i,j,k)*fu
+               end do
+
+               if (it .eq. iters) then
+                  p1d => h(i,j,:) ; p_haux(0:) => p1d
+                  p1d => f(i,j,:) ; p_faux(0:) => p1d
+               end if
+
+               do k=1,kmax
+                  hfo = haux(k)*faux(k)
+                  p_haux(k) = haux(k) - dtk*(w(i,j,k  )-w(i,j,k-1))
+                  advn = flux(k  ) - flux(k-1)
+                  p_faux(k) = ( hfo - dtk*advn ) / p_haux(k)
+               end do
+
+               it = it + 1
+
+            end do
+
+         end if
+
+      end do
+   end do
+
+   return
 END SUBROUTINE _W_SUB_NAME_
 
 !KB END MODULE _MODULE_NAME_
