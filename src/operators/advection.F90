@@ -98,70 +98,86 @@ MODULE subroutine advection_calculate_2d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
 #else
 MODULE PROCEDURE advection_calculate_2d
 #endif
+   real(real64), allocatable :: D(:,:)
 !---------------------------------------------------------------------------
+   allocate(D,mold=tgrid%D)
+   D = tgrid%D
+#define _RESET_DEPTH_ if(1) D = tgrid%D
    select case (scheme)
       case (HSIMT)
          call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
+_RESET_DEPTH_
          call v_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                          tgrid%mask,tgrid%inv_area,dt,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt,D,f)
+_RESET_DEPTH_
          call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (MUSCL)
          call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
+_RESET_DEPTH_
          call v_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                          tgrid%mask,tgrid%inv_area,dt,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt,D,f)
+_RESET_DEPTH_
          call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (P2_PDM)
          call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
+_RESET_DEPTH_
          call v_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                          tgrid%mask,tgrid%inv_area,dt,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt,D,f)
+_RESET_DEPTH_
          call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (SPLMAX13)
          call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
+_RESET_DEPTH_
          call v_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                          tgrid%mask,tgrid%inv_area,dt,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt,D,f)
+_RESET_DEPTH_
          call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (SUPERBEE)
          call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
+_RESET_DEPTH_
          call v_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                          tgrid%mask,tgrid%inv_area,dt,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt,D,f)
+_RESET_DEPTH_
          call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (UPSTREAM)
          call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
+_RESET_DEPTH_
          call v_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                          tgrid%mask,tgrid%inv_area,dt,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt,D,f)
+_RESET_DEPTH_
          call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                          tgrid%mask,tgrid%inv_area,dt/2,tgrid%D,f)
+                          tgrid%mask,tgrid%inv_area,dt/2,D,f)
    end select
-   return
+#undef _RESET_DEPTH_
 #if 0
 END SUBROUTINE advection_calculate_2d
 #else
@@ -190,7 +206,10 @@ MODULE subroutine advection_calculate_3d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
 MODULE PROCEDURE advection_calculate_3d
 #endif
    integer :: k
+   real(real64), allocatable :: hn(:,:,:)
 !---------------------------------------------------------------------------
+   allocate(hn,mold=tgrid%hn)
+   hn = tgrid%hn
    select case (scheme)
       case (SUPERBEE)
          do k=tgrid%kmin,tgrid%kmax

@@ -1,4 +1,4 @@
-#if 0
+#if 1
 #ifdef HSIMT
 hsimt: block
              real(real64) :: kappa,x

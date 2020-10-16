@@ -4,7 +4,7 @@
 !> array indices!!!!!
 !> @endnote
 
-#define _AUTOMATIC_
+!#define _AUTOMATIC_
 
 !KB MODULE _MODULE_NAME_
 
@@ -40,8 +40,9 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
 #endif
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
-   real(real64) :: limiter,egon
+   real(real64) :: limiter
    integer :: i, j
+!KB   integer :: scheme=1
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
    allocate(flux(imin-1:imax,jmin:jmax), QU(imin-1:imax,jmin:jmax))
@@ -92,23 +93,9 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
       do i=imin,imax
          if (tmask(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
-!KB            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*iA(i,j)
-            egon = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*iA(i,j)
-#if 0
-            if (i==100 .and. j==73) then
-write(*,*) Umask(i-1,j),Umask(i,j),Tmask(i,j)
-write(*,*) hfo,h(i,j),iA(i,j)
-write(*,*) QU(i,j),QU(i-1,j),QU(i,j)-QU(i-1,j)
-            end if
-#endif
+            h(i,j) = h(i,j) - dt*( QU(i,j)-QU(i-1,j) )*iA(i,j)
             advn = ( flux(i,j)-flux(i-1,j) )*iA(i,j)
-!KB            f(i,j) = ( hfo - dt*advn ) / h(i,j)
-            f(i,j) = ( hfo - dt*advn ) / egon
-#if 0
-            if (i==100 .and. j==73) then
-write(*,*) 'AAA ',hfo-f(i,j)*h(i,j)
-            end if
-#endif
+            f(i,j) = ( hfo - dt*advn ) / h(i,j)
          end if
       end do
    end do
@@ -144,8 +131,9 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
 #endif
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
-   real(real64) :: limiter,egon
+   real(real64) :: limiter
    integer :: i, j
+!KB   integer :: scheme=1
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
    allocate(flux(imin:imax,jmin-1:jmax), QV(imin:imax,jmin-1:jmax))
@@ -196,23 +184,9 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
       do i=imin,imax
          if (tmask(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
-!KB            h(i,j) = h(i,j) - dt*( QV(i,j)-QV(i,j-1) )*iA(i,j)
-            egon = h(i,j) - dt*( QV(i,j)-QV(i,j-1) )*iA(i,j)
-#if 0
-            if (i==100 .and. j==73) then
-write(*,*) Vmask(i-1,j),Vmask(i,j),Tmask(i,j)
-write(*,*) hfo,h(i,j),iA(i,j)
-write(*,*) QV(i,j),QV(i,j-1),QV(i,j)-QV(i,j-1)
-            end if
-#endif
+            h(i,j) = h(i,j) - dt*( QV(i,j)-QV(i,j-1) )*iA(i,j)
             advn = ( flux(i,j)-flux(i,j-1) )*iA(i,j)
-!KB            f(i,j) = ( hfo - dt*advn ) / h(i,j)
-            f(i,j) = ( hfo - dt*advn ) / egon
-#if 0
-            if (i==100 .and. j==73) then
-write(*,*) 'BBB ',hfo-f(i,j)*h(i,j)
-            end if
-#endif
+            f(i,j) = ( hfo - dt*advn ) / h(i,j)
          end if
       end do
    end do

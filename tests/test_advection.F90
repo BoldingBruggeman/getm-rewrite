@@ -47,6 +47,7 @@ PROGRAM test_advection
    real(real64) :: timestep
    integer :: i,j,k,n
    character(len=4) :: arg
+   real(real64) :: advection_time=0._real64
 !-----------------------------------------------------------------------------
    omega=2*pi/period
    call parse_argument()
@@ -65,7 +66,13 @@ PROGRAM test_advection
    do n=1,Nmax
       t=t+dt
       write(*,*) n,' of',Nmax
+      advection_: block
+      real(real64) :: advection_start,advection_stop
+      call cpu_time(advection_start)
       call advection%calculate(scheme,domain%U,u,domain%V,v,timestep,domain%T,var)
+      call cpu_time(advection_stop)
+      advection_time=advection_time+advection_stop-advection_start
+      end block advection_
       if (mod(n,nsave) == 0) call output%do_output(t)
    end do
    call domain%cleanup()
@@ -78,6 +85,8 @@ PROGRAM test_advection
    write(*,*) 'timestep:         ',dt_cfl
    write(*,*) '# of revolutions: ',no_of_revolutions
    write(*,*) '# of timesteps:   ',Nmax
+   write(*,*) 'CPU time:         ',advection_time
+   write(*,*) 'CPU time/timestep:',advection_time/Nmax
    write(*,*)
    write(*,*) 'Compiler: ',compiler_version()
 
