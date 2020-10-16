@@ -102,17 +102,15 @@ MODULE PROCEDURE advection_calculate_2d
 !---------------------------------------------------------------------------
    allocate(D,mold=tgrid%D)
    D = tgrid%D
-#define _RESET_DEPTH_ if(.false.) D = tgrid%D
+
    select case (scheme)
       case (HSIMT)
          call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-_RESET_DEPTH_
          call v_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-_RESET_DEPTH_
          call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
@@ -120,11 +118,9 @@ _RESET_DEPTH_
          call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-_RESET_DEPTH_
          call v_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-_RESET_DEPTH_
          call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
@@ -132,11 +128,9 @@ _RESET_DEPTH_
          call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-_RESET_DEPTH_
          call v_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-_RESET_DEPTH_
          call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
@@ -144,11 +138,9 @@ _RESET_DEPTH_
          call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-_RESET_DEPTH_
          call v_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-_RESET_DEPTH_
          call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
@@ -156,11 +148,9 @@ _RESET_DEPTH_
          call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-_RESET_DEPTH_
          call v_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-_RESET_DEPTH_
          call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
@@ -168,16 +158,14 @@ _RESET_DEPTH_
          call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-_RESET_DEPTH_
          call v_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-_RESET_DEPTH_
          call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
    end select
-#undef _RESET_DEPTH_
+
 #if 0
 END SUBROUTINE advection_calculate_2d
 #else
