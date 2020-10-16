@@ -56,6 +56,11 @@ PROGRAM test_advection
    call field_manager_setup()
    call velocity_field()
    call initial_conditions(3)
+domain%T%mask(imin+1,:) = 0
+domain%T%mask(imax-1,:) = 0
+domain%T%mask(:,jmin+1) = 0
+domain%T%mask(:,jmax-1) = 0
+
    call output%do_output(t)
 
    umax=omega*Lx/2

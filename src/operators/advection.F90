@@ -102,7 +102,7 @@ MODULE PROCEDURE advection_calculate_2d
 !---------------------------------------------------------------------------
    allocate(D,mold=tgrid%D)
    D = tgrid%D
-#define _RESET_DEPTH_ if(.true.) D = tgrid%D
+#define _RESET_DEPTH_ if(.false.) D = tgrid%D
    select case (scheme)
       case (HSIMT)
          call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
