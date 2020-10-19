@@ -54,13 +54,20 @@ module SUBROUTINE metrics(self)
             do j=self%T%jmin,self%T%jmax
                do i=self%T%imin,self%T%imax-1
                   self%U%lat(i,j) = 0.5_real64 * ( self%T%lat(i,j) + self%T%lat(i+1,j) )
+                  self%U%cor(i,j) = 2._real64*omega*sin(deg2rad*self%U%lat(i,j))
                end do
             end do
             do j=self%T%jmin,self%T%jmax-1
                do i=self%T%imin,self%T%imax
                   self%V%lat(i,j) = 0.5_real64 * ( self%T%lat(i,j) + self%T%lat(i,j+1) )
+                  self%V%cor(i,j) = 2._real64*omega*sin(deg2rad*self%V%lat(i,j))
                end do
             end do
+         end if
+         ! allow for f-plane if valid lat0 is specified on input
+         if (-90._real64 <= self%lat0 .and. self%lat0 <= 90._real64) then
+            self%U%cor = 2._real64*omega*sin(deg2rad*self%lat0)
+            self%V%cor = 2._real64*omega*sin(deg2rad*self%lat0)
          end if
       case(spherical)
          do j=self%T%jmin,self%T%jmax

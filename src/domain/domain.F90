@@ -54,6 +54,8 @@ integer, parameter :: halo=2
       !! Earth radius
    real(real64), parameter :: pi = atan(1._real64)*4._real64
       !! \( \pi \)
+   real(real64), parameter :: omega = 2._real64*pi/86164._real64
+      !! Earth frequency
    real(real64), parameter :: deg2rad = pi/180._real64
       !! degrees to radians conversion
    real(real64), parameter :: Hland = -10._real64
@@ -154,6 +156,7 @@ integer, parameter :: halo=2
       real(real64) :: Dmax
       logical :: gamma_surf
       real(real64) :: ddl=-1._real64, ddu=-1._real64
+      real(real64) :: lat0=-999._real64
 
       contains
 
