@@ -59,7 +59,6 @@ integer, parameter :: halo=2
    real(real64), parameter :: deg2rad = pi/180._real64
       !! degrees to radians conversion
    real(real64), parameter :: Hland = -10._real64
-!KB   real(real64), parameter :: Dmin = 0.5_real64
 
 !  Module types and variables
    integer :: vel_depth_method = 0
@@ -123,7 +122,9 @@ integer, parameter :: halo=2
         !! layer heights - old time step
       real(real64), dimension(:,:,:), allocatable :: zf, zc
         !! depth to grid faces and grid centers
-       logical :: is_initialized = .false.
+      real(real64), dimension(:,:), allocatable :: alpha
+        !! drying factor
+      logical :: is_initialized = .false.
 
       contains
 
@@ -152,6 +153,7 @@ integer, parameter :: halo=2
          !! dimension ids for the interface points
 
       real(real64) :: Dmin
+      real(real64) :: Dcrit
       real(real64) :: Dgamma
       real(real64) :: Dmax
       logical :: gamma_surf
