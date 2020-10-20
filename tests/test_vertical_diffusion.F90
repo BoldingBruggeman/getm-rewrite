@@ -57,7 +57,7 @@ PROGRAM test_vertical_diffusion
    do n=1,Nmax
       t=t+dt
       write(*,*) n,' of ',Nmax
-      call vertical_diffusion%calculate(mask,dz,timestep,cnpar,avmol,nuh,var)
+      call vertical_diffusion%calculate(mask,dz,dz,timestep,cnpar,avmol,nuh,var)
 
       analytical: block
       real(real64) :: A1, B1, C1

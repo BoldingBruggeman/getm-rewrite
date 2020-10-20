@@ -64,8 +64,7 @@ MODULE getm_salinity
 #else
       real(real64), dimension(:,:,:), allocatable :: S
 #endif
-!> remember to allocate in initialize
-
+      integer :: advection_scheme=1
       real(real64) :: cnpar
       real(real64) :: avmolt
 
@@ -190,7 +189,7 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
    end associate VGrid
    end associate UGrid
    !scheme,ugrid,u,vgrid,v,dt,tgrid,f
-   call self%vertical_diffusion%calculate(TG%mask,TG%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
+   call self%vertical_diffusion%calculate(TG%mask,TG%hn,TG%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
    end associate TGrid
 
 END SUBROUTINE salinity_calculate

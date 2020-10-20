@@ -60,7 +60,7 @@ END SUBROUTINE vertical_diffusion_initialize
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE vertical_diffusion_calculate(self,mask,dz,dt,cnpar,avmol,nuh,var)
+module SUBROUTINE vertical_diffusion_calculate(self,mask,dzo,dzn,dt,cnpar,molecular,nuh,var,ea2,ea4)
 
    !! Vertical diffusion
 
@@ -69,12 +69,14 @@ module SUBROUTINE vertical_diffusion_calculate(self,mask,dz,dt,cnpar,avmol,nuh,v
    ! Subroutine arguments
    class(type_vertical_diffusion), intent(inout) :: self
    integer, dimension(:,:), intent(in) :: mask
-   real(real64), dimension(:,:,:), intent(in) :: dz
+   real(real64), dimension(:,:,:), intent(in) :: dzo,dzn
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
-   real(real64), intent(in) :: avmol
+   real(real64), intent(in) :: molecular
    real(real64), dimension(:,:,:), intent(in) :: nuh
    real(real64), dimension(:,:,:), intent(inout) :: var
+   real(real64), dimension(:,:,:), intent(in), optional :: ea2
+   real(real64), dimension(:,:,:), intent(in), optional :: ea4
 
 !  Local constants
 
@@ -88,8 +90,8 @@ module SUBROUTINE vertical_diffusion_calculate(self,mask,dz,dt,cnpar,avmol,nuh,v
 write(*,*) self%imin,self%imax
 write(*,*) self%jmin,self%jmax
 write(*,*) self%kmin,self%kmax
-write(*,*) lbound(dz)
-write(*,*) ubound(dz)
+write(*,*) lbound(dzn)
+write(*,*) ubound(dzn)
 write(*,*) lbound(nuh)
 write(*,*) ubound(nuh)
 write(*,*) lbound(var)
@@ -108,9 +110,9 @@ stop
       do j=self%jmin,self%jmax
          do i=self%imin,self%imax
             if (mask(i,j) ==  1) then
-               x = dt*(nuh(i,j,k)+avmol)/(dz(i,j,k+1)+dz(i,j,k))
-               self%auxo(i,j,k)=2._real64*(1-cnpar)*x
-               self%auxn(i,j,k)=2._real64*   cnpar *x
+               x = 2._real64*dt*(nuh(i,j,k)+molecular)
+               self%auxo(i,j,k)=(1-cnpar)*x/(dzo(i,j,k+1)+dzo(i,j,k))
+               self%auxn(i,j,k)=   cnpar *x/(dzn(i,j,k+1)+dzn(i,j,k))
             end if
          end do
       end do
@@ -122,8 +124,8 @@ stop
       do i=self%imin,self%imax
          if (mask(i,j) ==  1) then
             self%a1(ORDER)=-self%auxn(i,j,k-1)
-            self%a2(ORDER)=dz(i,j,k)+self%auxn(i,j,k-1)
-            self%a4(ORDER)=var(i,j,k)*(dz(i,j,k)-self%auxo(i,j,k-1))+var(i,j,k-1)*self%auxo(i,j,k-1)
+            self%a2(ORDER)=dzn(i,j,k)+self%auxn(i,j,k-1)
+            self%a4(ORDER)=var(i,j,k)*(dzo(i,j,k)-self%auxo(i,j,k-1))+var(i,j,k-1)*self%auxo(i,j,k-1)
          end if
       end do
    end do
@@ -136,9 +138,9 @@ stop
             if (mask(i,j) ==  1) then
                self%a3(ORDER)=-self%auxn(i,j,k  )
                self%a1(ORDER)=-self%auxn(i,j,k-1)
-               self%a2(ORDER)=dz(i,j,k)+self%auxn(i,j,k)+self%auxn(i,j,k-1)
+               self%a2(ORDER)=dzn(i,j,k)+self%auxn(i,j,k)+self%auxn(i,j,k-1)
                self%a4(ORDER)=var(i,j,k+1)*self%auxo(i,j,k) &
-                             +var(i,j,k  )*(dz(i,j,k)-self%auxo(i,j,k)-self%auxo(i,j,k-1)) &
+                             +var(i,j,k  )*(dzo(i,j,k)-self%auxo(i,j,k)-self%auxo(i,j,k-1)) &
                              +var(i,j,k-1)*self%auxo(i,j,k-1)
             end if
          end do
@@ -151,11 +153,13 @@ stop
       do i=self%imin,self%imax
          if (mask(i,j) ==  1) then
             self%a3(ORDER)=-self%auxn(i,j,k)
-            self%a2(ORDER)=dz(i,j,k)+self%auxn(i,j,k)
-            self%a4(ORDER)=var(i,j,k+1)*self%auxo(i,j,k)+var(i,j,k)*(dz(i,j,k)-self%auxo(i,j,k))
+            self%a2(ORDER)=dzn(i,j,k)+self%auxn(i,j,k)
+            self%a4(ORDER)=var(i,j,k+1)*self%auxo(i,j,k)+var(i,j,k)*(dzo(i,j,k)-self%auxo(i,j,k))
          end if
       end do
    end do
+   if (present(ea2)) self%a2=self%a2+ea2
+   if (present(ea4)) self%a4=self%a4+ea4
    call cpu_time(matrix_end)
    self%matrix_time = self%matrix_time + matrix_end - matrix_start
    end block matrix

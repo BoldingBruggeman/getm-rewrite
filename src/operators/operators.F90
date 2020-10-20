@@ -100,15 +100,17 @@ MODULE getm_operators
             !! variable to be diffused
       end subroutine vertical_diffusion_initialize
 
-      module subroutine vertical_diffusion_calculate(self,mask,dz,dt,cnpar,avmol,nuh,var)
+      module subroutine vertical_diffusion_calculate(self,mask,dzo,dzn,dt,cnpar,molecular,nuh,var,ea2,ea4)
          class(type_vertical_diffusion), intent(inout) :: self
          integer, dimension(:,:), intent(in) :: mask
-         real(real64), dimension(:,:,:), intent(in) :: dz
+         real(real64), dimension(:,:,:), intent(in) :: dzo,dzn
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: cnpar
-         real(real64), intent(in) :: avmol
+         real(real64), intent(in) :: molecular
          real(real64), dimension(:,:,:), intent(in) :: nuh
          real(real64), dimension(:,:,:), intent(inout) :: var
+         real(real64), dimension(:,:,:), intent(in), optional :: ea2
+         real(real64), dimension(:,:,:), intent(in), optional :: ea4
       end subroutine vertical_diffusion_calculate
    END INTERFACE
 

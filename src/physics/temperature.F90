@@ -60,6 +60,7 @@ MODULE getm_temperature
 #else
    real(real64), dimension(:,:,:), allocatable :: T
 #endif
+      integer :: advection_scheme=1
 
       contains
 
@@ -183,7 +184,7 @@ END SUBROUTINE temperature_initialize
 !> equation by means of a tri-diagonal solver.
 
 
-SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh)
+SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
 
    !! Advection/diffusion of the temperature field
 
@@ -194,21 +195,40 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh)
    real(real64), intent(in) :: dt
    real(real64), dimension(:,:,:), intent(in) :: uk,vk
    real(real64), dimension(:,:,:), intent(in) :: nuh
+   real(real64), dimension(:,:,:), intent(in) :: rad
+   real(real64), dimension(:,:), intent(in) :: shf
 
 !  Local constants
 
 !  Local variables
-   integer :: rc
+   integer :: i,j,k
+   real(real64), allocatable :: ea4(:,:,:)
 !---------------------------------------------------------------------------
    call self%logs%info('temperature_calculate()',level=2)
+
+   allocate(ea4,mold=self%T) !KB use imin,imax ... instead to be consistent with a1, a2 ... in diffusion solver
 
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
-   call self%advection%calculate(1,UG,uk,VG,vk,dt,TG,self%T)
+   call self%advection%calculate(self%advection_scheme,UG,uk,VG,vk,dt,TG,self%T)
    end associate VGrid
    end associate UGrid
-   call self%vertical_diffusion%calculate(TG%mask,TG%hn,dt,cnpar,avmols,nuh,self%T)
+   ! add extra processes - heating due to short wave radiation and surface heat flux (sensible, latent and net longwave)
+   do k=TG%kmin,TG%kmax
+      do j=TG%jmin,TG%jmax
+         do i=TG%imin,TG%imax
+            if (TG%mask(i,j) > 0) ea4(i,j,k) = dt*(rad(i,j,k)-rad(i,j,k-1))
+         end do
+      end do
+   end do
+   k=TG%kmax
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+         if (TG%mask(i,j) > 0) ea4(i,j,k) = ea4(i,j,k)+dt*shf(i,j) !KB some scaling
+      end do
+   end do
+   call self%vertical_diffusion%calculate(TG%mask,TG%hn,TG%hn,dt,cnpar,avmols,nuh,self%T,ea4=ea4)
    end associate TGrid
 
 END SUBROUTINE temperature_calculate
