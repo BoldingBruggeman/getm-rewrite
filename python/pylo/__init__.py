@@ -28,7 +28,7 @@ if not dllpath:
             break
 
 if not dllpath:
-   print('Unable to locate FABM dynamic library %s.' % (' or '.join(dllpaths),))
+   print('Unable to locate pylo dynamic library %s.' % (' or '.join(dllpaths),))
    sys.exit(1)
 
 # Load FABM library.
