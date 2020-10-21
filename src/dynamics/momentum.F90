@@ -6,6 +6,10 @@
 !> and calculating the advection-diffusion-equation, which includes
 !> penetrating short-wave radiation as source term (see {\tt do\_temperature}).
 
+!> @note
+!> loop boundaries in uadvgrid and vadvgrid
+!> @nednote
+
 #ifdef _STATIC_
 #include "dimensions.h"
 #endif
@@ -45,8 +49,9 @@ MODULE getm_momentum
 
       class(type_logging), pointer :: logs
       class(type_field_manager), pointer :: fm
-      class(type_advection), pointer :: advection => null()
       class(type_getm_domain), pointer :: domain
+      class(type_advection), pointer :: advection => null()
+      class(type_vertical_diffusion), pointer :: vertical_diffusion => null()
 
 #ifdef _STATIC_
       real(real64), dimension(E2DFIELD) :: U, V
@@ -66,7 +71,6 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: SxF, SyF ! Slow friction
       real(real64), dimension(:,:), allocatable :: SlUx, SlVx ! Should go away
       real(real64), dimension(:,:), allocatable :: ru, rv
-      real(real64), dimension(:,:), allocatable :: dry_u, dry_v
       real(real64), dimension(:,:,:), allocatable :: pk, qk, ww
       real(real64), dimension(:,:,:), allocatable :: pkadv, qkadv
       real(real64), dimension(:,:,:), allocatable :: uk, vk
@@ -75,49 +79,40 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: rru,rrv
       real(real64), dimension(:,:), allocatable :: zub,zvb
       type(type_getm_grid) :: uadvgrid,vadvgrid
+      integer :: advection_scheme=1
+      real(real64) :: molecular=0._real64
+      real(real64) :: cnpar
 #endif
 
       contains
 
       procedure :: configuration => momentum_configuration
       procedure :: initialize => momentum_initialize
-      procedure :: x_2d => momentum_x_2d
-      procedure :: y_2d => momentum_y_2d
+      procedure :: register => momentum_register
+      procedure :: uv_momentum_2d => uv_momentum_2d
       procedure :: advection_2d => uv_advection_2d
+      procedure :: uv_momentum_3d => uv_momentum_3d
+      procedure :: w_momentum_3d => w_momentum_3d
       procedure :: advection_3d => uv_advection_3d
-      procedure :: do_2d => momentum_2d
-      procedure :: do_3d => momentum_3d
-      procedure :: do_w => momentum_z_3d
       procedure :: vel_2d => velocities_2d
       procedure :: vel_3d => velocities_3d
       procedure :: stresses => stresses
       procedure :: shear => velocity_shear_frequency
-      procedure :: register => momentum_register
       procedure :: slow_terms => slow_terms
       procedure :: slow_bottom_friction => slow_bottom_friction
 
    end type type_getm_momentum
 
    INTERFACE
-      module subroutine momentum_x_2d(self,dt,dpdx,taus)
+      module subroutine uv_momentum_2d(self,dt,tausx,tausy,dpdx,dpdy)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-         real(real64), dimension(:,:), intent(in) :: dpdx
+         real(real64), dimension(:,:), intent(in) :: tausx,tausy
+            !! surface stresses
+         real(real64), dimension(:,:), intent(in) :: dpdx, dpdy
             !! surface pressure gradient - including air pressure
-         real(real64), dimension(:,:), intent(in) :: taus
-            !! surface stress in X-direction
-      end subroutine momentum_x_2d
-
-      module subroutine momentum_y_2d(self,dt,dpdy,taus)
-         class(type_getm_momentum), intent(inout) :: self
-         real(real64), intent(in) :: dt
-            !! timestep [s]
-         real(real64), dimension(:,:), intent(in) :: dpdy
-            !! surface pressure gradient - including air pressure
-         real(real64), dimension(:,:), intent(in) :: taus
-            !! surface stress in Y-direction
-      end subroutine momentum_y_2d
+      end subroutine uv_momentum_2d
 
       module subroutine uv_advection_2d(self,dt)
          class(type_getm_momentum), intent(inout) :: self
@@ -125,37 +120,33 @@ MODULE getm_momentum
             !! timestep [s]
       end subroutine uv_advection_2d
 
+      module subroutine uv_momentum_3d(self,mode_split,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
+         !! Solve the 3D momemtum equations
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+         integer, intent(in) :: mode_split
+         real(real64), dimension(:,:), intent(in) :: tausx,tausy
+           !! surface stresses
+         real(real64), dimension(:,:), intent(in) :: dpdx,dpdy
+           !! surface pressure gradients - including air pressure
+         real(real64), dimension(:,:,:), intent(in) :: idpdx,idpdy
+           !! internal pressure gradients
+         real(real64), dimension(:,:,:), intent(in) :: viscosity
+           !! viscosity
+      end subroutine uv_momentum_3d
+
+      module subroutine w_momentum_3d(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      end subroutine w_momentum_3d
+
       module subroutine uv_advection_3d(self,dt)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
       end subroutine uv_advection_3d
-
-      module subroutine momentum_x_3d(self,dt,dpdx,taus)
-         class(type_getm_momentum), intent(inout) :: self
-         real(real64), intent(in) :: dt
-            !! timestep [s]
-         real(real64), dimension(:,:), intent(in) :: dpdx
-            !! surface pressure gradient - including air pressure
-         real(real64), dimension(:,:), intent(in) :: taus
-            !! surface stress in X-direction
-      end subroutine momentum_x_3d
-
-      module subroutine momentum_y_3d(self,dt,dpdy,taus)
-         class(type_getm_momentum), intent(inout) :: self
-         real(real64), intent(in) :: dt
-            !! timestep [s]
-         real(real64), dimension(:,:), intent(in) :: dpdy
-            !! surface pressure gradient - including air pressure
-         real(real64), dimension(:,:), intent(in) :: taus
-            !! surface stress in Y-direction
-      end subroutine momentum_y_3d
-
-      module subroutine momentum_z_3d(self,dt)
-         class(type_getm_momentum), intent(inout) :: self
-         real(real64), intent(in) :: dt
-            !! timestep [s]
-      end subroutine momentum_z_3d
 
       module subroutine velocities_2d(self)
          class(type_getm_momentum), intent(inout) :: self
@@ -217,7 +208,7 @@ END SUBROUTINE momentum_configuration
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE momentum_initialize(self,domain,advection)
+SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
 
    !! Initialize all dynamical components
 
@@ -227,6 +218,7 @@ SUBROUTINE momentum_initialize(self,domain,advection)
    class(type_getm_momentum), intent(inout) :: self
    TYPE(type_getm_domain), intent(inout), target :: domain
    class(type_advection), intent(in), optional, target :: advection
+   class(type_vertical_diffusion), intent(in), optional, target :: vertical_diffusion
 
 !  Local constants
 
@@ -238,6 +230,9 @@ SUBROUTINE momentum_initialize(self,domain,advection)
    self%domain => domain
    if (present(advection)) then
       self%advection => advection
+   end if
+   if (present(vertical_diffusion)) then
+      self%vertical_diffusion => vertical_diffusion
    end if
 #ifndef _STATIC_
    XGrid: associate( XG => self%domain%X )
@@ -271,8 +266,6 @@ SUBROUTINE momentum_initialize(self,domain,advection)
    call mm_s('Slrv',self%Slrv,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('ru',self%ru,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('rv',self%rv,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('dry_u',self%dry_u,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('dry_v',self%dry_v,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('taub',self%taub,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
    call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
@@ -295,12 +288,13 @@ SUBROUTINE momentum_initialize(self,domain,advection)
    end if
 
    ! Grids for U and V advection - updates of time varying fields in advection calling routine
-!   call mm_s('uadvmask',self%uadvgrid%mask,TG%mask,def=0._real64,stat=stat)
+   call mm_s('uadvmask',self%uadvgrid%mask,TG%mask,def=0,stat=stat)
    call mm_s('uadvdx',self%uadvgrid%dx,TG%dx,def=0._real64,stat=stat)
    call mm_s('uadvdy',self%uadvgrid%dy,TG%dy,def=0._real64,stat=stat)
    call mm_s('uadvD',self%uadvgrid%D,TG%D,def=0._real64,stat=stat)
    call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
 
+   call mm_s('vadvmask',self%vadvgrid%mask,TG%mask,def=0,stat=stat)
    call mm_s('vadvdx',self%vadvgrid%dx,TG%dx,def=0._real64,stat=stat)
    call mm_s('vadvdy',self%vadvgrid%dy,TG%dy,def=0._real64,stat=stat)
    call mm_s('vadvD',self%vadvgrid%D,TG%D,def=0._real64,stat=stat)
@@ -311,7 +305,7 @@ SUBROUTINE momentum_initialize(self,domain,advection)
    call mm_s('pkadv',self%pkadv,self%pk,def=0._real64,stat=stat)
    call mm_s('qkadv',self%qkadv,self%qk,def=0._real64,stat=stat)
    do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
+      do i=UG%imin,UG%imax-1 !KB - note
          self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
          self%uadvgrid%dx(i,j) = TG%dx(i+1,j)
          self%uadvgrid%dy(i,j) = TG%dy(i+1,j)
@@ -321,7 +315,7 @@ SUBROUTINE momentum_initialize(self,domain,advection)
          self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
       end do
    end do
-   do j=UG%jmin,UG%jmax
+   do j=UG%jmin,UG%jmax-1 !KB - note
       do i=UG%imin,UG%imax
          self%uadvgrid%dx(i,j) = XG%dx(i,j)
          self%uadvgrid%dy(i,j) = XG%dy(i,j)
@@ -339,66 +333,7 @@ SUBROUTINE momentum_initialize(self,domain,advection)
    return
 END SUBROUTINE momentum_initialize
 
-!---------------------------------------------------------------------------
-
-SUBROUTINE momentum_2d(self,dt,tausx,dpdx,tausy,dpdy)
-   !! Solve the 2D momemtum equations
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
-   real(real64), intent(in) :: dt
-   real(real64), intent(in), dimension(:,:) :: tausx,dpdx,tausy,dpdy
-
-!  Local constants
-
-!  Local variables
-   logical, save :: ufirst=.false. ! should likely not have save
-   !---------------------------------------------------------------------------
-   if(ufirst) then
-      call self%x_2d(dt,tausx,dpdx)
-      call self%y_2d(dt,tausy,dpdy)
-      ufirst = .false.
-   else
-      call self%y_2d(dt,tausy,dpdy)
-      call self%x_2d(dt,tausx,dpdx)
-      ufirst = .true.
-   end if
-   return
-END SUBROUTINE momentum_2d
-
-!---------------------------------------------------------------------------
-
-SUBROUTINE momentum_3d(self,mode_split)
-   !! Solve the 3D momemtum equations
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
-   integer, intent(in) :: mode_split
-
-!  Local constants
-
-!  Local variables
-   logical, save :: ufirst=.false. ! should likely not have save
-!---------------------------------------------------------------------------
-   self%Ui=self%Ui/mode_split
-   self%Vi=self%Vi/mode_split
-
-   if(ufirst) then
-!      call self%x_3d(dt,tausx,dpdx)
-!      call self%y_3d(dt,tausy,dpdy)
-      ufirst = .false.
-   else
- !     call self%y_3d(dt,tausy,dpdy)
- !     call self%x_3d(dt,tausx,dpdx)
-      ufirst = .true.
-   end if
-   return
-END SUBROUTINE momentum_3d
-
-!---------------------------------------------------------------------------
-
 END MODULE getm_momentum
+
+!---------------------------------------------------------------------------
+
