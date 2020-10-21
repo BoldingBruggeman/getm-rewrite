@@ -1,17 +1,4 @@
-
-set_property( TARGET getm_domain PROPERTY FOLDER domain )
-target_sources( getm_domain PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/domain/domain.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/grids.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/metrics.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/register.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/uv_depths.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/cfl_check.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/depth_update.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_coordinates.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_gvc.F90
-    ${CMAKE_CURRENT_LIST_DIR}/domain/vertical_sigma.F90
-)
+add_subdirectory(domain)
 
 set_property( TARGET getm_airsea PROPERTY FOLDER airsea )
 target_sources( getm_airsea PRIVATE
@@ -57,29 +44,7 @@ target_sources( getm_output PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/output/output.F90
 )
 
-set_property( TARGET getm_operators PROPERTY FOLDER operators )
-set(USE_KNUT off)
-if (USE_KNUT)
-target_sources( getm_operators PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/operators/operators_knut.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_knut.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
-)
-else()
-target_sources( getm_operators PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/operators/operators.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_superbee.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_p2_pdm.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_splmax13.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_hsimt.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_muscl.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/advection_upstream.F90
-    ${CMAKE_CURRENT_LIST_DIR}/operators/diffusion.F90
-)
-endif()
-
-#add_subdirectory(operators)
+add_subdirectory(operators)
 
 set_property( TARGET getm_exe PROPERTY FOLDER getm )
 target_sources( getm_exe PRIVATE

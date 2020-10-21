@@ -37,8 +37,6 @@ add_compile_options(-pg -g)
 include_directories("${CMAKE_CURRENT_LIST_DIR}/include")
 
 # Libraries for the GETM 3D model
-add_library(getm_domain "")
-target_link_libraries( getm_domain PUBLIC flom )
 #add_library(getm_variables "")
 #target_link_libraries( getm_variables PUBLIC getm_domain )
 add_library(getm_airsea "")
@@ -51,8 +49,6 @@ add_library(getm_input "")
 target_link_libraries( getm_input PRIVATE getm_domain getm_airsea getm_dynamics flom )
 add_library(getm_output "")
 target_link_libraries( getm_output PRIVATE flom )
-add_library(getm_operators "")
-target_link_libraries( getm_operators PRIVATE getm_domain )
 # .. and now the executable
 add_executable(getm_exe)
 
