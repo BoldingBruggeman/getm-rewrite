@@ -83,7 +83,7 @@ SUBROUTINE initialize_output(self,fm)
    self%fm => fm
    allocate(type_getm_output::output_manager_host)
 !KB   call self%fm%list()
-   call output_manager_init(self%fm,title)
+   call output_manager_init(self%fm,trim(title))
    if (associated(self%logs)) call self%logs%info('done',level=1)
    return
 END SUBROUTINE initialize_output
