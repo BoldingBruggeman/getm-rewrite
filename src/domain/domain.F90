@@ -62,7 +62,6 @@ integer, parameter :: halo=2
 
 !  Module types and variables
    integer :: vel_depth_method = 0
-   real(real64) :: Dcrit=2._real64
 
    type, public :: type_grid_config
       !! author: Karsten Bolding
@@ -152,8 +151,8 @@ integer, parameter :: halo=2
       integer ::id_dim_xi, id_dim_yi, id_dim_zi
          !! dimension ids for the interface points
 
-      real(real64) :: Dmin
-      real(real64) :: Dcrit
+      real(real64) :: Dmin=1._real64
+      real(real64) :: Dcrit=2._real64
       real(real64) :: Dgamma
       real(real64) :: Dmax
       logical :: gamma_surf
