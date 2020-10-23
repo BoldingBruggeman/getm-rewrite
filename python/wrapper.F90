@@ -1,4 +1,4 @@
-module pylo
+module pygetm
 
    use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer
    use iso_fortran_env, only: real64

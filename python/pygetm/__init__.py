@@ -6,11 +6,11 @@ import numpy
 
 # Determine potential names of FABM dynamic library.
 if os.name == 'nt':
-   dllpaths = ('_pylo.dll', 'lib_pylo.dll')
+   dllpaths = ('_pygetm.dll', 'lib_pygetm.dll')
 elif os.name == 'posix' and sys.platform == 'darwin':
-   dllpaths = ('lib_pylo.dylib',)
+   dllpaths = ('lib_pygetm.dylib',)
 else:
-   dllpaths = ('lib_pylo.so',)
+   dllpaths = ('lib_pygetm.so',)
 
 def find_library(basedir):
     for dllpath in dllpaths:
@@ -28,41 +28,41 @@ if not dllpath:
             break
 
 if not dllpath:
-   print('Unable to locate pylo dynamic library %s.' % (' or '.join(dllpaths),))
+   print('Unable to locate pygetm dynamic library %s.' % (' or '.join(dllpaths),))
    sys.exit(1)
 
 # Load FABM library.
-_pylo = ctypes.CDLL(str(dllpath))
+_pygetm = ctypes.CDLL(str(dllpath))
 
-_pylo.domain_create.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
-_pylo.domain_create.restype = ctypes.c_void_p
+_pygetm.domain_create.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+_pygetm.domain_create.restype = ctypes.c_void_p
 
-_pylo.domain_get_grid.argtypes = [ctypes.c_void_p, ctypes.c_char]
-_pylo.domain_get_grid.restype = ctypes.c_void_p
+_pygetm.domain_get_grid.argtypes = [ctypes.c_void_p, ctypes.c_char]
+_pygetm.domain_get_grid.restype = ctypes.c_void_p
 
-_pylo.grid_get_arrays.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_int))]
-_pylo.grid_get_arrays.restype = None
+_pygetm.grid_get_arrays.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_int))]
+_pygetm.grid_get_arrays.restype = None
 
-_pylo.domain_initialize.argtypes = [ctypes.c_void_p]
-_pylo.domain_initialize.restype = None
+_pygetm.domain_initialize.argtypes = [ctypes.c_void_p]
+_pygetm.domain_initialize.restype = None
 
-_pylo.advection_create.argtypes = []
-_pylo.advection_create.restype = ctypes.c_void_p
+_pygetm.advection_create.argtypes = []
+_pygetm.advection_create.restype = ctypes.c_void_p
 
 CONTIGUOUS = str('CONTIGUOUS')
 arrtype2D = numpy.ctypeslib.ndpointer(dtype=ctypes.c_double, ndim=2, flags=CONTIGUOUS)
 
-_pylo.advection_calculate.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, arrtype2D, arrtype2D, ctypes.c_double, arrtype2D]
-_pylo.advection_calculate.restype = None
+_pygetm.advection_calculate.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, arrtype2D, arrtype2D, ctypes.c_double, arrtype2D]
+_pygetm.advection_calculate.restype = None
 
 class Grid:
     def __init__(self, domain, grid_type='T'):
-        self.p = _pylo.domain_get_grid(domain.p, grid_type.encode('ascii'))
+        self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
         pc1 = ctypes.POINTER(ctypes.c_double)()
         pc2 = ctypes.POINTER(ctypes.c_double)()
         pH = ctypes.POINTER(ctypes.c_double)()
         pmask = ctypes.POINTER(ctypes.c_int)()
-        _pylo.grid_get_arrays(self.p, pc1, pc2, pH, pmask)
+        _pygetm.grid_get_arrays(self.p, pc1, pc2, pH, pmask)
         halo = domain.halo
         self.c1 = numpy.ctypeslib.as_array(pc1, shape=(domain.shape[2],))[halo:-halo]
         self.c2 = numpy.ctypeslib.as_array(pc2, shape=(domain.shape[1],))[halo:-halo]
@@ -75,12 +75,12 @@ class Domain:
         self.jmin, self.jmax = jmin, jmax
         self.kmin, self.kmax = kmin, kmax
         self.halo = halo
-        self.p = _pylo.domain_create(imin, imax, jmin, jmax, kmin, kmax, halo)
+        self.p = _pygetm.domain_create(imin, imax, jmin, jmax, kmin, kmax, halo)
         self.shape = (kmax - kmin + 1, jmax - jmin + 1 + 2 * halo, imax - imin + 1 + 2 * halo)
         self.T = Grid(self, 'T')
 
     def initialize(self):
-        _pylo.domain_initialize(self.p)
+        _pygetm.domain_initialize(self.p)
         self.U = Grid(self, 'U')
         self.V = Grid(self, 'V')
 
@@ -92,9 +92,9 @@ class Domain:
 
 class Advection:
     def __init__(self, domain, scheme):
-        self.p = _pylo.advection_create()
+        self.p = _pygetm.advection_create()
         self.pdomain = domain.p
         self.scheme = scheme
 
     def calculate(self, u, v, dt, var):
-        _pylo.advection_calculate(self.p, self.scheme, self.pdomain, u, v, dt, var)
+        _pygetm.advection_calculate(self.p, self.scheme, self.pdomain, u, v, dt, var)

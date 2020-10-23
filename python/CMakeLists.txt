@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1.3)
 
 # Create main project.
-project(loms VERSION 0.1.0 LANGUAGES Fortran)
+project(pygetm VERSION 0.1.0 LANGUAGES Fortran)
 
 # Specify position-independent code since we will build a shared library.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -25,11 +25,11 @@ add_subdirectory(../src/domain domain)
 
 add_subdirectory(../src/operators operators)
 
-add_library(_pylo SHARED
+add_library(_pygetm SHARED
   wrapper.F90
-  pylo/__init__.py
+  pygetm/__init__.py
 )
-target_link_libraries(_pylo getm_domain getm_operators)
+target_link_libraries(_pygetm getm_domain getm_operators)
 
 
 # Find target Python interpreter.
@@ -37,11 +37,11 @@ find_package(PythonInterp)
 
 # Build wheel
 add_custom_command(OUTPUT wheel.stamp
-                   COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pylo" pylo
-                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pylo>" pylo/
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/
                    COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
 
 # Let pip install the wheel
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} -m pip install --no-index --find-links=${CMAKE_CURRENT_BINARY_DIR}/dist --user --force-reinstall --upgrade pylo WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist)")
+install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} -m pip install --no-index --find-links=${CMAKE_CURRENT_BINARY_DIR}/dist --user --force-reinstall --upgrade pygetm WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist)")

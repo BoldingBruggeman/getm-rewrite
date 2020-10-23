@@ -15,13 +15,13 @@ except ImportError:
     bdist_wheel = None
 
 setup(
-    name='pylo',
+    name='pygetm',
     version='0.1.1',
     author='Bolding-Bruggeman ApS',
     author_email='jorn@bolding-bruggeman.com',
     license='GPL',
-    packages=['pylo'],
-    package_data={'pylo': ['*.so', '*.dll', '*.dylib', 'schemas/*']},
+    packages=['pygetm'],
+    package_data={'pygetm': ['*.so', '*.dll', '*.dylib', 'schemas/*']},
     cmdclass={'bdist_wheel': bdist_wheel},
     zip_safe=False
 )
