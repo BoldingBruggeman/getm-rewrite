@@ -122,21 +122,22 @@ SUBROUTINE pressure_initialize(self,domain)
    call mm_s('idpdx',self%idpdx,self%domain%T%l(1:3),self%domain%T%u(1:3),def=0._real64,stat=stat)
    call mm_s('idpdy',self%idpdy,self%domain%T%l(1:3),self%domain%T%u(1:3),def=0._real64,stat=stat)
 #endif
+   TGrid: associate( TG => self%domain%T )
    call self%fm%register('dpdx', 'Pa/m', 'surface pressure gradient - x', &
                          standard_name='', &
                          dimensions=(self%domain%T%dim_2d_ids), &
  !KB                        output_level=output_level_debug, &
                          part_of_state=.false., &
                          category='airsea', field=f)
-   call self%fm%send_data('dpdx', self%dpdx)
+   call self%fm%send_data('dpdx', self%dpdx(TG%imin:TG%imax,TG%jmin:TG%jmax))
    call self%fm%register('dpdy', 'Pa/m', 'surface pressure gradient - y', &
                          standard_name='', &
                          dimensions=(self%domain%T%dim_2d_ids), &
  !KB                        output_level=output_level_debug, &
                          part_of_state=.false., &
                          category='airsea', field=f)
-  call self%fm%send_data('dpdy', self%dpdy)
-   return
+   call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   end associate TGrid
 END SUBROUTINE pressure_initialize
 
 !---------------------------------------------------------------------------
