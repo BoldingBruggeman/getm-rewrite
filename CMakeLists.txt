@@ -52,7 +52,8 @@ target_link_libraries( getm_output PRIVATE flom )
 # .. and now the executable
 add_executable(getm_exe)
 
-include(src/CMakeLists.txt)
+#include(src/CMakeLists.txt)
+add_subdirectory(src)
 include(tests/CMakeLists.txt)
 
 target_include_directories( getm_exe PRIVATE ${CMAKE_BINARY_DIR}/modules )
