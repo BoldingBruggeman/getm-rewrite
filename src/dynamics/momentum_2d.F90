@@ -89,10 +89,12 @@ module SUBROUTINE u_2d(self,dt,taus,dpdx)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
-   real(real64), dimension(:,:), intent(in) :: taus
+#define _T_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), dimension(:,:), intent(in) :: taus(_T_)
       !! surface stress in X-direction
-   real(real64), dimension(:,:), intent(in) :: dpdx
+   real(real64), dimension(:,:), intent(in) :: dpdx(_T_)
       !! surface pressure gradient - including air pressure
+#undef _T_
 
 !  Local constants
 
@@ -167,10 +169,12 @@ module SUBROUTINE v_2d(self,dt,taus,dpdy)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
-   real(real64), dimension(:,:), intent(in) :: taus
-      !! surface stress in X-direction
-   real(real64), dimension(:,:), intent(in) :: dpdy
+#define _T_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), dimension(:,:), intent(in) :: taus(_T_)
+      !! surface stress in Y-direction
+   real(real64), dimension(:,:), intent(in) :: dpdy(_T_)
       !! surface pressure gradient - including air pressure
+#undef _T_
 
 !  Local constants
 

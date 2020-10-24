@@ -4,38 +4,8 @@ SUBMODULE (getm_operators) advection_smod
 
 !-----------------------------------------------------------------------------
 
-!   USE advection_superbee
-!   USE advection_upstream
-
-INTERFACE
-#if 0
-   module subroutine upstream_initialize()
-!      class(type_advection), intent(inout) :: self
-   end subroutine upstream_initialize
-   module subroutine upstream_calculate(self,domain,dt,var)
-      class(type_advection), intent(inout) :: self
-      class(type_getm_domain), intent(in) :: domain
-      real(real64), intent(in) :: dt
-      real(real64), dimension(:,:,:), intent(inout) :: var
-   end subroutine upstream_calculate
-   module subroutine init_gvc(self)
-      class(type_getm_domain), intent(inout) :: self
-   end subroutine init_gvc
-   module subroutine do_gvc(self,dt)
-      class(type_getm_domain), intent(inout) :: self
-      real(real64), intent(in) :: dt
-   end subroutine do_gvc
-   module subroutine u_advection_superbee(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,A,dt,h,f)
-      integer, intent(in) :: imin,imax,jmin,jmax
-      integer, intent(in) :: umask(:,:)
-      real(real64), intent(in) :: dxu(:,:), dyu(:,:), hu(:,:), u(:,:)
-      integer, intent(in) :: tmask(:,:)
-      real(real64), intent(in) :: A(:,:)
-      real(real64), intent(in) :: dt
-      real(real64), intent(inout) :: h(:,:), f(:,:)
-   end subroutine
-#endif
-END INTERFACE
+!INTERFACE
+!END INTERFACE
 
 ENUM, BIND(C)
   ENUMERATOR :: SPLIT_ADVECTION_SCHEMES=0
@@ -105,63 +75,63 @@ MODULE PROCEDURE advection_calculate_2d
 
    select case (scheme)
       case (HSIMT)
-         call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-         call v_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call v_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-         call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_hsimt(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (MUSCL)
-         call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-         call v_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call v_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-         call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_muscl(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (P2_PDM)
-         call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-         call v_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call v_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-         call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_p2_pdm(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (SPLMAX13)
-         call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-         call v_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call v_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-         call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_splmax13(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (SUPERBEE)
-         call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-         call v_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call v_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-         call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
       case (UPSTREAM)
-         call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
-         call v_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call v_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
                           tgrid%mask,tgrid%inv_area,dt,D,f)
-         call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+         call u_advection_upstream(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
    end select
