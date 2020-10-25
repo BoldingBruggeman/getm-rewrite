@@ -14,7 +14,7 @@ domain_shape = 400, 600  # nj, ni
 rank = MPI.COMM_WORLD.Get_rank()
 
 if rank == 0:
-    # Set up global 2D coordinate arrays  and bathymetry
+    # Set up global 2D coordinate arrays and bathymetry
     c1_glob = numpy.broadcast_to(numpy.linspace(-Lx/2, Lx/2, domain_shape[1])[None, :], domain_shape)
     c2_glob = numpy.broadcast_to(numpy.linspace(-Ly/2, Ly/2, domain_shape[0])[:, None], domain_shape)
     H_glob = numpy.zeros(domain_shape)
@@ -28,9 +28,9 @@ tiling = pygetm.parallel.Tiling(2, 2)
 domain = pygetm.Domain(1, nlev, 1, domain_shape[0] // 2, 1, domain_shape[1] // 2, halo)
 
 # Scatter global bathymetry to subdomains
-distH = tiling.wrap(domain.T.H_, halo=halo).scatter(H_glob)
+tiling.wrap(domain.T.H_, halo=halo).scatter(H_glob)
 
-# Scatter global bcoordinates to subdomains and extract 1D c1, c2
+# Scatter global coordinates to subdomains and extract 1D c1, c2
 c1_ = numpy.zeros_like(domain.T.H_)
 c2_ = numpy.zeros_like(domain.T.H_)
 tiling.wrap(c1_, halo=halo).scatter(c1_glob)
@@ -45,14 +45,12 @@ domain.T.mask_[...] = domain.T.H_ == 1.
 
 domain.initialize()
 
-#domain.T.mask[...] = 0
-#domain.T.mask[2:-2, 2:-2] = 1
-domain.T.mask_[...] = 0
-distmask = tiling.wrap(domain.T.mask_, halo=halo)
+# Knut's mask hack, implemnted by setting up global mask and scattering that
+domain.T.mask_[...] = 0  # this ensure that outer halos [outside global domain] are masked too - should not be needed
 if rank == 0:
     mask_glob = numpy.zeros(H_glob.shape, dtype=int)
     mask_glob[2:-2, 2:-2] = 1
-distmask.scatter(mask_glob)
+tiling.wrap(domain.T.mask_, halo=halo).scatter(mask_glob)
 
 # Set up velocities
 period = 600
@@ -98,26 +96,40 @@ if rank == 0:
 # Wrap tracer for halo updates
 distvar = tiling.wrap(var_, halo=halo)
 
+# Set up figure for plotting tracer per subdomain
+fig_sub = matplotlib.pyplot.figure()
+ax_sub = fig_sub.gca()
+pc_sub = ax_sub.pcolormesh(var_)
+cb_sub = fig_sub.colorbar(pc_sub)
+
+# Set up figure for plotting global tracer field
+var_glob = distvar.gather()
+if var_glob is not None:
+    fig = matplotlib.pyplot.figure()
+    ax = fig.gca()
+    pc = ax.pcolormesh(var_glob)
+    cb = fig.colorbar(pc)
+
 adv = pygetm.Advection(domain, scheme=1)
 ifig = 0
 for i in range(Nmax):
     if i % 10 == 0:
-        # Print tracer min and max along boundaries, inside and outsde halo 
+        # Print tracer max along boundaries, inside and outsde halo 
         print(i, rank, 'inside', var[0, :].max(), var[-1, :].max(), var[:, 0].max(), var[:, -1].max(), flush=True)
         print(i, rank, 'outside', rank, var_[halo-1, :].max(), var_[-halo, :].max(), var_[:, halo-1].max(), var_[:, -halo].max(), flush=True)
 
-        # Gather and plot tracer field
+        # Plot local tracer field
+        pc_sub.set_array(var_.ravel())
+        fig_sub.savefig('subadv_%i_%04i.png' % (rank, ifig))
+
+        # Gather and plot global tracer field
         var_glob = distvar.gather()
-        if rank == 0:
-            if i == 0:
-                fig = matplotlib.pyplot.figure()
-                ax = fig.gca()
-                pc = ax.pcolormesh(var_glob)
-                cb = fig.colorbar(pc)
-            else:
-                pc.set_array(var_glob.ravel())
+        if var_glob is not None:
+            pc.set_array(var_glob.ravel())
             fig.savefig('adv_%04i.png' % ifig)
-            ifig += 1
+
+        ifig += 1
+
     # Advect
     adv.calculate(u_, v_, timestep, var_)
 
