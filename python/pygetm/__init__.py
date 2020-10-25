@@ -64,13 +64,17 @@ class Grid:
         pmask = ctypes.POINTER(ctypes.c_int)()
         _pygetm.grid_get_arrays(self.p, pc1, pc2, pH, pmask)
         halo = domain.halo
-        self.c1 = numpy.ctypeslib.as_array(pc1, shape=(domain.shape[2],))[halo:-halo]
-        self.c2 = numpy.ctypeslib.as_array(pc2, shape=(domain.shape[1],))[halo:-halo]
-        self.H = numpy.ctypeslib.as_array(pH, shape=domain.shape[1:])[halo:-halo,halo:-halo]
-        self.mask = numpy.ctypeslib.as_array(pmask, shape=domain.shape[1:])[halo:-halo,halo:-halo]
+        self.c1_ = numpy.ctypeslib.as_array(pc1, shape=(domain.shape[2],)).view('=d')
+        self.c2_ = numpy.ctypeslib.as_array(pc2, shape=(domain.shape[1],)).view('=d')
+        self.H_ = numpy.ctypeslib.as_array(pH, shape=domain.shape[1:]) .view('=d')
+        self.mask_ = numpy.ctypeslib.as_array(pmask, shape=domain.shape[1:]).view('=i')
+        self.c1 = self.c1_[halo:-halo]
+        self.c2 = self.c2_[halo:-halo]
+        self.H = self.H_[halo:-halo, halo:-halo]
+        self.mask = self.mask_[halo:-halo, halo:-halo]
 
 class Domain:
-    def __init__(self, imin, imax, jmin, jmax, kmin, kmax, halo):
+    def __init__(self, kmin, kmax, jmin, jmax, imin, imax, halo):
         self.imin, self.imax = imin, imax
         self.jmin, self.jmax = jmin, jmax
         self.kmin, self.kmax = kmin, kmax
