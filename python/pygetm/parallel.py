@@ -24,7 +24,7 @@ class Tiling:
         self.bottomleft = get_rank(self.irow - 1, self.icol - 1)
         self.bottomright = get_rank(self.irow - 1, self.icol + 1)
 
-    def setup(self, field, halo):
+    def wrap(self, field, halo):
         return DistributedArray(self, field, halo)
 
     def describe(self):
