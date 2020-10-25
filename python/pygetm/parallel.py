@@ -2,18 +2,18 @@ from mpi4py import MPI
 import numpy
 
 class Tiling:
-    def __init__(self, nx, ny, comm=MPI.COMM_WORLD):
+    def __init__(self, nrow, ncol, comm=MPI.COMM_WORLD):
         def get_rank(i, j):
-            if i >= 0 and i < nx and j >= 0 and j < ny:
+            if i >= 0 and i < nrow and j >= 0 and j < ncol:
                 return self.map[i, j]
 
         self.comm = comm
-        assert self.comm.Get_size() == nx * ny
+        assert self.comm.Get_size() == nrow * ncol
         self.rank = self.comm.Get_rank()
-        self.map = numpy.arange(nx * ny).reshape(nx, ny)
+        self.map = numpy.arange(nrow * ncol).reshape(nrow, ncol)
 
-        self.irow, self.icol = divmod(self.rank, nx)
-        self.nx, self.ny = nx, ny
+        self.irow, self.icol = divmod(self.rank, nrow)
+        self.nrow, self.ncol = nrow, ncol
 
         self.top = get_rank(self.irow + 1, self.icol)
         self.bottom = get_rank(self.irow - 1, self.icol)
@@ -76,12 +76,12 @@ class DistributedArray:
             recvbuf = numpy.empty((rankmap.size,) + self.interior.shape, dtype=self.interior.dtype)
         self.comm.Gather(sendbuf, recvbuf, root=root)
         if rank == root:
-            nx, ny = rankmap.shape
-            ni, nj = recvbuf.shape[-2:]
-            out = numpy.empty(recvbuf.shape[1:-2] + (nx * ni, ny * nj), dtype=recvbuf.dtype)
-            for i in range(nx):
-                for j in range(ny):
-                    out[..., i * ni:(i + 1) * ni, j * nj:(j + 1) * nj] = recvbuf[rankmap[i, j], ...]
+            nrow, ncol = rankmap.shape
+            ny, nx = recvbuf.shape[-2:]
+            out = numpy.empty(recvbuf.shape[1:-2] + (nrow * ny, ncol * nx), dtype=recvbuf.dtype)
+            for i in range(nrow):
+                for j in range(ncol):
+                    out[..., i * ny:(i + 1) * ny, j * nx:(j + 1) * nx] = recvbuf[rankmap[i, j], ...]
             return out
 
     def scatter(self, data, root=0):
@@ -91,17 +91,17 @@ class DistributedArray:
         sendbuf = None
         if rank == root:
             sendbuf = numpy.zeros((rankmap.size,) + recvbuf.shape, dtype=recvbuf.dtype)
-            ni, nj = self.interior.shape[-2:]
-            nx, ny = rankmap.shape
+            ny, nx = self.interior.shape[-2:]
+            nrow, ncol = rankmap.shape
             halo = self.halo
-            assert nx * ni == data.shape[-2] and ny * nj == data.shape[-1], '%s, %i, %i' % (data.shape, nx * ni, ny * nj)
-            for i in range(nx):
-                for j in range(ny):
+            assert nrow * ny == data.shape[-2] and ncol * nx == data.shape[-1], '%s, %i, %i' % (data.shape, nrow * ny, ncol * nx)
+            for i in range(nrow):
+                for j in range(ncol):
                     imin_off = 0 if i == 0 else halo
-                    imax_off = 0 if i == nx - 1 else halo
+                    imax_off = 0 if i == nrow - 1 else halo
                     jmin_off = 0 if j == 0 else halo
-                    jmax_off = 0 if j == ny - 1 else halo
-                    sendbuf[rankmap[i, j], ..., halo - imin_off:halo + ni + imax_off, halo - jmin_off:halo + nj + jmax_off] = data[..., i * ni - imin_off:(i + 1) * ni + imax_off, j * nj - jmin_off:(j + 1) * nj + jmax_off]
+                    jmax_off = 0 if j == ncol - 1 else halo
+                    sendbuf[rankmap[i, j], ..., halo - imin_off:halo + ny + imax_off, halo - jmin_off:halo + nx + jmax_off] = data[..., i * ny - imin_off:(i + 1) * ny + imax_off, j * nx - jmin_off:(j + 1) * nx + jmax_off]
         self.comm.Scatter(sendbuf, recvbuf, root=root)
         self.field[...] = recvbuf
 
