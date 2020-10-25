@@ -108,10 +108,12 @@ MODULE getm_momentum
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-         real(real64), dimension(:,:), intent(in) :: tausx,tausy
+#define _T_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), dimension(:,:), intent(in) :: tausx(_T_),tausy(_T_)
             !! surface stresses
-         real(real64), dimension(:,:), intent(in) :: dpdx, dpdy
+         real(real64), dimension(:,:), intent(in) :: dpdx(_T_), dpdy(_T_)
             !! surface pressure gradient - including air pressure
+#undef _T_
       end subroutine uv_momentum_2d
 
       module subroutine uv_advection_2d(self,dt)

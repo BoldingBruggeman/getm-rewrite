@@ -26,11 +26,6 @@
 !>  Hej kurt
 !>  @endtodo
 
-#define HALO 0
-!> @note
-!> HALO set to 0
-!> @endnote
-
 MODULE getm_domain
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
@@ -44,7 +39,7 @@ MODULE getm_domain
    PRIVATE  ! Private scope by default
 
 !  Module constants
-integer, parameter :: halo=2
+   integer, parameter :: halo(3)=(/2,2,0/)
    integer, parameter :: cartesian=1, spherical=2, curvilinear=3
       !! Fortran precision
    real(real64), parameter :: g = 9.81_real64

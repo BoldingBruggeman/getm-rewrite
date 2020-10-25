@@ -102,10 +102,18 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
    class(type_getm_sealevel), intent(inout) :: self
    real(real64), intent(in) :: dt
       !! timestep [s]
-   real(real64), dimension(:,:), intent(in) :: U,V
-      !! X-Y transports
-   real(real64), dimension(:,:), intent(in), optional :: fwf
+#define _U_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), dimension(:,:), intent(in) :: U(_U_)
+      !! X transports
+#undef _U_
+#define _V_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), dimension(:,:), intent(in) :: V(_V_)
+      !! Y transports
+#undef _V_
+#define _T_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), dimension(:,:), intent(in), optional :: fwf(_T_)
       !! surface fresh water sources
+#undef _T_
 
 !  Local constants
 

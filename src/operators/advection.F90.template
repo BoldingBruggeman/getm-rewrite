@@ -14,7 +14,7 @@
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
+SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
 
@@ -22,12 +22,16 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
 
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
-   integer, intent(in) :: umask(imin-1:imax+1,jmin-1:jmax+1)
-   real(real64), intent(in) :: dxu(imin-1:imax+1,jmin-1:jmax+1), dyu(imin-1:imax+1,jmin-1:jmax+1), hu(imin-1:imax+1,jmin-1:jmax+1), u(imin-1:imax+1,jmin-1:jmax+1)
-   integer, intent(in) :: tmask(imin-1:imax+1,jmin-1:jmax+1)
-   real(real64), intent(in) :: iA(imin-1:imax+1,jmin-1:jmax+1)
+   integer, intent(in) :: halo(2)
+#define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
+   integer, intent(in) :: umask(_A_)
+   real(real64), intent(in) :: dxu(_A_), dyu(_A_)
+   real(real64), intent(in) :: hu(_A_), u(_A_)
+   integer, intent(in) :: tmask(_A_)
+   real(real64), intent(in) :: iA(_A_)
    real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(imin-1:imax+1,jmin-1:jmax+1), f(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64), intent(inout) :: h(_A_), f(_A_)
+#undef _A_
 
 !  Local constants
 
@@ -106,19 +110,22 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
    return
 END SUBROUTINE _U_SUB_NAME_
 
-SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
+SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    USE, INTRINSIC :: ISO_FORTRAN_ENV
 
    IMPLICIT NONE
 
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
-   integer, intent(in) :: vmask(imin-1:imax+1,jmin-1:jmax+1)
-   real(real64), intent(in) :: dxv(imin-1:imax+1,jmin-1:jmax+1), dyv(imin-1:imax+1,jmin-1:jmax+1), hv(imin-1:imax+1,jmin-1:jmax+1), v(imin-1:imax+1,jmin-1:jmax+1)
-   integer, intent(in) :: tmask(imin-1:imax+1,jmin-1:jmax+1)
-   real(real64), intent(in) :: iA(imin-1:imax+1,jmin-1:jmax+1)
+   integer, intent(in) :: halo(2)
+#define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
+   integer, intent(in) :: vmask(_A_)
+   real(real64), intent(in) :: dxv(_A_), dyv(_A_)
+   real(real64), intent(in) :: hv(_A_), v(_A_)
+   integer, intent(in) :: tmask(_A_)
+   real(real64), intent(in) :: iA(_A_)
    real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(imin-1:imax+1,jmin-1:jmax+1), f(imin-1:imax+1,jmin-1:jmax+1)
+   real(real64), intent(inout) :: h(_A_), f(_A_)
 
 !  Local constants
 

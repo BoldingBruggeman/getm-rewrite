@@ -24,6 +24,9 @@ module SUBROUTINE register(self)
 !-----------------------------------------------------------------------------
    if (.not. associated(self%fm)) return
    if (associated(self%logs)) call self%logs%info('register()',level=2)
+   TGrid: associate( TG => self%T )
+   UGrid: associate( UG => self%U )
+   VGrid: associate( VG => self%V )
    select case (self%domain_type)
       case (1)
          call self%fm%register('x', 'm', 'x-axis', &
@@ -32,15 +35,15 @@ module SUBROUTINE register(self)
                             no_default_dimensions=.true., &
                             category='domain',field=f)
          call f%attributes%set('axis', 'X')
-         call self%fm%send_data('x', self%T%c1)
+         call self%fm%send_data('x', TG%c1(TG%imin:TG%imax))
          call self%fm%register('y', 'm', 'y-axis', &
                             standard_name='plane_y_coordinate', &
                             dimensions=(/self%id_dim_y/), &
                             no_default_dimensions=.true., &
                             category='domain',field=f)
          call f%attributes%set('axis', 'Y')
-         call self%fm%send_data('y', self%T%c2)
-
+         call self%fm%send_data('y', TG%c2(TG%jmin:TG%jmax))
+#if 0
          call self%fm%register('xi', 'm', 'x-axis', &
                             standard_name='plane_x_coordinate', &
                             dimensions=(/self%id_dim_xi/), &
@@ -65,6 +68,7 @@ module SUBROUTINE register(self)
                             category='domain',field=f)
          call f%attributes%set('axis', 'Z')
          call f%attributes%set('positive', 'down')
+#endif
 #endif
       case (2)
          call self%fm%register('lon', 'degrees_east', 'longitude', &
@@ -136,7 +140,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('bathymetry', self%T%H)
+   call self%fm%send_data('bathymetry', TG%H(TG%imin:TG%imax,TG%jmin:TG%jmax))
 
    call self%fm%register('hu', 'm', 'bathymetry at u-points', &
                       standard_name='depth', &
@@ -146,8 +150,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('hu', self%U%H)
-
+   call self%fm%send_data('hu', UG%H(UG%imin:UG%imax,UG%jmin:UG%jmax))
    call self%fm%register('hv', 'm', 'bathymetry at v-points', &
                       standard_name='depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_yi/), &
@@ -156,7 +159,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('hv', self%V%H)
+   call self%fm%send_data('hv', self%V%H(VG%imin:VG%imax,VG%jmin:VG%jmax))
    call self%fm%register('D', 'm', 'waterdepth', &
                       standard_name='total depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_y, id_dim_time/), &
@@ -165,7 +168,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('D', self%T%D)
+   call self%fm%send_data('D', TG%D(TG%imin:TG%imax,TG%jmin:TG%jmax))
    call self%fm%register('DU', 'm', 'waterdepth', &
                       standard_name='total depth', &
                       dimensions=(/self%id_dim_xi, self%id_dim_y, id_dim_time/), &
@@ -174,7 +177,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('DU', self%U%D)
+   call self%fm%send_data('DU', UG%D(UG%imin:UG%imax,UG%jmin:UG%jmax))
    call self%fm%register('DV', 'm', 'waterdepth', &
                       standard_name='total depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_yi, id_dim_time/), &
@@ -183,7 +186,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('DV', self%V%D)
+   call self%fm%send_data('DV', self%V%D(VG%imin:VG%imax,VG%jmin:VG%jmax))
    call self%fm%register('elev', 'm', 'sea surface elevation', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
@@ -191,7 +194,7 @@ module SUBROUTINE register(self)
                          part_of_state=.true., &
                          category='domain', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('elev', self%T%z)
+   call self%fm%send_data('elev', TG%z(TG%imin:TG%imax,TG%jmin:TG%jmax))
    call self%fm%register('zo', 'm', 'sea surface eleveation - previous timestep', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
@@ -200,7 +203,9 @@ module SUBROUTINE register(self)
                          part_of_state=.true., &
                          category='domain', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('zo', self%T%zo)
+   call self%fm%send_data('zo', TG%zo(TG%imin:TG%imax,TG%jmin:TG%jmax))
+!KB
+#if 0
    call self%fm%register('ssen', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%T%dim_2d_ids), &
@@ -234,6 +239,10 @@ module SUBROUTINE register(self)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hvn', self%V%hn)
+#endif
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
    if (associated(self%logs)) call self%logs%info('done',level=2)
    return
 END SUBROUTINE register

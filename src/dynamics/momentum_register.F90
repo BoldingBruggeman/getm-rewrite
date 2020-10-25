@@ -23,6 +23,8 @@ module SUBROUTINE momentum_register(self)
    type (type_field), pointer :: f
 !-----------------------------------------------------------------------------
    call self%logs%info('register()',level=2)
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
    call self%fm%register('U', 'm2/s', 'transport in local x-direction', &
                          standard_name='', &
                          dimensions=(self%domain%U%dim_2d_ids), &
@@ -30,7 +32,7 @@ module SUBROUTINE momentum_register(self)
                          part_of_state=.true., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('U', self%U)
+   call self%fm%send_data('U', self%U(UG%imin:UG%imax,UG%jmin:UG%jmax))
    call self%fm%register('V', 'm2/s', 'transport in local y-direction', &
                          standard_name='', &
                          dimensions=(self%domain%V%dim_2d_ids), &
@@ -38,13 +40,32 @@ module SUBROUTINE momentum_register(self)
                          part_of_state=.true., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('V', self%V)
+   call self%fm%send_data('V', self%V(VG%imin:VG%imax,VG%jmin:VG%jmax))
+#if 0
+   call self%fm%register('Uadv', 'm2/s', 'advective transport in local x-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('Uadv', self%Uadv)
+   call self%fm%register('Vadv', 'm2/s', 'advective transport in local y-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('Vadv', self%Vadv)
+#endif
 #if 0
    call fm%register('pk', 'm2/s', 'transport in local x-direction (3D)', standard_name='', dimensions=(/id_dim_z/), data3d=pk(_3D_W_), category='3d', output_level=output_level_debug, part_of_state=.true.)
    call fm%register('qk', 'm2/s', 'transport in local y-direction (3D)', standard_name='', dimensions=(/id_dim_z/), data3d=qk(_3D_W_), category='3d', output_level=output_level_debug, part_of_state=.true.)
 #endif
    call self%logs%info('done',level=2)
-   return
+   end associate VGrid
+   end associate UGrid
 END SUBROUTINE momentum_register
 
 !---------------------------------------------------------------------------
