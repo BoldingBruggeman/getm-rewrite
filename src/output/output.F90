@@ -42,14 +42,15 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE configure_output(self,logs)
+SUBROUTINE configure_output(self,logs,fm)
    !! Configure the getm_manager
 
    IMPLICIT NONE
 
 ! Subroutine arguments
    class(type_getm_output), intent(inout) :: self
-   class(type_logging), intent(in), optional, target :: logs
+   class(type_logging), intent(in), target, optional :: logs
+   class(type_field_manager), intent(in), target, optional :: fm
 
 ! Local constants
 
@@ -60,20 +61,22 @@ SUBROUTINE configure_output(self,logs)
       self%logs => logs
       call self%logs%info('output_configure()',level=1)
    end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
    call init_epoch()
    if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE configure_output
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE initialize_output(self,fm)
+SUBROUTINE initialize_output(self)
    !! Initialize the getm_manager
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_output), intent(inout) :: self
-   class(type_field_manager), intent(in), target :: fm
 
 !  Local constants
 
@@ -81,12 +84,10 @@ SUBROUTINE initialize_output(self,fm)
    character(len=128) :: title='getm'
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('output_initialize()',level=1)
-   self%fm => fm
    allocate(type_getm_output::output_manager_host)
 !KB   call self%fm%list()
    call output_manager_init(self%fm,trim(title))
    if (associated(self%logs)) call self%logs%info('done',level=1)
-   return
 END SUBROUTINE initialize_output
 
 !-----------------------------------------------------------------------------
