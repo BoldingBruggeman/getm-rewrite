@@ -36,8 +36,8 @@ MODULE getm_pressure
 !  Module types and variables
    type, public :: type_getm_pressure
 
-      class(type_logging), pointer :: logs
-      class(type_field_manager), pointer :: fm
+      class(type_logging), pointer :: logs => null()
+      class(type_field_manager), pointer :: fm => null()
       class(type_getm_domain), pointer :: domain
 
 #ifdef _STATIC_
@@ -82,17 +82,20 @@ SUBROUTINE pressure_configuration(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_pressure), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   TYPE(type_field_manager), intent(inout), target :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   TYPE(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
 !-----------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('pressure_configuration()',level=2)
-   self%fm => fm
-   return
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('pressure_configuration()',level=2)
+   end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
 END SUBROUTINE pressure_configuration
 
 !---------------------------------------------------------------------------
@@ -114,29 +117,31 @@ SUBROUTINE pressure_initialize(self,domain)
    integer :: stat
    type (type_field), pointer :: f
 !---------------------------------------------------------------------------
-   call self%logs%info('pressure_initialize()',level=2)
+   if (associated(self%logs)) call self%logs%info('pressure_initialize()',level=2)
    self%domain => domain
-#ifndef _STATIC_
-   call mm_s('dpdx',self%dpdx,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('dpdy',self%dpdy,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('idpdx',self%idpdx,self%domain%T%l(1:3),self%domain%T%u(1:3),def=0._real64,stat=stat)
-   call mm_s('idpdy',self%idpdy,self%domain%T%l(1:3),self%domain%T%u(1:3),def=0._real64,stat=stat)
-#endif
    TGrid: associate( TG => self%domain%T )
-   call self%fm%register('dpdx', 'Pa/m', 'surface pressure gradient - x', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_2d_ids), &
- !KB                        output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='airsea', field=f)
-   call self%fm%send_data('dpdx', self%dpdx(TG%imin:TG%imax,TG%jmin:TG%jmax))
-   call self%fm%register('dpdy', 'Pa/m', 'surface pressure gradient - y', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_2d_ids), &
- !KB                        output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='airsea', field=f)
-   call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+#ifndef _STATIC_
+   call mm_s('dpdx',self%dpdx,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('dpdy',self%dpdy,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('idpdx',self%idpdx,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('idpdy',self%idpdy,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
+#endif
+   if (associated(self%fm)) then
+      call self%fm%register('dpdx', 'Pa/m', 'surface pressure gradient - x', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_2d_ids), &
+    !KB                        output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='airsea', field=f)
+      call self%fm%send_data('dpdx', self%dpdx(TG%imin:TG%imax,TG%jmin:TG%jmax))
+      call self%fm%register('dpdy', 'Pa/m', 'surface pressure gradient - y', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_2d_ids), &
+    !KB                        output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='airsea', field=f)
+      call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   end if
    end associate TGrid
 END SUBROUTINE pressure_initialize
 

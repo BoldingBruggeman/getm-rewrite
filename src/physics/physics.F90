@@ -41,8 +41,8 @@ MODULE getm_physics
 
 !  Module types and variables
    type, public :: type_getm_physics
-      class(type_logging), pointer :: logs
-      class(type_field_manager), pointer :: fm
+      class(type_logging), pointer :: logs => null()
+      class(type_field_manager), pointer :: fm => null()
 
       TYPE(type_radiation), public :: radiation
       TYPE(type_salinity), public :: salinity
@@ -72,25 +72,26 @@ SUBROUTINE physics_configure(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_physics), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   class(type_field_manager), intent(in), target :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   class(type_field_manager), intent(in), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
 !KB   integer :: rc
 ! ---------------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('physics_configure()',level=1)
-!KB   write(*,*) 'This file was compiled by ', compiler_version(), ' using the options ', compiler_options()
-
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('physics_configure()',level=1)
+   end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
    call self%salinity%configuration(logs,fm)
    call self%temperature%configuration(logs,fm)
    call self%density%configure(logs,fm)
 !KB   call self%turbulence%configuration(logs)
-
-   call logs%info('done',level=1)
-   return
+   if (associated(self%logs)) call logs%info('done',level=1)
 END SUBROUTINE physics_configure
 
 !---------------------------------------------------------------------------
@@ -110,15 +111,8 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
 !  Local constants
 
 !  Local variables
-!KB   integer :: imin,imax,jmin,jmax,kmin,kmax
-!KB   integer :: rc
 !---------------------------------------------------------------------------
-   call self%logs%info('physics_initialize()',level=1)
-!   call logs%warn(trim(self%temperature%config%f))
-
-!   imin = grid%imin; imax = grid%imax
-!   jmin = grid%jmin; jmax = grid%jmax
-!   kmin = grid%kmin; kmax = grid%kmax
+   if (associated(self%logs)) call self%logs%info('physics_initialize()',level=1)
 
 !KB   call self%radiation%initialize(logs,grid)
    call self%salinity%initialize(domain,advection,vertical_diffusion)
@@ -126,8 +120,7 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
    call self%density%initialize(domain)
    call self%density%density(self%salinity%S,self%temperature%T)
    call self%density%buoyancy()
-   call self%logs%info('done',level=1)
-   return
+   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE physics_initialize
 
 !---------------------------------------------------------------------------
@@ -149,9 +142,7 @@ SUBROUTINE physics_do_2d(self,logs)
    integer :: rc
 
 !---------------------------------------------------------------------------
-   call logs%info('physics_do_2d()',level=1)
-
-   return
+   if (associated(self%logs)) call logs%info('physics_do_2d()',level=1)
 END SUBROUTINE physics_do_2d
 
 !---------------------------------------------------------------------------
@@ -171,9 +162,7 @@ SUBROUTINE physics_do_3d(self,logs)
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   call logs%info('physics_do_3d()',level=1)
-
-   return
+   if (associated(self%logs)) call logs%info('physics_do_3d()',level=1)
 END SUBROUTINE physics_do_3d
 
 !---------------------------------------------------------------------------

@@ -52,7 +52,7 @@ MODULE getm_salinity
       !!
       !! Salinity type
 
-      class(type_logging), pointer :: logs
+      class(type_logging), pointer :: logs => null()
       class(type_field_manager), pointer :: fm => null()
       class(type_getm_domain), pointer :: domain => null()
       class(type_advection), pointer :: advection => null()
@@ -88,22 +88,22 @@ SUBROUTINE salinity_configuration(self,logs,fm)
 
 !  Subroutine arguments
    class(type_salinity), intent(out) :: self
-   class(type_logging), intent(in), target :: logs
-   type(type_field_manager), optional, target  :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   type(type_field_manager), target, optional  :: fm
 
 !  Local constants
 
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('salinity_configuration()',level=2)
-   call self%logs%info('reading initial salinity from: ',level=3,msg2=trim(self%config%f))
-
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('salinity_configuration()',level=2)
+      call self%logs%info('reading initial salinity from: ',level=3,msg2=trim(self%config%f))
+   end if
    if (present(fm)) then
       self%fm => fm
    end if
-   return
 END SUBROUTINE salinity_configuration
 
 !---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ SUBROUTINE salinity_initialize(self,domain,advection,vertical_diffusion)
    integer :: i,j
    integer :: stat
 !---------------------------------------------------------------------------
-   call self%logs%info('salinity_initialize()',level=2)
+   if (associated(self%logs)) call self%logs%info('salinity_initialize()',level=2)
 
    self%domain => domain
    if (present(advection)) then
@@ -158,7 +158,6 @@ SUBROUTINE salinity_initialize(self,domain,advection,vertical_diffusion)
       end do
    end do
    end associate TGrid
-
 END SUBROUTINE salinity_initialize
 
 !---------------------------------------------------------------------------
@@ -180,7 +179,7 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   call self%logs%info('salinity_calculate()',level=2)
+   if (associated(self%logs)) call self%logs%info('salinity_calculate()',level=2)
 
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
@@ -191,7 +190,6 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
    !scheme,ugrid,u,vgrid,v,dt,tgrid,f
    call self%vertical_diffusion%calculate(TG%mask,TG%hn,TG%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
    end associate TGrid
-
 END SUBROUTINE salinity_calculate
 
 !---------------------------------------------------------------------------

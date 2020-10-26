@@ -56,11 +56,12 @@ SUBROUTINE configure_output(self,logs)
 ! Local variables
    integer :: n
 !-----------------------------------------------------------------------------
-   if (present(logs)) self%logs => logs
-   call self%logs%info('output_configure()',level=1)
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('output_configure()',level=1)
+   end if
    call init_epoch()
    if (associated(self%logs)) call self%logs%info('done',level=1)
-   return
 END SUBROUTINE configure_output
 
 !-----------------------------------------------------------------------------
@@ -111,7 +112,6 @@ SUBROUTINE prepare_output(self,t,n)
    secs = 3600*t%getHour()+60*t%getMinute()+t%getSecond()
    microsecs = 1000*t%getmilliSecond()
    call output_manager_prepare_save(julday,secs,microsecs,n)
-   return
 END SUBROUTINE prepare_output
 
 !-----------------------------------------------------------------------------
@@ -131,14 +131,11 @@ SUBROUTINE do_output(self,t)
    integer :: julday
    integer :: secs, microsecs
 !-----------------------------------------------------------------------------
-   if (associated(self%logs)) then
-      call self%logs%info('do_output()',level=2)
-   end if
+   if (associated(self%logs)) call self%logs%info('do_output()',level=2)
    call self%julian_day(t%getYear(),t%getMonth(),t%getDay(),julday)
    secs = 3600*t%getHour()+60*t%getMinute()+t%getSecond()
    microsecs = 1000*t%getmilliSecond()
    call output_manager_save(julday,secs,microsecs)
-   return
 END SUBROUTINE do_output
 
 !-----------------------------------------------------------------------------
@@ -154,7 +151,6 @@ SUBROUTINE getm_julian_day(self,yyyy,mm,dd,julian)
    integer, intent(out)  :: julian
 !-----------------------------------------------------------------------------
    call jd(yyyy,mm,dd,julian)
-   return
 END SUBROUTINE getm_julian_day
 
 !-----------------------------------------------------------------------------
@@ -170,7 +166,6 @@ SUBROUTINE getm_calendar_date(self,julian,yyyy,mm,dd)
    integer, intent(out) :: yyyy,mm,dd
 !-----------------------------------------------------------------------------
    call cal(julian,yyyy,mm,dd)
-   return
 END SUBROUTINE getm_calendar_date
 
 #if 0

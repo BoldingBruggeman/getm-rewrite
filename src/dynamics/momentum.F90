@@ -47,8 +47,8 @@ MODULE getm_momentum
 !  Module types and variables
    type, public :: type_getm_momentum
 
-      class(type_logging), pointer :: logs
-      class(type_field_manager), pointer :: fm
+      class(type_logging), pointer :: logs => null()
+      class(type_field_manager), pointer :: fm => null()
       class(type_getm_domain), pointer :: domain
       class(type_advection), pointer :: advection => null()
       class(type_vertical_diffusion), pointer :: vertical_diffusion => null()
@@ -195,17 +195,20 @@ SUBROUTINE momentum_configuration(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   TYPE(type_field_manager), intent(inout), target :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   TYPE(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
 !---------------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('momentum_configuration()',level=2)
-   self%fm => fm
-   return
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('momentum_configuration()',level=2)
+   end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
 END SUBROUTINE momentum_configuration
 
 !---------------------------------------------------------------------------
@@ -219,8 +222,8 @@ SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
    TYPE(type_getm_domain), intent(inout), target :: domain
-   class(type_advection), intent(in), optional, target :: advection
-   class(type_vertical_diffusion), intent(in), optional, target :: vertical_diffusion
+   class(type_advection), intent(in), target, optional :: advection
+   class(type_vertical_diffusion), intent(in), target, optional :: vertical_diffusion
 
 !  Local constants
 
@@ -228,7 +231,7 @@ SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
    integer :: i,j,k
    integer :: stat
 !---------------------------------------------------------------------------
-   call self%logs%info('momentum_initialize()',level=2)
+   if (associated(self%logs)) call self%logs%info('momentum_initialize()',level=2)
    self%domain => domain
    if (present(advection)) then
       self%advection => advection
@@ -332,7 +335,6 @@ SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
    end associate UGrid
    end associate TGrid
    end associate XGrid
-   return
 END SUBROUTINE momentum_initialize
 
 END MODULE getm_momentum
