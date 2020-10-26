@@ -38,7 +38,8 @@ MODULE getm_dynamics
 !  Module types and variables
    type, public :: type_getm_dynamics
 
-      TYPE(type_logging), public :: logs
+      class(type_logging), pointer :: logs => null()
+      class(type_field_manager), pointer :: fm => null()
       TYPE(type_getm_domain), public :: domain
       TYPE(type_getm_sealevel), public :: sealevel
       TYPE(type_getm_pressure), public :: pressure
@@ -66,20 +67,24 @@ SUBROUTINE dynamics_configure(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_dynamics), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   class(type_field_manager), intent(inout), target :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   class(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
 !---------------------------------------------------------------------------
-!   self%logs => logs
-!KB   call self%logs%info('dynamics_configure()',level=1)
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('dynamics_configure()',level=1)
+   end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
    call self%sealevel%configuration(logs,fm)
    call self%pressure%configuration(logs,fm)
    call self%momentum%configuration(logs,fm)
-   call self%logs%info('done',level=1)
-   return
+   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE dynamics_configure
 
 !---------------------------------------------------------------------------
@@ -99,12 +104,11 @@ SUBROUTINE dynamics_initialize(self,domain)
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   call self%logs%info('dynamics_initialize()',level=1)
+   if (associated(self%logs)) call self%logs%info('dynamics_initialize()',level=1)
    call self%sealevel%initialize(domain)
    call self%pressure%initialize(domain)
    call self%momentum%initialize(domain)
-   call self%logs%info('done',level=1)
-   return
+   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE dynamics_initialize
 
 !---------------------------------------------------------------------------
@@ -123,9 +127,7 @@ SUBROUTINE dynamics_do_2d(logs)
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   call logs%info('dynamics_do_2d()',level=1)
-
-   return
+!KB   if (associated(self%logs)) call self%logs%info('dynamics_do_2d()',level=1)
 END SUBROUTINE dynamics_do_2d
 
 !---------------------------------------------------------------------------
@@ -144,9 +146,7 @@ SUBROUTINE dynamics_do_3d(logs)
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   call logs%info('dynamics_do_3d()',level=1)
-
-   return
+!KB   if (associated(self%logs)) call logs%info('dynamics_do_3d()',level=1)
 END SUBROUTINE dynamics_do_3d
 
 !---------------------------------------------------------------------------

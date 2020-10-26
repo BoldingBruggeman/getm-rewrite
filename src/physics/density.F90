@@ -31,9 +31,9 @@ MODULE getm_density
       !!
       !! Density type
 
-      class(type_logging), pointer :: logs
-      class(type_getm_domain), pointer :: domain
+      class(type_logging), pointer :: logs => null()
       class(type_field_manager), pointer :: fm => null()
+      class(type_getm_domain), pointer :: domain
 
 #ifdef _STATIC_
       real(real64), dimension(A3DFIELD) :: rho, buoy, NN
@@ -60,21 +60,21 @@ SUBROUTINE density_configure(self,logs,fm)
 
 !  Subroutine arguments
    class(type_density), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   type(type_field_manager), optional, target  :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   type(type_field_manager), target, optional  :: fm
 
 !  Local constants
 
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('density_configuration()',level=2)
-
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('density_configuration()',level=2)
+   end if
    if (present(fm)) then
       self%fm => fm
    end if
-   return
 END SUBROUTINE density_configure
 
 !---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ SUBROUTINE density_initialize(self,domain)
    integer :: i,j
    integer :: stat
 !-----------------------------------------------------------------------------
-   call self%logs%info('density_initialize()',2)
+   if (associated(self%logs)) call self%logs%info('density_initialize()',2)
    self%domain => domain
    TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
@@ -110,13 +110,13 @@ SUBROUTINE density_initialize(self,domain)
                             dimensions=(TG%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             category='temperature_and_salinity')
-      call self%fm%send_data('rho', self%rho)
+      call self%fm%send_data('rho', self%rho(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
       call self%fm%register('buoy', 'm/s2', 'buoyancy', &
                             standard_name='', &
                             dimensions=(TG%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             category='temperature_and_salinity')
-      call self%fm%send_data('buoy', self%buoy)
+      call self%fm%send_data('buoy', self%buoy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
 !   do j=grid%jmin,grid%jmax
 !      do i=grid%imin,grid%imax
@@ -127,7 +127,6 @@ SUBROUTINE density_initialize(self,domain)
 !      end do
 !   end do
    end associate TGrid
-
 END SUBROUTINE density_initialize
 
 !---------------------------------------------------------------------------
@@ -172,8 +171,6 @@ SUBROUTINE density_calculate(self,S,T,p)
       self%rho = gsw_rho(S,T,p)
    end if
 #endif
-
-  return
 END SUBROUTINE density_calculate
 
 !-----------------------------------------------------------------------------
@@ -238,8 +235,7 @@ SUBROUTINE brunt_vaisala_calculate(self)
    real(real64) :: gravity, rho0 !!!! KB
    real(real64) :: dz, NNc, NNe, NNn, NNw, NNs
 !-----------------------------------------------------------------------------
-   call self%logs%info('brunt_vaisala()',2)
-
+   if (associated(self%logs)) call self%logs%info('brunt_vaisala()',2)
    TGrid: associate( TG => self%domain%T )
    do j=TG%jmin-1,TG%jmax+1
       do i=TG%imin-1,TG%imax+1

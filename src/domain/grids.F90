@@ -35,7 +35,6 @@ module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
    call self%type_3d_grid%create(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
 
 !KB   self%is_initialized = .true.
-   return
 END SUBROUTINE grid_configure
 
 !-----------------------------------------------------------------------------
@@ -56,15 +55,14 @@ module SUBROUTINE grid_report(self,logs,unit,header)
 
 !  Local variables
 !-----------------------------------------------------------------------
-!KB
-!KB   if (associated(self%logs)) call logs%info('grid_report()',level=2)
-
-!KB   call logs%costum(unit,trim(header))
-   call self%print(unit)
-!KB   call logs%costum(unit,'mask')
-   call self%print_mask(unit)
-!KB   call logs%costum(unit,'')
-   return
+   if (associated(self%logs)) then
+      call logs%info('grid_report()',level=2)
+      call logs%costum(unit,trim(header))
+      call self%print(unit)
+      call logs%costum(unit,'mask')
+      call self%print_mask(unit)
+      call logs%costum(unit,'')
+   end if
 END SUBROUTINE grid_report
 
 !-----------------------------------------------------------------------------
@@ -81,8 +79,7 @@ module SUBROUTINE grid_print_info(self,logs)
 !  Local variables
    integer :: i,j
 !-----------------------------------------------------------------------------
-   call self%type_3d_grid%print(1)
-   return
+   if (associated(self%logs)) call self%type_3d_grid%print(1)
 END SUBROUTINE grid_print_info
 
 !-----------------------------------------------------------------------------
@@ -110,7 +107,6 @@ module SUBROUTINE grid_print_mask(self,unit)
       write(unit,'(*(i1))') (self%mask(i,j), i=self%imin,self%imax)
    end do
 #endif
-   return
 END SUBROUTINE grid_print_mask
 
 !-----------------------------------------------------------------------------
@@ -129,6 +125,8 @@ module SUBROUTINE allocate_grid_variables(self)
    integer :: stat
 !-----------------------------------------------------------------------------
 #ifndef _STATIC_
+   call mm_s('c1',self%c1,self%l(1),self%u(1),def=0._real64,stat=stat)
+   call mm_s('c2',self%c2,self%l(2),self%u(2),def=0._real64,stat=stat)
    call mm_s('H',self%H,self%l(1:2),self%u(1:2),def=-10._real64,stat=stat)
    call mm_s('x',self%x,self%H,def=-9999._real64,stat=stat)
    call mm_s('y',self%y,self%H,def=-9999._real64,stat=stat)
@@ -155,7 +153,6 @@ module SUBROUTINE allocate_grid_variables(self)
 #endif
    call mm_s('alpha',self%alpha,self%H,def=1._real64,stat=stat)
 #endif
-   return
 END SUBROUTINE allocate_grid_variables
 
 !-----------------------------------------------------------------------------
@@ -174,6 +171,8 @@ module SUBROUTINE deallocate_grid_variables(self)
    integer :: stat
 !-----------------------------------------------------------------------------
 #ifndef _STATIC_
+   deallocate(self%c1)
+   deallocate(self%c2)
    deallocate(self%H)
    deallocate(self%x)
    deallocate(self%y)

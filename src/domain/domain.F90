@@ -73,8 +73,12 @@ MODULE getm_domain
       !!
       !! The GETM calculation grid
 
+      class(type_logging), pointer :: logs => null()
+
       integer :: iextr=-1,jextr=-1
         !!  global grid extend
+      integer :: ioff=0,joff=0
+        !!  offset in subdomain decomposition
       integer :: ilg=-1,ihg=-1,jlg=-1,jhg=-1
         !!  global index range
       integer :: ill=-1,ihl=-1,jll=-1,jhl=-1
@@ -244,7 +248,7 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE domain_configure(self,logs,fm)
+SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,logs,fm)
 
    !! Configure the type_grid
 
@@ -252,13 +256,13 @@ SUBROUTINE domain_configure(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
+   integer, intent(in) :: imin,imax,jmin,jmax,kmin,kmax
    class(type_logging), intent(in), target, optional :: logs
    TYPE(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
-   integer :: imin,imax,jmin,jmax,kmin,kmax
    logical :: tgrid,ugrid, vgrid, xgrid
 !-----------------------------------------------------------------------
    if (present(logs)) then
@@ -268,13 +272,7 @@ SUBROUTINE domain_configure(self,logs,fm)
    if (present(fm)) then
       self%fm => fm
    end if
-
-!  The T grid have been initialized during reading the bathymetry
-!  and kmax is initialized via a configuration file
-   imin = self%T%imin; imax = self%T%imax
-   jmin = self%T%jmin; jmax = self%T%jmax
-   kmin = self%T%kmin; kmax = self%T%kmax
-
+   call self%T%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
    call self%U%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%V%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%X%configure(logs,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
@@ -283,10 +281,11 @@ SUBROUTINE domain_configure(self,logs,fm)
    self%T%ill=self%T%l(1); self%T%ihl=self%T%u(1)
    self%T%jll=self%T%l(2); self%T%jhl=self%T%u(2)
 
+   call allocate_variables(self)
+
    self%domain_ready = self%T%grid_ready .and. self%U%grid_ready .and. &
                        self%V%grid_ready .and. self%X%grid_ready
    if (associated(self%logs)) call self%logs%info('done',level=1)
-   return
 END SUBROUTINE domain_configure
 
 !-----------------------------------------------------------------------------
@@ -307,14 +306,6 @@ SUBROUTINE domain_initialize(self)
 !-----------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
 
-   call allocate_variables(self)
-
-   call mm_s('c1',self%U%c1,self%T%c1,stat=stat)
-   call mm_s('c2',self%U%c2,self%T%c2,stat=stat)
-   call mm_s('c1',self%V%c1,self%T%c1,stat=stat)
-   call mm_s('c2',self%V%c2,self%T%c2,stat=stat)
-   call mm_s('c1',self%X%c1,self%T%c1,stat=stat)
-   call mm_s('c2',self%X%c2,self%T%c2,stat=stat)
    call self%metrics()
    where (self%T%mask > 0)
       self%T%z = 0._real64
@@ -348,7 +339,6 @@ SUBROUTINE domain_initialize(self)
 !>  @endtodo
 
    if (associated(self%logs)) call self%logs%info('done',level=1)
-   return
 END SUBROUTINE domain_initialize
 
 !-----------------------------------------------------------------------------
@@ -373,7 +363,6 @@ SUBROUTINE allocate_variables(self)
    call allocate_grid_variables(self%X)
    if (associated(self%logs)) call self%logs%info('done',level=2)
 #endif
-   return
 END SUBROUTINE allocate_variables
 
 !-----------------------------------------------------------------------------
@@ -398,7 +387,6 @@ SUBROUTINE deallocate_variables(self)
    call deallocate_grid_variables(self%X)
    if (associated(self%logs)) call self%logs%info('done',level=2)
 #endif
-   return
 END SUBROUTINE deallocate_variables
 
 !-----------------------------------------------------------------------------
@@ -434,7 +422,6 @@ SUBROUTINE domain_report(self)
       close(gridunit)
    end if
    if (associated(self%logs)) call self%logs%info('done',level=1)
-   return
 END SUBROUTINE domain_report
 
 !---------------------------------------------------------------------------
@@ -452,7 +439,7 @@ SUBROUTINE start_3d(self)
 !  Local variables
    integer :: i,j
 !-----------------------------------------------------------------------
-   call self%logs%info('start_3d()',level=2)
+   if (associated(self%logs)) call self%logs%info('start_3d()',level=2)
 
    self%T%sseo=self%T%ssen
    self%T%ssen=self%T%z
@@ -474,7 +461,6 @@ SUBROUTINE start_3d(self)
       end do
    end do
    self%V%ho=self%V%hn
-   return
 END SUBROUTINE start_3d
 
 !---------------------------------------------------------------------------

@@ -48,9 +48,9 @@ MODULE getm_temperature
       !!
       !! Temperature type
 
-      class(type_logging), pointer :: logs
-      class(type_getm_domain), pointer :: domain
+      class(type_logging), pointer :: logs => null()
       class(type_field_manager), pointer :: fm => null()
+      class(type_getm_domain), pointer :: domain
       class(type_advection), pointer :: advection => null()
       class(type_vertical_diffusion), pointer :: vertical_diffusion => null()
       TYPE(type_temperature_configuration) :: config
@@ -82,21 +82,22 @@ SUBROUTINE temperature_configuration(self,logs,fm)
 
 !  Subroutine arguments
    class(type_temperature), intent(out) :: self
-   class(type_logging), intent(in), target :: logs
-   type(type_field_manager), optional, target  :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   type(type_field_manager), target, optional  :: fm
 
 !  Local constants
 
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('temperature_configuration()',level=2)
-   call self%logs%info('reading initial temperature from: ',level=3,msg2=trim(self%config%f))
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('temperature_configuration()',level=2)
+      call self%logs%info('reading initial temperature from: ',level=3,msg2=trim(self%config%f))
+   end if
    if (present(fm)) then
       self%fm => fm
    end if
-   return
 END SUBROUTINE temperature_configuration
 
 !---------------------------------------------------------------------------
@@ -119,7 +120,7 @@ SUBROUTINE temperature_initialize(self,domain,advection,vertical_diffusion)
    integer :: i,j
    integer :: stat
 !---------------------------------------------------------------------------
-   call self%logs%info('temperature_initialize()',level=2)
+   if (associated(self%logs)) call self%logs%info('temperature_initialize()',level=2)
    self%domain => domain
    if (present(advection)) then
       self%advection => advection
@@ -127,7 +128,6 @@ SUBROUTINE temperature_initialize(self,domain,advection,vertical_diffusion)
    if (present(vertical_diffusion)) then
       self%vertical_diffusion => vertical_diffusion
    end if
-!   self%T = null()
    TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
    call mm_s('T',self%T,TG%l,TG%u,def=15._real64,stat=stat)
@@ -149,7 +149,6 @@ SUBROUTINE temperature_initialize(self,domain,advection,vertical_diffusion)
       end do
    end do
    end associate TGrid
-
 END SUBROUTINE temperature_initialize
 
 !---------------------------------------------------------------------------
@@ -204,7 +203,7 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
    integer :: i,j,k
    real(real64), allocatable :: ea4(:,:,:)
 !---------------------------------------------------------------------------
-   call self%logs%info('temperature_calculate()',level=2)
+   if (associated(self%logs)) call self%logs%info('temperature_calculate()',level=2)
 
    allocate(ea4,mold=self%T) !KB use imin,imax ... instead to be consistent with a1, a2 ... in diffusion solver
 
@@ -230,7 +229,6 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
    end do
    call self%vertical_diffusion%calculate(TG%mask,TG%hn,TG%hn,dt,cnpar,avmols,nuh,self%T,ea4=ea4)
    end associate TGrid
-
 END SUBROUTINE temperature_calculate
 
 !---------------------------------------------------------------------------
@@ -279,9 +277,7 @@ SUBROUTINE temperature_advection(self)
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   call self%logs%info('temperature_advection() - NOT CALLED',level=2)
-
-   return
+   if (associated(self%logs)) call self%logs%info('temperature_advection() - NOT CALLED',level=2)
 END SUBROUTINE temperature_advection
 
 !---------------------------------------------------------------------------
@@ -334,12 +330,9 @@ SUBROUTINE temperature_vertical_diffusion(self,logs,rad,nuh)
    integer :: rc
 
 !---------------------------------------------------------------------------
-   call logs%info('temperature_vertical_diffusion() - NOT CALLED',level=2)
-
-   return
+   if (associated(self%logs)) call logs%info('temperature_vertical_diffusion() - NOT CALLED',level=2)
 END SUBROUTINE temperature_vertical_diffusion
 
 !---------------------------------------------------------------------------
 
 END MODULE getm_temperature
-

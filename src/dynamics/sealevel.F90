@@ -19,8 +19,8 @@ MODULE getm_sealevel
 !  Module types and variables
    type, public :: type_getm_sealevel
 
-      class(type_logging), pointer :: logs
-      class(type_field_manager), pointer :: fm
+      class(type_logging), pointer :: logs => null()
+      class(type_field_manager), pointer :: fm => null()
       class(type_getm_domain), pointer :: domain
 
       contains
@@ -45,16 +45,20 @@ SUBROUTINE sealevel_configuration(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_sealevel), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   class(type_field_manager), intent(inout), target :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   class(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
 !---------------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('sealevel_configuration()',level=2)
-   self%fm => fm
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('sealevel_configuration()',level=2)
+   end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
    return
 END SUBROUTINE sealevel_configuration
 
@@ -76,9 +80,8 @@ SUBROUTINE sealevel_initialize(self,domain)
    integer :: stat
    type (type_field), pointer :: f
 !---------------------------------------------------------------------------
-   call self%logs%info('sealevel_initialize()',level=2)
+   if (associated(self%logs)) call self%logs%info('sealevel_initialize()',level=2)
    self%domain => domain
-   return
 END SUBROUTINE sealevel_initialize
 
 !---------------------------------------------------------------------------
@@ -120,7 +123,7 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   call self%logs%info('sealevel_calculate()',level=2)
+   if (associated(self%logs)) call self%logs%info('sealevel_calculate()',level=2)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
@@ -164,7 +167,6 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
    end associate VGrid
    end associate UGrid
    end associate TGrid
-   return
 END SUBROUTINE sealevel_calculate
 
 !---------------------------------------------------------------------------

@@ -18,14 +18,14 @@ PROGRAM test_density
    IMPLICIT NONE
 
 !  Local constants
-   integer, parameter :: rk = kind(1.d0)
+   integer, parameter :: rk = real64
    integer, parameter :: imin=1, imax=50, jmin=1, jmax=50, kmin=0, kmax=20
    integer, parameter :: nmax = 500
    real(real64) :: t1, t2, t3, t4
 
 !  Local variables
    TYPE(type_logging) :: logs
-   TYPE(type_getm_grid), target :: grid
+   TYPE(type_getm_domain), target :: domain
    TYPE(type_temperature) :: temperature
    TYPE(type_salinity) :: salinity
    TYPE(type_density) :: density
@@ -47,17 +47,13 @@ PROGRAM test_density
       STOP ' test_density imin imax jmin jmax kmin kmax'
    end if
 
-   grid%l(1) = imin; grid%u(1) = imax
-   grid%l(2) = jmin; grid%u(2) = jmax
-   grid%l(3) = kmin; grid%u(3) = kmax
-
    do n=1,command_argument_count()
       call get_command_argument(n,arg)
       select case (n)
          case(1,3,5)
-            read(arg,*,iostat=stat)  grid%l((n+1)/2)
+            read(arg,*,iostat=stat)  domain%T%l((n+1)/2)
          case(2,4,6)
-            read(arg,*,iostat=stat)  grid%u((n+1)/2)
+            read(arg,*,iostat=stat)  domain%T%u((n+1)/2)
       end select
    end do
 
@@ -66,20 +62,20 @@ PROGRAM test_density
    open(file = trim(file_name), unit = out_unit)
    call logs%costum(out_unit,'testing density():')
    write(out_unit,*) 'nmax:   ',nmax
-   write(out_unit,*) 'lbound: ',grid%l
-   write(out_unit,*) 'ubound: ',grid%u
+   write(out_unit,*) 'lbound: ',domain%T%l
+   write(out_unit,*) 'ubound: ',domain%T%u
 
-   call grid%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax)
-   call mm_s('mask',grid%mask,grid%l(1:2),grid%u(1:2),def=1,stat=stat)
+   call domain%configure(imin,imax,jmin,jmax,kmin,kmax,logs=logs)
+   domain%T%mask(imin:imax,jmin:jmax) = 1
 
    call temperature%configuration(logs)
-   call temperature%initialize(grid)
+   call temperature%initialize(domain)
 
    call salinity%configuration(logs)
-   call salinity%initialize(grid)
+   call salinity%initialize(domain)
 
    call density%configure(logs)
-   call density%initialize(grid)
+   call density%initialize(domain)
 
    call cpu_time(t1)
    do n=1,nmax
@@ -126,17 +122,15 @@ SUBROUTINE density_mask()
       density%rho = gsw_rho(salinity%S,temperature%T,0._rk)
    end where
 #else
-   do j=grid%l(2),grid%u(2)
-      do i=grid%l(1),grid%u(1)
-         if (grid%mask(i,j) > 0) then
+   do j=domain%T%l(2),domain%T%u(2)
+      do i=domain%T%l(1),domain%T%u(1)
+         if (domain%T%mask(i,j) > 0) then
             density%rho(i,j,:) = gsw_rho(salinity%S(i,j,:), &
                                          temperature%T(i,j,:),0._rk)
          end  if
       end do
    end do
 #endif
-
-   return
 END SUBROUTINE density_mask
 
 !---------------------------------------------------------------------------
@@ -158,31 +152,29 @@ SUBROUTINE density_loops(method)
 !---------------------------------------------------------------------------
    call logs%info('density_loops()',level=2)
 
-if (method == 1) then
-   do k=grid%l(3),grid%u(3)
-      do j=grid%l(2),grid%u(2)
-         do i=grid%l(1),grid%u(1)
-            if (grid%mask(i,j) > 0) then
-               density%rho(i,j,k) = gsw_rho(salinity%S(i,j,k), &
-                                            temperature%T(i,j,k),0._rk)
+   if (method == 1) then
+      do k=domain%T%l(3),domain%T%u(3)
+         do j=domain%T%l(2),domain%T%u(2)
+            do i=domain%T%l(1),domain%T%u(1)
+               if (domain%T%mask(i,j) > 0) then
+                  density%rho(i,j,k) = gsw_rho(salinity%S(i,j,k), &
+                                               temperature%T(i,j,k),0._rk)
+               end  if
+            end do
+         end do
+      end do
+   else
+      do j=domain%T%l(2),domain%T%u(2)
+         do i=domain%T%l(1),domain%T%u(1)
+            if (domain%T%mask(i,j) > 0) then
+               do k=domain%T%l(3),domain%T%u(3)
+                  density%rho(i,j,k) = gsw_rho(salinity%S(i,j,k), &
+                                               temperature%T(i,j,k),0._rk)
+               end do
             end  if
          end do
       end do
-   end do
-else
-   do j=grid%l(2),grid%u(2)
-      do i=grid%l(1),grid%u(1)
-         if (grid%mask(i,j) > 0) then
-            do k=grid%l(3),grid%u(3)
-               density%rho(i,j,k) = gsw_rho(salinity%S(i,j,k), &
-                                            temperature%T(i,j,k),0._rk)
-            end do
-         end  if
-      end do
-   end do
-end if
-
-   return
+   end if
 END SUBROUTINE density_loops
 
 !---------------------------------------------------------------------------

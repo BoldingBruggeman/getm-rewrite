@@ -41,11 +41,9 @@ MODULE getm_mixing
 
       TYPE(type_mixing_config) :: config
 
-      class(type_logging), pointer :: logs
-      class(type_getm_domain), pointer :: domain
+      class(type_logging), pointer :: logs => null()
       class(type_field_manager), pointer :: fm => null()
-
-
+      class(type_getm_domain), pointer :: domain
 
 
 #ifdef _STATIC_
@@ -100,22 +98,23 @@ SUBROUTINE mixing_configuration(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_mixing), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   type(type_field_manager), optional, target  :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   type(type_field_manager), target, optional  :: fm
 
 !  Local constants
 
 !  Local variables
    character(len=256) :: str
 !---------------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('mixing_configuration()',level=2)
-   write(str,'(I04)') self%config%kurt
-   call self%logs%info('config->kurt:',msg2=trim(str),level=3)
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('mixing_configuration()',level=2)
+   end if
+!KB   write(str,'(I04)') self%config%kurt
+!KB   call self%logs%info('config->kurt:',msg2=trim(str),level=3)
    if (present(fm)) then
       self%fm => fm
    end if
-   return
 END SUBROUTINE mixing_configuration
 
 !---------------------------------------------------------------------------
@@ -137,7 +136,7 @@ SUBROUTINE mixing_initialize(self,domain)
    integer :: imin,imax,jmin,jmax,kmin,kmax
    integer :: rc
 !-----------------------------------------------------------------------------
-   call self%logs%info('mixing_initialize()',level=2)
+   if (associated(self%logs)) call self%logs%info('mixing_initialize()',level=2)
 
 #if 0
 #ifndef _STATIC_
@@ -164,8 +163,6 @@ SUBROUTINE mixing_initialize(self,domain)
       end do
    end do
 #endif
-
-  return
 END SUBROUTINE mixing_initialize
 
 !---------------------------------------------------------------------------
@@ -195,9 +192,7 @@ SUBROUTINE mixing_calculate(self,logs,SS,NN)
 !  Local variables
 
 !-----------------------------------------------------------------------------
-   call logs%info('mixing_calculate()',level=2)
-
-  return
+   if (associated(self%logs)) call logs%info('mixing_calculate()',level=2)
 END SUBROUTINE mixing_calculate
 
 !---------------------------------------------------------------------------

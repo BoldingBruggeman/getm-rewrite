@@ -20,6 +20,7 @@ MODULE getm_radiation
    USE, INTRINSIC :: ISO_FORTRAN_ENV
    use memory_manager
    use logging
+   use field_manager
    use getm_domain
 
    IMPLICIT NONE
@@ -40,6 +41,8 @@ MODULE getm_radiation
       !! Temperature type
 
       TYPE(type_radiation_configuration) :: config
+      class(type_logging), pointer :: logs => null()
+      class(type_field_manager), pointer :: fm => null()
 
 #ifdef _STATIC_
       real(real64), dimension(A3DFIELD) :: rad = 10._real64
@@ -60,7 +63,7 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE radiation_configuration(self,logs)
+SUBROUTINE radiation_configuration(self,logs,fm)
 
    !! Configure the the radiation module
 
@@ -68,28 +71,32 @@ SUBROUTINE radiation_configuration(self,logs)
 
 !  Subroutine arguments
    class(type_radiation), intent(out) :: self
-   class(type_logging), intent(in) :: logs
+   class(type_logging), intent(in), target, optional :: logs
+   class(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
 !---------------------------------------------------------------------------
-   call logs%info('radiation_configuration()',level=2)
-   call logs%info('reading initial radiation from: ',level=3,msg2=trim(self%config%f))
-
-   return
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('radiation_configuration()',level=2)
+      call self%logs%info('reading initial radiation from: ',level=3,msg2=trim(self%config%f))
+   end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
 END SUBROUTINE radiation_configuration
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE radiation_initialize(self,logs,grid)
+SUBROUTINE radiation_initialize(self,grid)
    !! Initialize the radiation field
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_radiation), intent(inout) :: self
-   class(type_logging), intent(in) :: logs
    class(type_getm_grid), intent(in) :: grid
 
 !  Local constants
@@ -97,18 +104,13 @@ SUBROUTINE radiation_initialize(self,logs,grid)
 !  Local variables
    integer :: stat
 !---------------------------------------------------------------------------
-   call logs%info('radiation_initialize()',level=2)
-!KB   call logs%warn('radiation_initialize()',level=1)
-!   call logs%costum(tunit,'testing costum message from radiation',level=2)
-
+   if (associated(self%logs)) call self%logs%info('radiation_initialize()',level=2)
 #ifndef _STATIC_
    call mm_s('A',self%A,grid%l(1:2),grid%u(1:2),def=0.7_real64,stat=stat)
    call mm_s('g1',self%g1,grid%l(1:2),grid%u(1:2),def=0.4_real64,stat=stat)
    call mm_s('g2',self%g2,grid%l(1:2),grid%u(1:2),def=8._real64,stat=stat)
    call mm_s('rad',self%rad,grid%l,grid%u,def=15._real64,stat=stat)
 #endif
-
-   return
 END SUBROUTINE radiation_initialize
 
 !---------------------------------------------------------------------------
@@ -116,14 +118,13 @@ END SUBROUTINE radiation_initialize
 !> Write description of algorithm for calculation radiation based on surface
 !> short-wave radiation
 
-SUBROUTINE radiation_calculate(self,logs,grid,swr,albedo)
+SUBROUTINE radiation_calculate(self,grid,swr,albedo)
    !!
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_radiation), intent(out) :: self
-   class(type_logging), intent(in) :: logs
    class(type_getm_grid), intent(in) :: grid
    real(real64), dimension(:,:), intent(in) :: swr
    real(real64), dimension(:,:), intent(in) :: albedo
@@ -134,7 +135,7 @@ SUBROUTINE radiation_calculate(self,logs,grid,swr,albedo)
    real(real64) :: z
    integer :: i,j,k
 !---------------------------------------------------------------------------
-   call logs%info('radiation_calculate()',level=2)
+   if (associated(self%logs)) call self%logs%info('radiation_calculate()',level=2)
 
    self%rad(:,:,grid%u(3)) = (1._real64-albedo(:,:))*swr(:,:)
    do k=grid%l(3),grid%u(3)-1
@@ -150,8 +151,6 @@ SUBROUTINE radiation_calculate(self,logs,grid,swr,albedo)
          end do
       end do
    end do
-
-   return
 END SUBROUTINE radiation_calculate
 
 !---------------------------------------------------------------------------

@@ -43,8 +43,8 @@ MODULE getm_airsea
    type, public :: type_getm_airsea
       !! author: Karsten Bolding
 
-      class(type_logging), pointer :: logs
-      class(type_field_manager), pointer :: fm
+      class(type_logging), pointer :: logs => null()
+      class(type_field_manager), pointer :: fm => null()
       class(type_getm_domain), pointer :: domain
 
       real(real64) :: taux0=0._real64, tauy0=0._real64
@@ -84,18 +84,21 @@ SUBROUTINE airsea_configure(self,logs,fm)
 
 !  Subroutine arguments
    class(type_getm_airsea), intent(inout) :: self
-   class(type_logging), intent(in), target :: logs
-   class(type_field_manager), intent(in), target :: fm
+   class(type_logging), intent(in), target, optional :: logs
+   class(type_field_manager), intent(in), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
    integer :: stat
 !-----------------------------------------------------------------------
-   self%logs => logs
-   call self%logs%info('airsea_initialize()',level=1)
-   self%fm => fm
-   return
+   if (present(logs)) then
+      self%logs => logs
+      call self%logs%info('airsea_initialize()',level=1)
+   end if
+   if (present(fm)) then
+      self%fm => fm
+   end if
 END SUBROUTINE airsea_configure
 
 !-----------------------------------------------------------------------
@@ -117,38 +120,39 @@ SUBROUTINE airsea_initialize(self,domain)
    type (type_field), pointer :: f
 !-----------------------------------------------------------------------
    self%domain => domain
+   TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
-   call mm_s('swr',self%swr,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('albedo',self%albedo,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('taux',self%taux,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('tauy',self%tauy,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('sp',self%sp,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
+   call mm_s('swr',self%swr,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('albedo',self%albedo,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('taux',self%taux,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('tauy',self%tauy,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('sp',self%sp,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
 #endif
 
-   TGrid: associate( TG => self%domain%T )
-   call self%fm%register('sp', 'Pa', 'atmospheric surface pressure', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_2d_ids), &
-!KB                         output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='airsea', field=f)
-   call self%fm%send_data('sp', self%sp(TG%imin:TG%imax,TG%jmin:TG%jmax))
-   call self%fm%register('tausx', 'Pa', 'surface stress - x', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_2d_ids), &
-!KB                         output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='airsea', field=f)
-   call self%fm%send_data('tausx', self%taux(TG%imin:TG%imax,TG%jmin:TG%jmax))
-   call self%fm%register('tausy', 'Pa', 'surface stress - y', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_2d_ids), &
-!KB                         output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='airsea', field=f)
-   call self%fm%send_data('tausy', self%tauy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   if (associated(self%fm)) then
+      call self%fm%register('sp', 'Pa', 'atmospheric surface pressure', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_2d_ids), &
+   !KB                         output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='airsea', field=f)
+      call self%fm%send_data('sp', self%sp(TG%imin:TG%imax,TG%jmin:TG%jmax))
+      call self%fm%register('tausx', 'Pa', 'surface stress - x', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_2d_ids), &
+   !KB                         output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='airsea', field=f)
+      call self%fm%send_data('tausx', self%taux(TG%imin:TG%imax,TG%jmin:TG%jmax))
+      call self%fm%register('tausy', 'Pa', 'surface stress - y', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_2d_ids), &
+   !KB                         output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='airsea', field=f)
+      call self%fm%send_data('tausy', self%tauy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   end if
    end associate TGrid
-   return
 END SUBROUTINE airsea_initialize
 
 !-----------------------------------------------------------------------
@@ -182,7 +186,6 @@ SUBROUTINE airsea_update(self,n)
          self%tauy(i,j) = 0._real64
       end do
    end do
-   return
 END SUBROUTINE airsea_update
 
 !-----------------------------------------------------------------------
