@@ -12,7 +12,7 @@ class Tiling:
         self.rank = self.comm.Get_rank()
         self.map = numpy.arange(nrow * ncol).reshape(nrow, ncol)
 
-        self.irow, self.icol = divmod(self.rank, nrow)
+        self.irow, self.icol = divmod(self.rank, ncol)
         self.nrow, self.ncol = nrow, ncol
 
         self.top = get_rank(self.irow + 1, self.icol)
