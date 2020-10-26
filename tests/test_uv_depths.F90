@@ -18,17 +18,9 @@ PROGRAM test_uv_depths
 !-----------------------------------------------------------------------------
    logs%prepend = ''
    call logs%info('testing test_uv_depths():')
-!   write(*,*) ('testing test_uv_depths():')
-   domain%T%imin = imin
-   domain%T%imax = imax
-   domain%T%jmin = jmin
-   domain%T%jmax = jmax
 
-!   call domain%print(logs)
-   call domain%T%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=-1,kmax=-1)
-   call domain%configure(logs)
-
-   call domain%initialize()
+   call domain%configure(imin,imax,jmin,jmax,kmin=-1,kmax=-1,logs=logs)
+   domain%domain_type = 1
 
    call random_number(domain%T%H)
    where (domain%T%H > 0.10_real64)
@@ -37,11 +29,7 @@ PROGRAM test_uv_depths
       domain%T%mask = 0
    end where
 
-   where (domain%T%mask == 1)
-      domain%T%H = 5._real64 + 20._real64*domain%T%H
-   else where
-      domain%T%H = -10._real64
-   end where
+   call domain%initialize()
 
    call logs%info('H:')
    call domain%T%print_info(logs)

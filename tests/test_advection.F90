@@ -20,7 +20,7 @@ PROGRAM test_advection
    real(real64), parameter :: Lx=100._real64, Ly=100._real64
    real(real64), parameter :: pi=3.1415926535897932384626433832795_real64
    integer, parameter :: imin=1, imax=100, jmin=1, jmax=100, kmin=0, kmax=25
-   integer, parameter :: halo=1
+   integer, parameter :: halo=2
    integer, parameter :: nsave=1
 
 !  Local variables
@@ -56,10 +56,12 @@ PROGRAM test_advection
    call field_manager_setup()
    call velocity_field()
    call initial_conditions(3)
+#if 1
 domain%T%mask(imin+1,:) = 0
 domain%T%mask(imax-1,:) = 0
 domain%T%mask(:,jmin+1) = 0
 domain%T%mask(:,jmax-1) = 0
+#endif
 
    call output%do_output(t)
 
@@ -135,21 +137,17 @@ CONTAINS
 !-----------------------------------------------------------------------------
 
    subroutine domain_setup()
-      call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=(/halo,halo,0/))
-      call mm_s('c1',domain%T%c1,domain%T%l(1),domain%T%u(1),stat=stat)
-      call mm_s('c2',domain%T%c2,domain%T%l(2),domain%T%u(2),stat=stat)
-      call mm_s('H',domain%T%H,domain%T%l(1:2),domain%T%u(1:2),def=-99._real64,stat=stat)
-      call mm_s('mask',domain%T%mask,domain%T%l(1:2),domain%T%u(1:2),def=0,stat=stat)
+      call domain%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax)
       do i=imin,imax
          domain%T%c1(i) = (i-1)*dx-x0
       end do
       do j=jmin,jmax
          domain%T%c2(j) = (j-1)*dy-y0
       end do
+      domain%T%H = -10._real64
       domain%T%H(imin+1:imax-1,jmin+1:jmax-1) = 1._real64
       where(domain%T%H .gt. 0._real64) domain%T%mask = 1
       domain%domain_type=1
-      call domain%configure()
       call domain%initialize()
       call domain%report()
    end subroutine domain_setup
@@ -163,7 +161,10 @@ CONTAINS
       call fm%initialize(prepend_by_default=(/id_dim_lon,id_dim_lat/),append_by_default=(/id_dim_time/))
       call fm%register('dx','m','grid spacing - x',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%dx(imin:imax,jmin:jmax))
       call fm%register('dy','m','grid spacing - y',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%dy(imin:imax,jmin:jmax))
-      call fm%register('H','m','depth',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%H(imin:imax,jmin:jmax))
+      call fm%register('x','m','grid - x',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%x(imin:imax,jmin:jmax))
+!write(*,*) domain%T%x(imin:imax,jmin:jmax)
+      call fm%register('y','m','grid - y',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%y(imin:imax,jmin:jmax))
+      call fm%register('H','m','depth',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%H(imin:imax,jmin:jmax),fill_value=-10._real64)
       call fm%register('u','m/s','u-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=u(imin:imax,jmin:jmax),fill_value=0._real64)
       call fm%register('v','m/s','v-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=v(imin:imax,jmin:jmax),fill_value=0._real64)
       call fm%register('D','','depth',data2d=domain%T%D(imin:imax,jmin:jmax),fill_value=-99._real64)
