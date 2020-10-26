@@ -48,10 +48,10 @@ contains
       pgrid = c_loc(grid)
    end function
 
-   subroutine grid_get_arrays(pgrid, pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, pH, pmask) bind(c)
+   subroutine grid_get_arrays(pgrid, pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, parea, pinv_area, pH, pD, pmask) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: grid_get_arrays
       type(c_ptr), intent(in), value :: pgrid
-      type(c_ptr), intent(out)       :: pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, pH, pmask
+      type(c_ptr), intent(out)       :: pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, parea, pinv_area, pH, pD, pmask
 
       type (type_getm_grid), pointer :: grid
 
@@ -67,7 +67,10 @@ contains
       plat = c_loc(grid%lat)
       pdlon = c_loc(grid%dlon)
       pdlat = c_loc(grid%dlat)
+      parea = c_loc(grid%area)
+      pinv_area = c_loc(grid%inv_area)
       pH = c_loc(grid%H)
+      pD = c_loc(grid%D)
       pmask = c_loc(grid%mask)
    end subroutine
 
