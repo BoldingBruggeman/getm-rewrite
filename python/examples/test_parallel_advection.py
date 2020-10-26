@@ -25,7 +25,8 @@ else:
 tiling = pygetm.parallel.Tiling(2, 2)
 
 # Set up local subdomain 
-domain = pygetm.Domain(1, nlev, 1, domain_shape[0] // 2, 1, domain_shape[1] // 2, halo)
+domain = pygetm.Domain(1, nlev, 1, domain_shape[0] // 2, 1, domain_shape[1] // 2)
+halo = domain.halo
 
 # Scatter global bathymetry to subdomains
 tiling.wrap(domain.T.H_, halo=halo).scatter(H_glob)
@@ -92,6 +93,10 @@ if rank == 0:
     ax = fig.gca()
     ax.quiver(u_glob[::10, ::10], v_glob[::10, ::10], angles='xy')
     fig.savefig('vel.png')
+fig = matplotlib.pyplot.figure()
+ax = fig.gca()
+ax.quiver(u_[::10, ::10], v_[::10, ::10], angles='xy')
+fig.savefig('vel_%i.png' % rank)
 
 # Wrap tracer for halo updates
 distvar = tiling.wrap(var_, halo=halo)

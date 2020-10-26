@@ -11,22 +11,22 @@ module pygetm
 
 contains
 
-   function domain_create(imin, imax, jmin, jmax, kmin, kmax, halo) result(pdomain) bind(c)
+   function domain_create(imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz) result(pdomain) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: domain_create
-      integer(c_int), intent(in), value :: imin, imax, jmin, jmax, kmin, kmax, halo
+      integer(c_int), intent(in), value :: imin, imax, jmin, jmax, kmin, kmax
+      integer(c_int), intent(out)       :: halox, haloy, haloz
       type(c_ptr)                       :: pdomain
 
       type (type_getm_domain), pointer :: domain
       integer                          :: stat 
 
       allocate(domain)
-      call domain%T%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=(/halo,halo,0/))
-      call mm_s('c1', domain%T%c1, domain%T%l(1), domain%T%u(1), def=0._real64,stat=stat)
-      call mm_s('c2', domain%T%c2, domain%T%l(2), domain%T%u(2), def=0._real64,stat=stat)
-      call mm_s('H', domain%T%H, domain%T%l(1:2), domain%T%u(1:2), def=-99._real64, stat=stat)
-      call mm_s('mask', domain%T%mask, domain%T%l(1:2), domain%T%u(1:2), def=0, stat=stat)
+      call domain%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax)
       pdomain = c_loc(domain)
       domain%domain_type = 1
+      halox = imin - lbound(domain%T%c1, 1)
+      haloy = jmin - lbound(domain%T%c2, 1)
+      haloz = 0
    end function
 
    function domain_get_grid(pdomain, grid_type) result(pgrid) bind(c)
@@ -48,10 +48,10 @@ contains
       pgrid = c_loc(grid)
    end function
 
-   subroutine grid_get_arrays(pgrid, pc1, pc2, pH, pmask) bind(c)
+   subroutine grid_get_arrays(pgrid, pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, pH, pmask) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: grid_get_arrays
       type(c_ptr), intent(in), value :: pgrid
-      type(c_ptr), intent(out)       :: pc1, pc2, pH, pmask
+      type(c_ptr), intent(out)       :: pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, pH, pmask
 
       type (type_getm_grid), pointer :: grid
 
@@ -59,6 +59,14 @@ contains
 
       pc1 = c_loc(grid%c1)
       pc2 = c_loc(grid%c2)
+      px = c_loc(grid%x)
+      py = c_loc(grid%y)
+      pdx = c_loc(grid%dx)
+      pdy = c_loc(grid%dy)
+      plon = c_loc(grid%lon)
+      plat = c_loc(grid%lat)
+      pdlon = c_loc(grid%dlon)
+      pdlat = c_loc(grid%dlat)
       pH = c_loc(grid%H)
       pmask = c_loc(grid%mask)
    end subroutine
@@ -70,7 +78,6 @@ contains
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
-      call domain%configure()
       call domain%initialize()
    end subroutine
 

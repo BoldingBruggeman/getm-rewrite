@@ -34,13 +34,13 @@ if not dllpath:
 # Load FABM library.
 _pygetm = ctypes.CDLL(str(dllpath))
 
-_pygetm.domain_create.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+_pygetm.domain_create.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
 _pygetm.domain_create.restype = ctypes.c_void_p
 
 _pygetm.domain_get_grid.argtypes = [ctypes.c_void_p, ctypes.c_char]
 _pygetm.domain_get_grid.restype = ctypes.c_void_p
 
-_pygetm.grid_get_arrays.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_double)), ctypes.POINTER(ctypes.POINTER(ctypes.c_int))]
+_pygetm.grid_get_arrays.argtypes = [ctypes.c_void_p] + [ctypes.POINTER(ctypes.POINTER(ctypes.c_double))] * 11 + [ctypes.POINTER(ctypes.POINTER(ctypes.c_int))]
 _pygetm.grid_get_arrays.restype = None
 
 _pygetm.domain_initialize.argtypes = [ctypes.c_void_p]
@@ -60,13 +60,29 @@ class Grid:
         self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
         pc1 = ctypes.POINTER(ctypes.c_double)()
         pc2 = ctypes.POINTER(ctypes.c_double)()
+        px = ctypes.POINTER(ctypes.c_double)()
+        py = ctypes.POINTER(ctypes.c_double)()
+        pdx = ctypes.POINTER(ctypes.c_double)()
+        pdy = ctypes.POINTER(ctypes.c_double)()
+        plon = ctypes.POINTER(ctypes.c_double)()
+        plat = ctypes.POINTER(ctypes.c_double)()
+        pdlon = ctypes.POINTER(ctypes.c_double)()
+        pdlat = ctypes.POINTER(ctypes.c_double)()
         pH = ctypes.POINTER(ctypes.c_double)()
         pmask = ctypes.POINTER(ctypes.c_int)()
-        _pygetm.grid_get_arrays(self.p, pc1, pc2, pH, pmask)
+        _pygetm.grid_get_arrays(self.p, pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, pH, pmask)
         halo = domain.halo
         self.c1_ = numpy.ctypeslib.as_array(pc1, shape=(domain.shape[2],)).view('=d')
         self.c2_ = numpy.ctypeslib.as_array(pc2, shape=(domain.shape[1],)).view('=d')
         self.H_ = numpy.ctypeslib.as_array(pH, shape=domain.shape[1:]) .view('=d')
+        self.x_ = numpy.ctypeslib.as_array(px, shape=domain.shape[1:]) .view('=d')
+        self.y_ = numpy.ctypeslib.as_array(py, shape=domain.shape[1:]) .view('=d')
+        self.dx_ = numpy.ctypeslib.as_array(pdx, shape=domain.shape[1:]) .view('=d')
+        self.dy_ = numpy.ctypeslib.as_array(pdy, shape=domain.shape[1:]) .view('=d')
+        self.lon_ = numpy.ctypeslib.as_array(plon, shape=domain.shape[1:]) .view('=d')
+        self.lat_ = numpy.ctypeslib.as_array(plat, shape=domain.shape[1:]) .view('=d')
+        self.dlon_ = numpy.ctypeslib.as_array(pdlon, shape=domain.shape[1:]) .view('=d')
+        self.dlat_ = numpy.ctypeslib.as_array(pdlat, shape=domain.shape[1:]) .view('=d')
         self.mask_ = numpy.ctypeslib.as_array(pmask, shape=domain.shape[1:]).view('=i')
         self.c1 = self.c1_[halo:-halo]
         self.c2 = self.c2_[halo:-halo]
@@ -74,19 +90,21 @@ class Grid:
         self.mask = self.mask_[halo:-halo, halo:-halo]
 
 class Domain:
-    def __init__(self, kmin, kmax, jmin, jmax, imin, imax, halo):
+    def __init__(self, kmin, kmax, jmin, jmax, imin, imax):
         self.imin, self.imax = imin, imax
         self.jmin, self.jmax = jmin, jmax
         self.kmin, self.kmax = kmin, kmax
-        self.halo = halo
-        self.p = _pygetm.domain_create(imin, imax, jmin, jmax, kmin, kmax, halo)
-        self.shape = (kmax - kmin + 1, jmax - jmin + 1 + 2 * halo, imax - imin + 1 + 2 * halo)
+        halox, haloy, haloz = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        self.p = _pygetm.domain_create(imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz)
+        self.halo = halox.value
+        self.shape = (kmax - kmin + 1, jmax - jmin + 1 + 2 * self.halo, imax - imin + 1 + 2 * self.halo)
         self.T = Grid(self, 'T')
+        self.U = Grid(self, 'U')
+        self.V = Grid(self, 'V')
+        self.X = Grid(self, 'X')
 
     def initialize(self):
         _pygetm.domain_initialize(self.p)
-        self.U = Grid(self, 'U')
-        self.V = Grid(self, 'V')
 
     def array(self, fill=None):
         data = numpy.empty(self.shape[1:])
