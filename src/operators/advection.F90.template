@@ -1,16 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
-!> @note
-!> array indices!!!!!
-!> @endnote
-
 !#define _AUTOMATIC_
-
-!KB MODULE _MODULE_NAME_
-
-!---------------------------------------------------------------------------
-
-!KB CONTAINS
 
 !---------------------------------------------------------------------------
 
@@ -25,20 +15,23 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,
    integer, intent(in) :: halo(2)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
    integer, intent(in) :: umask(_A_)
-   real(real64), intent(in) :: dxu(_A_), dyu(_A_)
-   real(real64), intent(in) :: hu(_A_), u(_A_)
+   real(real64), intent(in) :: dxu(_A_)
+   real(real64), intent(in) :: dyu(_A_)
+   real(real64), intent(in) :: hu(_A_)
+   real(real64), intent(in) :: u(_A_)
    integer, intent(in) :: tmask(_A_)
    real(real64), intent(in) :: iA(_A_)
    real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(_A_), f(_A_)
+   real(real64), intent(inout) :: h(_A_)
+   real(real64), intent(inout) :: f(_A_)
 #undef _A_
 
 !  Local constants
 
 !  Local variables
 #ifdef _AUTOMATIC_
-   real(real64) :: flux(imin-1:imax,jmin:jmax)
-   real(real64) :: QU(imin-1:imax,jmin:jmax)
+   real(real64) :: flux(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2))
+   real(real64) ::   QU(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2))
 #else
    real(real64), allocatable :: flux(:,:), QU(:,:)
 #endif
@@ -46,20 +39,19 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
    integer :: i, j
-!KB   integer :: scheme=1
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
-   allocate(flux(imin-1:imax,jmin:jmax), QU(imin-1:imax,jmin:jmax))
+   allocate(flux(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)))
+   allocate(  QU(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)))
 #endif
 
    ! the provided velocity MUST be ZERO at land!
-   QU(imin-1,:) = 0 ! assume staggered u-fields [imin:imax]
-   flux(imin-1:imax,:) = 0._real64
+   flux(imin-halo(1),:) = 0._real64
+     QU(imin-halo(1),:) = 0._real64
 
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
-!KB      do i=imin,imax-1
-      do i=imin,imax
+      do i=imin-1,imax
          QU(i,j) = u(i,j) * hu(i,j) * dyu(i,j)
          if (umask(i,j) == 1 .or. umask(i,j) == 2) then
             cfl = abs(u(i,j)*dt/dxu(i,j))
@@ -107,7 +99,6 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,
 !#ifndef _AUTOMATIC_
 !   deallocate(flux, QU)
 !#endif
-   return
 END SUBROUTINE _U_SUB_NAME_
 
 SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
@@ -120,19 +111,23 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,
    integer, intent(in) :: halo(2)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
    integer, intent(in) :: vmask(_A_)
-   real(real64), intent(in) :: dxv(_A_), dyv(_A_)
-   real(real64), intent(in) :: hv(_A_), v(_A_)
+   real(real64), intent(in) :: dxv(_A_)
+   real(real64), intent(in) :: dyv(_A_)
+   real(real64), intent(in) :: hv(_A_)
+   real(real64), intent(in) :: v(_A_)
    integer, intent(in) :: tmask(_A_)
    real(real64), intent(in) :: iA(_A_)
    real(real64), intent(in) :: dt
-   real(real64), intent(inout) :: h(_A_), f(_A_)
+   real(real64), intent(inout) :: h(_A_)
+   real(real64), intent(inout) :: f(_A_)
+#undef _A_
 
 !  Local constants
 
 !  Local variables
 #ifdef _AUTOMATIC_
-   real(real64) :: flux(imin:imax,jmin-1:jmax)
-   real(real64) :: QV(imin:imax,jmin-1:jmax)
+   real(real64) :: flux(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2))
+   real(real64) ::   QV(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2))
 #else
    real(real64), allocatable :: flux(:,:), QV(:,:)
 #endif
@@ -140,19 +135,18 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
    integer :: i, j
-!KB   integer :: scheme=1
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
-   allocate(flux(imin:imax,jmin-1:jmax), QV(imin:imax,jmin-1:jmax))
+   allocate(flux(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)))
+   allocate(  QV(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)))
 #endif
 
    ! the provided velocity MUST be ZERO at land!
-   QV(:,jmin-1) = 0 ! assume staggered u-fields [imin:imax]
-   flux(:,jmin-1:jmax) = 0._real64
+   flux(:,jmin-halo(2)) = 0._real64
+     QV(:,jmin-halo(2)) = 0._real64
 
 !  TODO: (vertical) interation!!!
-   do j=jmin,jmax
-!KB   do j=jmin,jmax-1
+   do j=jmin-1,jmax
       do i=imin,imax
          QV(i,j) = v(i,j) * hv(i,j) * dxv(i,j)
          if (vmask(i,j) == 1 .or. vmask(i,j) == 2) then
@@ -192,7 +186,7 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,
          if (tmask(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
             h(i,j) = h(i,j) - dt*( QV(i,j)-QV(i,j-1) )*iA(i,j)
-            advn = ( flux(i,j)-flux(i,j-1) )*iA(i,j)
+            advn = ( flux(i,j)-flux(i,j-1) )/iA(i,j)
             f(i,j) = ( hfo - dt*advn ) / h(i,j)
          end if
       end do
