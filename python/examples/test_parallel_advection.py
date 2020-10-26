@@ -64,9 +64,9 @@ Nmax = no_of_revolutions * round(2 * numpy.pi / omega / dt_cfl)
 tmax = no_of_revolutions * 2 * numpy.pi / omega
 timestep = tmax / Nmax
 
-# Unmask entire U, V domains for testing (to ensure we are not accidentically stopping u, v)
-domain.U.mask_[...] = 1
-domain.V.mask_[...] = 1
+# Update U and V mask in halos
+tiling.wrap(domain.U.mask_, halo=halo).update_halos()
+tiling.wrap(domain.V.mask_, halo=halo).update_halos()
 
 u, u_ = domain.array(fill=0.)
 v, v_ = domain.array(fill=0.)
@@ -88,7 +88,7 @@ tiling.wrap(domain.T.mask_, halo=halo).update_halos()
 # Gather and plot global velocities
 u_glob = tiling.wrap(u_, halo=halo).gather()
 v_glob = tiling.wrap(v_, halo=halo).gather()
-if rank == 0:
+if u_glob is not None:
     fig = matplotlib.pyplot.figure()
     ax = fig.gca()
     ax.quiver(u_glob[::10, ::10], v_glob[::10, ::10], angles='xy')
