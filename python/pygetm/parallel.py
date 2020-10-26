@@ -46,12 +46,12 @@ class DistributedArray:
 
         add_task(tiling.left, field[..., halo:-halo, halo:halo*2], field[..., halo:-halo, :halo])
         add_task(tiling.right, field[..., halo:-halo, -halo*2:-halo], field[..., halo:-halo, -halo:])
-        add_task(tiling.top, field[..., halo:halo*2, halo:-halo], field[..., :halo, halo:-halo])
-        add_task(tiling.bottom, field[..., -halo*2:-halo, halo:-halo], field[..., -halo:, halo:-halo])
-        add_task(tiling.topleft, field[..., halo:halo*2, halo:halo*2], field[..., :halo, :halo])
-        add_task(tiling.topright, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
-        add_task(tiling.bottomleft, field[..., -halo*2:-halo, halo:halo*2], field[..., -halo:, :halo])
-        add_task(tiling.bottomright, field[..., -halo*2:-halo, -halo*2:-halo], field[..., -halo:, -halo:])
+        add_task(tiling.top, field[..., -halo*2:-halo, halo:-halo], field[..., -halo:, halo:-halo])
+        add_task(tiling.bottom, field[..., halo:halo*2, halo:-halo], field[..., :halo, halo:-halo])
+        add_task(tiling.topleft, field[..., -halo*2:-halo, halo:halo*2], field[..., -halo:, :halo])
+        add_task(tiling.topright, field[..., -halo*2:-halo, -halo*2:-halo], field[..., -halo:, -halo:])
+        add_task(tiling.bottomleft, field[..., halo:halo*2, halo:halo*2], field[..., :halo, :halo])
+        add_task(tiling.bottomright, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
         self.field = field
         self.interior = field[..., halo:-halo, halo:-halo]
         self.halo = halo
