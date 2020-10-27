@@ -19,6 +19,17 @@ if(BUILD_SHARED_LIBS)
   set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
+option(GETM_USE_PARALLEL "Enable MPI parallelization" OFF)
+if(GETM_USE_PARALLEL)
+   find_package(MPI REQUIRED)
+   if(MPI_Fortran_INCLUDE_PATH)
+     include_directories("${MPI_Fortran_INCLUDE_PATH}")
+   endif()
+   add_definitions(-D_PARALLEL_)
+   set(EXTERNAL_LIBS ${EXTERNAL_LIBS} ${MPI_Fortran_LIBRARIES})
+endif(GETM_USE_PARALLEL)
+
+
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/extern/flom" extern/flom)
 
 # Various compilation options
@@ -57,7 +68,7 @@ add_subdirectory(src)
 include(tests/CMakeLists.txt)
 
 target_include_directories( getm_exe PRIVATE ${CMAKE_BINARY_DIR}/modules )
-target_link_libraries( getm_exe PRIVATE getm_domain getm_operators getm_physics getm_dynamics getm_input getm_output flom )
+target_link_libraries( getm_exe PRIVATE getm_domain getm_parallel getm_operators getm_physics getm_dynamics getm_input getm_output flom )
 
 
 #install(EXPORT stimConfig DESTINATION cmake)

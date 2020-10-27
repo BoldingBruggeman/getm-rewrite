@@ -46,3 +46,9 @@ add_executable(test_vertical_diffusion EXCLUDE_FROM_ALL
 target_link_libraries(test_vertical_diffusion PRIVATE getm_output getm_operators  getm_physics flom)
 add_dependencies( test_all_getm ${test_all_getm}  test_vertical_diffusion )
 
+add_executable(test_parallel EXCLUDE_FROM_ALL
+               ${CMAKE_CURRENT_LIST_DIR}/test_parallel.F90
+              )
+target_link_libraries(test_parallel PRIVATE getm_domain getm_parallel flom)
+add_dependencies( test_all_getm ${test_all_getm}  test_parallel )
+

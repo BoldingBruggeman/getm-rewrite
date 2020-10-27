@@ -1,3 +1,5 @@
+add_subdirectory(parallel)
+
 add_subdirectory(domain)
 
 set_property( TARGET getm_airsea PROPERTY FOLDER airsea )
