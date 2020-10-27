@@ -28,7 +28,7 @@ PROGRAM test_advection
    type(type_advection) :: advection
    TYPE(type_field_manager) :: fm
    TYPE(type_getm_output) :: output
-   integer :: initial_method=1
+   integer :: initial_method=3
    real(real64) :: period=600.
    real(real64) :: cfl=1.0_real64
    real(real64) :: omega
@@ -55,7 +55,7 @@ PROGRAM test_advection
    call domain_setup()
    call field_manager_setup()
    call velocity_field()
-   call initial_conditions(3)
+   call initial_conditions(initial_method)
 #if 1
 domain%T%mask(imin+1,:) = 0
 domain%T%mask(imax-1,:) = 0
@@ -200,35 +200,40 @@ CONTAINS
       real(real64) :: x,y,x0=-25._real64,y0=0._real64
       ! initial condition
       var = -99._real64
-      select case(method)
-         case (1)
-            where (domain%T%mask > 0)
-               var(:,:)= 1._real64
-            end where
-            var(imin+55:imax-25,jmin+40:imax-40) = 5._real64
-         case (2)
-            do j=jmin,jmax
-               do i=imin,imax
-                  if (domain%T%mask(i,j) > 0) then
-                     x=domain%T%c1(i)
-                     y=domain%T%c2(j)
-                     var(i,j) = 1._real64+4._real64*exp( -0.025*((x-x0)**2+(y-y0)**2))
-                  end if
-               end do
+      where(domain%T%mask > 0) var = 1._real64
+      if (method == 1 .or. method == 3) then
+         do j=jmin,jmax
+            do i=imin,imax
+               if (domain%T%mask(i,j) > 0) then
+                  x=domain%T%c1(i)
+                  y=domain%T%c2(j)
+                  var(i,j) = 1._real64+4._real64*exp( -0.01*((x-x0)**2+(y-y0)**2))
+               end if
             end do
-         case (3)
-            do j=jmin,jmax
-               do i=imin,imax
-                  if (domain%T%mask(i,j) > 0) then
-                     x=domain%T%c1(i)
-                     y=domain%T%c2(j)
-                     var(i,j) = 1._real64+4._real64*exp( -0.010*((x-x0)**2+(y-y0)**2))
+         end do
+      end if
+      if (method == 2 .or. method == 3) then
+         do j=jmin,jmax
+            do i=imin,imax
+               if (domain%T%mask(i,j) > 0) then
+                  if (domain%T%c1(i) > 15 .and. domain%T%c1(i) < 35 .and. &
+                      domain%T%c2(j) >-10 .and. domain%T%c2(j) < 10) then
+                     var(i,j) = 5._real64
                   end if
-               end do
+               end if
             end do
-            var(imin+65:imax-15,jmin+40:jmax-40) = 5._real64
-            var(imin+72:imax-15,jmin+47:jmax-47) = 1._real64
-      end select
+         end do
+         do j=jmin,jmax
+            do i=imin,imax
+               if (domain%T%mask(i,j) > 0) then
+                  if (domain%T%c1(i) > 15 .and. domain%T%c1(i) < 25 .and. &
+                      domain%T%c2(j) > -5 .and. domain%T%c2(j) <  5) then
+                     var(i,j) = 1._real64
+                  end if
+               end if
+            end do
+         end do
+      end if
    end subroutine initial_conditions
 
 END PROGRAM test_advection
