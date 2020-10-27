@@ -67,6 +67,10 @@ timestep = tmax / Nmax
 # Update U and V mask in halos
 tiling.wrap(domain.U.mask_, halo=halo).update_halos()
 tiling.wrap(domain.V.mask_, halo=halo).update_halos()
+tiling.wrap(domain.U.H_, halo=halo).update_halos()
+tiling.wrap(domain.V.H_, halo=halo).update_halos()
+tiling.wrap(domain.U.D_, halo=halo).update_halos()
+tiling.wrap(domain.V.D_, halo=halo).update_halos()
 
 u, u_ = domain.array(fill=0.)
 v, v_ = domain.array(fill=0.)
