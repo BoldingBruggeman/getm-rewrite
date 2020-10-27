@@ -27,7 +27,6 @@ MODULE getm_bathymetry
 !-----------------------------------------------------------------------------
    type, public :: type_bathymetry
 
-      TYPE(type_getm_grid), pointer :: pgrid
       TYPE(type_netcdf_input) :: depth
       TYPE(type_netcdf_input) :: c1,c2
       TYPE(type_netcdf_input) :: lon,lat
@@ -59,32 +58,13 @@ SUBROUTINE initialize_bathymetry(self,logs,grid,domain_type)
 ! Local constants
 
 ! Local variables
-  integer :: imin,imax,jmin,jmax
   integer :: stat
 !-----------------------------------------------------------------------------
    call logs%info('initialize_bathymetry()',level=1)
 
 !  reading bathymetry and get coordinate names
    call self%depth%initialize()
-   imin=1; imax=self%depth%dimlens(1)
-   jmin=1; jmax=self%depth%dimlens(2)
-   self%pgrid => grid
-   !call self%pgrid%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=-1,kmax=-1)
-   !! @note
-   !! how to initalize kmax
-   !! @endnote
-   call self%pgrid%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax)
-#if 0
-   write(*,*) imin,imax,jmin,jmax,self%pgrid%kmin,self%pgrid%kmax
-   write(*,*) self%pgrid%l(1:3),self%pgrid%u(1:3)
-   write(*,*) grid%l(1:3),grid%u(1:3)
-   write(*,*) self%pgrid%halo
-#endif
-   if (.not. self%pgrid%grid_ready) then
-      stop 'grid is not ready - can not continue'
-   end if
-   call mm_s('bathymetry',self%pgrid%H,self%pgrid%l(1:2),self%pgrid%u(1:2),def=-10._real64,stat=stat)
-   self%depth%p2dreal64 => self%pgrid%H
+   self%depth%p2dreal64 => grid%H(grid%imin:grid%imax,grid%jmin:grid%jmax)
    call self%depth%get()
    call self%depth%close()
 
@@ -97,27 +77,23 @@ SUBROUTINE initialize_bathymetry(self,logs,grid,domain_type)
    if( trim(self%depth%cord_names(1)) == 'lon_kurt' .and. trim(self%depth%cord_names(2)) == 'lat_kurt') then
       domain_type = 3
    end if
-!KB   call self%depth%print_info()
+   call self%depth%print_info()
 
 !  reading the first cordinate
    self%c1%f = self%depth%f
    self%c1%v = self%depth%cord_names(1)
    call self%c1%initialize()
-   call mm_s(trim(self%c1%v),self%pgrid%c1,self%pgrid%l(1),self%pgrid%u(1),def=-9999._real64,stat=stat)
-   self%c1%p1dreal64 => self%pgrid%c1
+   self%c1%p1dreal64 => grid%c1(grid%imin:grid%imax)
    call self%c1%get()
    call self%c1%close()
-!KB   call self%c1%print_info()
 
 !  reading the second cordinate
    self%c2%f = self%depth%f
    self%c2%v = self%depth%cord_names(2)
    call self%c2%initialize()
-   call mm_s(trim(self%c2%v),self%pgrid%c2,self%pgrid%l(2),self%pgrid%u(2),def=-9999._real64,stat=stat)
-   self%c2%p1dreal64 => self%pgrid%c2
+   self%c2%p1dreal64 => grid%c2(grid%jmin:grid%jmax)
    call self%c2%get()
    call self%c2%close()
-!KB   call self%c2%print_info()
 
    select case (domain_type)
       case(1)
@@ -127,7 +103,8 @@ SUBROUTINE initialize_bathymetry(self,logs,grid,domain_type)
 #if 0
          self%lon%f = self%depth%f
          self%lon%v = 'lonc'
-         call self%lon%initialize(start=stat)
+         call self%lon%initialize()
+!KB         call self%lon%initialize(start=stat)
          call mm_s('lonc',self%pgrid%lon,self%pgrid%l(1:2),self%pgrid%u(1:2),def=-9999._real64,stat=stat)
          self%lon%p2dreal64 => self%pgrid%lon
          call self%lon%get(error_handler=stat)
@@ -159,8 +136,7 @@ SUBROUTINE initialize_bathymetry(self,logs,grid,domain_type)
 #endif
    end select
 
-   call mm_s('mask',self%pgrid%mask,self%pgrid%l(1:2),self%pgrid%u(1:2),def=0,stat=stat)
-   where(self%pgrid%H > -10._real64) self%pgrid%mask = 1
+   where(grid%H > -10._real64) grid%mask = 1
 
    return
 END SUBROUTINE initialize_bathymetry
