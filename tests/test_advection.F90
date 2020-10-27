@@ -170,7 +170,8 @@ CONTAINS
       call fm%register('D','','depth',data2d=domain%T%D(imin:imax,jmin:jmax),fill_value=-99._real64)
       call fm%register('f','','scalar',data2d=var(imin:imax,jmin:jmax),fill_value=-99._real64)
 !KB      call fm%list()
-      call output%initialize(fm)
+      call output%configure(fm=fm)
+      call output%initialize()
    end subroutine field_manager_setup
 
 !-----------------------------------------------------------------------------
