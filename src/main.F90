@@ -1,6 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
-PROGRAM lom3d
+PROGRAM getm
 
    !! Lake Ocean Model in 3d - LOM3d
    !! A re-write of GETM using modern Fortran methods.
@@ -20,6 +20,6 @@ PROGRAM lom3d
    call themodel%integrate()
    call themodel%finalize()
 
-END PROGRAM lom3d
+END PROGRAM getm
 
 ! https://gist.github.com/n-s-k/522f2669979ed6d0582b8e80cf6c95fd
