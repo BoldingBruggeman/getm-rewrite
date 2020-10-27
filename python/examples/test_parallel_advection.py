@@ -25,7 +25,7 @@ else:
 tiling = pygetm.parallel.Tiling(2, 2)
 
 # Set up local subdomain 
-domain = pygetm.Domain(1, nlev, 1, domain_shape[0] // 2, 1, domain_shape[1] // 2)
+domain = pygetm.Domain(1, nlev, 1, domain_shape[0] // tiling.nrow, 1, domain_shape[1] // tiling.ncol)
 halo = domain.halo
 
 # Scatter global bathymetry to subdomains
@@ -80,7 +80,7 @@ v_[:, :] = omega * c1_
 u_[domain.U.mask_ == 0] = 0.
 v_[domain.V.mask_ == 0] = 0.
 if rank == 0:
-    var[int(0.4 * domain.shape[1]):int(0.8 * domain.shape[1]), int(0.4 * domain.shape[2]):int(0.8 * domain.shape[2])] = 5.
+    var[int(tiling.nrow * 0.2 * domain.shape[1]):int(tiling.nrow * 0.4 * domain.shape[1]), int(tiling.ncol * 0.2 * domain.shape[2]):int(tiling.ncol * 0.4 * domain.shape[2])] = 5.
 
 # These extra halo updates should not be needed - just for testing
 tiling.wrap(u_, halo=halo).update_halos()
