@@ -58,7 +58,7 @@ module SUBROUTINE uv_depths(self)
    if (associated(self%logs)) call self%logs%info('uv_depths()',level=2)
    ! U-mask
    do j=self%U%jmin,self%U%jmax
-      do i=self%U%imin,self%U%imax-1
+      do i=self%U%imin,self%U%imax
          if (self%T%mask(i,j) == 1 .and. self%T%mask(i+1,j) == 1) then
             self%U%mask(i,j)=1
          end if
@@ -73,7 +73,7 @@ module SUBROUTINE uv_depths(self)
    end do
    ! U-depths
    do j=self%U%jmin,self%U%jmax
-      do i=self%U%imin,self%U%imax-1
+      do i=self%U%imin,self%U%imax
          if (self%U%mask(i,j) > 0) then
             select case (vel_depth_method)
                case (0)
@@ -93,7 +93,7 @@ module SUBROUTINE uv_depths(self)
 
    ! V-mask
    do j=self%V%jmin,self%V%jmax
-      do i=self%V%imin,self%V%imax-1
+      do i=self%V%imin,self%V%imax
          if (self%T%mask(i,j) == 1 .and. self%T%mask(i,j+1) == 1) then
             self%V%mask(i,j)=1
          end if
@@ -107,7 +107,7 @@ module SUBROUTINE uv_depths(self)
       end do
    end do
    ! V-depths
-   do j=self%V%jmin,self%V%u(2)-1
+   do j=self%V%jmin,self%V%jmax
       do i=self%V%imin,self%V%imax
          if (self%V%mask(i,j) > 0) then
             select case (vel_depth_method)
