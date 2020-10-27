@@ -118,7 +118,6 @@ module SUBROUTINE metrics(self)
    self%V%inv_area = 1._real64/self%V%area
    self%X%inv_area = 1._real64/self%X%area
    if (associated(self%logs)) call self%logs%info('done',level=2)
-   return
 END SUBROUTINE metrics
 
 !---------------------------------------------------------------------------

@@ -186,7 +186,7 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,
          if (tmask(i,j) == 1) then
             hfo = h(i,j)*f(i,j)
             h(i,j) = h(i,j) - dt*( QV(i,j)-QV(i,j-1) )*iA(i,j)
-            advn = ( flux(i,j)-flux(i,j-1) )/iA(i,j)
+            advn = ( flux(i,j)-flux(i,j-1) )*iA(i,j)
             f(i,j) = ( hfo - dt*advn ) / h(i,j)
          end if
       end do
@@ -195,7 +195,6 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,
 !#ifndef _AUTOMATIC_
 !   deallocate(flux, QV)
 !#endif
-   return
 END SUBROUTINE _V_SUB_NAME_
 
 SUBROUTINE _W_SUB_NAME_(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
@@ -347,8 +346,6 @@ SUBROUTINE _W_SUB_NAME_(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
 
       end do
    end do
-
-   return
 END SUBROUTINE _W_SUB_NAME_
 
 !KB END MODULE _MODULE_NAME_

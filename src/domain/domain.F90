@@ -210,7 +210,7 @@ MODULE getm_domain
 
       module subroutine grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
          class(type_getm_grid), intent(inout) :: self
-         class(type_logging), intent(in), optional :: logs
+         class(type_logging), intent(in), target, optional :: logs
          integer, intent(in), optional :: imin,imax
          integer, intent(in), optional :: jmin,jmax
          integer, intent(in), optional :: kmin,kmax
@@ -234,9 +234,6 @@ MODULE getm_domain
          integer, intent(in) :: unit
       end subroutine grid_print_mask
 
-      module subroutine allocate_grid_variables(self)
-         class(type_getm_grid), intent(inout) :: self
-      end subroutine allocate_grid_variables
       module subroutine deallocate_grid_variables(self)
          class(type_getm_grid), intent(inout) :: self
       end subroutine deallocate_grid_variables
@@ -278,14 +275,11 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,logs,fm)
    call self%X%configure(logs,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
 
 !  set local and global grid extend
-   self%T%ill=self%T%l(1); self%T%ihl=self%T%u(1)
-   self%T%jll=self%T%l(2); self%T%jhl=self%T%u(2)
-
-   call allocate_variables(self)
+!KB   self%T%ill=self%T%l(1); self%T%ihl=self%T%u(1)
+!KB   self%T%jll=self%T%l(2); self%T%jhl=self%T%u(2)
 
    self%domain_ready = self%T%grid_ready .and. self%U%grid_ready .and. &
                        self%V%grid_ready .and. self%X%grid_ready
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE domain_configure
 
 !-----------------------------------------------------------------------------
@@ -340,30 +334,6 @@ SUBROUTINE domain_initialize(self)
 
    if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE domain_initialize
-
-!-----------------------------------------------------------------------------
-
-SUBROUTINE allocate_variables(self)
-   !! Allocate all domain related variables
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_domain), intent(inout) :: self
-
-!  Local constants
-
-!  Local variables
-!-----------------------------------------------------------------------------
-#ifndef _STATIC_
-   if (associated(self%logs)) call self%logs%info('allocate_variables()',level=2)
-   call allocate_grid_variables(self%T)
-   call allocate_grid_variables(self%U)
-   call allocate_grid_variables(self%V)
-   call allocate_grid_variables(self%X)
-   if (associated(self%logs)) call self%logs%info('done',level=2)
-#endif
-END SUBROUTINE allocate_variables
 
 !-----------------------------------------------------------------------------
 

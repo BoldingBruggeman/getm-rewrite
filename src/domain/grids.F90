@@ -18,7 +18,7 @@ module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
 
 !  Subroutine arguments
    class(type_getm_grid), intent(inout) :: self
-   class(type_logging), intent(in), optional :: logs
+   class(type_logging), intent(in), target, optional :: logs
    integer, intent(in), optional :: imin,imax
    integer, intent(in), optional :: jmin,jmax
    integer, intent(in), optional :: kmin,kmax
@@ -30,11 +30,15 @@ module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
 !  Local variables
 !-----------------------------------------------------------------------
    if (self%is_initialized) return
-   if (present(logs)) call logs%info('grid_configure()',level=2)
+   if (present(logs)) then
+      self%logs => logs
+      call logs%info('grid_configure()',level=2)
+   end if
 
    call self%type_3d_grid%create(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
+   call allocate_grid_variables(self)
 
-!KB   self%is_initialized = .true.
+   self%is_initialized = .true.
 END SUBROUTINE grid_configure
 
 !-----------------------------------------------------------------------------
@@ -79,7 +83,8 @@ module SUBROUTINE grid_print_info(self,logs)
 !  Local variables
    integer :: i,j
 !-----------------------------------------------------------------------------
-   if (associated(self%logs)) call self%type_3d_grid%print(1)
+!KB   if (associated(self%logs)) call self%type_3d_grid%print(1)
+   call self%type_3d_grid%print(6)
 END SUBROUTINE grid_print_info
 
 !-----------------------------------------------------------------------------
@@ -111,7 +116,8 @@ END SUBROUTINE grid_print_mask
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE allocate_grid_variables(self)
+!module SUBROUTINE allocate_grid_variables(self)
+SUBROUTINE allocate_grid_variables(self)
    !! Allocate all domain related variables
 
    IMPLICIT NONE
