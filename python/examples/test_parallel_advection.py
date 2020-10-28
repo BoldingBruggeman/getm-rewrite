@@ -1,4 +1,6 @@
 import argparse
+import timeit
+import cProfile
 
 import numpy
 import pygetm
@@ -8,17 +10,20 @@ from mpi4py import MPI
 import matplotlib.pyplot
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-d', '--debug', action='store_true', help='produce plots per subdomain')
+parser.add_argument('-d', '--debug', action='store_true', help='diagnose individual subdomains')
 parser.add_argument('-i', '--interval', type=int, help='number of timesteps between plots', default=10)
+parser.add_argument('--nmax', type=int, help='total number of timesteps', default=None)
 parser.add_argument('--nrow', type=int, help='number of rows in subdomain division', default=2)
 parser.add_argument('--ncol', type=int, help='number of columns in subdomain division', default=2)
+parser.add_argument('--noplot', action='store_true', help='skip plotting (useful for performance testing)')
+parser.add_argument('--profile', action='store_true', help='use profiler to time function calls')
 args = parser.parse_args()
 
 halo = 2
 Lx, Ly = 100., 100.
 nlev = 1
 
-domain_shape = 600, 602  # nj, ni
+domain_shape = 600, 604  # nj, ni
 
 rank = MPI.COMM_WORLD.Get_rank()
 
@@ -107,7 +112,7 @@ distf.scatter(f_glob)
 # Gather and plot global velocities
 u_glob = tiling.wrap(u_, halo=halo).gather()
 v_glob = tiling.wrap(v_, halo=halo).gather()
-if u_glob is not None:
+if u_glob is not None and not args.noplot:
     fig = matplotlib.pyplot.figure()
     ax = fig.gca()
     ax.quiver(u_glob[::10, ::10], v_glob[::10, ::10], angles='xy')
@@ -127,38 +132,51 @@ if args.debug:
     cb_sub = fig_sub.colorbar(pc_sub)
 
 # Set up figure for plotting global tracer field
-if f_glob is not None:
+if f_glob is not None and not args.noplot:
     fig = matplotlib.pyplot.figure()
     ax = fig.gca()
     pc = ax.pcolormesh(f_glob)
     cb = fig.colorbar(pc)
 
-adv = pygetm.Advection(domain, scheme=6)
-ifig = 0
-for i in range(Nmax):
-    if i % args.interval == 0:
-        if args.debug:
-            # Print tracer max along boundaries, inside and outsde halo 
-            print(i, rank, 'inside', f[0, :].max(), f[-1, :].max(), f[:, 0].max(), f[:, -1].max(), flush=True)
-            print(i, rank, 'outside', rank, f_[halo-1, :].max(), f_[-halo, :].max(), f_[:, halo-1].max(), f_[:, -halo].max(), flush=True)
+def main():
+    global Nmax
+    adv = pygetm.Advection(domain, scheme=6)
+    if args.nmax:
+        Nmax = args.nmax
+    ifig = 0
+    start = timeit.default_timer()
+    for i in range(Nmax):
+        if i % args.interval == 0:
+            if rank == 0:
+                print('time step %i of %i' % (i, Nmax), flush=True)
 
-            # Plot local tracer field
-            pc_sub.set_array(f_.ravel())
-            fig_sub.savefig('subadv_%i_%04i.png' % (rank, ifig))
+            if args.debug:
+                # Print tracer max along boundaries, inside and outsde halo 
+                print(i, rank, 'inside', f[0, :].max(), f[-1, :].max(), f[:, 0].max(), f[:, -1].max(), flush=True)
+                print(i, rank, 'outside', rank, f_[halo-1, :].max(), f_[-halo, :].max(), f_[:, halo-1].max(), f_[:, -halo].max(), flush=True)
 
-        # Gather and plot global tracer field
-        f_glob = distf.gather()
-        if f_glob is not None:
-            print('time step %i of %i, tracer sum = %s' % (i, Nmax, f_glob.sum()), flush=True)
-            pc.set_array(f_glob.ravel())
-            fig.savefig('adv_%04i.png' % ifig)
+                # Plot local tracer field
+                pc_sub.set_array(f_.ravel())
+                fig_sub.savefig('subadv_%i_%04i.png' % (rank, ifig))
 
-        ifig += 1
+            # Gather and plot global tracer field
+            if not args.noplot:
+                f_glob = distf.gather()
+                if f_glob is not None:
+                    pc.set_array(f_glob.ravel())
+                    fig.savefig('adv_%04i.png' % ifig)
 
-    # Advect
-    adv.calculate(u_, v_, timestep, f_)
+            ifig += 1
 
-    # Update halos
-    distf.update_halos()
+        # Advect
+        adv.calculate(u_, v_, timestep, f_)
 
+        # Update halos
+        distf.update_halos()
 
+    print('%.4f s per iteration' % ((timeit.default_timer() - start) / Nmax,))
+
+if args.profile:
+    cProfile.run('main()', sort='tottime')
+else:
+    main()
