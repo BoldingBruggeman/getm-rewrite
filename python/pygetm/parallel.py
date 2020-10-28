@@ -36,7 +36,7 @@ class Tiling:
         print('{:^3}  {:^3}  {:^3}'.format(p(self.bottomleft), p(self.bottom), p(self.bottomright)))
 
 class DistributedArray:
-    __slots__ = ['tiling', 'comm', 'tasks', 'field', 'interior', 'halo']
+    __slots__ = ['tiling', 'comm', 'sendtasks', 'recvtasks', 'field', 'interior', 'halo']
     def __init__(self, tiling, field, halo):
         self.tiling = tiling
         self.comm = tiling.comm
@@ -44,11 +44,13 @@ class DistributedArray:
         self.interior = field[..., halo:-halo, halo:-halo]
         self.halo = halo
 
-        self.tasks = []
+        self.sendtasks = []
+        self.recvtasks = []
         def add_task(neighbor, inner, outer):
             assert inner.shape == outer.shape
             if neighbor is not None:
-                self.tasks.append((neighbor, inner, outer, numpy.empty_like(outer)))
+                self.sendtasks.append((neighbor, inner, numpy.empty_like(inner)))
+                self.recvtasks.append((neighbor, outer, numpy.empty_like(outer)))
 
         add_task(tiling.left, field[..., halo:-halo, halo:halo*2], field[..., halo:-halo, :halo])
         add_task(tiling.right, field[..., halo:-halo, -halo*2:-halo], field[..., halo:-halo, -halo:])
@@ -60,10 +62,12 @@ class DistributedArray:
         add_task(tiling.bottomright, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
 
     def update_halos(self):
-        recreqs = [self.comm.Irecv(cache, neigbor) for neigbor, _, _, cache in self.tasks]
-        sendreqs = [self.comm.Isend(numpy.ascontiguousarray(inner), neigbor) for neigbor, inner, _, _ in self.tasks]
-        Waitall(recreqs + sendreqs)
-        for _, _, outer, cache in self.tasks:
+        recreqs = [self.comm.Irecv(cache, neigbor) for neigbor, _, cache in self.recvtasks]
+        for neigbor, inner, cache in self.sendtasks:
+            cache[...] = inner
+            self.comm.Isend(cache, neigbor)
+        Waitall(recreqs)
+        for _, outer, cache in self.recvtasks:
             outer[...] = cache
 
     def gather(self, root=0):
