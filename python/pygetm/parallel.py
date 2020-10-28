@@ -1,6 +1,8 @@
 from mpi4py import MPI
 import numpy
 
+Waitall = MPI.Request.Waitall
+
 class Tiling:
     def __init__(self, nrow, ncol, comm=MPI.COMM_WORLD):
         def get_rank(i, j):
@@ -34,9 +36,13 @@ class Tiling:
         print('{:^3}  {:^3}  {:^3}'.format(p(self.bottomleft), p(self.bottom), p(self.bottomright)))
 
 class DistributedArray:
+    __slots__ = ['tiling', 'comm', 'tasks', 'field', 'interior', 'halo']
     def __init__(self, tiling, field, halo):
         self.tiling = tiling
         self.comm = tiling.comm
+        self.field = field
+        self.interior = field[..., halo:-halo, halo:-halo]
+        self.halo = halo
 
         self.tasks = []
         def add_task(neighbor, inner, outer):
@@ -52,19 +58,12 @@ class DistributedArray:
         add_task(tiling.topright, field[..., -halo*2:-halo, -halo*2:-halo], field[..., -halo:, -halo:])
         add_task(tiling.bottomleft, field[..., halo:halo*2, halo:halo*2], field[..., :halo, :halo])
         add_task(tiling.bottomright, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
-        self.field = field
-        self.interior = field[..., halo:-halo, halo:-halo]
-        self.halo = halo
 
     def update_halos(self):
-        Irecv, Isend = self.comm.Irecv, self.comm.Isend
-        reqs = []
-        for neigbor, inner, outer, cache in self.tasks:
-            reqs.append(Irecv(cache, neigbor))
-        for neigbor, inner, outer, cache in self.tasks:
-            reqs.append(Isend(numpy.ascontiguousarray(inner), neigbor))
-        MPI.Request.Waitall(reqs)
-        for neigbor, inner, outer, cache in self.tasks:
+        recreqs = [self.comm.Irecv(cache, neigbor) for neigbor, _, _, cache in self.tasks]
+        sendreqs = [self.comm.Isend(numpy.ascontiguousarray(inner), neigbor) for neigbor, inner, _, _ in self.tasks]
+        Waitall(recreqs + sendreqs)
+        for _, _, outer, cache in self.tasks:
             outer[...] = cache
 
     def gather(self, root=0):
