@@ -42,8 +42,8 @@ _pygetm.domain_create.restype = ctypes.c_void_p
 _pygetm.domain_get_grid.argtypes = [ctypes.c_void_p, ctypes.c_char]
 _pygetm.domain_get_grid.restype = ctypes.c_void_p
 
-_pygetm.grid_get_arrays.argtypes = [ctypes.c_void_p] + [ctypes.POINTER(ctypes.POINTER(ctypes.c_double))] * 14 + [ctypes.POINTER(ctypes.POINTER(ctypes.c_int))]
-_pygetm.grid_get_arrays.restype = None
+_pygetm.grid_get_array.argtypes = [ctypes.c_void_p,  ctypes.c_char_p]
+_pygetm.grid_get_array.restype = ctypes.c_void_p
 
 _pygetm.domain_initialize.argtypes = [ctypes.c_void_p]
 _pygetm.domain_initialize.restype = None
@@ -60,45 +60,18 @@ _pygetm.advection_calculate.restype = None
 class Grid:
     def __init__(self, domain, grid_type='T'):
         self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
-        pc1 = ctypes.POINTER(ctypes.c_double)()
-        pc2 = ctypes.POINTER(ctypes.c_double)()
-        px = ctypes.POINTER(ctypes.c_double)()
-        py = ctypes.POINTER(ctypes.c_double)()
-        pdx = ctypes.POINTER(ctypes.c_double)()
-        pdy = ctypes.POINTER(ctypes.c_double)()
-        plon = ctypes.POINTER(ctypes.c_double)()
-        plat = ctypes.POINTER(ctypes.c_double)()
-        pdlon = ctypes.POINTER(ctypes.c_double)()
-        pdlat = ctypes.POINTER(ctypes.c_double)()
-        parea = ctypes.POINTER(ctypes.c_double)()
-        pinv_area = ctypes.POINTER(ctypes.c_double)()
-        pH = ctypes.POINTER(ctypes.c_double)()
-        pD = ctypes.POINTER(ctypes.c_double)()
-        pmask = ctypes.POINTER(ctypes.c_int)()
-        _pygetm.grid_get_arrays(self.p, pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, parea, pinv_area, pH, pD, pmask)
-        halo = domain.halo
-        self.c1_ = numpy.ctypeslib.as_array(pc1, shape=(domain.shape[2],)).view('=d')
-        self.c2_ = numpy.ctypeslib.as_array(pc2, shape=(domain.shape[1],)).view('=d')
-        self.x_ = numpy.ctypeslib.as_array(px, shape=domain.shape[1:]).view('=d')
-        self.y_ = numpy.ctypeslib.as_array(py, shape=domain.shape[1:]).view('=d')
-        self.dx_ = numpy.ctypeslib.as_array(pdx, shape=domain.shape[1:]).view('=d')
-        self.dy_ = numpy.ctypeslib.as_array(pdy, shape=domain.shape[1:]).view('=d')
-        self.lon_ = numpy.ctypeslib.as_array(plon, shape=domain.shape[1:]).view('=d')
-        self.lat_ = numpy.ctypeslib.as_array(plat, shape=domain.shape[1:]).view('=d')
-        self.dlon_ = numpy.ctypeslib.as_array(pdlon, shape=domain.shape[1:]).view('=d')
-        self.dlat_ = numpy.ctypeslib.as_array(pdlat, shape=domain.shape[1:]).view('=d')
-        self.area_ = numpy.ctypeslib.as_array(parea, shape=domain.shape[1:]).view('=d')
-        self.inv_area_ = numpy.ctypeslib.as_array(pinv_area, shape=domain.shape[1:]).view('=d')
-        self.H_ = numpy.ctypeslib.as_array(pH, shape=domain.shape[1:]).view('=d')
-        self.D_ = numpy.ctypeslib.as_array(pD, shape=domain.shape[1:]).view('=d')
-        self.mask_ = numpy.ctypeslib.as_array(pmask, shape=domain.shape[1:]).view('=i')
-        self.c1 = self.c1_[halo:-halo]
-        self.c2 = self.c2_[halo:-halo]
-        self.H = self.H_[halo:-halo, halo:-halo]
-        self.mask = self.mask_[halo:-halo, halo:-halo]
-        self.x = self.x_[halo:-halo, halo:-halo]
-        self.y = self.y_[halo:-halo, halo:-halo]
-        self.halo = halo
+        self.halo = domain.halo
+        names = 'c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask'
+        for name in names:
+            p = _pygetm.grid_get_array(self.p, name.encode('ascii'))
+            shape = {'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}.get(name, domain.shape[1:])
+            dtype = {'mask': ctypes.c_int}.get(name, ctypes.c_double)
+            for l in shape[::-1]:
+                dtype = dtype * l
+            p = ctypes.cast(p, ctypes.POINTER(dtype)).contents
+            data_ = numpy.ctypeslib.as_array(p).newbyteorder('=')
+            setattr(self, name + '_', data_)
+            setattr(self, name, data_[tuple([slice(self.halo, -self.halo)] * len(shape))])
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)

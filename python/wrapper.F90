@@ -1,6 +1,6 @@
 module pygetm
 
-   use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer
+   use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, C_NULL_CHAR
    use iso_fortran_env, only: real64
 
    use getm_domain, only: type_getm_domain, type_getm_grid
@@ -48,31 +48,36 @@ contains
       pgrid = c_loc(grid)
    end function
 
-   subroutine grid_get_arrays(pgrid, pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, parea, pinv_area, pH, pD, pmask) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: grid_get_arrays
-      type(c_ptr), intent(in), value :: pgrid
-      type(c_ptr), intent(out)       :: pc1, pc2, px, py, pdx, pdy, plon, plat, pdlon, pdlat, parea, pinv_area, pH, pD, pmask
+   function grid_get_array(pgrid, name) result(p) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: grid_get_array
+      type(c_ptr), value,             intent(in) :: pgrid
+      character(kind=c_char), target, intent(in) :: name(*)
+      type(c_ptr)                                :: p
 
       type (type_getm_grid), pointer :: grid
+      character(len=8),      pointer :: pname
 
       call c_f_pointer(pgrid, grid)
+      call c_f_pointer(c_loc(name), pname)
 
-      pc1 = c_loc(grid%c1)
-      pc2 = c_loc(grid%c2)
-      px = c_loc(grid%x)
-      py = c_loc(grid%y)
-      pdx = c_loc(grid%dx)
-      pdy = c_loc(grid%dy)
-      plon = c_loc(grid%lon)
-      plat = c_loc(grid%lat)
-      pdlon = c_loc(grid%dlon)
-      pdlat = c_loc(grid%dlat)
-      parea = c_loc(grid%area)
-      pinv_area = c_loc(grid%inv_area)
-      pH = c_loc(grid%H)
-      pD = c_loc(grid%D)
-      pmask = c_loc(grid%mask)
-   end subroutine
+      select case (pname(:index(pname, C_NULL_CHAR) - 1))
+      case ('c1'); p = c_loc(grid%c1)
+      case ('c2'); p = c_loc(grid%c2)
+      case ('x'); p = c_loc(grid%x)
+      case ('y'); p = c_loc(grid%y)
+      case ('dx'); p = c_loc(grid%dx)
+      case ('dy'); p = c_loc(grid%dy)
+      case ('lon'); p = c_loc(grid%lon)
+      case ('lat'); p = c_loc(grid%lat)
+      case ('dlon'); p = c_loc(grid%dlon)
+      case ('dlat'); p = c_loc(grid%dlat)
+      case ('area'); p = c_loc(grid%area)
+      case ('inv_area'); p = c_loc(grid%inv_area)
+      case ('H'); p = c_loc(grid%H)
+      case ('D'); p = c_loc(grid%D)
+      case ('mask'); p = c_loc(grid%mask)
+      end select
+   end function
 
    subroutine domain_initialize(pdomain) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: domain_initialize
