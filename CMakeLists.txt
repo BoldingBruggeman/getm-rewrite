@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1.3)
 
 # Create main project.
-project(loms VERSION 0.1.0 LANGUAGES Fortran)
+project(getm VERSION 0.1.0 LANGUAGES Fortran)
 
 # Use solution folders in IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
