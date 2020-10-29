@@ -4,6 +4,8 @@ import ctypes
 
 import numpy
 
+from . import parallel
+
 # Determine potential names of FABM dynamic library.
 if os.name == 'nt':
    dllpaths = ('_pygetm.dll', 'lib_pygetm.dll')
@@ -94,8 +96,53 @@ class Grid:
         self.c2 = self.c2_[halo:-halo]
         self.H = self.H_[halo:-halo, halo:-halo]
         self.mask = self.mask_[halo:-halo, halo:-halo]
+        self.x = self.x_[halo:-halo, halo:-halo]
+        self.y = self.y_[halo:-halo, halo:-halo]
 
 class Domain:
+    @staticmethod
+    def create_cartesian(x, y, nlev, H=0.):
+        assert x.ndim == 1, 'x coordinate must be one-dimensional'
+        assert y.ndim == 1, 'y coordinate must be one-dimensional'
+        assert nlev >= 1, 'number of levels must be >= 1'
+        domain = Domain(1, nlev, 1, y.size, 1, x.size)
+        domain.T.c1[:] = x
+        domain.T.c2[:] = y
+        domain.T.x[:, :] = x[numpy.newaxis, :]
+        domain.T.y[:, :] = y[:, numpy.newaxis]
+        domain.T.H[...] = H
+        return domain
+
+    @staticmethod
+    def partition(tiling, nx, ny, nlev, global_domain):
+        assert nx % tiling.ncol == 0
+        assert ny % tiling.nrow == 0
+        assert global_domain is None or global_domain.initialized
+
+        domain = Domain(1, nlev, 1, ny // tiling.nrow, 1, nx // tiling.ncol)
+
+        # Scatter coordinates, bathymetry and mask to subdomains
+        tiling.wrap(domain.T.x_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.x)
+        tiling.wrap(domain.T.y_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.y)
+        tiling.wrap(domain.T.H_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.H)
+        tiling.wrap(domain.T.mask_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.mask)
+
+        # Extract 1D coordinate vectors per subdomain
+        domain.T.c1_[:] = domain.T.x_[domain.halo, :]
+        domain.T.c2_[:] = domain.T.y_[:, domain.halo]
+
+        domain.initialize()
+
+        # Update U and V mask in halos
+        tiling.wrap(domain.U.mask_, halo=domain.halo).update_halos()
+        tiling.wrap(domain.V.mask_, halo=domain.halo).update_halos()
+        tiling.wrap(domain.U.H_, halo=domain.halo).update_halos()
+        tiling.wrap(domain.V.H_, halo=domain.halo).update_halos()
+        tiling.wrap(domain.U.D_, halo=domain.halo).update_halos()
+        tiling.wrap(domain.V.D_, halo=domain.halo).update_halos()
+
+        return domain
+
     def __init__(self, kmin, kmax, jmin, jmax, imin, imax):
         self.imin, self.imax = imin, imax
         self.jmin, self.jmax = jmin, jmax
@@ -108,12 +155,14 @@ class Domain:
         self.U = Grid(self, 'U')
         self.V = Grid(self, 'V')
         self.X = Grid(self, 'X')
+        self.initialized = False
 
     def initialize(self):
         _pygetm.domain_initialize(self.p)
+        self.initialized = True
 
-    def array(self, fill=None):
-        data = numpy.empty(self.shape[1:])
+    def array(self, fill=None, dtype=float):
+        data = numpy.empty(self.shape[1:], dtype=dtype)
         if fill is not None:
             data[...] = fill
         return data[self.halo:-self.halo, self.halo:-self.halo], data

@@ -21,91 +21,55 @@ args = parser.parse_args()
 
 halo = 2
 Lx, Ly = 100., 100.
-nlev = 1
-
-domain_shape = 600, 604  # nj, ni
+nx, ny, nlev = 612, 600, 1
 
 rank = MPI.COMM_WORLD.Get_rank()
 
+global_domain, f_glob = None, None
 if rank == 0:
     # Set up global 2D coordinate arrays, bathymetry and initial tracer field
-    c1_glob = numpy.broadcast_to(numpy.linspace(-Lx/2, Lx/2, domain_shape[1])[None, :], domain_shape)
-    c2_glob = numpy.broadcast_to(numpy.linspace(-Ly/2, Ly/2, domain_shape[0])[:, None], domain_shape)
-    H_glob = numpy.zeros(domain_shape)
-    H_glob[1:-1, 1:-1] = 1.
-    f_glob = numpy.zeros(domain_shape)
-    f_glob[int(0.2 * domain_shape[-2]):int(0.4 * domain_shape[-2]), int(0.2 * domain_shape[-1]):int(0.4 * domain_shape[-1])] = 5.
-else:
-    c1_glob, c2_glob, H_glob, mask_glob, f_glob = None, None, None, None, None
+    global_domain = pygetm.Domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=0.)
+    global_domain.T.H[1:-1, 1:-1] = 1.
+    global_domain.T.mask[1:-1, 1:-1] = 1
+    global_domain.initialize()
+    f_glob, _ = global_domain.array()
+    f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
 
 tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
 
 # Set up local subdomain 
-domain = pygetm.Domain(1, nlev, 1, domain_shape[0] // tiling.nrow, 1, domain_shape[1] // tiling.ncol)
-halo = domain.halo
+subdomain = pygetm.Domain.partition(tiling, nx, ny, nlev, global_domain)
+halo = subdomain.halo
 
-# Scatter global bathymetry to subdomains
-tiling.wrap(domain.T.H_, halo=halo).scatter(H_glob)
-
-# Scatter global 2D coordinates to subdomains and extract 1D c1, c2
-c1_ = numpy.zeros_like(domain.T.H_)
-c2_ = numpy.zeros_like(domain.T.H_)
-tiling.wrap(c1_, halo=halo).scatter(c1_glob)
-tiling.wrap(c2_, halo=halo).scatter(c2_glob)
-domain.T.c1_[:] = c1_[halo, :]
-domain.T.c2_[:] = c2_[:, halo]
-
-# Infer local mask from bathymetry
-domain.T.mask_[...] = domain.T.H_ == 1.
-
-#print(rank, domain.T.c1_[0], domain.T.c1_[-1], domain.T.c2_[0], domain.T.c2_[-1])
-
-domain.initialize()
-
-# Knut's mask hack, implemnted by setting up global mask and scattering that
-domain.T.mask_[...] = 0  # this ensure that outer halos [outside global domain] are masked too - should not be needed
+# Knut's mask hack, implemented by setting up global mask and scattering that
+mask_glob = None
+subdomain.T.mask_[...] = 0  # this ensure that outer halos [outside global domain] are masked too - should not be needed
 if rank == 0:
-    mask_glob = numpy.zeros(H_glob.shape, dtype=int)
+    mask_glob, _ = global_domain.array(dtype=int)
     mask_glob[2:-2, 2:-2] = 1
-tiling.wrap(domain.T.mask_, halo=halo).scatter(mask_glob)
+tiling.wrap(subdomain.T.mask_, halo=halo).scatter(mask_glob)
 
 # Set up velocities
 period = 600
 omega = 2 * numpy.pi / period
 cfl = 1.
 umax = omega * Lx / 2
-dt_cfl = cfl * min(Lx / (domain_shape[1] + 1), Ly / (domain_shape[0] + 1)) / umax
+dt_cfl = cfl * min(Lx / nx, Ly / ny) / umax
 no_of_revolutions = 5
 Nmax = no_of_revolutions * round(2 * numpy.pi / omega / dt_cfl)
 tmax = no_of_revolutions * 2 * numpy.pi / omega
 timestep = tmax / Nmax
 
-# Update U and V mask in halos
-tiling.wrap(domain.U.mask_, halo=halo).update_halos()
-tiling.wrap(domain.V.mask_, halo=halo).update_halos()
-tiling.wrap(domain.U.H_, halo=halo).update_halos()
-tiling.wrap(domain.V.H_, halo=halo).update_halos()
-tiling.wrap(domain.U.D_, halo=halo).update_halos()
-tiling.wrap(domain.V.D_, halo=halo).update_halos()
+u_ = -omega * subdomain.T.y_
+v_ = omega * subdomain.T.x_
+u_[subdomain.U.mask_ == 0] = 0.
+v_[subdomain.V.mask_ == 0] = 0.
 
-# These extra halo updates should not be needed - just for testing
-# tiling.wrap(u_, halo=halo).update_halos()
-# tiling.wrap(v_, halo=halo).update_halos()
-# tiling.wrap(domain.T.mask_, halo=halo).update_halos()
-# tiling.wrap(domain.U.dx_, halo=halo).update_halos()
-# tiling.wrap(domain.V.dx_, halo=halo).update_halos()
-# tiling.wrap(domain.T.dx_, halo=halo).update_halos()
-# tiling.wrap(domain.U.dy_, halo=halo).update_halos()
-# tiling.wrap(domain.V.dy_, halo=halo).update_halos()
-# tiling.wrap(domain.T.dy_, halo=halo).update_halos()
+if args.nmax:
+    Nmax = args.nmax
 
-f, f_ = domain.array(fill=0.)
-u_ = -omega * c2_
-v_ = omega * c1_
-u_[domain.U.mask_ == 0] = 0.
-v_[domain.V.mask_ == 0] = 0.
-
-# Wrap tracer for halo updates
+# Set up tracer field for subdomain, wrap it for halo updates, and MPI-scatter it from root node
+f, f_ = subdomain.array(fill=0.)
 distf = tiling.wrap(f_, halo=halo)
 distf.scatter(f_glob)
 
@@ -139,10 +103,7 @@ if f_glob is not None and not args.noplot:
     cb = fig.colorbar(pc)
 
 def main():
-    global Nmax
-    adv = pygetm.Advection(domain, scheme=6)
-    if args.nmax:
-        Nmax = args.nmax
+    adv = pygetm.Advection(subdomain, scheme=1)
     ifig = 0
     start = timeit.default_timer()
     for i in range(Nmax):
