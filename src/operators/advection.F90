@@ -49,25 +49,13 @@ END SUBROUTINE advection_initialize
 
 !---------------------------------------------------------------------------
 
-#if 0
-MODULE subroutine advection_calculate_2d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
+MODULE PROCEDURE advection_calculate_2d
 
    IMPLICIT NONE
-
-   class(type_advection), intent(inout) :: self
-   integer, intent(in) :: scheme
-   type(type_getm_grid), intent(in) :: ugrid, vgrid
-   real(real64), intent(in) :: u(:,:), v(:,:)
-   real(real64), intent(in) :: dt
-   type(type_getm_grid), intent(inout) :: tgrid
-   real(real64), intent(inout) :: f(:,:)
 
 !  Local constants
 
 !  Local variables
-#else
-MODULE PROCEDURE advection_calculate_2d
-#endif
    real(real64), allocatable :: D(:,:)
 !---------------------------------------------------------------------------
    allocate(D,mold=tgrid%D)
@@ -135,39 +123,23 @@ MODULE PROCEDURE advection_calculate_2d
                           ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
                           tgrid%mask,tgrid%inv_area,dt/2,D,f)
    end select
-
-#if 0
-END SUBROUTINE advection_calculate_2d
-#else
 END PROCEDURE advection_calculate_2d
-#endif
 
 !---------------------------------------------------------------------------
 
-#if 0
-MODULE subroutine advection_calculate_3d(self,scheme,ugrid,u,vgrid,v,dt,tgrid,f)
+MODULE PROCEDURE advection_calculate_3d
 
    IMPLICIT NONE
-
-   class(type_advection), intent(inout) :: self
-   integer, intent(in) :: scheme
-   type(type_getm_grid), intent(in) :: ugrid, vgrid
-   real(real64), intent(in) :: u(:,:,:), v(:,:,:)
-   real(real64), intent(in) :: dt
-   type(type_getm_grid), intent(inout) :: tgrid
-   real(real64), intent(inout) :: f(:,:,:)
 
 !  Local constants
 
 !  Local variables
-#else
-MODULE PROCEDURE advection_calculate_3d
-#endif
    integer :: k
    real(real64), allocatable :: hn(:,:,:)
 !---------------------------------------------------------------------------
    allocate(hn,mold=tgrid%hn)
    hn = tgrid%hn
+#if 0
    select case (scheme)
       case (SUPERBEE)
          do k=tgrid%kmin,tgrid%kmax
@@ -208,11 +180,8 @@ MODULE PROCEDURE advection_calculate_3d
                              tgrid%mask,tgrid%inv_area,dt/2,hn(:,:,k),f(:,:,k))
          end do
    end select
-#if 0
-END SUBROUTINE advection_calculate_3d
-#else
-END PROCEDURE advection_calculate_3d
 #endif
+END PROCEDURE advection_calculate_3d
 
 !---------------------------------------------------------------------------
 
