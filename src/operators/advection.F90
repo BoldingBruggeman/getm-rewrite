@@ -58,6 +58,7 @@ MODULE PROCEDURE advection_calculate_2d
 !  Local variables
    real(real64), allocatable :: D(:,:)
 !---------------------------------------------------------------------------
+   if (scheme == 0) return
    allocate(D,mold=tgrid%D)
    D = tgrid%D
 
@@ -137,6 +138,7 @@ MODULE PROCEDURE advection_calculate_3d
    integer :: k
    real(real64), allocatable :: hn(:,:,:)
 !---------------------------------------------------------------------------
+   if (scheme == 0) return
    allocate(hn,mold=tgrid%hn)
    hn = tgrid%hn
 #if 0

@@ -265,7 +265,6 @@ SUBROUTINE getm_integrate(self)
 !KB
   real(real64), allocatable :: nuh(:,:,:),rad(:,:,:),shf(:,:)
   integer :: momentum_adv_scheme=1
-
 !-----------------------------------------------------------------------------
    MOMENTUM: associate( MOMENTUM => self%dynamics%momentum )
 
@@ -289,7 +288,7 @@ SUBROUTINE getm_integrate(self)
 
       ! call do_input(n)
       call self%airsea%update(n)
-!KB      call self%dynamics%momentum%advection_2d(self%timestep)
+      call self%dynamics%momentum%advection_2d(self%timestep)
       call self%dynamics%pressure%surface(self%domain%T%z,self%airsea%sp)
       call self%dynamics%momentum%uv_momentum_2d(self%timestep,self%airsea%taux,self%airsea%tauy, &
            self%dynamics%pressure%dpdx,self%dynamics%pressure%dpdy)
