@@ -32,7 +32,7 @@ if rank == 0:
     global_domain.T.H[1:-1, 1:-1] = 1.
     global_domain.T.mask[1:-1, 1:-1] = 1
     global_domain.initialize()
-    f_glob, _ = global_domain.array()
+    f_glob, _ = global_domain.T.array()
     f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
 
 tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
@@ -45,7 +45,7 @@ halo = subdomain.halo
 mask_glob = None
 subdomain.T.mask_[...] = 0  # this ensure that outer halos [outside global domain] are masked too - should not be needed
 if rank == 0:
-    mask_glob, _ = global_domain.array(dtype=int)
+    mask_glob, _ = global_domain.T.array(dtype=int)
     mask_glob[2:-2, 2:-2] = 1
 tiling.wrap(subdomain.T.mask_, halo=halo).scatter(mask_glob)
 
@@ -69,7 +69,7 @@ if args.nmax:
     Nmax = args.nmax
 
 # Set up tracer field for subdomain, wrap it for halo updates, and MPI-scatter it from root node
-f, f_ = subdomain.array(fill=0.)
+f, f_ = subdomain.T.array(fill=0.)
 distf = tiling.wrap(f_, halo=halo)
 distf.scatter(f_glob)
 

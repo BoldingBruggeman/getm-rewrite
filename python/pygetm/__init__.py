@@ -98,6 +98,13 @@ class Grid:
         self.mask = self.mask_[halo:-halo, halo:-halo]
         self.x = self.x_[halo:-halo, halo:-halo]
         self.y = self.y_[halo:-halo, halo:-halo]
+        self.halo = halo
+
+    def array(self, fill=None, dtype=float):
+        data = numpy.empty(self.H_.shape, dtype=dtype)
+        if fill is not None:
+            data[...] = fill
+        return data[self.halo:-self.halo, self.halo:-self.halo], data
 
 class Domain:
     @staticmethod
@@ -160,12 +167,6 @@ class Domain:
     def initialize(self):
         _pygetm.domain_initialize(self.p)
         self.initialized = True
-
-    def array(self, fill=None, dtype=float):
-        data = numpy.empty(self.shape[1:], dtype=dtype)
-        if fill is not None:
-            data[...] = fill
-        return data[self.halo:-self.halo, self.halo:-self.halo], data
 
 class Advection:
     def __init__(self, domain, scheme):
