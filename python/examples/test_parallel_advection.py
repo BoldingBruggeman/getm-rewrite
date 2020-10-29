@@ -122,7 +122,7 @@ def main():
 
             # Gather and plot global tracer field
             if not args.noplot:
-                f_glob = distf.gather()
+                distf.gather(out=f_glob)
                 if f_glob is not None:
                     pc.set_array(f_glob.ravel())
                     fig.savefig('adv_%04i.png' % ifig)

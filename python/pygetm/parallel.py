@@ -70,7 +70,7 @@ class DistributedArray:
         for _, outer, cache in self.recvtasks:
             outer[...] = cache
 
-    def gather(self, root=0):
+    def gather(self, root=0, out=None):
         rankmap = self.tiling.map
         rank = self.comm.Get_rank()
         sendbuf = numpy.ascontiguousarray(self.f)
@@ -81,7 +81,8 @@ class DistributedArray:
         if rank == root:
             nrow, ncol = rankmap.shape
             ny, nx = recvbuf.shape[-2:]
-            out = numpy.empty(recvbuf.shape[1:-2] + (nrow * ny, ncol * nx), dtype=recvbuf.dtype)
+            if out is None:
+                out = numpy.empty(recvbuf.shape[1:-2] + (nrow * ny, ncol * nx), dtype=recvbuf.dtype)
             for i in range(nrow):
                 for j in range(ncol):
                     out[..., i * ny:(i + 1) * ny, j * nx:(j + 1) * nx] = recvbuf[rankmap[i, j], ...]
