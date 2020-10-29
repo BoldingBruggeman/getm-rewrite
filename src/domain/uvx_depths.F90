@@ -35,7 +35,7 @@
 !>
 
 
-SUBMODULE (getm_domain) uv_depths_smod
+SUBMODULE (getm_domain) uvx_depths_smod
 
 !-----------------------------------------------------------------------------
 
@@ -43,7 +43,7 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE uv_depths(self)
+module SUBROUTINE uvx_depths(self)
 
   IMPLICIT NONE
 
@@ -55,84 +55,114 @@ module SUBROUTINE uv_depths(self)
 ! Local variables
    integer :: i,j
 !-----------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('uv_depths()',level=2)
+   if (associated(self%logs)) call self%logs%info('uvx_depths()',level=2)
+   TGrid: associate( TG => self%T )
+   UGrid: associate( UG => self%U )
    ! U-mask
-   do j=self%U%jmin,self%U%jmax
-      do i=self%U%imin,self%U%imax
-         if (self%T%mask(i,j) == 1 .and. self%T%mask(i+1,j) == 1) then
-            self%U%mask(i,j)=1
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         if (TG%mask(i,j) == 1 .and. TG%mask(i+1,j) == 1) then
+            UG%mask(i,j)=1
          end if
-         if ((self%T%mask(i,j) == 1 .and. self%T%mask(i+1,j) == 2) .or. &
-             (self%T%mask(i,j) == 2 .and. self%T%mask(i+1,j) == 1)) then
-            self%U%mask(i,j)=2
+         if ((TG%mask(i,j) == 1 .and. TG%mask(i+1,j) == 2) .or. &
+             (TG%mask(i,j) == 2 .and. TG%mask(i+1,j) == 1)) then
+            UG%mask(i,j)=2
          end if
-         if (self%T%mask(i,j) == 2 .and. self%T%mask(i+1,j) == 2) then
-            self%U%mask(i,j)=3
+         if (TG%mask(i,j) == 2 .and. TG%mask(i+1,j) == 2) then
+            UG%mask(i,j)=3
          end if
       end do
    end do
    ! U-depths
-   do j=self%U%jmin,self%U%jmax
-      do i=self%U%imin,self%U%imax
-         if (self%U%mask(i,j) > 0) then
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         if (UG%mask(i,j) > 0) then
             select case (vel_depth_method)
                case (0)
-                  self%U%H(i,j) = 0.5_real64 * ( self%T%H(i,j) + self%T%H(i+1,j) )
+                  UG%H(i,j) = 0.5_real64 * ( TG%H(i,j) + TG%H(i+1,j) )
                case (1)
-                  self%U%H(i,j)=min(self%T%H(i,j),self%T%H(i+1,j))
+                  UG%H(i,j)=min(TG%H(i,j),TG%H(i+1,j))
                case (2)
-                  if (self%T%H(i,j) .lt. self%Dcrit .or. self%T%H(i+1,j) .lt. self%Dcrit) then
-                     self%U%H(i,j)=min(self%T%H(i,j),self%T%H(i+1,j))
+                  if (TG%H(i,j) .lt. self%Dcrit .or. TG%H(i+1,j) .lt. self%Dcrit) then
+                     UG%H(i,j)=min(TG%H(i,j),TG%H(i+1,j))
                   else
-                     self%U%H(i,j) = 0.5_real64 * ( self%T%H(i,j) + self%T%H(i+1,j) )
+                     UG%H(i,j) = 0.5_real64 * ( TG%H(i,j) + TG%H(i+1,j) )
                   end if
             end select
          end if
       end do
    end do
+   end associate UGrid
 
    ! V-mask
-   do j=self%V%jmin,self%V%jmax
-      do i=self%V%imin,self%V%imax
-         if (self%T%mask(i,j) == 1 .and. self%T%mask(i,j+1) == 1) then
-            self%V%mask(i,j)=1
+   VGrid: associate( VG => self%V )
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
+         if (TG%mask(i,j) == 1 .and. TG%mask(i,j+1) == 1) then
+            VG%mask(i,j)=1
          end if
-         if ((self%T%mask(i,j) == 1 .and. self%T%mask(i,j+1) == 2) .or. &
-             (self%T%mask(i,j) == 2 .and. self%T%mask(i,j+1) == 1)) then
-            self%V%mask(i,j)=2
+         if ((TG%mask(i,j) == 1 .and. TG%mask(i,j+1) == 2) .or. &
+             (TG%mask(i,j) == 2 .and. TG%mask(i,j+1) == 1)) then
+            VG%mask(i,j)=2
          end if
-         if (self%T%mask(i,j) == 2 .and. self%T%mask(i,j+1) == 2) then
-            self%V%mask(i,j)=3
+         if (TG%mask(i,j) == 2 .and. TG%mask(i,j+1) == 2) then
+            VG%mask(i,j)=3
          end if
       end do
    end do
    ! V-depths
-   do j=self%V%jmin,self%V%jmax
-      do i=self%V%imin,self%V%imax
-         if (self%V%mask(i,j) > 0) then
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
+         if (VG%mask(i,j) > 0) then
             select case (vel_depth_method)
                case (0)
-                  self%V%H(i,j) = 0.5_real64 * ( self%T%H(i,j) + self%T%H(i,j+1) )
+                  VG%H(i,j) = 0.5_real64 * ( TG%H(i,j) + TG%H(i,j+1) )
                case (1)
-                  self%V%H(i,j)=min(self%T%H(i,j),self%T%H(i,j+1))
+                  VG%H(i,j)=min(TG%H(i,j),TG%H(i,j+1))
                case (2)
-                  if (self%T%H(i,j) .lt. self%Dcrit .or. self%T%H(i,j+1) .lt. self%Dcrit) then
-                     self%V%H(i,j)=min(self%T%H(i,j),self%T%H(i,j+1))
+                  if (TG%H(i,j) .lt. self%Dcrit .or. TG%H(i,j+1) .lt. self%Dcrit) then
+                     VG%H(i,j)=min(TG%H(i,j),TG%H(i,j+1))
                   else
-                     self%V%H(i,j) = 0.5_real64 * ( self%T%H(i,j) + self%T%H(i,j+1) )
+                     VG%H(i,j) = 0.5_real64 * ( TG%H(i,j) + TG%H(i,j+1) )
                   end if
             end select
          end if
       end do
    end do
-   ! Initialize time varying depths in U and V points
-   self%T%D = self%T%H
-   self%U%D = self%U%H
-   self%V%D = self%V%H
+   end associate VGrid
+
+   XGrid: associate( XG => self%X )
+   UGrid: associate( UG => self%U )
+   VGrid: associate( VG => self%V )
+   ! X-mask
+   do j=XG%jmin+1,XG%jmax
+      do i=XG%imin+1,XG%imax
+         if (TG%mask(i,j) > 0 .and. TG%mask(i+1,j) > 0 .and. &
+             TG%mask(i,j) > 0 .and. TG%mask(i,j+1) > 0) then
+            XG%mask(i,j)=1
+         end if
+      end do
+   end do
+   ! X-depths
+   do j=XG%jmin,XG%jmax
+      do i=XG%imin,XG%imax
+         if (XG%mask(i,j) > 0) then
+            XG%H(i,j) = 0.25_real64*(UG%H(i,j)+UG%H(i+1,j)+VG%H(i,j)+VG%H(i,j+1))
+         end if
+      end do
+   end do
+   ! Initialize time varying depths in U, V and X points
+   TG%D = TG%H
+   UG%D = UG%H
+   VG%D = VG%H
+   XG%D = XG%H
+   end associate VGrid
+   end associate UGrid
+   end associate XGrid
+   end associate TGrid
    if (associated(self%logs)) call self%logs%info('done',level=2)
-   return
-END SUBROUTINE uv_depths
+END SUBROUTINE uvx_depths
 
 !---------------------------------------------------------------------------
 
-END SUBMODULE uv_depths_smod
+END SUBMODULE uvx_depths_smod

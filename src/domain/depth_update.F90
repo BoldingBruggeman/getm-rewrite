@@ -68,7 +68,6 @@ module SUBROUTINE depth_update(self)
 #endif
       end do
    end do
-   end associate UGrid
 
    VGrid: associate( VG => self%V )
    do j=VG%l(2),VG%u(2)-1
@@ -84,7 +83,24 @@ module SUBROUTINE depth_update(self)
 #endif
       end do
    end do
+
+   XGrid: associate( XG => self%X )
+   do j=XG%l(2)+1,XG%u(2)
+      do i=XG%l(1)+1,XG%u(1)
+#ifdef USE_MASK
+      if (XG%mask(i,j) > 0) then
+#endif
+         XG%D(i,j)=max(0.25_real64*(UG%D(i,j)+UG%D(i+1,j)+VG%D(i,j)+VG%D(i,j+1)),-XG%H(i,j)+self%Dmin)
+!KB
+         XG%alpha(i,j)=1._real64
+#ifdef USE_MASK
+      end if
+#endif
+      end do
+   end do
+   end associate XGrid
    end associate VGrid
+   end associate UGrid
    end associate TGrid
    call self%logs%info('done',level=1)
 END SUBROUTINE depth_update

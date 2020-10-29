@@ -165,7 +165,7 @@ MODULE getm_domain
       procedure :: report => domain_report
       procedure :: metrics => metrics
       procedure :: register => register
-      procedure :: uv_depths => uv_depths
+      procedure :: uvx_depths => uvx_depths
       procedure :: cfl_check => cfl_check
       procedure :: depth_update => depth_update
       procedure :: start_3d => start_3d
@@ -183,9 +183,9 @@ MODULE getm_domain
          class(type_getm_domain), intent(inout) :: self
       end subroutine register
 
-      module subroutine uv_depths(self)
+      module subroutine uvx_depths(self)
          class(type_getm_domain), intent(inout) :: self
-      end subroutine uv_depths
+      end subroutine uvx_depths
 
       module subroutine cfl_check(self)
          class(type_getm_domain), intent(inout) :: self
@@ -319,7 +319,7 @@ SUBROUTINE domain_initialize(self)
       self%V%ssen = 0._real64
       self%V%sseo = 0._real64
    end where
-   call self%uv_depths()
+   call self%uvx_depths()
    call self%register()
    call self%cfl_check()
    call self%init_vertical()

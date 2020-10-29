@@ -27,6 +27,7 @@ module SUBROUTINE register(self)
    TGrid: associate( TG => self%T )
    UGrid: associate( UG => self%U )
    VGrid: associate( VG => self%V )
+   XGrid: associate( XG => self%X )
    select case (self%domain_type)
       case (1)
          call self%fm%register('x', 'm', 'x-axis', &
@@ -187,6 +188,15 @@ module SUBROUTINE register(self)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('DV', self%V%D(VG%imin:VG%imax,VG%jmin:VG%jmax))
+   call self%fm%register('DX', 'm', 'waterdepth', &
+                      standard_name='total depth', &
+                      dimensions=(/self%id_dim_xi, self%id_dim_yi, id_dim_time/), &
+                      fill_value=-10._real64, &
+                      no_default_dimensions=.true., &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('DX', self%X%D(XG%imin+1:XG%imax,XG%jmin+1:XG%jmax))
    call self%fm%register('elev', 'm', 'sea surface elevation', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
@@ -240,6 +250,7 @@ module SUBROUTINE register(self)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hvn', self%V%hn)
 #endif
+   end associate XGrid
    end associate VGrid
    end associate UGrid
    end associate TGrid

@@ -3,7 +3,7 @@ add_library( getm_domain
     grids.F90
     metrics.F90
     register.F90
-    uv_depths.F90
+    uvx_depths.F90
     cfl_check.F90
     depth_update.F90
     vertical_coordinates.F90
