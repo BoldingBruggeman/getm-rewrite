@@ -9,15 +9,10 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE slow_terms(self,idpdx,idpdy)
+MODULE PROCEDURE slow_terms
    !! Slow terms
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
-   real(real64), dimension(:,:,:), intent(in) :: idpdx
-   real(real64), dimension(:,:,:), intent(in) :: idpdy
 
 !  Local constants
 
@@ -98,19 +93,13 @@ module SUBROUTINE slow_terms(self,idpdx,idpdy)
       end do
    end do
    end associate VGrid
-
-END SUBROUTINE slow_terms
+END PROCEDURE slow_terms
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE slow_bottom_friction(self)
-
-   !!
+MODULE PROCEDURE slow_bottom_friction
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
 
 !  Local constants
 
@@ -201,8 +190,7 @@ module SUBROUTINE slow_bottom_friction(self)
 
    end associate VGrid
    end associate UGrid
-
-END SUBROUTINE slow_bottom_friction
+END PROCEDURE slow_bottom_friction
 
 !---------------------------------------------------------------------------
 

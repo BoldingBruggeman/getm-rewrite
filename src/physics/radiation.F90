@@ -126,8 +126,11 @@ SUBROUTINE radiation_calculate(self,grid,swr,albedo)
 !  Subroutine arguments
    class(type_radiation), intent(out) :: self
    class(type_getm_grid), intent(in) :: grid
-   real(real64), dimension(:,:), intent(in) :: swr
-   real(real64), dimension(:,:), intent(in) :: albedo
+!KB - should use a pointer for this
+#define _T2_ grid%l(1):,grid%l(2):
+   real(real64), intent(in) :: swr(_T2_)
+   real(real64), intent(in) :: albedo(_T2_)
+#undef _T2_
 
 !  Local constants
 
@@ -137,6 +140,7 @@ SUBROUTINE radiation_calculate(self,grid,swr,albedo)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('radiation_calculate()',level=2)
 
+!KB - loop boundaries
    self%rad(:,:,grid%u(3)) = (1._real64-albedo(:,:))*swr(:,:)
    do k=grid%l(3),grid%u(3)-1
       do j=grid%l(2),grid%u(2)

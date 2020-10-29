@@ -61,7 +61,12 @@ MODULE getm_pressure
    INTERFACE
       module subroutine pressure_surface(self,z,sp)
          class(type_getm_pressure), intent(inout) :: self
-         real(real64), dimension(:,:), intent(in) :: z,sp
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: z(_T2_)
+           !! elevation [m]
+         real(real64), intent(in) :: sp(_T2_)
+           !! pressure [Pa]
+#undef _T2_
       end subroutine pressure_surface
       module subroutine pressure_internal(self)
          class(type_getm_pressure), intent(inout) :: self

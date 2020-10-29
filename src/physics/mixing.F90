@@ -184,8 +184,12 @@ SUBROUTINE mixing_calculate(self,logs,SS,NN)
    class(type_getm_mixing), intent(inout) :: self
 !   class(type_getm_domain), intent(in) :: domain
    class(type_logging), intent(in) :: logs
-   real(real64), dimension(-1:,-1:,0:), intent(in) :: SS,NN
-      !! shear stress and Brunt-Vaisala frequency
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: SS(_T3_)
+      !! shear stress []
+   real(real64), intent(in) :: NN(_T3_)
+      !! Brunt-Vaisala frequency []
+#undef _T3_
 
 !  Local constants
 

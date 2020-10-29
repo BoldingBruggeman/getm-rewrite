@@ -171,8 +171,11 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
 !  Subroutine arguments
    class(type_salinity), intent(inout) :: self
    real(real64), intent(in) :: dt
-   real(real64), dimension(:,:,:), intent(in) :: uk,vk
-   real(real64), dimension(:,:,:), intent(in) :: nuh
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: uk(_T3_)
+   real(real64), intent(in) :: vk(_T3_)
+   real(real64), intent(in) :: nuh(_T3_)
+#undef _T3_
 
 !  Local constants
 

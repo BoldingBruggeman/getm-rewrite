@@ -108,12 +108,12 @@ MODULE getm_momentum
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-#define _T_ self%domain%T%l(1):,self%domain%T%l(2):
-         real(real64), dimension(:,:), intent(in) :: tausx(_T_),tausy(_T_)
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: tausx(_T2_),tausy(_T2_)
             !! surface stresses
-         real(real64), dimension(:,:), intent(in) :: dpdx(_T_), dpdy(_T_)
+         real(real64), intent(in) :: dpdx(_T2_), dpdy(_T2_)
             !! surface pressure gradient - including air pressure
-#undef _T_
+#undef _T2_
       end subroutine uv_momentum_2d
 
       module subroutine uv_advection_2d(self,dt)
@@ -128,13 +128,17 @@ MODULE getm_momentum
          real(real64), intent(in) :: dt
             !! timestep [s]
          integer, intent(in) :: mode_split
-         real(real64), dimension(:,:), intent(in) :: tausx,tausy
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+         real(real64), intent(in) :: tausx(_T2_),tausy(_T2_)
            !! surface stresses
-         real(real64), dimension(:,:), intent(in) :: dpdx,dpdy
+         real(real64), intent(in) :: dpdx(_T2_),dpdy(_T2_)
            !! surface pressure gradients - including air pressure
-         real(real64), dimension(:,:,:), intent(in) :: idpdx,idpdy
+         real(real64), intent(in) :: idpdx(_T3_),idpdy(_T3_)
            !! internal pressure gradients
-         real(real64), dimension(:,:,:), intent(in) :: viscosity
+         real(real64), intent(in) :: viscosity(_T3_)
+#undef _T2_
+#undef _T3_
            !! viscosity
       end subroutine uv_momentum_3d
 
@@ -160,8 +164,10 @@ MODULE getm_momentum
 
       module subroutine velocity_shear_frequency(self,num,SS)
          class(type_getm_momentum), intent(inout) :: self
-         real(real64), dimension(:,:,:), intent(in) :: num
-         real(real64), dimension(:,:,:), intent(inout) :: SS
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+         real(real64), intent(in) :: num(_T3_)
+         real(real64), intent(inout) :: SS(_T3_)
+#undef _T3_
       end subroutine velocity_shear_frequency
 
       module subroutine stresses(self)
@@ -173,9 +179,11 @@ MODULE getm_momentum
       end subroutine momentum_register
 
       module subroutine slow_terms(self,idpdx,idpdy)
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
          class(type_getm_momentum), intent(inout) :: self
-         real(real64), dimension(:,:,:), intent(in) :: idpdx
-         real(real64), dimension(:,:,:), intent(in) :: idpdy
+         real(real64), intent(in) :: idpdx(_T3_)
+         real(real64), intent(in) :: idpdy(_T3_)
+#undef _T3_
       end subroutine slow_terms
 
       module subroutine slow_bottom_friction(self)

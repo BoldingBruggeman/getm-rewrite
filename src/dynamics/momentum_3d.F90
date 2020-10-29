@@ -117,13 +117,17 @@ module SUBROUTINE u_3d(self,dt,taus,dpdx,idpdx,viscosity)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
-   real(real64), dimension(:,:), intent(in) :: taus
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), intent(in) :: taus(_T2_)
       !! surface stress in X-direction
-   real(real64), dimension(:,:), intent(in) :: dpdx
+   real(real64), intent(in) :: dpdx(_T2_)
       !! surface pressure gradient - including air pressure
-   real(real64), dimension(:,:,:), intent(in) :: idpdx
+#undef _T2_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: idpdx(_T3_)
       !! internal pressure gradient
-   real(real64), dimension(:,:,:), intent(in) :: viscosity
+   real(real64), intent(in) :: viscosity(_T3_)
+#undef _T3_
       !! viscosity
 
 !  Local constants
@@ -229,14 +233,18 @@ module SUBROUTINE v_3d(self,dt,taus,dpdy,idpdy,viscosity)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
-   real(real64), dimension(:,:), intent(in) :: taus
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), intent(in) :: taus(_T2_)
       !! surface stress in X-direction
-   real(real64), dimension(:,:), intent(in) :: dpdy
+   real(real64), intent(in) :: dpdy(_T2_)
       !! surface pressure gradient - including air pressure
-   real(real64), dimension(:,:,:), intent(in) :: idpdy
+#undef _T2_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: idpdy(_T3_)
       !! internal pressure gradient
-   real(real64), dimension(:,:,:), intent(in) :: viscosity
+   real(real64), intent(in) :: viscosity(_T3_)
       !! viscosity
+#undef _T3_
 
 !  Local constants
 

@@ -11,12 +11,11 @@
 MODULE getm_density
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
-   use gsw_mod_toolbox, only: gsw_rho
+!KB   use gsw_mod_toolbox, only: gsw_rho
    use memory_manager
    use logging
    use field_manager
    use getm_domain, only: type_getm_domain
-!KB   use getm_variables
 
    IMPLICIT NONE
 
@@ -136,16 +135,20 @@ SUBROUTINE density_calculate(self,S,T,p)
    !! Feeds your cats and dogs, if enough food is available. If not enough
    !! food is available, some of your pets will get angry.
 
-!KB   use gsw_mod_toolbox, only: gsw_rho
+   use gsw_mod_toolbox, only: gsw_rho
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_density), intent(inout) :: self
-   real(real64), dimension(:,:,:), intent(in) :: S,T
-      !! Salinity and temperature
-   real(real64), dimension(:,:,:), optional, intent(in) :: p
-      !! Pressure
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: S(_T3_)
+      !! absolute salinity
+   real(real64), intent(in) :: T(_T3_)
+      !! conservative temperature [C|K?]
+   real(real64), optional, intent(in) :: p(_T3_)
+      !! Pressure [m or ?]
+#undef _T3_
 
 !  Local constants
 
