@@ -192,10 +192,15 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
 !  Subroutine arguments
    class(type_temperature), intent(inout) :: self
    real(real64), intent(in) :: dt
-   real(real64), dimension(:,:,:), intent(in) :: uk,vk
-   real(real64), dimension(:,:,:), intent(in) :: nuh
-   real(real64), dimension(:,:,:), intent(in) :: rad
-   real(real64), dimension(:,:), intent(in) :: shf
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), dimension(:,:,:), intent(in) :: uk(_T3_)
+   real(real64), dimension(:,:,:), intent(in) :: vk(_T3_)
+   real(real64), dimension(:,:,:), intent(in) :: nuh(_T3_)
+   real(real64), dimension(:,:,:), intent(in) :: rad(_T3_)
+#undef _T3_
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), intent(in) :: shf(_T2_)
+#undef _T2_
 
 !  Local constants
 

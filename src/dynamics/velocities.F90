@@ -6,13 +6,10 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE velocities_2d(self)
+MODULE PROCEDURE velocities_2d
    !! 2D velocities
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
 
 !  Local constants
 
@@ -37,17 +34,14 @@ module SUBROUTINE velocities_2d(self)
    end where
    end associate VGrid
 
-END SUBROUTINE velocities_2d
+END PROCEDURE velocities_2d
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE velocities_3d(self)
+MODULE PROCEDURE velocities_3d
    !! 3D velocities
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
 
 !  Local constants
 
@@ -83,21 +77,15 @@ module SUBROUTINE velocities_3d(self)
       end do
    end do
    end associate VGrid
-   return
-END SUBROUTINE velocities_3d
+END PROCEDURE velocities_3d
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE velocity_shear_frequency(self,num,SS)
+MODULE PROCEDURE velocity_shear_frequency
 
    !!{!./code/velocity_shear_frequency.md!}
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
-   real(real64), dimension(:,:,:), intent(in) :: num
-   real(real64), dimension(:,:,:), intent(inout) :: SS
 
 !  Local constants
 
@@ -182,19 +170,15 @@ module SUBROUTINE velocity_shear_frequency(self,num,SS)
       end do
    end do
 #endif
-   return
-END SUBROUTINE velocity_shear_frequency
+END PROCEDURE velocity_shear_frequency
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE stresses(self)
+MODULE PROCEDURE stresses
 
    !! Bottom stress
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
 
 !  Local constants
 
@@ -250,20 +234,17 @@ module SUBROUTINE stresses(self)
       end do
    end do
    end associate TGrid
-END SUBROUTINE stresses
+END PROCEDURE stresses
 
 #if 0
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE destag_velocities_2d(self)
+MODULE PROCEDURE destag_velocities_2d
 
    !! Velocity shear
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
 
 !  Local constants
 
@@ -272,19 +253,15 @@ module SUBROUTINE destag_velocities_2d(self)
 !---------------------------------------------------------------------------
    call self%logs%info('destag_velocities_2d()',level=2)
 
-   return
-END SUBROUTINE destag_velocities_2d
+END PROCEDURE destag_velocities_2d
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE destag_velocities_3d(self)
+MODULE PROCEDURE destag_velocities_3d
 
    !! Velocity shear
 
    IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
 
 !  Local constants
 
@@ -293,8 +270,7 @@ module SUBROUTINE destag_velocities_3d(self)
 !---------------------------------------------------------------------------
    call self%logs%info('destag_velocities_3d()',level=2)
 
-   return
-END SUBROUTINE destag_velocities_3d
+END PROCEDURE destag_velocities_3d
 #endif
 
 !---------------------------------------------------------------------------
