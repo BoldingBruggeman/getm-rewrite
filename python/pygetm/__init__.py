@@ -22,12 +22,17 @@ def find_library(basedir):
 
 # Find dynamic library.
 # Look first in local directory, then in Python path.
-dllpath = find_library(os.path.dirname(os.path.abspath(__file__)))
-if not dllpath:
-    for basedir in sys.path:
-        dllpath = find_library(basedir)
-        if dllpath:
-            break
+if 'PYGETM_DLL' in os.environ:
+    dllpath = os.environ['PYGETM_DLL']
+    print('Using _pygetm library %s as set by environment variable PYGETM_DLL' % dllpath)
+    assert os.path.isfile(dllpath), '%s not found' % dllpath
+else:
+    dllpath = find_library(os.path.dirname(os.path.abspath(__file__)))
+    if not dllpath:
+        for basedir in sys.path:
+            dllpath = find_library(basedir)
+            if dllpath:
+                break
 
 if not dllpath:
    print('Unable to locate pygetm dynamic library %s.' % (' or '.join(dllpaths),))
