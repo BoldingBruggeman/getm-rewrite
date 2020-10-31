@@ -10,7 +10,7 @@ First we need to check out the python development branch:
 
 Then we prepare for building and do the build:
 
-  1. cd source/repos/GETM
+  1. cd source
   2. mkdir -p build/getm\_python
   3. cd build/getm\_python
   4. cmake ../../repos/GETM/getm/python && make install
