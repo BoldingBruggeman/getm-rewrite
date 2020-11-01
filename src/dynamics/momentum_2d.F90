@@ -32,11 +32,15 @@ MODULE PROCEDURE uv_momentum_2d
 !---------------------------------------------------------------------------
    call self%logs%info('uv_momentum_2d()',level=2)
    if(ufirst) then
+      call v_cor(self)
       call u_2d(self,dt,tausx,dpdx)
+      call u_cor(self)
       call v_2d(self,dt,tausy,dpdy)
       ufirst = .false.
    else
+      call u_cor(self)
       call v_2d(self,dt,tausy,dpdy)
+      call v_cor(self)
       call u_2d(self,dt,tausx,dpdx)
       ufirst = .true.
    end if
@@ -104,7 +108,7 @@ module SUBROUTINE u_2d(self,dt,taus,dpdx)
 
 !  Local variables
    integer :: i,j
-   real(real64) :: tausu, Uloc, cord_curv
+   real(real64) :: tausu
 !KB
    real(real64) :: Slr
 !---------------------------------------------------------------------------
@@ -127,11 +131,31 @@ module SUBROUTINE u_2d(self,dt,taus,dpdx)
          end if
       end do
    end do
+   end associate UGrid
+END subroutine u_2d
 
+!---------------------------------------------------------------------------
+
+SUBROUTINE u_cor(self)
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+      !! GETM momentum type
+
+!  Local constants
+
+!  Local variables
+   real(real64) :: Uloc, cord_curv
+   integer :: i,j
+!---------------------------------------------------------------------------
+   call self%logs%info('u_cor()',level=3)
    ! Semi-implicit treatment of Coriolis force for V-momentum eq.
-   XGrid: associate( XG => self%domain%X )
    TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
+   XGrid: associate( XG => self%domain%X )
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if(VG%mask(i,j) .ge. 1) then
@@ -144,7 +168,6 @@ module SUBROUTINE u_2d(self,dt,taus,dpdx)
 #else
             Uloc=0.25_real64*( self%U(i-1,j)+self%U(i,j)+self%U(i-1,j+1)+self%U(i,j+1))
 #endif
-!KB check XG%??
             cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j)) &
                       -Uloc*(TG%dx(i,j+1)-TG%dx(i,j))) &
                       /VG%D(i,j)*VG%inv_area(i,j)
@@ -153,17 +176,16 @@ module SUBROUTINE u_2d(self,dt,taus,dpdx)
          else
             self%fU(i,j)= 0._real64
          end if
-!KB
-            self%fU(i,j)= 0._real64
       end do
    end do
-   end associate VGrid
-   end associate TGrid
    end associate XGrid
+   end associate VGrid
    end associate UGrid
-END subroutine u_2d
+   end associate TGrid
+END subroutine u_cor
 
 !---------------------------------------------------------------------------
+
 module SUBROUTINE v_2d(self,dt,taus,dpdy)
 
    IMPLICIT NONE
@@ -184,12 +206,11 @@ module SUBROUTINE v_2d(self,dt,taus,dpdy)
 
 !  Local variables
    integer :: i,j
-   real(real64) :: tausv, Vloc, cord_curv
+   real(real64) :: tausv
 !KB
    real(real64) :: Slr
 !---------------------------------------------------------------------------
    call self%logs%info('v_2d()',level=3)
-
    VGrid: associate( VG => self%domain%V )
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
@@ -208,11 +229,30 @@ module SUBROUTINE v_2d(self,dt,taus,dpdy)
          end if
       end do
    end do
+   end associate VGrid
+END subroutine v_2d
+!---------------------------------------------------------------------------
 
+SUBROUTINE v_cor(self)
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+      !! GETM momentum type
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+   real(real64) :: Vloc, cord_curv
+!---------------------------------------------------------------------------
+   call self%logs%info('v_cor()',level=3)
    ! Semi-implicit treatment of Coriolis force for U-momentum eq.
-   XGrid: associate( XG => self%domain%X )
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   XGrid: associate( XG => self%domain%X )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if(UG%mask(i,j) .ge. 1) then
@@ -232,15 +272,13 @@ module SUBROUTINE v_2d(self,dt,taus,dpdy)
          else
             self%fV(i,j)= 0._real64
          end if
-!KB
-            self%fV(i,j)= 0._real64
       end do
    end do
-   end associate UGrid
-   end associate TGrid
    end associate XGrid
    end associate VGrid
-END subroutine v_2d
+   end associate UGrid
+   end associate TGrid
+END subroutine v_cor
 
 !---------------------------------------------------------------------------
 
