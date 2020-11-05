@@ -266,7 +266,7 @@ SUBROUTINE getm_integrate(self)
   real(real64), allocatable :: nuh(:,:,:),rad(:,:,:),shf(:,:)
   integer :: momentum_adv_scheme=1
 !-----------------------------------------------------------------------------
-   MOMENTUM: associate( MOMENTUM => self%dynamics%momentum )
+!KB   MOMENTUM: associate( MOMENTUM => self%dynamics%momentum )
 
    if (self%sim_start .gt. self%sim_stop) return
    call self%logs%info('getm_integrate()',level=0)
@@ -364,7 +364,7 @@ SUBROUTINE getm_integrate(self)
       call self%output%do_output(sim_time)
       remain = self%sim_stop - sim_time
    end do
-   end associate MOMENTUM
+!KB   end associate MOMENTUM
 END SUBROUTINE getm_integrate
 
 !---------------------------------------------------------------------------

@@ -20,9 +20,7 @@ module SUBROUTINE velocity_shear(self)
 !  Local variables
    integer :: rc
 !---------------------------------------------------------------------------
-   call self%logs%info('velocity_shear()',level=2)
-
-   return
+   if (associated(self%logs)) call self%logs%info('velocity_shear()',level=2)
 END SUBROUTINE velocity_shear
 
 !---------------------------------------------------------------------------

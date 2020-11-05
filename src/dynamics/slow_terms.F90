@@ -1,6 +1,9 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 !! @note
 !! check with GETM
+!!
+!! rru, rrv, Ui, Vi could maybe be moved to here
+!!
 !! @endnote
 
 SUBMODULE (getm_momentum) slow_terms_smod
@@ -9,10 +12,16 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-MODULE PROCEDURE slow_terms
+MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
    !! Slow terms
 
    IMPLICIT NONE
+
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: idpdx(_T3_)
+   real(real64), intent(in) :: idpdy(_T3_)
+#undef _T3_
 
 !  Local constants
 
@@ -20,7 +29,7 @@ MODULE PROCEDURE slow_terms
    integer :: i,j,k
 !KB   real(real64) :: vertsum,ip_fac
 !---------------------------------------------------------------------------
-   call self%logs%info('slow_terms()',level=2)
+   if(associated(self%logs)) call self%logs%info('slow_terms()',level=2)
 
    UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax
@@ -93,7 +102,7 @@ MODULE PROCEDURE slow_terms
       end do
    end do
    end associate VGrid
-END PROCEDURE slow_terms
+END SUBROUTINE slow_terms
 
 !---------------------------------------------------------------------------
 
@@ -109,7 +118,7 @@ MODULE PROCEDURE slow_bottom_friction
    real(real64), dimension(:,:), allocatable :: ruu,rvv,Ui,Vi
    integer :: stat
 !---------------------------------------------------------------------------
-   call self%logs%info('slow_bottom_friction()',level=2)
+   if(associated(self%logs)) call self%logs%info('slow_bottom_friction()',level=2)
 
    allocate(ruu, mold=self%U, stat=stat)
    allocate(rvv, mold=self%V, stat=stat)
