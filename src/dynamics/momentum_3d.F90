@@ -6,17 +6,72 @@ SUBMODULE (getm_momentum) momentum_3d_smod
 
 CONTAINS
 
-MODULE PROCEDURE uv_momentum_3d
+!---------------------------------------------------------------------------
+
+MODULE SUBROUTINE uv_initialize_3d(self)
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: stat
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('uv_initialize_3d()',level=2)
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   call mm_s('pk',self%pk,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('qk',self%qk,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('ww',self%ww,self%pk,def=0._real64,stat=stat)
+   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
+   call mm_s('vvEx',self%vvEx,self%pk,def=0._real64,stat=stat)
+   call mm_s('pkadv',self%pkadv,self%pk,def=0._real64,stat=stat)
+   call mm_s('qkadv',self%qkadv,self%qk,def=0._real64,stat=stat)
+!KB if (self%advection_scheme > 0) then
+   TGrid: associate( TG => self%domain%T )
+   call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+   call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+   end associate TGrid
+!KBend if
+
+   end associate VGrid
+   end associate UGrid
+END SUBROUTINE uv_initialize_3d
+
+!---------------------------------------------------------------------------
+
+MODULE SUBROUTINE uv_momentum_3d(self,mode_split,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
    !! Solve the 3D momemtum equations
 
    IMPLICIT NONE
+
+   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+      !! timestep [s]
+   integer, intent(in) :: mode_split
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: tausx(_T2_),tausy(_T2_)
+     !! surface stresses
+   real(real64), intent(in) :: dpdx(_T2_),dpdy(_T2_)
+     !! surface pressure gradients - including air pressure
+   real(real64), intent(in) :: idpdx(_T3_),idpdy(_T3_)
+     !! internal pressure gradients
+   real(real64), intent(in) :: viscosity(_T3_)
+     !! viscosity
+#undef _T2_
+#undef _T3_
+
 
 !  Local constants
 
 !  Local variables
    logical, save :: ufirst=.false. ! should likely not have save
 !---------------------------------------------------------------------------
-   call self%logs%info('uv_momentum_3d()',level=2)
+   if (associated(self%logs)) call self%logs%info('uv_momentum_3d()',level=2)
    self%Ui=self%Ui/mode_split
    self%Vi=self%Vi/mode_split
 
@@ -29,13 +84,17 @@ MODULE PROCEDURE uv_momentum_3d
       call u_3d(self,dt,tausx,dpdx,idpdy,viscosity)
       ufirst = .true.
    end if
-END PROCEDURE uv_momentum_3d
+END SUBROUTINE uv_momentum_3d
 
 !---------------------------------------------------------------------------
 
-MODULE PROCEDURE w_momentum_3d
+MODULE SUBROUTINE w_momentum_3d(self,dt)
 
    IMPLICIT NONE
+
+   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+      !! timestep [s]
 
 !  Local constants
 
@@ -43,7 +102,7 @@ MODULE PROCEDURE w_momentum_3d
    integer :: i,j,k
    real(real64) :: dtm1
 !---------------------------------------------------------------------------
-   call self%logs%info('momentum_z_3d()',level=2)
+   if (associated(self%logs)) call self%logs%info('momentum_z_3d()',level=2)
    dtm1=1._real64/dt
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
@@ -63,14 +122,18 @@ MODULE PROCEDURE w_momentum_3d
    end associate VGrid
    end associate UGrid
    end associate TGrid
-END PROCEDURE w_momentum_3d
+END SUBROUTINE w_momentum_3d
 
 !---------------------------------------------------------------------------
 
-MODULE PROCEDURE uv_advection_3d
+MODULE SUBROUTINE uv_advection_3d(self,dt)
    !! 3D velocity advection
 
    IMPLICIT NONE
+
+   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+      !! timestep [s]
 
 !  Local constants
 
@@ -104,11 +167,11 @@ MODULE PROCEDURE uv_advection_3d
    end associate UGrid
    end associate TGrid
    end associate XGrid
-END PROCEDURE uv_advection_3d
+END SUBROUTINE uv_advection_3d
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE u_3d(self,dt,taus,dpdx,idpdx,viscosity)
+SUBROUTINE u_3d(self,dt,taus,dpdx,idpdx,viscosity)
 
    IMPLICIT NONE
 
@@ -140,7 +203,7 @@ module SUBROUTINE u_3d(self,dt,taus,dpdx,idpdx,viscosity)
    real(real64), dimension(:,:,:), allocatable :: ea2,ea4,num
    integer :: i,j,k
 !---------------------------------------------------------------------------
-   call self%logs%info('u_3d()',level=3)
+   if (associated(self%logs)) call self%logs%info('u_3d()',level=3)
 
    allocate(ea2,mold=self%pk) !KB se note in temperature.F90
    allocate(ea4,mold=self%pk)
@@ -224,7 +287,7 @@ END SUBROUTINE u_3d
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE v_3d(self,dt,taus,dpdy,idpdy,viscosity)
+SUBROUTINE v_3d(self,dt,taus,dpdy,idpdy,viscosity)
 
    IMPLICIT NONE
 
@@ -255,7 +318,7 @@ module SUBROUTINE v_3d(self,dt,taus,dpdy,idpdy,viscosity)
    real(real64) :: Slr
 !KB
 !---------------------------------------------------------------------------
-   call self%logs%info('v_3d()',level=3)
+   if (associated(self%logs)) call self%logs%info('v_3d()',level=3)
 END SUBROUTINE v_3d
 
 !---------------------------------------------------------------------------
