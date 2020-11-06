@@ -50,7 +50,7 @@ MODULE getm_pressure
 
       contains
 
-      procedure :: configuration => pressure_configuration
+      procedure :: configure => pressure_configure
       procedure :: initialize => pressure_initialize
       procedure :: surface => pressure_surface
       procedure :: internal => pressure_internal
@@ -79,7 +79,7 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE pressure_configuration(self,logs,fm)
+SUBROUTINE pressure_configure(self,logs,fm)
 
    !! Configure the components belonging to the dynamics
 
@@ -101,7 +101,7 @@ SUBROUTINE pressure_configuration(self,logs,fm)
    if (present(fm)) then
       self%fm => fm
    end if
-END SUBROUTINE pressure_configuration
+END SUBROUTINE pressure_configure
 
 !---------------------------------------------------------------------------
 

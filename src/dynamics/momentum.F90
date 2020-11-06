@@ -86,7 +86,7 @@ MODULE getm_momentum
 
       contains
 
-      procedure :: configuration => momentum_configuration
+      procedure :: configure => momentum_configure
       procedure :: initialize => momentum_initialize
       procedure :: register => momentum_register
       procedure :: initialize_2d => uv_initialize_2d
@@ -203,7 +203,7 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE momentum_configuration(self,logs,fm)
+SUBROUTINE momentum_configure(self,logs,fm)
 
    !! Configure the components belonging to the dynamics
 
@@ -225,7 +225,7 @@ SUBROUTINE momentum_configuration(self,logs,fm)
    if (present(fm)) then
       self%fm => fm
    end if
-END SUBROUTINE momentum_configuration
+END SUBROUTINE momentum_configure
 
 !---------------------------------------------------------------------------
 
