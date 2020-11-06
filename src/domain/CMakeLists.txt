@@ -10,5 +10,5 @@ add_library( getm_domain
     vertical_gvc.F90
     vertical_sigma.F90
 )
-set_property( TARGET getm_domain PROPERTY FOLDER domain )
+set_property( TARGET getm_domain PROPERTY FOLDER getm )
 target_link_libraries(getm_domain flom field_manager)

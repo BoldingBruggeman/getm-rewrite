@@ -10,7 +10,7 @@ add_library( getm_operators
     diffusion.F90
 )
 target_link_libraries(getm_operators getm_domain)
-set_property( TARGET getm_operators PROPERTY FOLDER operators )
+set_property( TARGET getm_operators PROPERTY FOLDER getm )
 
 #set(USE_KB on)
 #if (USE_KB)
