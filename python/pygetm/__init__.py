@@ -124,6 +124,14 @@ class Grid(FortranObject):
             data[...] = fill
         return data[self.halo:-self.halo, self.halo:-self.halo], data
 
+def find_interfaces(c):
+    c_if = numpy.empty((c.size + 1),)
+    d = numpy.diff(c)
+    c_if[1:-1] = c[:-1] + 0.5 * d
+    c_if[0] = c[0] - 0.5 * d[0]
+    c_if[-1] = c[-1] + 0.5 * d[-1]
+    return c_if
+
 class Domain:
     @staticmethod
     def create_cartesian(x, y, nlev, H=0.):
@@ -136,6 +144,8 @@ class Domain:
         domain.T.x[:, :] = x[numpy.newaxis, :]
         domain.T.y[:, :] = y[:, numpy.newaxis]
         domain.T.H[...] = H
+        domain.T.xi = numpy.broadcast_to(find_interfaces(x)[numpy.newaxis, :], (y.size + 1, x.size + 1))
+        domain.T.yi = numpy.broadcast_to(find_interfaces(y)[:, numpy.newaxis], (y.size + 1, x.size + 1))
         return domain
 
     @staticmethod
