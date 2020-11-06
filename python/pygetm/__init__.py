@@ -53,6 +53,9 @@ _pygetm.grid_get_array.restype = ctypes.c_void_p
 _pygetm.domain_initialize.argtypes = [ctypes.c_void_p]
 _pygetm.domain_initialize.restype = None
 
+_pygetm.domain_depth_update.argtypes = [ctypes.c_void_p]
+_pygetm.domain_depth_update.restype = None
+
 _pygetm.advection_create.argtypes = []
 _pygetm.advection_create.restype = ctypes.c_void_p
 
@@ -62,21 +65,58 @@ arrtype2D = numpy.ctypeslib.ndpointer(dtype=ctypes.c_double, ndim=2, flags=CONTI
 _pygetm.advection_calculate.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, arrtype2D, arrtype2D, ctypes.c_double, arrtype2D]
 _pygetm.advection_calculate.restype = None
 
-class Grid:
-    def __init__(self, domain, grid_type='T'):
-        self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
-        self.halo = domain.halo
-        names = 'c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask'
+_pygetm.momentum_create.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+_pygetm.momentum_create.restype = ctypes.c_void_p
+
+_pygetm.momentum_get_array.argtypes = [ctypes.c_void_p,  ctypes.c_char_p]
+_pygetm.momentum_get_array.restype = ctypes.c_void_p
+
+_pygetm.momentum_advection_2d.argtypes = [ctypes.c_void_p, ctypes.c_double]
+_pygetm.momentum_advection_2d.restype = None
+
+_pygetm.momentum_uv_momentum_2d.argtypes = [ctypes.c_void_p, ctypes.c_double, arrtype2D, arrtype2D, arrtype2D, arrtype2D]
+_pygetm.momentum_uv_momentum_2d.restype = None
+
+_pygetm.pressure_create.argtypes = [ctypes.c_void_p]
+_pygetm.pressure_create.restype = ctypes.c_void_p
+
+_pygetm.pressure_surface.argtypes = [ctypes.c_void_p, arrtype2D, arrtype2D]
+_pygetm.pressure_surface.restype = None
+
+_pygetm.pressure_get_array.argtypes = [ctypes.c_void_p,  ctypes.c_char_p]
+_pygetm.pressure_get_array.restype = ctypes.c_void_p
+
+_pygetm.sealevel_create.argtypes = [ctypes.c_void_p]
+_pygetm.sealevel_create.restype = ctypes.c_void_p
+
+_pygetm.sealevel_update.argtypes = [ctypes.c_void_p, ctypes.c_double, arrtype2D, arrtype2D]
+_pygetm.sealevel_update.restype = None
+
+class FortranObject:
+    def __init__(self, get_function=None, names=(), default_shape=None, default_dtype=ctypes.c_double, shapes={}, dtypes={}, halo=None):
         for name in names:
-            p = _pygetm.grid_get_array(self.p, name.encode('ascii'))
-            shape = {'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}.get(name, domain.shape[1:])
-            dtype = {'mask': ctypes.c_int}.get(name, ctypes.c_double)
+            p = get_function(self.p, name.encode('ascii'))
+
+            # Cast returned pointer to teh correct shape and dtype.
+            shape = shapes.get(name, default_shape)
+            dtype = dtypes.get(name, default_dtype)
             for l in shape[::-1]:
                 dtype = dtype * l
             p = ctypes.cast(p, ctypes.POINTER(dtype)).contents
+
+            # Cast to numpy array and set byte order to "native" rather than the explicit little/big endian.
+            # The latter is needed to allow exchange of this field with mpi4py
             data_ = numpy.ctypeslib.as_array(p).newbyteorder('=')
+
+            # Store field with and without halo as class attribute
             setattr(self, name + '_', data_)
-            setattr(self, name, data_[tuple([slice(self.halo, -self.halo)] * len(shape))])
+            setattr(self, name, data_[tuple([slice(halo, -halo)] * len(shape))])
+
+class Grid(FortranObject):
+    def __init__(self, domain, grid_type='T'):
+        self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
+        self.halo = domain.halo
+        FortranObject.__init__(self, _pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z'), default_shape=domain.shape[1:], shapes={'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)
@@ -146,11 +186,41 @@ class Domain:
         _pygetm.domain_initialize(self.p)
         self.initialized = True
 
+    def depth_update(self):
+        _pygetm.domain_depth_update(self.p)
+
 class Advection:
     def __init__(self, domain, scheme):
         self.p = _pygetm.advection_create()
         self.pdomain = domain.p
         self.scheme = scheme
 
-    def calculate(self, u, v, dt, var):
-        _pygetm.advection_calculate(self.p, self.scheme, self.pdomain, u, v, dt, var)
+    def calculate(self, u, v, timestep, var):
+        _pygetm.advection_calculate(self.p, self.scheme, self.pdomain, u, v, timestep, var)
+
+class Momentum(FortranObject):
+    def __init__(self, domain, advection):
+        self.p = _pygetm.momentum_create(domain.p, advection.p)
+        FortranObject.__init__(self, _pygetm.momentum_get_array, ('U', 'V'), default_shape=domain.shape[1:], halo=domain.halo)
+
+    def advection_2d(self, timestep):
+        _pygetm.momentum_advection_2d(self.p, timestep)
+
+    def uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy):
+        _pygetm.momentum_uv_momentum_2d(self.p, timestep, tausx, tausy, dpdx, dpdy)
+
+class Pressure(FortranObject):
+    def __init__(self, domain):
+        self.p = _pygetm.pressure_create(domain.p)
+        FortranObject.__init__(self, _pygetm.pressure_get_array, ('dpdx', 'dpdy'), default_shape=domain.shape[1:], halo=domain.halo)
+
+    def surface(self, z, sp):
+        _pygetm.pressure_surface(self.p, z, sp)
+
+class Sealevel:
+    def __init__(self, domain):
+        self.p = _pygetm.sealevel_create(domain.p)
+
+    def update(self, timestep, U, V):
+        _pygetm.sealevel_update(self.p, timestep, U, V)
+

@@ -22,14 +22,15 @@ add_library( flom
 set_property( TARGET flom PROPERTY FOLDER flom )
 
 add_subdirectory(../src/domain domain)
-
+add_subdirectory(../src/airsea airsea)
 add_subdirectory(../src/operators operators)
+add_subdirectory(../src/dynamics dynamics)
 
 add_library(_pygetm SHARED
   wrapper.F90
   pygetm/__init__.py
 )
-target_link_libraries(_pygetm getm_domain getm_operators)
+target_link_libraries(_pygetm getm_domain getm_operators getm_airsea getm_dynamics)
 
 
 # Find target Python interpreter.

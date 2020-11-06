@@ -5,6 +5,9 @@ module pygetm
 
    use getm_domain, only: type_getm_domain, type_getm_grid
    use getm_operators, only: type_advection
+   use getm_sealevel, only: type_getm_sealevel
+   use getm_pressure, only: type_getm_pressure
+   use getm_momentum, only: type_getm_momentum
    use memory_manager
 
    implicit none
@@ -76,6 +79,7 @@ contains
       case ('H'); p = c_loc(grid%H)
       case ('D'); p = c_loc(grid%D)
       case ('mask'); p = c_loc(grid%mask)
+      case ('z'); p = c_loc(grid%z)
       end select
    end function
 
@@ -87,6 +91,16 @@ contains
 
       call c_f_pointer(pdomain, domain)
       call domain%initialize()
+   end subroutine
+
+   subroutine domain_depth_update(pdomain) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: domain_depth_update
+      type(c_ptr), intent(in), value :: pdomain
+
+      type (type_getm_domain), pointer :: domain
+
+      call c_f_pointer(pdomain, domain)
+      call domain%depth_update()
    end subroutine
 
    function advection_create() result(padvection) bind(c)
@@ -115,6 +129,146 @@ contains
       call c_f_pointer(pv, v, domain%T%u(1:2) - domain%T%l(1:2) + 1)
       call c_f_pointer(pvar, var, domain%T%u(1:2) - domain%T%l(1:2) + 1)
      call advection%advection_calculate_2d(scheme, domain%U, u, domain%V, v, timestep, domain%T,var)
+   end subroutine
+
+   function momentum_create(pdomain, padvection) result(pmomentum) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_create
+      type(c_ptr), intent(in), value :: pdomain, padvection
+      type(c_ptr) :: pmomentum
+
+      type (type_getm_domain),   pointer :: domain
+      type (type_advection),     pointer :: advection
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pdomain, domain)
+      call c_f_pointer(padvection, advection)
+      allocate(momentum)
+      call momentum%configure()
+      call momentum%initialize(domain, advection)
+      pmomentum = c_loc(momentum)
+   end function
+
+   function momentum_get_array(pmomentum, name) result(p) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_get_array
+      type(c_ptr), value,             intent(in) :: pmomentum
+      character(kind=c_char), target, intent(in) :: name(*)
+      type(c_ptr)                                :: p
+
+      type (type_getm_momentum), pointer :: momentum
+      character(len=8),          pointer :: pname
+
+      call c_f_pointer(pmomentum, momentum)
+      call c_f_pointer(c_loc(name), pname)
+
+      select case (pname(:index(pname, C_NULL_CHAR) - 1))
+      case ('U'); p = c_loc(momentum%U)
+      case ('V'); p = c_loc(momentum%V)
+      end select
+   end function
+
+   subroutine momentum_advection_2d(pmomentum, timestep) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_advection_2d
+      type(c_ptr),    intent(in), value :: pmomentum
+      real(c_double), intent(in), value :: timestep
+
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pmomentum, momentum)
+      call momentum%advection_2d(timestep)
+   end subroutine
+
+   subroutine momentum_uv_momentum_2d(pmomentum, timestep, ptausx, ptausy, pdpdx, pdpdy) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_uv_momentum_2d
+      type(c_ptr),    intent(in), value :: pmomentum
+      real(c_double), intent(in), value :: timestep
+      type(c_ptr),    intent(in), value :: ptausx, ptausy, pdpdx, pdpdy
+
+      type (type_getm_momentum), pointer :: momentum
+      real(real64), contiguous, pointer, dimension(:,:) :: tausx, tausy, dpdx, dpdy
+
+      call c_f_pointer(pmomentum, momentum)
+      call c_f_pointer(ptausx, tausx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
+      call c_f_pointer(ptausy, tausy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
+      call c_f_pointer(pdpdx, dpdx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
+      call c_f_pointer(pdpdy, dpdy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
+      call momentum%uv_momentum_2d(timestep, tausx, tausy, dpdx, dpdy)
+   end subroutine
+
+   function pressure_create(pdomain) result(ppressure) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: pressure_create
+      type(c_ptr), intent(in), value :: pdomain
+      type(c_ptr) :: ppressure
+
+      type (type_getm_domain),   pointer :: domain
+      type (type_getm_pressure), pointer :: pressure
+
+      call c_f_pointer(pdomain, domain)
+      allocate(pressure)
+      call pressure%configure()
+      call pressure%initialize(domain)
+      ppressure = c_loc(pressure)
+   end function
+
+   function pressure_get_array(ppressure, name) result(p) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: pressure_get_array
+      type(c_ptr), value,             intent(in) :: ppressure
+      character(kind=c_char), target, intent(in) :: name(*)
+      type(c_ptr)                                :: p
+
+      type (type_getm_pressure), pointer :: pressure
+      character(len=8),          pointer :: pname
+
+      call c_f_pointer(ppressure, pressure)
+      call c_f_pointer(c_loc(name), pname)
+
+      select case (pname(:index(pname, C_NULL_CHAR) - 1))
+      case ('dpdx'); p = c_loc(pressure%dpdx)
+      case ('dpdy'); p = c_loc(pressure%dpdy)
+      end select
+   end function
+
+   subroutine pressure_surface(ppressure, pz, psp) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: pressure_surface
+      type(c_ptr), intent(in), value :: ppressure
+      type(c_ptr), intent(in), value :: pz, psp
+
+      type (type_getm_pressure), pointer :: pressure
+      real(real64), contiguous, pointer, dimension(:,:) :: z, sp
+
+      call c_f_pointer(ppressure, pressure)
+      call c_f_pointer(pz, z, pressure%domain%T%u(1:2) - pressure%domain%T%l(1:2) + 1)
+      call c_f_pointer(psp, sp, pressure%domain%T%u(1:2) - pressure%domain%T%l(1:2) + 1)
+      call pressure%surface(z, sp)
+   end subroutine
+
+   function sealevel_create(pdomain) result(psealevel) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: sealevel_create
+      type(c_ptr), intent(in), value :: pdomain
+      type(c_ptr) :: psealevel
+
+      type (type_getm_domain),   pointer :: domain
+      type (type_getm_sealevel), pointer :: sealevel
+
+      call c_f_pointer(pdomain, domain)
+      allocate(sealevel)
+      call sealevel%configure()
+      call sealevel%initialize(domain)
+      psealevel = c_loc(sealevel)
+   end function
+
+   subroutine sealevel_update(psealevel, timestep, pU, pV) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: sealevel_update
+      type(c_ptr), intent(in),    value :: psealevel
+      real(c_double), intent(in), value :: timestep
+      type(c_ptr), intent(in),    value :: pU, pV
+
+      type (type_getm_sealevel), pointer :: sealevel
+      real(real64), contiguous, pointer, dimension(:,:) :: U, V
+
+      call c_f_pointer(psealevel, sealevel)
+      call c_f_pointer(pU, U, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
+      call c_f_pointer(pV, V, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
+      call sealevel%update(timestep, U, V)
    end subroutine
 
 end module
