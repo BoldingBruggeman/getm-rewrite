@@ -81,9 +81,9 @@ SUBROUTINE dynamics_configure(self,logs,fm)
    if (present(fm)) then
       self%fm => fm
    end if
-   call self%sealevel%configuration(logs,fm)
-   call self%pressure%configuration(logs,fm)
-   call self%momentum%configuration(logs,fm)
+   call self%sealevel%configure(logs,fm)
+   call self%pressure%configure(logs,fm)
+   call self%momentum%configure(logs,fm)
    if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE dynamics_configure
 

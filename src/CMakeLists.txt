@@ -1,11 +1,9 @@
 add_subdirectory(parallel)
 
 add_subdirectory(domain)
-
-set_property( TARGET getm_airsea PROPERTY FOLDER airsea )
-target_sources( getm_airsea PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/airsea/airsea.F90
-)
+add_subdirectory(operators)
+add_subdirectory(airsea)
+add_subdirectory(dynamics)
 
 set_property( TARGET getm_physics PROPERTY FOLDER physics )
 target_sources( getm_physics PRIVATE
@@ -18,23 +16,6 @@ target_sources( getm_physics PRIVATE
 #    ${CMAKE_CURRENT_LIST_DIR}/physics/diffusion.F90
 )
 
-set_property( TARGET getm_dynamics PROPERTY FOLDER dynamics )
-target_sources( getm_dynamics PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/dynamics.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/sealevel.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/pressure.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/pressure_surface.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/pressure_internal.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/momentum.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/momentum_2d.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/momentum_3d.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/velocities.F90
-    #${CMAKE_CURRENT_LIST_DIR}/dynamics/velocity_diffusion.F90
-    #${CMAKE_CURRENT_LIST_DIR}/dynamics/shear.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/slow_terms.F90
-    ${CMAKE_CURRENT_LIST_DIR}/dynamics/momentum_register.F90
-)
-
 set_property( TARGET getm_input PROPERTY FOLDER input )
 target_sources( getm_input PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/input/input.F90
@@ -45,8 +26,6 @@ set_property( TARGET getm_output PROPERTY FOLDER output )
 target_sources( getm_output PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/output/output.F90
 )
-
-add_subdirectory(operators)
 
 set_property( TARGET getm_exe PROPERTY FOLDER getm )
 target_sources( getm_exe PRIVATE

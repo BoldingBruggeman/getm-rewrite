@@ -25,7 +25,7 @@ MODULE getm_sealevel
 
       contains
 
-      procedure :: configuration => sealevel_configuration
+      procedure :: configure => sealevel_configure
       procedure :: initialize => sealevel_initialize
       procedure :: update => sealevel_calculate
 
@@ -37,7 +37,7 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE sealevel_configuration(self,logs,fm)
+SUBROUTINE sealevel_configure(self,logs,fm)
 
    !! Configure the components belonging to the dynamics
 
@@ -60,7 +60,7 @@ SUBROUTINE sealevel_configuration(self,logs,fm)
       self%fm => fm
    end if
    return
-END SUBROUTINE sealevel_configuration
+END SUBROUTINE sealevel_configure
 
 !---------------------------------------------------------------------------
 
