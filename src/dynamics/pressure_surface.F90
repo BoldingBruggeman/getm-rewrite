@@ -28,7 +28,7 @@ module SUBROUTINE pressure_surface(self,z,sp)
 !KB
    real(real64) :: gammai= 1._real64/(9.81_real64*1025._real64)
 !---------------------------------------------------------------------------
-   call self%logs%info('pressure_external()',level=2)
+   if (associated(self%logs)) call self%logs%info('pressure_external()',level=2)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax

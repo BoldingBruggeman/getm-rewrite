@@ -37,7 +37,7 @@ module SUBROUTINE depth_update(self)
    real(real64) :: x
    integer :: i,j
 !---------------------------------------------------------------------------
-   call self%logs%info('depth_update()',level=1)
+   if (associated(self%logs)) call self%logs%info('depth_update()',level=1)
 
 #define USE_MASK
    TGrid: associate( TG => self%T )
@@ -102,7 +102,7 @@ module SUBROUTINE depth_update(self)
    end associate VGrid
    end associate UGrid
    end associate TGrid
-   call self%logs%info('done',level=1)
+   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE depth_update
 
 !-----------------------------------------------------------------------------
