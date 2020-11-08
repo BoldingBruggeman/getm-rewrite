@@ -27,7 +27,7 @@ end block ps_pdm
 
 #ifdef SPLMAX13
 splmax13: block
-                limiter = MIN( 2._real64*ratio , 1._real64/3._real64*MAX( 1._real64+2._real64*ratio , 2._real64+ratio ) , 2._real64 )
+                limiter = MIN(2._real64*ratio,1._real64/3._real64*MAX( 1._real64+2._real64*ratio,2._real64+ratio ),2._real64)
 end block splmax13
 #endif
 

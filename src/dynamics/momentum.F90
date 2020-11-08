@@ -139,16 +139,22 @@ MODULE getm_momentum
             !! timestep [s]
          integer, intent(in) :: mode_split
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-         real(real64), intent(in) :: tausx(_T2_),tausy(_T2_)
-           !! surface stresses
-         real(real64), intent(in) :: dpdx(_T2_),dpdy(_T2_)
-           !! surface pressure gradients - including air pressure
-         real(real64), intent(in) :: idpdx(_T3_),idpdy(_T3_)
-           !! internal pressure gradients
-         real(real64), intent(in) :: viscosity(_T3_)
-           !! viscosity
+   real(real64), intent(in) :: tausx(_T2_)
+     !! surface stress - x
+   real(real64), intent(in) :: tausy(_T2_)
+     !! surface stress - y
+   real(real64), intent(in) :: dpdx(_T2_)
+     !! surface pressure (including air pressure) - x-gradient
+   real(real64), intent(in) :: dpdy(_T2_)
+     !! surface pressure (including air pressure) - y-gradient
 #undef _T2_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: idpdx(_T3_)
+     !! internal pressure - x-gradient
+   real(real64), intent(in) :: idpdy(_T3_)
+     !! internal pressure - y-gradient
+   real(real64), intent(in) :: viscosity(_T3_)
+     !! viscosity
 #undef _T3_
       END SUBROUTINE uv_momentum_3d
       MODULE SUBROUTINE w_momentum_3d(self,dt)
