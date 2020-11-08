@@ -87,6 +87,8 @@ MODULE getm_momentum
       contains
 
       procedure :: configure => momentum_configure
+      procedure :: list => momentum_list
+      procedure :: set => momentum_set
       procedure :: initialize => momentum_initialize
       procedure :: register => momentum_register
       procedure :: initialize_2d => uv_initialize_2d
@@ -232,6 +234,57 @@ SUBROUTINE momentum_configure(self,logs,fm)
       self%fm => fm
    end if
 END SUBROUTINE momentum_configure
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE momentum_list(self)
+   !! List the configurable parameters in type_getm_momentum
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+!---------------------------------------------------------------------------
+   write(*,*) 'Momentum settings:'
+   write(*,*) 'advection_scheme=    ',self%advection_scheme
+   write(*,*) 'cnpar=               ',self%cnpar
+   write(*,*) 'molecular viscosity= ',self%molecular
+END SUBROUTINE momentum_list
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE momentum_set(self,adv,cnpar,mol)
+   !! List the configurable parameters in type_getm_momentum
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+   integer, intent(in), optional :: adv
+   real(real64), intent(in), optional :: cnpar
+   real(real64), intent(in), optional :: mol
+
+!  Local constants
+
+!  Local variables
+!---------------------------------------------------------------------------
+   if (present(adv)) then
+      self%advection_scheme=adv
+      write(*,*) 'setting advection_scheme to:',self%advection_scheme
+   end if
+   if (present(cnpar)) then
+      self%cnpar=cnpar
+      write(*,*) 'setting cnpar to:',self%cnpar
+   end if
+   if (present(cnpar)) then
+      self%molecular=mol
+      write(*,*) 'setting molecular to:',self%molecular
+   end if
+END SUBROUTINE momentum_set
 
 !---------------------------------------------------------------------------
 
