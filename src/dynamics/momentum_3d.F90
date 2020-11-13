@@ -36,6 +36,9 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
    end associate TGrid
 !KBend if
+   call mm_s('num',self%num,self%pk,def=0._real64,stat=stat)
+   call mm_s('ea2',self%ea2,self%pk,def=0._real64,stat=stat)
+   call mm_s('ea4',self%ea4,self%pk,def=0._real64,stat=stat)
 
    end associate VGrid
    end associate UGrid
@@ -71,7 +74,6 @@ MODULE SUBROUTINE uv_momentum_3d(self,mode_split,dt,tausx,tausy,dpdx,dpdy,idpdx,
      !! viscosity
 #undef _T3_
 
-
 !  Local constants
 
 !  Local variables
@@ -82,11 +84,15 @@ MODULE SUBROUTINE uv_momentum_3d(self,mode_split,dt,tausx,tausy,dpdx,dpdy,idpdx,
    self%Vi=self%Vi/mode_split
 
    if(ufirst) then
+      call qk_cor(self)
       call u_3d(self,dt,tausx,dpdx,idpdy,viscosity)
+      call pk_cor(self)
       call v_3d(self,dt,tausy,dpdy,idpdy,viscosity)
       ufirst = .false.
    else
+      call pk_cor(self)
       call v_3d(self,dt,tausy,dpdy,idpdy,viscosity)
+      call qk_cor(self)
       call u_3d(self,dt,tausx,dpdx,idpdy,viscosity)
       ufirst = .true.
    end if
@@ -117,9 +123,9 @@ MODULE SUBROUTINE w_momentum_3d(self,dt)
       do j=TG%l(2)+1,TG%u(2)
          do i=TG%l(1)+1,TG%u(1)
             if (TG%mask(i,j) == 1) then
-                  self%ww(i,j,k) = self%ww(i,j,k-1) - (TG%hn(i,j,k)-TG%ho(i,j,k))*dtm1 &
-                              -(self%pk(i,j,k)*UG%dy(i,j) - self%pk(i-1,j  ,k)*UG%dy(i-1,j) &
-                               +self%qk(i,j,k)*VG%dx(i,j) - self%qk(i  ,j-1,k)*VG%dx(i,j-1)) &
+                  self%ww(i,j,k) = self%ww(i,j,k-1)-(TG%hn(i,j,k)-TG%ho(i,j,k))*dtm1 &
+                              -(self%pk(i,j,k)*UG%dy(i,j)-self%pk(i-1,j  ,k)*UG%dy(i-1,j) &
+                               +self%qk(i,j,k)*VG%dx(i,j)-self%qk(i  ,j-1,k)*VG%dx(i,j-1)) &
                                *TG%inv_area(i,j)
             end if
          end do
@@ -196,56 +202,36 @@ SUBROUTINE u_3d(self,dt,taus,dpdx,idpdx,viscosity)
    real(real64), intent(in) :: idpdx(_T3_)
       !! internal pressure gradient
    real(real64), intent(in) :: viscosity(_T3_)
-#undef _T3_
       !! viscosity
+#undef _T3_
 
 !  Local constants
 
 !  Local variables
-   real(real64) :: Vloc
+   real(real64) :: res
 !KB
    real(real64) :: Slr, ip_fac=1._real64
 !KB
-   real(real64), dimension(:,:,:), allocatable :: ea2,ea4,num
    integer :: i,j,k
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('u_3d()',level=3)
-
-   allocate(ea2,mold=self%pk) !KB se note in temperature.F90
-   allocate(ea4,mold=self%pk)
-   allocate(num,mold=viscosity)
-
    UGrid: associate( UG => self%domain%U )
    do k=UG%kmin,UG%kmax
       do j=UG%jmin,UG%jmax
          do i=UG%imin,UG%imax
-            ea2(i,j,k)=0._real64
-            ea4(i,j,k)=0._real64
+            self%num(i,j,k)=0._real64
+            self%ea2(i,j,k)=0._real64
+            self%ea4(i,j,k)=0._real64
             if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-
                ! Eddy viscosity at U-points
-               num(i,j,k)=0.5_real64*(num(i,j,k)+num(i+1,j,k))
-
+               self%num(i,j,k)=0.5_real64*(viscosity(i,j,k)+viscosity(i+1,j,k))
+!KB check where to apply dt
+               ! Coriolis term
+               self%ea4(i,j,k)=self%fqk(i,j,k)
                ! surface pressure
-               ea4(i,j,k)=-dt*0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k))*g*dpdx(i,j)
-#if 0
-               ! Coriolis
-               ! Espelid et al. [2000], IJNME 49, 1521-1545
-#ifdef NEW_CORI
-               Vloc=0.25_real64*(work3d(i,j,k)+work3d(i+1,j,k)+work3d(i,j-1,k)+work3d(i+1,j-1,k))*sqrt(huo(i,j,k))
-#else
-               Vloc=0.25_real64*(self%qk(i,j,k)+self%qk(i+1,j,k)+self%qk(i,j-1,k)+self%qk(i+1,j-1,k))
-#endif
-#if defined(SPHERICAL) || defined(CURVILINEAR)
-               cord_curv=(Vloc*(DYCIP1-DYC)-uu(i,j,k)*(DXX-DXXJM1))   &
-                     /huo(i,j,k)*ARUD1
-               ex(k)=(cord_curv+coru(i,j))*Vloc
-#else
-               ex(k)=coru(i,j)*Vloc
-#endif
-#endif
+               self%ea4(i,j,k)=self%ea4(i,j,k)-dt*0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k))*g*dpdx(i,j)
                ! .... and internal pressure gradient
-               ea4(i,j,k)=UG%alpha(i,j)*(ea4(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
+               self%ea4(i,j,k)=UG%alpha(i,j)*(self%ea4(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
             end if
          end do
       end do
@@ -256,40 +242,87 @@ SUBROUTINE u_3d(self,dt,taus,dpdx,idpdx,viscosity)
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             ! surface stress
-            ea4(i,j,UG%kmax)=ea4(i,j,UG%kmax)+UG%alpha(i,j)*0.5_real64*(taus(i,j)+taus(i+1,j))/rho0
+            k=UG%kmax
+            self%ea4(i,j,k)=self%ea4(i,j,k)+UG%alpha(i,j)*0.5_real64*(taus(i,j)+taus(i+1,j))/rho0
             ! bottom friction
-            ea2(i,j,UG%kmin)=dt*self%rru(i,j)/(0.5_real64*(UG%ho(i,j,UG%kmin)+UG%hn(i,j,UG%kmin)))
+            k=UG%kmin
+            self%ea2(i,j,k)=dt*self%rru(i,j)/(0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k)))
          end if
       end do
    end do
 
 !KB scale with huo
-   call self%vertical_diffusion%calculate(UG%mask,UG%ho,UG%hn,dt,self%cnpar,self%molecular,num,self%pk,ea2,ea4)
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+!KB            self%pk=self%pk/se
+         end if
+      end do
+   end do
+   call self%vertical_diffusion%calculate(UG%mask,UG%ho,UG%hn,dt,self%cnpar,self%molecular,self%num,self%pk,self%ea2,self%ea4)
 !KB un-scale with huo
 
-#if 0
    ! Transport correction: the integral of the new velocities has to
-   ! be the same than the transport calculated by the external mode, Uint.
-
-   ResInt= _ZERO_
-   do k=kumin(i,j),kmax
-      ResInt=ResInt+Res(k)
+   ! be the same as the transport calculated by the external mode, Uint.
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+            res = (self%Ui(i,j)-sum(self%pk(i,j,1:)))/UG%D(i,j)
+            self%pk(i,j,1:) = self%pk(i,j,1:)+res*UG%hn(i,j,1:)
+         end if
+      end do
    end do
-#ifdef MUDFLAT
-   Diff=(Uint(i,j)-ResInt)/(ssun(i,j)+HU(i,j))
-#else
-   Diff=(Uint(i,j)-ResInt)/(ssuo(i,j)+HU(i,j))
-#endif
-
-   do k=kumin(i,j),kmax
-#ifndef NO_BAROTROPIC
-      uu(i,j,k)=Res(k) +hun(i,j,k)*Diff
-#else
-      uu(i,j,k)=Res(k)
-#endif
-#endif
    end associate UGrid
 END SUBROUTINE u_3d
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE pk_cor(self)
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+      !! GETM momentum type
+
+!  Local constants
+
+!  Local variables
+   real(real64) :: Vloc, cord_curv=0._real64
+   integer :: i,j,k
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('pk_cor()',level=3)
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   XGrid: associate( XG => self%domain%X )
+   do k=UG%kmin,UG%kmax
+      do j=UG%jmin,UG%jmax
+         do i=UG%imin,UG%imax
+            if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+               Vloc=0.25_real64*(self%qk(i,j  ,k)+self%qk(i+1,j  ,k) &
+                                +self%qk(i,j-1,k)+self%qk(i+1,j-1,k))
+               if (self%domain%domain_type /= 1) then
+!KB                  cord_curv=(Vloc*(DYCIP1-DYC)-uu(i,j,k)*(DXX-DXXJM1))/huo(i,j,k)*ARUD1
+                  cord_curv=(Vloc*(TG%dy(i+1,j)-TG%dy(i,j)) &
+                            -self%pk(i,j,k)*(XG%dx(i,j)-XG%dx(i,j-1))) &
+                            /UG%ho(i,j,k)*UG%inv_area(i,j)
+               end if
+               self%fqk(i,j,k)=(cord_curv+UG%cor(i,j))*Vloc
+            end if
+         end do
+      end do
+   end do
+   end associate XGrid
+   end associate UGrid
+   end associate TGrid
+END SUBROUTINE pk_cor
+#if 0
+#ifdef NEW_CORI
+               Vloc=0.25_real64*(work3d(i,j,k)+work3d(i+1,j,k)+work3d(i,j-1,k)+work3d(i+1,j-1,k))*sqrt(huo(i,j,k))
+#else
+               Vloc=0.25_real64*(self%qk(i,j,k)+self%qk(i+1,j,k)+self%qk(i,j-1,k)+self%qk(i+1,j-1,k))
+#endif
+#endif
 
 !---------------------------------------------------------------------------
 
@@ -318,14 +351,114 @@ SUBROUTINE v_3d(self,dt,taus,dpdy,idpdy,viscosity)
 !  Local constants
 
 !  Local variables
-   integer :: i,j
-   real(real64) :: tausu
+   real(real64) :: res
 !KB
-   real(real64) :: Slr
+   real(real64) :: Slr, ip_fac=1._real64
 !KB
+   integer :: i,j,k
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('v_3d()',level=3)
+   VGrid: associate( VG => self%domain%V )
+   do k=VG%kmin,VG%kmax
+      do j=VG%jmin,VG%jmax
+         do i=VG%imin,VG%imax
+            self%num(i,j,k)=0._real64
+            self%ea2(i,j,k)=0._real64
+            self%ea4(i,j,k)=0._real64
+            if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+               ! Eddy viscosity at U-points
+               self%num(i,j,k)=0.5_real64*(viscosity(i,j,k)+viscosity(i,j+1,k))
+!KB check where to apply dt
+               ! Coriolis term
+               self%ea4(i,j,k)=self%fpk(i,j,k)
+               ! surface pressure
+               self%ea4(i,j,k)=self%ea4(i,j,k)-dt*0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k))*g*dpdy(i,j)
+               ! .... and internal pressure gradient
+               self%ea4(i,j,k)=VG%alpha(i,j)*(self%ea4(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
+            end if
+         end do
+      end do
+   end do
+
+   ! Additional matrix elements for surface and bottom layer
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
+         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+            ! surface stress
+            k=VG%kmax
+            self%ea4(i,j,k)=self%ea4(i,j,k)+VG%alpha(i,j)*0.5_real64*(taus(i,j)+taus(i,j+1))/rho0
+            ! bottom friction
+            k=VG%kmin
+            self%ea2(i,j,k)=dt*self%rrv(i,j)/(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
+         end if
+      end do
+   end do
+
+!KB scale with hvo
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
+         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+!KB            self%pk=self%pk/se
+         end if
+      end do
+   end do
+   call self%vertical_diffusion%calculate(VG%mask,VG%ho,VG%hn,dt,self%cnpar,self%molecular,self%num,self%qk,self%ea2,self%ea4)
+!KB un-scale with hvo
+
+   ! Transport correction: the integral of the new velocities has to
+   ! be the same as the transport calculated by the external mode, Uint.
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
+         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+            res = (self%Vi(i,j)-sum(self%qk(i,j,1:)))/VG%D(i,j)
+            self%qk(i,j,1:) = self%qk(i,j,1:)+res*VG%hn(i,j,1:)
+         end if
+      end do
+   end do
+   end associate VGrid
 END SUBROUTINE v_3d
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE qk_cor(self)
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+      !! GETM momentum type
+
+!  Local constants
+
+!  Local variables
+   real(real64) :: Uloc, cord_curv=0._real64
+   integer :: i,j,k
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('qk_cor()',level=3)
+   TGrid: associate( TG => self%domain%T )
+   VGrid: associate( VG => self%domain%V )
+   XGrid: associate( XG => self%domain%X )
+   do k=VG%kmin,VG%kmax
+      do j=VG%jmin,VG%jmax
+         do i=VG%imin,VG%imax
+            if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+               Uloc=0.25_real64*(self%uk(i,j  ,k)+self%uk(i+1,j  ,k) &
+                                +self%uk(i,j-1,k)+self%uk(i+1,j-1,k))
+               if (self%domain%domain_type /= 1) then
+!KB                  cord_curv=(Vloc*(DYCIP1-DYC)-uu(i,j,k)*(DXX-DXXJM1))/huo(i,j,k)*ARUD1
+                  cord_curv=(-Uloc*(TG%dx(i,j+1)-TG%dx(i,j)) &
+                            +self%qk(i,j,k)*(XG%dy(i,j)-XG%dy(i-1,j))) &
+                            /VG%ho(i,j,k)*VG%inv_area(i,j)
+               end if
+               self%fpk(i,j,k)=(cord_curv+VG%cor(i,j))*Uloc
+            end if
+         end do
+      end do
+   end do
+   end associate XGrid
+   end associate VGrid
+   end associate TGrid
+END SUBROUTINE qk_cor
 
 !---------------------------------------------------------------------------
 
