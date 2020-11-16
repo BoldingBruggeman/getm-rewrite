@@ -85,6 +85,8 @@ MODULE getm_momentum
       integer :: advection_scheme=1
       real(real64) :: molecular=0._real64
       real(real64) :: cnpar
+      real(real64) :: Am=0.0001_real64 ! KB
+      integer :: An_method=0
 #endif
 
       contains
@@ -97,10 +99,12 @@ MODULE getm_momentum
       procedure :: initialize_2d => uv_initialize_2d
       procedure :: uv_momentum_2d => uv_momentum_2d
       procedure :: advection_2d => uv_advection_2d
+      procedure :: diffusion_2d => uv_diffusion_2d
       procedure :: initialize_3d => uv_initialize_3d
       procedure :: uv_momentum_3d => uv_momentum_3d
       procedure :: w_momentum_3d => w_momentum_3d
       procedure :: advection_3d => uv_advection_3d
+      procedure :: diffusion_3d => uv_diffusion_3d
       procedure :: vel_2d => velocities_2d
       procedure :: vel_3d => velocities_3d
       procedure :: stresses => stresses
@@ -132,6 +136,10 @@ MODULE getm_momentum
          real(real64), intent(in) :: dt
             !! timestep [s]
       END SUBROUTINE uv_advection_2d
+
+      MODULE SUBROUTINE uv_diffusion_2d(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE uv_diffusion_2d
 
       ! 3D routines
       MODULE SUBROUTINE uv_initialize_3d(self)
@@ -172,6 +180,9 @@ MODULE getm_momentum
          real(real64), intent(in) :: dt
             !! timestep [s]
       END SUBROUTINE uv_advection_3d
+      MODULE SUBROUTINE uv_diffusion_3d(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE uv_diffusion_3d
 
       MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
