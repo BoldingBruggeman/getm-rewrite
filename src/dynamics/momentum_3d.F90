@@ -246,22 +246,21 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
       end do
    end do
 
-!KB scale with huo
+   !KB - could call with uk instead of doing scaling??
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-!KB            self%pk(i,j,:)=self%pk(i,j,:)/UG%ho(i,j,:)
+            self%pk(i,j,:)=self%pk(i,j,:)/UG%ho(i,j,:)
+            self%ea2(i,j,:)=self%ea2(i,j,:)/UG%ho(i,j,:)
+            self%ea4(i,j,:)=self%ea4(i,j,:)/UG%ho(i,j,:)
          end if
       end do
    end do
-
    call self%vertical_diffusion%calculate(UG%mask,UG%ho,UG%hn,dt,self%cnpar,self%molecular,self%num,self%pk,self%ea2,self%ea4)
-
-!KB un-scale with huo
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-!KB            self%pk(i,j,:)=self%pk(i,j,:)*UG%ho(i,j,:)
+            self%pk(i,j,:)=self%pk(i,j,:)*UG%hn(i,j,:)
          end if
       end do
    end do
@@ -394,22 +393,20 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
       end do
    end do
 
-!KB scale with hvo
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-!KB            self%qk(i,j,:)=self%qk(i,j,:)/VG%ho(i,j,:)
+            self%qk(i,j,:)=self%qk(i,j,:)/VG%ho(i,j,:)
+            self%ea2(i,j,:)=self%ea2(i,j,:)/VG%ho(i,j,:)
+            self%ea4(i,j,:)=self%ea4(i,j,:)/VG%ho(i,j,:)
          end if
       end do
    end do
-
    call self%vertical_diffusion%calculate(VG%mask,VG%ho,VG%hn,dt,self%cnpar,self%molecular,self%num,self%qk,self%ea2,self%ea4)
-
-!KB un-scale with hvo
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-!KB            self%qk(i,j,:)=self%qk(i,j,:)*VG%ho(i,j,:)
+            self%qk(i,j,:)=self%qk(i,j,:)*VG%hn(i,j,:)
          end if
       end do
    end do
