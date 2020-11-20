@@ -28,10 +28,16 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('pk',self%pk,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
    call mm_s('qk',self%qk,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
    call mm_s('ww',self%ww,self%pk,def=0._real64,stat=stat)
-   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
-   call mm_s('vvEx',self%vvEx,self%pk,def=0._real64,stat=stat)
-   call mm_s('pkadv',self%pkadv,self%pk,def=0._real64,stat=stat)
-   call mm_s('qkadv',self%qkadv,self%qk,def=0._real64,stat=stat)
+!KB   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
+!KB   call mm_s('vvEx',self%vvEx,self%pk,def=0._real64,stat=stat)
+   call mm_s('pka',self%pka,self%pk,def=0._real64,stat=stat)
+   call mm_s('qka',self%qka,self%qk,def=0._real64,stat=stat)
+   call mm_s('fpk',self%fpk,self%pk,def=0._real64,stat=stat)
+   call mm_s('fqk',self%fqk,self%qk,def=0._real64,stat=stat)
+   call mm_s('advpk',self%advpk,self%pk,def=0._real64,stat=stat)
+   call mm_s('advqk',self%advqk,self%qk,def=0._real64,stat=stat)
+   call mm_s('diffuk',self%diffuk,self%pk,def=0._real64,stat=stat)
+   call mm_s('diffvk',self%diffvk,self%qk,def=0._real64,stat=stat)
 !KB if (self%advection_scheme > 0) then
    TGrid: associate( TG => self%domain%T )
    call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
@@ -162,21 +168,21 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
       do i=UG%imin,UG%imax
          self%uadvgrid%hn(i,j,:) = TG%hn(i+1,j,:)
          self%vadvgrid%hn(i,j,:) = XG%hn(i,j,:)
-         self%pkadv(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i+1,j,:))
-         self%qkadv(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i+1,j,:))
+         self%pka(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i+1,j,:))
+         self%qka(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i+1,j,:))
       end do
    end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pkadv,self%vadvgrid,self%qkadv,dt,UG,self%pk)
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pka,self%vadvgrid,self%qka,dt,UG,self%pk)
 
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%hn(i,j,:) = XG%hn(i,j,:)
          self%vadvgrid%hn(i,j,:) = TG%hn(i,j+1,:)
-         self%pkadv(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i,j+1,:))
-         self%qkadv(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i,j+1,:))
+         self%pka(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i,j+1,:))
+         self%qka(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i,j+1,:))
       end do
    end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pkadv,self%vadvgrid,self%qkadv,dt,VG,self%qk)
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pka,self%vadvgrid,self%qka,dt,VG,self%qk)
    end associate VGrid
    end associate UGrid
    end associate TGrid
@@ -224,7 +230,9 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
                ! Eddy viscosity at U-points
                self%num(i,j,k)=0.5_real64*(viscosity(i,j,k)+viscosity(i+1,j,k))
                ! Coriolis, advection/diffusion and internal pressure
-               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
+!KB               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
+               ! check signs for components
+               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%advpk(i,j,k)-self%diffuk(i,j,k)+ip_fac*idpdx(i,j,k))
             end if
          end do
       end do
@@ -371,7 +379,9 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
                ! Eddy viscosity at U-points
                self%num(i,j,k)=0.5_real64*(viscosity(i,j,k)+viscosity(i,j+1,k))
                ! Coriolis, advection/diffusion and internal pressure
-               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
+!KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
+               ! check signs for components
+               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%advqk(i,j,k)-self%diffvk(i,j,k)+ip_fac*idpdy(i,j,k))
             end if
          end do
       end do

@@ -13,7 +13,7 @@
 
 !> to be consistent with the old GETM documentation
 !>
-!> Uadv, Vadv could be defined in here
+!> Ua, Va could be defined in here
 !>
 !> @endnote
 
@@ -21,7 +21,7 @@ SUBMODULE (getm_momentum) momentum_2d_smod
 
 CONTAINS
 
-!KB      real(real64), dimension(:,:), allocatable :: Uadv,Vadv
+!KB      real(real64), dimension(:,:), allocatable :: Ua,Va
 
 !---------------------------------------------------------------------------
 
@@ -47,8 +47,14 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('Vi',self%Vi,self%V,def=0._real64,stat=stat)
    call mm_s('Uio',self%Uio,self%U,def=0._real64,stat=stat)
    call mm_s('Vio',self%Vio,self%V,def=0._real64,stat=stat)
+   call mm_s('Ua',self%Ua,self%U,def=0._real64,stat=stat)
+   call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
    call mm_s('fU',self%fU,self%U,def=0._real64,stat=stat)
    call mm_s('fV',self%fV,self%V,def=0._real64,stat=stat)
+   call mm_s('advU',self%advU,self%U,def=0._real64,stat=stat)
+   call mm_s('advV',self%advV,self%V,def=0._real64,stat=stat)
+   call mm_s('diffu1',self%diffu1,self%U,def=0._real64,stat=stat)
+   call mm_s('diffv1',self%diffv1,self%V,def=0._real64,stat=stat)
    call mm_s('SxA',self%SxA,self%U,def=0._real64,stat=stat)
    call mm_s('SyA',self%SyA,self%V,def=0._real64,stat=stat)
    call mm_s('SxB',self%SxB,self%U,def=0._real64,stat=stat)
@@ -57,12 +63,12 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('SyD',self%SyD,self%V,def=0._real64,stat=stat)
    call mm_s('SxF',self%SxF,self%U,def=0._real64,stat=stat)
    call mm_s('SyF',self%SyF,self%V,def=0._real64,stat=stat)
-   call mm_s('UEx',self%UEx,self%U,def=0._real64,stat=stat)
-   call mm_s('VEx',self%VEx,self%V,def=0._real64,stat=stat)
-   call mm_s('SlUx',self%SlUx,self%U,def=0._real64,stat=stat)
-   call mm_s('SlVx',self%SlVx,self%V,def=0._real64,stat=stat)
-   call mm_s('Slru',self%Slru,self%U,def=0._real64,stat=stat)
-   call mm_s('Slrv',self%Slrv,self%V,def=0._real64,stat=stat)
+!KB   call mm_s('UEx',self%UEx,self%U,def=0._real64,stat=stat)
+!KB   call mm_s('VEx',self%VEx,self%V,def=0._real64,stat=stat)
+!KB   call mm_s('SlUx',self%SlUx,self%U,def=0._real64,stat=stat)
+!KB   call mm_s('SlVx',self%SlVx,self%V,def=0._real64,stat=stat)
+!KB   call mm_s('Slru',self%Slru,self%U,def=0._real64,stat=stat)
+!KB   call mm_s('Slrv',self%Slrv,self%V,def=0._real64,stat=stat)
    call mm_s('ru',self%ru,self%U,def=0._real64,stat=stat)
    call mm_s('rv',self%rv,self%V,def=0._real64,stat=stat)
 !   call mm_s('taub',self%taub,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
@@ -88,8 +94,8 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('vadvdy',self%vadvgrid%dy,TG%dy,def=0._real64,stat=stat)
    call mm_s('vadvD',self%vadvgrid%D,TG%D,def=0._real64,stat=stat)
 
-   call mm_s('Uadv',self%Uadv,self%U,def=0._real64,stat=stat)
-   call mm_s('Vadv',self%Vadv,self%V,def=0._real64,stat=stat)
+   call mm_s('Ua',self%Ua,self%U,def=0._real64,stat=stat)
+   call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
 
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax-1 !KB - note
@@ -179,21 +185,21 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
       do i=UG%imin,UG%imax
          self%uadvgrid%D(i,j)  = TG%D(i+1,j)
          self%vadvgrid%D(i,j)  = XG%D(i,j)
-         self%Uadv(i,j) = 0.5_real64*(self%U(i,j) + self%U(i+1,j))
-         self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
+         self%Ua(i,j) = 0.5_real64*(self%U(i,j) + self%U(i+1,j))
+         self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
       end do
    end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,UG,self%U)
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%U)
 
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%D(i,j)  = XG%D(i,j)
          self%vadvgrid%D(i,j)  = TG%D(i,j+1)
-         self%Uadv(i,j) = 0.5_real64*(self%U(i,j) + self%U(i,j+1))
-         self%Vadv(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
+         self%Ua(i,j) = 0.5_real64*(self%U(i,j) + self%U(i,j+1))
+         self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
       end do
    end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Uadv,self%vadvgrid,self%Vadv,dt,VG,self%V)
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%V)
    end associate VGrid
    end associate UGrid
    end associate TGrid
@@ -233,13 +239,14 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             tausu = 0.5_real64 * ( taus(i,j) + taus(i+1,j) )
             if (self%U(i,j) .gt. 0._real64) then
-               Slr = max( self%Slru(i,j) , 0._real64 )
+               Slr = max( self%SxF(i,j) , 0._real64 )
             else
-               Slr = min( self%Slru(i,j) , 0._real64 )
+               Slr = min( self%SxF(i,j) , 0._real64 )
             end if
-            self%U(i,j)=(self%U(i,j) &
-                        -dt*(g*UG%D(i,j)*dpdx(i,j)+UG%alpha(i,j) &
-                        *(-tausu/rho0-self%fV(i,j)+self%UEx(i,j)+self%SlUx(i,j)+Slr))) &
+            self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! (2.16) - note SxF is multiplied by alpha
+                        +UG%alpha(i,j)*(-tausu/rho0-self%fV(i,j) &
+                        +self%advU(i,j)-self%diffu1(i,j) &
+                        +self%SxA(i,j)-self%SxB(i,j)+self%SxD(i,j)+Slr))) &
                         /(1._real64+dt*self%ru(i,j)/UG%D(i,j))
             self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)
          end if
@@ -261,7 +268,7 @@ SUBROUTINE u_cor(self)
 !  Local constants
 
 !  Local variables
-   real(real64) :: Uloc, cord_curv
+   real(real64) :: Uloc, cord_curv=0._real64
    integer :: i,j
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('u_cor()',level=3)
@@ -280,12 +287,12 @@ SUBROUTINE u_cor(self)
              + self%U(i,j+1)/sqrt(UG%D(i,j+1))+ self%U(i-1,j+1)/sqrt(UG%D(i-1,j+1))) &
                *0.25_real64*sqrt(VG%D(i,j))
 #else
-            Uloc=0.25_real64*( self%U(i-1,j)+self%U(i,j)+self%U(i-1,j+1)+self%U(i,j+1))
+            Uloc=0.25_real64*(self%U(i-1,j)+self%U(i,j)+self%U(i-1,j+1)+self%U(i,j+1))
 #endif
-            cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j)) &
-                      -Uloc*(TG%dx(i,j+1)-TG%dx(i,j))) &
-                      /VG%D(i,j)*VG%inv_area(i,j)
-!            cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j))-Uloc*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%inv_area(i,j)
+            if (self%domain%domain_type /= 1) then
+               cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j)) &
+                         -Uloc*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%inv_area(i,j)
+            end if
             self%fU(i,j)=(cord_curv+VG%cor(i,j))*Uloc
          else
             self%fU(i,j)= 0._real64
@@ -331,14 +338,16 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             tausv = 0.5_real64 * ( taus(i,j) + taus(i,j+1) )
             if (self%V(i,j) .gt. 0._real64) then
-               Slr = max( self%Slrv(i,j) , 0._real64 )
+               Slr = max( self%SyF(i,j) , 0._real64 )
             else
-               Slr = min( self%Slrv(i,j) , 0._real64 )
+               Slr = min( self%SyF(i,j) , 0._real64 )
             end if
+#if 0
             self%V(i,j)=(self%V(i,j) &
                         -dt*(g*VG%D(i,j)*dpdy(i,j)+VG%alpha(i,j) &
                         *(-tausv/rho0-self%fU(i,j)+self%VEx(i,j)+self%SlVx(i,j)+Slr))) &
                         /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
+#endif
             self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)
          end if
       end do
@@ -380,9 +389,10 @@ SUBROUTINE v_cor(self)
 #else
             Vloc=0.25_real64*( self%V(i-1,j)+self%V(i,j)+self%V(i-1,j+1)+self%V(i,j+1))
 #endif
-            cord_curv=(Vloc*(TG%dy(i+1,j)-TG%dy(i,j))) &
-                      +self%U(i,j)*(XG%dx(i,j)-XG%dx(i,j-1)) &
-                      /UG%D(i,j)*UG%inv_area(i,j)
+            if (self%domain%domain_type /= 1) then
+               cord_curv=(Vloc*(TG%dy(i+1,j)-TG%dy(i,j))) &
+                         +self%U(i,j)*(XG%dx(i,j)-XG%dx(i,j-1))/UG%D(i,j)*UG%inv_area(i,j)
+            end if
             self%fV(i,j)=(cord_curv+UG%cor(i,j))*Vloc
          else
             self%fV(i,j)= 0._real64

@@ -42,22 +42,22 @@ module SUBROUTINE momentum_register(self)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('V', self%V(VG%imin:VG%imax,VG%jmin:VG%jmax))
 #if 0
-   call self%fm%register('Uadv', 'm2/s', 'advective transport in local x-direction', &
+   call self%fm%register('Ua', 'm2/s', 'advective transport in local x-direction', &
                          standard_name='', &
                          dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
                          part_of_state=.false., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('Uadv', self%Uadv)
-   call self%fm%register('Vadv', 'm2/s', 'advective transport in local y-direction', &
+   call self%fm%send_data('Ua', self%Ua)
+   call self%fm%register('Va', 'm2/s', 'advective transport in local y-direction', &
                          standard_name='', &
                          dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
                          part_of_state=.false., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('Vadv', self%Vadv)
+   call self%fm%send_data('Va', self%Va)
 #endif
 #if 0
    call fm%register('pk', 'm2/s', 'transport in local x-direction (3D)', standard_name='', dimensions=(/id_dim_z/), data3d=pk(_3D_W_), category='3d', output_level=output_level_debug, part_of_state=.true.)

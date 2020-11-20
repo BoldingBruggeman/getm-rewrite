@@ -36,9 +36,9 @@ MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
 !KB            self%SlUx(i,j)=-self%UEx(i,j)+SUM(self%uuEx(i,j,1:))-SUM(idpdx(i,j,1:))
-            self%SxA(i,j)=0._real64 ! KB
+            self%SxA(i,j)=SUM(self%advpk(i,j,1:)) !KB
             self%SxB(i,j)=-SUM(idpdx(i,j,1:))
-            self%SxD(i,j)=SUM(self%uuEx(i,j,1:))
+            self%SxD(i,j)=SUM(self%diffvk(i,j,1:))
          end if
       end do
    end do
@@ -60,7 +60,7 @@ MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
                end do
 #endif
             else
-               self%Slru(i,j)= 0._real64
+               self%SxF(i,j)= 0._real64
             end if
          end if
       end do
@@ -72,9 +72,9 @@ MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then
 !KB            self%SlVx(i,j)=-self%VEx(i,j)+SUM(self%vvEx(i,j,1:))-SUM(idpdy(i,j,1:))
-            self%SyA(i,j)=0._real64 ! KB
+            self%SyA(i,j)=SUM(self%advqk(i,j,1:)) ! KB
             self%SyB(i,j)=-SUM(idpdy(i,j,1:))
-            self%SyD(i,j)=SUM(self%vvEx(i,j,1:))
+            self%SyD(i,j)=SUM(self%diffvk(i,j,1:))
          end if
       end do
    end do
@@ -96,7 +96,7 @@ MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
                end do
 #endif
             else
-               self%Slrv(i,j)= 0._real64
+               self%SyF(i,j)= 0._real64
             end if
          end if
       end do

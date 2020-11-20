@@ -26,7 +26,7 @@ module SUBROUTINE uv_diffusion_2d(self)
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
    if (self%Am > 0._real64 .or. self%An_method > 0) then
-      call diffusion_driver(self,self%UEx,self%VEx,self%U,self%V,TG%D,UG%D,VG%D)
+      call diffusion_driver(self,self%U,self%V,TG%D,UG%D,VG%D,self%diffu1,self%diffv1)
    end if
    end associate VGrid
    end associate UGrid
@@ -55,9 +55,9 @@ module SUBROUTINE uv_diffusion_3d(self)
    VGrid: associate( VG => self%domain%V )
    if (self%Am > 0._real64 .or. self%An_method > 0) then
       do k=1,TG%kmax
-         call diffusion_driver(self,self%uuEx(:,:,k),self%vvEx(:,:,k), &
-                               self%pk(:,:,k),self%qk(:,:,k), &
-                               TG%hn(:,:,k),UG%hn(:,:,k),VG%hn(:,:,k))
+         call diffusion_driver(self,self%pk(:,:,k),self%qk(:,:,k), &
+                               TG%hn(:,:,k),UG%hn(:,:,k),VG%hn(:,:,k), &
+                               self%diffuk(:,:,k),self%diffvk(:,:,k))
       end do
    end if
    end associate VGrid
@@ -68,7 +68,7 @@ END SUBROUTINE uv_diffusion_3d
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
+module SUBROUTINE diffusion_driver(self,U,V,D,DU,DV,diffu,diffv,hsd_u,hsd_v)
    !! Driver routine for velocity diffusion
    !! @note
    !! this routine should likely be in a submodule
@@ -81,8 +81,8 @@ module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
 #define _U2_ self%domain%T%l(1):,self%domain%T%l(2):
 #define _V2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), dimension(:,:), intent(inout) :: UEx(_U2_),VEx(_V2_)
    real(real64), dimension(:,:), intent(in) :: U(_U2_),V(_V2_),D(_T2_),DU(_U2_),DV(_V2_)
+   real(real64), dimension(:,:), intent(inout) :: diffu(_U2_),diffv(_V2_)
    real(real64), dimension(:,:), intent(out),optional :: hsd_u(_U2_),hsd_v(_V2_)
 #undef _V2_
 #undef _U2_
@@ -102,10 +102,10 @@ module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
    use_Am = (Am .gt. _ZERO_)
 
    if (present(hsd_u)) then
-      hsd_u = UEx
+      hsd_u = diffu
    end if
    if (present(hsd_v)) then
-      hsd_v = VEx
+      hsd_v = diffv
    end if
 #endif
 
@@ -126,9 +126,9 @@ module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
             end if
          end if
       end do
-      do i=UG%imin,UG%imax ! UEx defined on U-points
+      do i=UG%imin,UG%imax ! diffu defined on U-points
          if (UG%mask(i,j).eq.1 .or. UG%mask(i,j).eq.2) then
-!KB            UEx(i,j)=UEx(i,j)-(work2d(i+1,j)-work2d(i  ,j))*UG%mask%inv_area(i,j)
+!KB            diffu(i,j)=diffu(i,j)-(work2d(i+1,j)-work2d(i  ,j))*UG%mask%inv_area(i,j)
          end if
       end do
    end do
@@ -149,10 +149,10 @@ module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
          end if
       end do
    end do
-   do j=UG%jmin,UG%jmax ! UEx defined on U-points
+   do j=UG%jmin,UG%jmax ! diffu defined on U-points
       do i=UG%imin,UG%imax
          if (UG%mask(i,j).eq.1 .or. UG%mask(i,j).eq.2) then
-!KB            UEx(i,j)=UEx(i,j)-(work2d(i,j  )-work2d(i,j-1))*UG%mask%inv_area(i,j)
+!KB            diffu(i,j)=diffu(i,j)-(work2d(i,j  )-work2d(i,j-1))*UG%mask%inv_area(i,j)
          end if
       end do
    end do
@@ -175,9 +175,9 @@ module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
          end if
       end do
       !!!!!!!!!!
-      do i=VG%imin,VG%imax ! VEx defined on V-points
+      do i=VG%imin,VG%imax ! diffv defined on V-points
          if (VG%mask(i,j).eq.1 .or. VG%mask(i,j).eq.2) then
-!KB            VEx(i,j)=VEx(i,j)-(work2d(i  ,j)-work2d(i-1,j))*VG%mask%inv_area(i,j)
+!KB            diffv(i,j)=diffv(i,j)-(work2d(i  ,j)-work2d(i-1,j))*VG%mask%inv_area(i,j)
          end if
       end do
    end do
@@ -197,10 +197,10 @@ module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
          end if
       end do
    end do
-   do j=VG%jmin,VG%jmax ! VEx defined on V-points
+   do j=VG%jmin,VG%jmax ! diffv defined on V-points
       do i=VG%imin,VG%imax
          if (VG%mask(i,j).eq.1 .or. VG%mask(i,j).eq.2) then
-!KB            VEx(i,j)=VEx(i,j)-(work2d(i,j+1)-work2d(i,j  ))*VG%inv_area(i,j)
+!KB            diffv(i,j)=diffv(i,j)-(work2d(i,j+1)-work2d(i,j  ))*VG%inv_area(i,j)
          end if
       end do
    end do
@@ -210,10 +210,10 @@ module SUBROUTINE diffusion_driver(self,UEx,VEx,U,V,D,DU,DV,hsd_u,hsd_v)
 
 #if 0
    if (present(hsd_u)) then
-      hsd_u = UEx - hsd_u
+      hsd_u = diffu - hsd_u
    end if
    if (present(hsd_v)) then
-      hsd_v = VEx - hsd_v
+      hsd_v = diffv - hsd_v
    end if
 #endif
    return

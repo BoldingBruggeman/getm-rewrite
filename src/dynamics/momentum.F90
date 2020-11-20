@@ -60,22 +60,26 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: U,V
       real(real64), dimension(:,:), allocatable :: Ui,Vi
       real(real64), dimension(:,:), allocatable :: Uio,Vio
-      real(real64), dimension(:,:), allocatable :: Uadv,Vadv
-      real(real64), dimension(:,:), allocatable :: u1,v1
+      real(real64), dimension(:,:), allocatable :: Ua,Va
       real(real64), dimension(:,:), allocatable :: fU,fV
-      real(real64), dimension(:,:), allocatable :: Slru,Slrv ! Should go away
-      real(real64), dimension(:,:), allocatable :: UEx,VEx ! SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
+      real(real64), dimension(:,:), allocatable :: advU,advV
+      real(real64), dimension(:,:), allocatable :: diffu1,diffv1
+      real(real64), dimension(:,:), allocatable :: u1,v1
+!KB      real(real64), dimension(:,:), allocatable :: Slru,Slrv ! Should go away
+!KB      real(real64), dimension(:,:), allocatable :: UEx,VEx ! SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
       real(real64), dimension(:,:), allocatable :: SxA,SyA ! Slow advection
       real(real64), dimension(:,:), allocatable :: SxB,SyB ! Slow internal pressure
       real(real64), dimension(:,:), allocatable :: SxD,SyD ! Slow diffusion
       real(real64), dimension(:,:), allocatable :: SxF,SyF ! Slow friction
-      real(real64), dimension(:,:), allocatable :: SlUx,SlVx ! Should go away
+!KB      real(real64), dimension(:,:), allocatable :: SlUx,SlVx ! Should go away
       real(real64), dimension(:,:), allocatable :: ru,rv
       real(real64), dimension(:,:,:), allocatable :: pk,qk,ww
-      real(real64), dimension(:,:,:), allocatable :: pkadv,qkadv
-      real(real64), dimension(:,:,:), allocatable :: uk,vk
+      real(real64), dimension(:,:,:), allocatable :: pka,qka
       real(real64), dimension(:,:,:), allocatable :: fpk,fqk
-      real(real64), dimension(:,:,:), allocatable :: uuEx,vvEx ! 0
+      real(real64), dimension(:,:,:), allocatable :: advpk,advqk
+      real(real64), dimension(:,:,:), allocatable :: diffuk,diffvk
+      real(real64), dimension(:,:,:), allocatable :: uk,vk
+!KB      real(real64), dimension(:,:,:), allocatable :: uuEx,vvEx ! 0
       real(real64), dimension(:,:), allocatable :: taub,taubx,tauby
       real(real64), dimension(:,:), allocatable :: rru,rrv
       real(real64), dimension(:,:), allocatable :: zub,zvb
