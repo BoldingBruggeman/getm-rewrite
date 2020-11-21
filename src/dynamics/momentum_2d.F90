@@ -208,6 +208,51 @@ END SUBROUTINE uv_advection_2d
 
 !---------------------------------------------------------------------------
 
+MODULE SUBROUTINE uivi_advection_2d(self,dt)
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+      !! timestep [s]
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+!---------------------------------------------------------------------------
+   XGrid: associate( XG => self%domain%X )
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%D(i,j)  = TG%H(i+1,j)+TG%ssen(i+1,j) !KB TG%D(i+1,j)
+         self%vadvgrid%D(i,j)  = XG%D(i,j) ! Knut
+         self%Ua(i,j) = 0.5_real64*(self%Ui(i,j) + self%Ui(i+1,j))
+         self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i+1,j))
+      end do
+   end do
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%SxA)
+
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+         self%uadvgrid%D(i,j)  = XG%D(i,j) ! Knut
+         self%vadvgrid%D(i,j)  = TG%H(i,j+1)+TG%ssen(i,j+1) !KB TG%D(i,j+1)
+         self%Ua(i,j) = 0.5_real64*(self%Ui(i,j) + self%Ui(i,j+1))
+         self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i,j+1))
+      end do
+   end do
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%SyA)
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
+   end associate XGrid
+END SUBROUTINE uivi_advection_2d
+
+!---------------------------------------------------------------------------
+
 SUBROUTINE u_2d(self,dt,taus,dpdx)
 
    IMPLICIT NONE
