@@ -35,6 +35,33 @@ END SUBROUTINE uv_diffusion_2d
 
 !---------------------------------------------------------------------------
 
+module SUBROUTINE uivi_diffusion_2d(self)
+
+   !! Velocity shear
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('diffusion_2d()',level=2)
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   if (self%Am > 0._real64 .or. self%An_method > 0) then
+      call diffusion_driver(self,self%Ui,self%Vi,TG%D,UG%D,VG%D,self%SxD,self%SyD)
+   end if
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
+END SUBROUTINE uivi_diffusion_2d
+
+!---------------------------------------------------------------------------
+
 module SUBROUTINE uv_diffusion_3d(self)
 
    !! Velocity shear
