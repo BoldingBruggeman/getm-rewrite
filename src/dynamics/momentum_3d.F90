@@ -249,7 +249,7 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
             self%ea4(i,j,1:)=self%ea4(i,j,1:)-dt*0.5_real64*(UG%ho(i,j,1:)+UG%hn(i,j,1:))*g*dpdx(i,j)
             ! bottom friction
             k=UG%kmin
-            self%ea2(i,j,k)=dt*self%rru(i,j)/(0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k)))
+            self%ea2(i,j,k)=dt*self%rru(i,j)
          end if
       end do
    end do
