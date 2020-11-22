@@ -13,9 +13,9 @@ PROGRAM test_vertical_diffusion
 !  Local constants
    integer, parameter :: imin=1, imax=100, jmin=1, jmax=100
    real(real64), parameter :: depth=100._real64
-   real(real64), parameter :: Nsecs=10._real64
+   real(real64), parameter :: Nsecs=1000._real64
    integer, parameter :: nsave=1
-   real(real64), parameter :: cmax=5._real64, a=5._real64, Kd=10._real64
+   real(real64), parameter :: cmax=5._real64, a=5._real64, Av=0.1_real64
 
 !  Local variables
    type(type_vertical_diffusion) :: vertical_diffusion
@@ -30,10 +30,11 @@ PROGRAM test_vertical_diffusion
    real(real64), allocatable :: var(:,:,:)
    real(real64), allocatable :: ana(:,:,:)
    real(real64), allocatable :: diff(:,:,:)
+   real(real64) :: conservation
 
    type(datetime) :: t
    type(timedelta) :: dt
-   real(real64) :: timestep=0.1_real64, cnpar, avmol, z0
+   real(real64) :: timestep=5._real64, cnpar=0.5, avmol, z0
    integer :: i,j,k,n
 !-----------------------------------------------------------------------------
 
@@ -43,18 +44,17 @@ PROGRAM test_vertical_diffusion
    allocate(z(imin:imax,jmin:jmax,kmin:kmax))
    allocate(dz(imin:imax,jmin:jmax,kmin:kmax))
    allocate(nuh(imin:imax,jmin:jmax,kmin:kmax))
-   nuh=Kd
    allocate(var(imin:imax,jmin:jmax,kmin:kmax))
    allocate(ana(imin:imax,jmin:jmax,kmin:kmax))
    allocate(diff(imin:imax,jmin:jmax,kmin:kmax))
    call field_manager_setup()
    call initial_conditions(1)
+   conservation=sum(var)
    call output%do_output(t)
 
    Nmax=Nsecs/timestep
-   cnpar=0.5_real64
    avmol=0._real64
-   nuh = Kd
+   nuh = Av
 
    dt= timedelta(seconds=int(timestep),milliseconds=int(1000*(timestep-int(timestep))))
 
@@ -64,10 +64,11 @@ PROGRAM test_vertical_diffusion
       t=t+dt
       write(*,*) n,' of ',Nmax
       call vertical_diffusion%calculate(mask,dz,dz,timestep,cnpar,avmol,nuh,var)
+      conservation=sum(var)
 
       analytical: block
       real(real64) :: A1, B1, C1
-      C1 = (4*Kd*n*timestep+a**2)
+      C1 = (4*Av*n*timestep+a**2)
       A1 = cmax*sqrt(a**2/C1)
       do k=1,kmax
          B1 = exp(-(z(1,1,k)-z0)**2/C1) 
@@ -82,6 +83,7 @@ PROGRAM test_vertical_diffusion
    write(*,*)
    write(*,*) 'time: length=',Nsecs,Nmax,timestep
    write(*,*) 'domain: depth=',depth,'dz=',dz(imax/2,jmax/2,kmax/2)
+   write(*,*) 'cnpar: ',cnpar
    write(*,*) 'domain size (i,j,k): ',imax-imin+1,jmax-jmin+1,kmax-kmin+1
    write(*,*) 'timing (pr timestep)'
    write(*,*) 'matrix setup:        ',vertical_diffusion%matrix_time/Nmax
@@ -101,18 +103,20 @@ CONTAINS
       if (command_argument_count() .eq. 1 ) then
          call get_command_argument(1,arg)
          if (trim(arg) == '-h') then
-            write(*,*)' test_vertical_diffusion kmax (100) timestep (0.1)'
+            write(*,*)' test_vertical_diffusion kmax (100) timestep (5.0) cnpar (0.5)'
             stop 0
          else
             write(*,*)' test_vertical_diffusion -h'
             stop 0
          end if
       end if
-      if (command_argument_count() .eq. 2 ) then
+      if (command_argument_count() .eq. 3 ) then
          call get_command_argument(1,arg)
          read(arg,*,iostat=stat) kmax
          call get_command_argument(2,arg)
          read(arg,*,iostat=stat) timestep
+         call get_command_argument(3,arg)
+         read(arg,*,iostat=stat) cnpar
       end if
    end subroutine parse_argument
 
@@ -130,6 +134,7 @@ CONTAINS
       call fm%register('f','-','scalar',data3d=var,fill_value=-99._real64)
       call fm%register('a','-','analytical',data3d=ana,fill_value=-99._real64)
       call fm%register('d','-','difference',data3d=diff,fill_value=-99._real64)
+      call fm%register('c','-','conservation',no_default_dimensions=.true.,dimensions=(/id_dim_time/),data0d=conservation,fill_value=-99._real64)
 !KB      call fm%list()
       call output%configure(fm=fm)
       call output%initialize()
