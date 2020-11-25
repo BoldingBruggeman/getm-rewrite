@@ -34,10 +34,8 @@ MODULE getm_temperature
 
 !  Module constants
    integer, parameter :: tunit = 20
-   real(real64), parameter :: avmols = 0._real64
 
 !  Module types and variables
-   real(real64) :: cnpar
    type, public :: type_temperature_configuration
       character(len=256) :: f = "temperature.nc"
    end type type_temperature_configuration
@@ -61,6 +59,8 @@ MODULE getm_temperature
    real(real64), dimension(:,:,:), allocatable :: T
 #endif
       integer :: advection_scheme=1
+      real(real64) :: cnpar
+      real(real64) :: avmolt=0._real64
 
       contains
 
@@ -232,112 +232,12 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
          if (TG%mask(i,j) > 0) ea4(i,j,k) = ea4(i,j,k)+dt*shf(i,j) !KB some scaling
       end do
    end do
-   call self%vertical_diffusion%calculate(TG%mask,TG%hn,TG%hn,dt,cnpar,avmols,nuh,self%T,ea4=ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmolt,nuh,self%T,ea4=ea4)
    end associate TGrid
 END SUBROUTINE temperature_calculate
 
 !---------------------------------------------------------------------------
 
-!> Here, one time step for the temperature equation is performed.
-!> First, preparations for the call to the advection schemes are
-!> made, i.e.\ calculating the necessary metric coefficients.
-!> After the call to the advection schemes, which actually perform
-!> the advection (and horizontal diffusion) step as an operational
-!> split step, the solar radiation at the interfaces ({\tt rad(k)})
-!> is calculated
-!> from given surface radiation ({\tt swr\_loc})
-!> by means of a double exponential
-!> approach, see equation (\ref{Light}) on page \pageref{Light}).
-!> An option to reflect part of the short wave radiation that reaches the
-!> bottom has been implemented. In very shallow waters - or with very clear
-!> waters - a significant part of the incoming radiation will reach the
-!> bottom. Setting swr\_bot\_refl\_frac to a value between 0 and 1 will
-!> reflect this fraction of what ever the value of SWR is at the bottom.
-!> The default value of swr\_bot\_refl\_frac is 0.
-!> The reflection is only done if the ratio between the surface and bottom
-!> values of SWR is greater than swr\_min\_bot\_frac (default 0.01).
-!> Furthermore, the surface heat flux {\tt sfl\_loc} is given a
-!> value.
-!> The sea surface temperature is limited by the freezing point
-!> temperature (as a most primitive sea ice model). The next
-!> step is to set up the tri-diagonal matrix for calculating the
-!> new temperature by means of a semi-implicit central scheme for the
-!> vertical diffusion. Source terms which appear on the right hand sides
-!> are due to the divergence of the solar radiation at the interfaces.
-!> The subroutine is completed by solving the tri-diagonal linear
-!> equation by means of a tri-diagonal solver.
-
-
-SUBROUTINE temperature_advection(self)
-
-   !! Advection/diffusion of the temperature field
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_temperature), intent(inout) :: self
-
-!  Local constants
-
-!  Local variables
-   integer :: rc
-!---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('temperature_advection() - NOT CALLED',level=2)
-END SUBROUTINE temperature_advection
-
-!---------------------------------------------------------------------------
-
-!> Here, one time step for the temperature equation is performed.
-!> First, preparations for the call to the advection schemes are
-!> made, i.e.\ calculating the necessary metric coefficients.
-!> After the call to the advection schemes, which actually perform
-!> the advection (and horizontal diffusion) step as an operational
-!> split step, the solar radiation at the interfaces ({\tt rad(k)})
-!> is calculated
-!> from given surface radiation ({\tt swr\_loc})
-!> by means of a double exponential
-!> approach, see equation (\ref{Light}) on page \pageref{Light}).
-!> An option to reflect part of the short wave radiation that reaches the
-!> bottom has been implemented. In very shallow waters - or with very clear
-!> waters - a significant part of the incoming radiation will reach the
-!> bottom. Setting swr\_bot\_refl\_frac to a value between 0 and 1 will
-!> reflect this fraction of what ever the value of SWR is at the bottom.
-!> The default value of swr\_bot\_refl\_frac is 0.
-!> The reflection is only done if the ratio between the surface and bottom
-!> values of SWR is greater than swr\_min\_bot\_frac (default 0.01).
-!> Furthermore, the surface heat flux {\tt sfl\_loc} is given a
-!> value.
-!> The sea surface temperature is limited by the freezing point
-!> temperature (as a most primitive sea ice model). The next
-!> step is to set up the tri-diagonal matrix for calculating the
-!> new temperature by means of a semi-implicit central scheme for the
-!> vertical diffusion. Source terms which appear on the right hand sides
-!> are due to the divergence of the solar radiation at the interfaces.
-!> The subroutine is completed by solving the tri-diagonal linear
-!> equation by means of a tri-diagonal solver.
-
-
-SUBROUTINE temperature_vertical_diffusion(self,logs,rad,nuh)
-
-   !! Advection/diffusion of the temperature field
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_temperature), intent(inout) :: self
-   class(type_logging), intent(in) :: logs
-   real(real64), dimension(:,:,:), intent(in) :: rad, nuh
-      !! radiation and diffusivity
-
-!  Local constants
-
-!  Local variables
-   integer :: rc
-
-!---------------------------------------------------------------------------
-   if (associated(self%logs)) call logs%info('temperature_vertical_diffusion() - NOT CALLED',level=2)
-END SUBROUTINE temperature_vertical_diffusion
-
-!---------------------------------------------------------------------------
-
 END MODULE getm_temperature
+
+!---------------------------------------------------------------------------
