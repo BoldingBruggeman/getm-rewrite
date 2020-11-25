@@ -88,7 +88,7 @@ MODULE getm_momentum
       type(type_getm_grid) :: uadvgrid,vadvgrid
       integer :: advection_scheme=1
       real(real64) :: molecular=0._real64
-      real(real64) :: cnpar
+      real(real64) :: cnpar=1._real64
       real(real64) :: Am=0.0001_real64 ! KB
       integer :: An_method=0
 #endif

@@ -28,8 +28,6 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('pk',self%pk,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
    call mm_s('qk',self%qk,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
    call mm_s('ww',self%ww,self%pk,def=0._real64,stat=stat)
-!KB   call mm_s('uuEx',self%uuEx,self%pk,def=0._real64,stat=stat)
-!KB   call mm_s('vvEx',self%vvEx,self%pk,def=0._real64,stat=stat)
    call mm_s('pka',self%pka,self%pk,def=0._real64,stat=stat)
    call mm_s('qka',self%qka,self%qk,def=0._real64,stat=stat)
    call mm_s('fpk',self%fpk,self%pk,def=0._real64,stat=stat)
@@ -259,12 +257,12 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             self%pk(i,j,:)=self%pk(i,j,:)/UG%ho(i,j,:)
-            self%ea2(i,j,:)=self%ea2(i,j,:)/UG%ho(i,j,:)
-            self%ea4(i,j,:)=self%ea4(i,j,:)/UG%ho(i,j,:)
+!            self%ea2(i,j,:)=self%ea2(i,j,:)/UG%ho(i,j,:)
+!            self%ea4(i,j,:)=self%ea4(i,j,:)/UG%ho(i,j,:)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(UG%mask,UG%ho,UG%hn,dt,self%cnpar,self%molecular,self%num,self%pk,self%ea2,self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,self%num,self%pk,self%ea2,self%ea4)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
@@ -489,11 +487,3 @@ END SUBROUTINE qk_cor
 !---------------------------------------------------------------------------
 
 END SUBMODULE momentum_3d_smod
-
-#if 0
-#ifdef NEW_CORI
-               Vloc=0.25_real64*(work3d(i,j,k)+work3d(i+1,j,k)+work3d(i,j-1,k)+work3d(i+1,j-1,k))*sqrt(huo(i,j,k))
-#else
-               Vloc=0.25_real64*(self%qk(i,j,k)+self%qk(i+1,j,k)+self%qk(i,j-1,k)+self%qk(i+1,j-1,k))
-#endif
-#endif
