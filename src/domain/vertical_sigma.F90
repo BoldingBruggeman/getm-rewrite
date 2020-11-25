@@ -1,6 +1,5 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
-!SUBMODULE (getm_domain) vertical_coordinates_smod
 SUBMODULE (getm_domain : vertical_coordinates_smod) vertical_sigma_smod
 
 !  Module types and variables
@@ -45,8 +44,8 @@ module SUBROUTINE init_sigma(self)
       ! This zooming routine is from Antoine Garapon, ICCH, DK
       if (self%ddu .lt. 0._real64) self%ddu=0._real64
       if (self%ddl .lt. 0._real64) self%ddl=0._real64
-      allocate(dga(self%T%kmax),stat=stat)
-      if (stat /= 0) STOP 'coordinates: Error allocating (dga)'
+!KB      allocate(dga(self%T%kmax),stat=stat)
+!KB      if (stat /= 0) STOP 'coordinates: Error allocating (dga)'
       ga(0)= -1._real64
       do k=1,self%T%kmax
          ga(k)=tanh((self%ddl+self%ddu)*k/float(self%T%kmax)-self%ddl)+tanh(self%ddl)
@@ -55,7 +54,6 @@ module SUBROUTINE init_sigma(self)
       end do
       deallocate(ga)
    end if
-   return
 END SUBROUTINE init_sigma
 
 !---------------------------------------------------------------------------
@@ -82,8 +80,6 @@ module SUBROUTINE do_sigma(self)
          if (TG%mask(i,j) > 0) then
             TG%ho(i,j,:)=(TG%sseo(i,j)+TG%H(i,j))*dga(:)
             TG%hn(i,j,:)=(TG%ssen(i,j)+TG%H(i,j))*dga(:)
-!            TG%ho(i,j,:)=(TG%H(i,j))*dga(:)
-!            TG%hn(i,j,:)=(TG%H(i,j))*dga(:)
          end if
       end do
    end do
@@ -98,8 +94,6 @@ module SUBROUTINE do_sigma(self)
          if (UG%mask(i,j) > 0) then
             UG%ho(i,j,:)=(UG%sseo(i,j)+UG%H(i,j))*dga(:)
             UG%hn(i,j,:)=(UG%ssen(i,j)+UG%H(i,j))*dga(:)
-            UG%ho(i,j,:)=(UG%H(i,j))*dga(:) ! KB
-            UG%hn(i,j,:)=(UG%H(i,j))*dga(:) ! KB
          end if
       end do
    end do
@@ -110,15 +104,12 @@ module SUBROUTINE do_sigma(self)
    do j=VG%l(2),VG%u(2)-1
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
-            VG%ho(i,j,:)=(VG%H(i,j))*dga(:)
-            VG%hn(i,j,:)=(VG%H(i,j))*dga(:)
-            VG%ho(i,j,:)=(VG%H(i,j))*dga(:) ! KB
-            VG%hn(i,j,:)=(VG%H(i,j))*dga(:) ! KB
+            VG%ho(i,j,:)=(VG%sseo(i,j)+VG%H(i,j))*dga(:)
+            VG%hn(i,j,:)=(VG%ssen(i,j)+VG%H(i,j))*dga(:)
          end if
       end do
    end do
 #undef VG
-   return
 END SUBROUTINE do_sigma
 
 !---------------------------------------------------------------------------

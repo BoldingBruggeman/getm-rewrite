@@ -46,7 +46,7 @@ module SUBROUTINE init_vertical(self)
       self%T%ssen=self%T%z
    end where
 
-!KB   call init_sigma(self)
+   call init_sigma(self)
 !KB   call init_gvc(self)
 
    return
@@ -69,7 +69,7 @@ real(real64) :: dt
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('do_vertical()',level=2)
 
-!KB   call do_sigma(self)
+   call do_sigma(self)
 !KB   call do_gvc(self,dt)
 
    return
