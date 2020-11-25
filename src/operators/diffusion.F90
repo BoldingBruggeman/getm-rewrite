@@ -14,19 +14,18 @@ SUBMODULE (getm_operators) diffusion_smod
 
 CONTAINS
 
+#define _NORMAL_ORDER_
 !-----------------------------------------------------------------------------
 
-#define _NORMAL_ORDER_
+MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f)
 
-module SUBROUTINE vertical_diffusion_initialize(self,var)
-
-   !! Initialize the salinity field
+   !! Initialize the vertical diffusion operator from a 3D field
 
    IMPLICIT NONE
 
    ! Subroutine arguments
    class(type_vertical_diffusion), intent(inout) :: self
-   real(real64), dimension(:,:,:), intent(in) :: var
+   real(real64), dimension(:,:,:), intent(in) :: f
       !! grid dimensions in case of dynamic memory allocation
 
 !  Local constants
@@ -34,9 +33,9 @@ module SUBROUTINE vertical_diffusion_initialize(self,var)
 !  Local variables
 !---------------------------------------------------------------------------
 #ifndef _STATIC_
-   self%imin = lbound(var,1); self%imax = ubound(var,1)
-   self%jmin = lbound(var,2); self%jmax = ubound(var,2)
-   self%kmin = lbound(var,3); self%kmax = ubound(var,3)
+   self%imin = lbound(f,1); self%imax = ubound(f,1)
+   self%jmin = lbound(f,2); self%jmax = ubound(f,2)
+   self%kmin = lbound(f,3); self%kmax = ubound(f,3)
    allocate(self%auxn(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
    allocate(self%auxo(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
 #ifdef _NORMAL_ORDER_
@@ -55,12 +54,52 @@ module SUBROUTINE vertical_diffusion_initialize(self,var)
 #endif
    self%matrix_time = 0._real64
    self%tridiag_time = 0._real64
-   return
-END SUBROUTINE vertical_diffusion_initialize
+END SUBROUTINE vertical_diffusion_initialize_field
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE vertical_diffusion_calculate(self,mask,dzo,dzn,dt,cnpar,molecular,nuh,var,ea2,ea4)
+MODULE SUBROUTINE vertical_diffusion_initialize_grid(self,grid)
+
+   !! Initialize the vertical diffusion operator from a grid object
+
+   IMPLICIT NONE
+
+   ! Subroutine arguments
+   class(type_vertical_diffusion), intent(inout) :: self
+   type(type_getm_grid), intent(in) :: grid
+      !! grid dimensions in case of dynamic memory allocation
+
+!  Local constants
+
+!  Local variables
+!---------------------------------------------------------------------------
+#ifndef _STATIC_
+   self%imin = grid%imin; self%imax = grid%imax
+   self%jmin = grid%jmin; self%jmax = grid%jmax
+   self%kmin = grid%kmin; self%kmax = grid%kmax
+   allocate(self%auxo(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%auxn(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+#ifdef _NORMAL_ORDER_
+#define ORDER i,j,k
+   allocate(self%a1(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a2(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a3(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a4(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+#else
+#define ORDER k,i,j
+   allocate(self%a1(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
+   allocate(self%a2(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
+   allocate(self%a3(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
+   allocate(self%a4(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
+#endif
+#endif
+   self%matrix_time = 0._real64
+   self%tridiag_time = 0._real64
+END SUBROUTINE vertical_diffusion_initialize_grid
+
+!---------------------------------------------------------------------------
+
+MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecular,nuh,var,ea2,ea4)
 
    !! Vertical diffusion
 
@@ -68,22 +107,26 @@ module SUBROUTINE vertical_diffusion_calculate(self,mask,dzo,dzn,dt,cnpar,molecu
 
    ! Subroutine arguments
    class(type_vertical_diffusion), intent(inout) :: self
-   integer, dimension(:,:), intent(in) :: mask
-   real(real64), dimension(:,:,:), intent(in) :: dzo,dzn
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
+#define _T2_ self%imin-self%halo:,self%jmin-self%halo:
+   integer, dimension(:,:), intent(in) :: mask
+#undef _T2_
+#define _T3_ self%imin-self%halo:,self%jmin-self%halo:,self%kmin:
+   real(real64), intent(in) :: dzo(_T3_)
+   real(real64), intent(in) :: dzn(_T3_)
    real(real64), intent(in) :: molecular
-   real(real64), dimension(:,:,:), intent(in) :: nuh
-   real(real64), dimension(:,:,:), intent(inout) :: var
-   real(real64), dimension(:,:,:), intent(in), optional :: ea2
-   real(real64), dimension(:,:,:), intent(in), optional :: ea4
+   real(real64), intent(in) :: nuh(_T3_)
+   real(real64), intent(inout) :: var(_T3_)
+   real(real64), intent(in), optional :: ea2(_T3_)
+   real(real64), intent(in), optional :: ea4(_T3_)
+#undef _T3_
 
 !  Local constants
 
 !  Local variables
    integer :: i,j,k
 !---------------------------------------------------------------------------
-
    if (self%kmax == 1) return
 
 #if 0

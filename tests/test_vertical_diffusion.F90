@@ -63,7 +63,7 @@ PROGRAM test_vertical_diffusion
    do n=1,Nmax
       t=t+dt
       write(*,*) n,' of ',Nmax
-      call vertical_diffusion%calculate(mask,dz,dz,timestep,cnpar,avmol,nuh,var)
+      call vertical_diffusion%calculate(timestep,cnpar,mask,dz,dz,avmol,nuh,var)
       conservation=sum(var)
 
       analytical: block
