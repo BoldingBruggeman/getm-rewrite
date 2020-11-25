@@ -110,7 +110,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
 #define _T2_ self%imin-self%halo:,self%jmin-self%halo:
-   integer, dimension(:,:), intent(in) :: mask
+   integer, dimension(:,:), intent(in) :: mask(_T2_)
 #undef _T2_
 #define _T3_ self%imin-self%halo:,self%jmin-self%halo:,self%kmin:
    real(real64), intent(in) :: dzo(_T3_)
@@ -128,6 +128,17 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    integer :: i,j,k
 !---------------------------------------------------------------------------
    if (self%kmax == 1) return
+#if 0
+write(*,*) lbound(mask)
+write(*,*) ubound(mask)
+write(*,*) lbound(dzo)
+write(*,*) ubound(dzo)
+write(*,*) lbound(nuh)
+write(*,*) ubound(nuh)
+write(*,*) lbound(var)
+write(*,*) ubound(var)
+#endif
+!KBreturn
 
 #if 0
 write(*,*) self%imin,self%imax
