@@ -30,6 +30,7 @@ MODULE getm_physics
    use getm_salinity, only: type_salinity
    use getm_temperature, only: type_temperature
    use getm_density, only: type_density
+   use getm_mixing, only: type_getm_mixing
 !KB   use getm_turbulence, only: type_turbulence
 
    IMPLICIT NONE
@@ -48,6 +49,7 @@ MODULE getm_physics
       TYPE(type_salinity), public :: salinity
       TYPE(type_temperature), public :: temperature
       TYPE(type_density), public :: density
+      TYPE(type_getm_mixing), public :: mixing
 !KB      TYPE(type_turbulence), public :: turbulence
 
       contains
@@ -90,7 +92,7 @@ SUBROUTINE physics_configure(self,logs,fm)
    call self%salinity%configuration(logs,fm)
    call self%temperature%configuration(logs,fm)
    call self%density%configure(logs,fm)
-!KB   call self%turbulence%configuration(logs)
+   call self%mixing%configuration(logs,fm)
    if (associated(self%logs)) call logs%info('done',level=1)
 END SUBROUTINE physics_configure
 
@@ -120,6 +122,7 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
    call self%density%initialize(domain)
    call self%density%density(self%salinity%S,self%temperature%T)
    call self%density%buoyancy()
+   call self%mixing%initialize(domain)
    if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE physics_initialize
 
