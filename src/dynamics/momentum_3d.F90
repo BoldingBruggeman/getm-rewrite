@@ -410,7 +410,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(VG%mask,VG%ho,VG%hn,dt,self%cnpar,self%molecular,self%num,self%qk,self%ea2,self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,self%num,self%qk,self%ea2,self%ea4)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
