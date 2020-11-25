@@ -214,15 +214,27 @@ module SUBROUTINE register(self)
                          category='domain', field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('zo', TG%zo(TG%imin:TG%imax,TG%jmin:TG%jmax))
-!KB
-#if 0
    call self%fm%register('ssen', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%T%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssen', self%T%ssen)
+   call self%fm%send_data('ssen', self%T%ssen(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%register('ssun', 'm', 'sea surface elevation', &
+                      standard_name='', &
+                      dimensions=(self%U%dim_2d_ids), &
+                      fill_value=-9999._real64, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y T')
+   call self%fm%send_data('ssun', self%U%ssen(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   call self%fm%register('ssvn', 'm', 'sea surface elevation', &
+                      standard_name='', &
+                      dimensions=(self%V%dim_2d_ids), &
+                      fill_value=-9999._real64, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y T')
+   call self%fm%send_data('ssvn', self%V%ssen(VG%imin:VG%imax,VG%jmin:VG%jmax))
    call self%fm%register('hn', 'm', 'layer thickness', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
@@ -230,7 +242,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('hn', self%T%hn)
+   call self%fm%send_data('hn', self%T%hn(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    call self%logs%info('done',level=2)
    call self%fm%register('hun', 'm', 'layer thickness', &
                       standard_name='cell thickness', &
@@ -239,7 +251,7 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('hun', self%U%hn)
+   call self%fm%send_data('hun', self%U%hn(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
    call self%logs%info('done',level=2)
    call self%fm%register('hvn', 'm', 'layer thickness', &
                       standard_name='cell thickness', &
@@ -248,8 +260,8 @@ module SUBROUTINE register(self)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('hvn', self%V%hn)
-#endif
+   call self%fm%send_data('hvn', self%V%hn(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
+
    end associate XGrid
    end associate VGrid
    end associate UGrid
