@@ -36,7 +36,7 @@ MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
 !KB            self%SlUx(i,j)=-self%UEx(i,j)+SUM(self%uuEx(i,j,1:))-SUM(idpdx(i,j,1:))
-            self%SxA(i,j)=SUM(self%advpk(i,j,1:))-self%SxA(i,j) !KB
+            self%SxA(i,j)=SUM(self%advpk(i,j,1:))-self%SxA(i,j)
             self%SxB(i,j)=-SUM(idpdx(i,j,1:))
             self%SxD(i,j)=SUM(self%diffuk(i,j,1:))-self%SxD(i,j)
          end if
@@ -72,7 +72,7 @@ MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then
 !KB            self%SlVx(i,j)=-self%VEx(i,j)+SUM(self%vvEx(i,j,1:))-SUM(idpdy(i,j,1:))
-            self%SyA(i,j)=SUM(self%advqk(i,j,1:))-self%SyA(i,j) ! KB
+            self%SyA(i,j)=SUM(self%advqk(i,j,1:))-self%SyA(i,j)
             self%SyB(i,j)=-SUM(idpdy(i,j,1:))
             self%SyD(i,j)=SUM(self%diffvk(i,j,1:))-self%SyD(i,j)
          end if

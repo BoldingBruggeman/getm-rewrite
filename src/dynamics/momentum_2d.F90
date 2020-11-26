@@ -227,7 +227,9 @@ MODULE SUBROUTINE uivi_advection_2d(self,dt)
          self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i+1,j))
       end do
    end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%SxA)
+   self%SxA=self%Ui
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%Ui)
+   self%SxA=(self%Ui-self%SxA)/dt
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%D(i,j)  = XG%D(i,j) ! Knut
@@ -236,7 +238,9 @@ MODULE SUBROUTINE uivi_advection_2d(self,dt)
          self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i,j+1))
       end do
    end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%SyA)
+   self%SyA=self%Vi
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%Vi)
+   self%SyA=(self%Vi-self%SyA)/dt
    end associate VGrid
    end associate UGrid
    end associate TGrid
