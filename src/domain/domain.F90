@@ -322,8 +322,10 @@ SUBROUTINE domain_initialize(self)
       self%V%sseo = 0._real64
    end where
    call self%cfl_check()
-   call self%init_vertical()
-   call self%do_vertical()
+   if (self%T%kmax > 1) then
+      call self%init_vertical()
+      call self%do_vertical()
+   end if
 
    self%domain_ready = .true.
 
