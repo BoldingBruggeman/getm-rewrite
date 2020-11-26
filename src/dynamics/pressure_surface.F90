@@ -15,10 +15,10 @@ module SUBROUTINE pressure_surface(self,z,sp)
 
 !  Subroutine arguments
    class(type_getm_pressure), intent(inout) :: self
-#define _A_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), dimension(:,:), intent(in) :: z(_A_)
-   real(real64), dimension(:,:), intent(in) :: sp(_A_)
-#undef _A_
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), dimension(:,:), intent(in) :: z(_T2_)
+   real(real64), dimension(:,:), intent(in) :: sp(_T2_)
+#undef _T2_
 
 !  Local constants
 

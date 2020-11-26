@@ -334,7 +334,6 @@ SUBROUTINE domain_initialize(self)
 !>  part_domain
 !>  @endtodo
 
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE domain_initialize
 
 !-----------------------------------------------------------------------------
@@ -352,12 +351,11 @@ SUBROUTINE deallocate_variables(self)
 !  Local variables
 !-----------------------------------------------------------------------------
 #ifndef _STATIC_
-   if (associated(self%logs)) call self%logs%info('deallocate_variables()',level=2)
+   if (associated(self%logs)) call self%logs%info('deallocate_variables()',level=3)
    call deallocate_grid_variables(self%T)
    call deallocate_grid_variables(self%U)
    call deallocate_grid_variables(self%V)
    call deallocate_grid_variables(self%X)
-   if (associated(self%logs)) call self%logs%info('done',level=2)
 #endif
 END SUBROUTINE deallocate_variables
 
@@ -393,7 +391,6 @@ SUBROUTINE domain_report(self)
       call self%X%report(self%logs,gridunit,'X-grid info: ')
       close(gridunit)
    end if
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE domain_report
 
 !---------------------------------------------------------------------------
@@ -453,8 +450,7 @@ SUBROUTINE domain_cleanup(self)
 
 !  Local variables
 !-----------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('cleanup()',level=2)
-
+   if (associated(self%logs)) call self%logs%info('domain_cleanup()',level=2)
    call deallocate_variables(self)
 END SUBROUTINE domain_cleanup
 

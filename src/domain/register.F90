@@ -243,7 +243,6 @@ module SUBROUTINE register(self)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hn', self%T%hn(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
-   call self%logs%info('done',level=2)
    call self%fm%register('hun', 'm', 'layer thickness', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
@@ -252,7 +251,6 @@ module SUBROUTINE register(self)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hun', self%U%hn(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
-   call self%logs%info('done',level=2)
    call self%fm%register('hvn', 'm', 'layer thickness', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
@@ -266,8 +264,6 @@ module SUBROUTINE register(self)
    end associate VGrid
    end associate UGrid
    end associate TGrid
-   if (associated(self%logs)) call self%logs%info('done',level=2)
-   return
 END SUBROUTINE register
 
 !---------------------------------------------------------------------------

@@ -160,7 +160,6 @@ module SUBROUTINE uvx_depths(self)
    end associate UGrid
    end associate XGrid
    end associate TGrid
-   if (associated(self%logs)) call self%logs%info('done',level=2)
 END SUBROUTINE uvx_depths
 
 !---------------------------------------------------------------------------

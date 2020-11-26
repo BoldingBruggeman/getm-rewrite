@@ -85,7 +85,6 @@ SUBROUTINE dynamics_configure(self,logs,fm)
    call self%sealevel%configure(logs,fm)
    call self%pressure%configure(logs,fm)
    call self%momentum%configure(logs,fm)
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE dynamics_configure
 
 !---------------------------------------------------------------------------
@@ -111,7 +110,6 @@ SUBROUTINE dynamics_initialize(self,domain,advection,vertical_diffusion)
    call self%sealevel%initialize(domain)
    call self%pressure%initialize(domain)
    call self%momentum%initialize(domain,advection,vertical_diffusion)
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE dynamics_initialize
 
 !---------------------------------------------------------------------------

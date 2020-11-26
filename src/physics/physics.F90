@@ -93,7 +93,6 @@ SUBROUTINE physics_configure(self,logs,fm)
    call self%temperature%configuration(logs,fm)
    call self%density%configure(logs,fm)
    call self%mixing%configuration(logs,fm)
-   if (associated(self%logs)) call logs%info('done',level=1)
 END SUBROUTINE physics_configure
 
 !---------------------------------------------------------------------------
@@ -123,7 +122,6 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
    call self%density%density(self%salinity%S,self%temperature%T)
    call self%density%buoyancy()
    call self%mixing%initialize(domain)
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE physics_initialize
 
 !---------------------------------------------------------------------------
