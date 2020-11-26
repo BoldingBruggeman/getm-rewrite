@@ -157,12 +157,11 @@ MODULE getm_momentum
       MODULE SUBROUTINE uv_initialize_3d(self)
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE uv_initialize_3d
-      MODULE SUBROUTINE uv_momentum_3d(self,mode_split,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
+      MODULE SUBROUTINE uv_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
          !! Solve the 3D momemtum equations
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-         integer, intent(in) :: mode_split
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
    real(real64), intent(in) :: tausx(_T2_)
      !! surface stress - x
