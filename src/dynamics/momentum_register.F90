@@ -23,6 +23,7 @@ module SUBROUTINE momentum_register(self)
    type (type_field), pointer :: f
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('register()',level=2)
+   TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
    call self%fm%register('U', 'm2/s', 'transport in local x-direction', &
@@ -144,8 +145,16 @@ module SUBROUTINE momentum_register(self)
                          category='3d', field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('qk', self%qk(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
+   call self%fm%register('ww', 'm/s', 'grid relataed vertical velocity', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_3d_ids), &
+                         part_of_state=.true., &
+                         category='3d', field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('ww', self%ww(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end associate VGrid
    end associate UGrid
+   end associate TGrid
 END SUBROUTINE momentum_register
 
 !---------------------------------------------------------------------------
