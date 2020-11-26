@@ -131,6 +131,23 @@ module SUBROUTINE momentum_register(self)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('Vi', self%Vi(UG%imin:UG%imax,UG%jmin:UG%jmax))
 
+   call self%fm%register('SxA', 'm2/s2', 'slow advection term in local x-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('SxA', self%SxA(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   call self%fm%register('SyA', 'm2/s2', 'slow advection term in local y-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('SyA', self%SyA(UG%imin:UG%imax,UG%jmin:UG%jmax))
+
    call self%fm%register('pk', 'm2/s', 'transport in local x-direction (3D)', &
                          standard_name='', &
                          dimensions=(self%domain%U%dim_3d_ids), &
