@@ -63,12 +63,6 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('SyD',self%SyD,self%V,def=0._real64,stat=stat)
    call mm_s('SxF',self%SxF,self%U,def=0._real64,stat=stat)
    call mm_s('SyF',self%SyF,self%V,def=0._real64,stat=stat)
-!KB   call mm_s('UEx',self%UEx,self%U,def=0._real64,stat=stat)
-!KB   call mm_s('VEx',self%VEx,self%V,def=0._real64,stat=stat)
-!KB   call mm_s('SlUx',self%SlUx,self%U,def=0._real64,stat=stat)
-!KB   call mm_s('SlVx',self%SlVx,self%V,def=0._real64,stat=stat)
-!KB   call mm_s('Slru',self%Slru,self%U,def=0._real64,stat=stat)
-!KB   call mm_s('Slrv',self%Slrv,self%V,def=0._real64,stat=stat)
    call mm_s('ru',self%ru,self%U,def=0._real64,stat=stat)
    call mm_s('rv',self%rv,self%V,def=0._real64,stat=stat)
 !   call mm_s('taub',self%taub,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
@@ -190,7 +184,6 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
       end do
    end do
    call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%U)
-
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%D(i,j)  = XG%D(i,j)
@@ -235,7 +228,6 @@ MODULE SUBROUTINE uivi_advection_2d(self,dt)
       end do
    end do
    call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%SxA)
-
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%D(i,j)  = XG%D(i,j) ! Knut
@@ -387,12 +379,11 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
             else
                Slr = min( self%SyF(i,j) , 0._real64 )
             end if
-#if 0
-            self%V(i,j)=(self%V(i,j) &
-                        -dt*(g*VG%D(i,j)*dpdy(i,j)+VG%alpha(i,j) &
-                        *(-tausv/rho0-self%fU(i,j)+self%VEx(i,j)+self%SlVx(i,j)+Slr))) &
+            self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! (2.17) - note SxF is multiplied by alpha
+                        +VG%alpha(i,j)*(-tausv/rho0+self%fU(i,j) &
+                        +self%advV(i,j)-self%diffv1(i,j) &
+                        +self%SyA(i,j)-self%SyB(i,j)+self%SyD(i,j)+Slr))) &
                         /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
-#endif
             self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)
          end if
       end do
