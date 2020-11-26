@@ -374,7 +374,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
             self%ea2(i,j,k)=0._real64
             self%ea4(i,j,k)=0._real64
             if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-               ! Eddy viscosity at U-points
+               ! Eddy viscosity at V-points
                self%num(i,j,k)=0.5_real64*(viscosity(i,j,k)+viscosity(i,j+1,k))
                ! Coriolis, advection/diffusion and internal pressure
 !KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
@@ -396,7 +396,8 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
             self%ea4(i,j,1:)=self%ea4(i,j,1:)-dt*0.5_real64*(VG%ho(i,j,1:)+VG%hn(i,j,1:))*g*dpdy(i,j)
             ! bottom friction
             k=VG%kmin
-            self%ea2(i,j,k)=dt*self%rrv(i,j)/(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
+!KB            self%ea2(i,j,k)=dt*self%rrv(i,j)/(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
+            self%ea2(i,j,k)=dt*self%rrv(i,j)
          end if
       end do
    end do
@@ -405,8 +406,8 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             self%qk(i,j,:)=self%qk(i,j,:)/VG%ho(i,j,:)
-            self%ea2(i,j,:)=self%ea2(i,j,:)/VG%ho(i,j,:)
-            self%ea4(i,j,:)=self%ea4(i,j,:)/VG%ho(i,j,:)
+!KB            self%ea2(i,j,:)=self%ea2(i,j,:)/VG%ho(i,j,:)
+!KB            self%ea4(i,j,:)=self%ea4(i,j,:)/VG%ho(i,j,:)
          end if
       end do
    end do
