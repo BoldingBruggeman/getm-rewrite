@@ -182,8 +182,8 @@ SUBROUTINE airsea_update(self,n)
          self%sp(i,j) = p0
          self%taux(i,j) = (1._real64+n)/10._real64*self%taux0
          self%tauy(i,j) = (1+n)/10*self%tauy0
-         self%taux(i,j) = 0.001_real64
-         self%tauy(i,j) = 0._real64
+         self%taux(i,j) = self%taux0
+         self%tauy(i,j) = self%tauy0
       end do
    end do
 END SUBROUTINE airsea_update
