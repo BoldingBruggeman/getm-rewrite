@@ -409,31 +409,36 @@ SUBROUTINE start_3d(self)
    integer :: i,j
 !-----------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('start_3d()',level=2)
+   TGrid: associate( TG => self%T )
+   TG%sseo=TG%ssen
+   TG%ssen=TG%z
 
-   self%T%sseo=self%T%ssen
-   self%T%ssen=self%T%z
-
-   self%U%sseo=self%U%ssen
-   do j=self%U%l(2),self%U%u(2)
-      do i=self%U%l(1),self%U%u(1)-1
-         if (self%U%mask(i,j) > 0) then
-            self%U%ssen(i,j)=0.25*(self%T%sseo(i,j)+self%T%sseo(i+1,j)+self%T%ssen(i,j)+self%T%ssen(i+1,j))
-            self%U%ssen(i,j)=max(self%U%ssen(i,j),-self%U%H(i,j)+self%Dmin)
+   UGrid: associate( UG => self%U )
+   UG%sseo=UG%ssen
+   do j=UG%l(2),UG%u(2)
+      do i=UG%l(1),UG%u(1)-1
+         if (UG%mask(i,j) > 0) then
+            UG%ssen(i,j)=0.25*(TG%sseo(i,j)+TG%sseo(i+1,j)+TG%ssen(i,j)+TG%ssen(i+1,j))
+            UG%ssen(i,j)=max(UG%ssen(i,j),-UG%H(i,j)+self%Dmin)
          end if
       end do
    end do
-   self%U%ho=self%U%hn
+   UG%ho=UG%hn
+   end associate UGrid
 
-   self%V%sseo=self%V%ssen
-   do j=self%V%l(2),self%V%u(2)-1
-      do i=self%V%l(1),self%V%u(1)
-         if (self%V%mask(i,j) > 0) then
-            self%V%ssen(i,j)=0.25*(self%T%sseo(i,j)+self%T%sseo(i,j+1)+self%T%ssen(i,j)+self%T%ssen(i,j+1))
-            self%V%ssen(i,j)=max(self%V%ssen(i,j),-self%U%H(i,j)+self%Dmin)
+   VGrid: associate( VG => self%V )
+   VG%sseo=VG%ssen
+   do j=VG%l(2),VG%u(2)-1
+      do i=VG%l(1),VG%u(1)
+         if (VG%mask(i,j) > 0) then
+            VG%ssen(i,j)=0.25*(TG%sseo(i,j)+TG%sseo(i,j+1)+TG%ssen(i,j)+TG%ssen(i,j+1))
+            VG%ssen(i,j)=max(VG%ssen(i,j),-VG%H(i,j)+self%Dmin)
          end if
       end do
    end do
    self%V%ho=self%V%hn
+   end associate VGrid
+   end associate TGrid
 END SUBROUTINE start_3d
 
 !---------------------------------------------------------------------------
