@@ -65,13 +65,10 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: advU,advV
       real(real64), dimension(:,:), allocatable :: diffu1,diffv1
       real(real64), dimension(:,:), allocatable :: u1,v1
-!KB      real(real64), dimension(:,:), allocatable :: Slru,Slrv ! Should go away
-!KB      real(real64), dimension(:,:), allocatable :: UEx,VEx ! SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
       real(real64), dimension(:,:), allocatable :: SxA,SyA ! Slow advection
       real(real64), dimension(:,:), allocatable :: SxB,SyB ! Slow internal pressure
       real(real64), dimension(:,:), allocatable :: SxD,SyD ! Slow diffusion
       real(real64), dimension(:,:), allocatable :: SxF,SyF ! Slow friction
-!KB      real(real64), dimension(:,:), allocatable :: SlUx,SlVx ! Should go away
       real(real64), dimension(:,:), allocatable :: ru,rv
       real(real64), dimension(:,:,:), allocatable :: pk,qk,ww
       real(real64), dimension(:,:,:), allocatable :: pka,qka
@@ -79,7 +76,6 @@ MODULE getm_momentum
       real(real64), dimension(:,:,:), allocatable :: advpk,advqk
       real(real64), dimension(:,:,:), allocatable :: diffuk,diffvk
       real(real64), dimension(:,:,:), allocatable :: uk,vk
-!KB      real(real64), dimension(:,:,:), allocatable :: uuEx,vvEx ! 0
       real(real64), dimension(:,:), allocatable :: taub,taubx,tauby
       real(real64), dimension(:,:), allocatable :: rru,rrv
       real(real64), dimension(:,:), allocatable :: zub,zvb
@@ -102,13 +98,15 @@ MODULE getm_momentum
       procedure :: register => momentum_register
       procedure :: initialize_2d => uv_initialize_2d
       procedure :: uv_momentum_2d => uv_momentum_2d
-      procedure :: advection_2d => uv_advection_2d
-      procedure :: diffusion_2d => uv_diffusion_2d
+      procedure :: uv_advection_2d => uv_advection_2d
+      procedure :: uivi_advection_2d => uivi_advection_2d
+      procedure :: uv_diffusion_2d => uv_diffusion_2d
+      procedure :: uivi_diffusion_2d => uivi_diffusion_2d
       procedure :: initialize_3d => uv_initialize_3d
       procedure :: uv_momentum_3d => uv_momentum_3d
       procedure :: w_momentum_3d => w_momentum_3d
       procedure :: advection_3d => uv_advection_3d
-      procedure :: diffusion_3d => uv_diffusion_3d
+      procedure :: uv_diffusion_3d => uv_diffusion_3d
       procedure :: vel_2d => velocities_2d
       procedure :: vel_3d => velocities_3d
       procedure :: stresses => stresses
@@ -141,9 +139,19 @@ MODULE getm_momentum
             !! timestep [s]
       END SUBROUTINE uv_advection_2d
 
+      MODULE SUBROUTINE uivi_advection_2d(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      END SUBROUTINE uivi_advection_2d
+
       MODULE SUBROUTINE uv_diffusion_2d(self)
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE uv_diffusion_2d
+
+      MODULE SUBROUTINE uivi_diffusion_2d(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE uivi_diffusion_2d
 
       ! 3D routines
       MODULE SUBROUTINE uv_initialize_3d(self)
