@@ -120,7 +120,7 @@ MODULE SUBROUTINE w_momentum_3d(self,dt)
    integer :: i,j,k
    real(real64) :: dtm1
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('momentum_z_3d()',level=2)
+   if (associated(self%logs)) call self%logs%info('w_momentum_3d()',level=2)
    dtm1=1._real64/dt
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
@@ -171,7 +171,6 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
       end do
    end do
    call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pka,self%vadvgrid,self%qka,dt,UG,self%pk)
-
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%hn(i,j,:) = XG%hn(i,j,:)
@@ -262,7 +261,7 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,self%num,self%pk,self%ea2,self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,self%num,self%pk,ea2=self%ea2,ea4=self%ea4)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
@@ -411,7 +410,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,self%num,self%qk,self%ea2,self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,self%num,self%qk,ea2=self%ea2,ea4=self%ea4)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
