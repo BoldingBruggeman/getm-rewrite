@@ -63,6 +63,8 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('SyD',self%SyD,self%V,def=0._real64,stat=stat)
    call mm_s('SxF',self%SxF,self%U,def=0._real64,stat=stat)
    call mm_s('SyF',self%SyF,self%V,def=0._real64,stat=stat)
+   call mm_s('Am',self%Am,self%U,def=0._real64,stat=stat)
+   call mm_s('An',self%An,self%U,def=0._real64,stat=stat)
    call mm_s('ru',self%ru,self%U,def=0._real64,stat=stat)
    call mm_s('rv',self%rv,self%V,def=0._real64,stat=stat)
 !   call mm_s('taub',self%taub,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
@@ -286,7 +288,8 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
             end if
             self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! (2.16) - note SxF is multiplied by alpha
                         +UG%alpha(i,j)*(-tausu/rho0-self%fV(i,j) &
-                        +self%advU(i,j)-self%diffu1(i,j) &
+                                       -self%diffu1(i,j) &
+!KB                        +self%advU(i,j)-self%diffu1(i,j) &
                         +self%SxA(i,j)-self%SxB(i,j)+self%SxD(i,j)+Slr))) &
                         /(1._real64+dt*self%ru(i,j)/UG%D(i,j))
             self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)
@@ -385,7 +388,8 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
             end if
             self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! (2.17) - note SxF is multiplied by alpha
                         +VG%alpha(i,j)*(-tausv/rho0+self%fU(i,j) &
-                        +self%advV(i,j)-self%diffv1(i,j) &
+                                       -self%diffv1(i,j) &
+!KB                        +self%advV(i,j)-self%diffv1(i,j) &
                         +self%SyA(i,j)-self%SyB(i,j)+self%SyD(i,j)+Slr))) &
                         /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
             self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)

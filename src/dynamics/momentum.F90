@@ -70,6 +70,7 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: SxD,SyD ! Slow diffusion
       real(real64), dimension(:,:), allocatable :: SxF,SyF ! Slow friction
       real(real64), dimension(:,:), allocatable :: ru,rv
+      real(real64), dimension(:,:), allocatable :: Am,An
       real(real64), dimension(:,:,:), allocatable :: pk,qk,ww
       real(real64), dimension(:,:,:), allocatable :: pka,qka
       real(real64), dimension(:,:,:), allocatable :: fpk,fqk
@@ -81,12 +82,14 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: zub,zvb
       ! help variables
       real(real64), dimension(:,:,:), allocatable :: num,ea2,ea4
+      real(real64), dimension(:,:), allocatable :: work2d
       type(type_getm_grid) :: uadvgrid,vadvgrid
       integer :: advection_scheme=1
       real(real64) :: molecular=0._real64
       real(real64) :: cnpar=1._real64
-      real(real64) :: Am=0.0001_real64 ! KB
       integer :: An_method=0
+      real(real64) :: Am0=0._real64
+      real(real64) :: An0=0._real64
 #endif
 
       contains
@@ -347,6 +350,8 @@ SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
 
    call self%initialize_2d()
    call self%initialize_3d()
+
+   call mm_s('work2d',self%work2d,self%U,def=0._real64,stat=stat)
 
 !KB should move to velocities
    call mm_s('u1',self%u1,self%U,def=0._real64,stat=stat)
