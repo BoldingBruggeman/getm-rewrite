@@ -62,41 +62,43 @@ module SUBROUTINE momentum_register(self)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('fV', self%fV(VG%imin:VG%imax,VG%jmin:VG%jmax))
 
-   call self%fm%register('advU', 'm2/s2', 'momentum advection term in local x-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%U%dim_2d_ids), &
+   if (self%store_advection) then
+      call self%fm%register('advU', 'm2/s2', 'momentum advection term in local x-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%U%dim_2d_ids), &
 !KB                         output_level=output_level_debug, &
-                         part_of_state=.true., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('advU', self%advU(UG%imin:UG%imax,UG%jmin:UG%jmax))
-
-   call self%fm%register('advV', 'm2/s2', 'momentum advection term in local y-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%V%dim_2d_ids), &
+                            part_of_state=.true., &
+                            category='2d', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('advU', self%advU(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('advV', 'm2/s2', 'momentum advection term in local y-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%V%dim_2d_ids), &
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.true., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('advV', self%advV(VG%imin:VG%imax,VG%jmin:VG%jmax))
+                            part_of_state=.true., &
+                            category='2d', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('advV', self%advV(VG%imin:VG%imax,VG%jmin:VG%jmax))
+   end if
 
-   call self%fm%register('diffu1', 'm2/s2', 'momentum diffusion term in local x-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%U%dim_2d_ids), &
+   if (self%store_diffusion) then
+      call self%fm%register('diffu1', 'm2/s2', 'momentum diffusion term in local x-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%U%dim_2d_ids), &
 !KB                         output_level=output_level_debug, &
-                         part_of_state=.true., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('diffu1', self%diffu1(UG%imin:UG%imax,UG%jmin:UG%jmax))
-
-   call self%fm%register('diffv1', 'm2/s2', 'momentum diffusion term in local y-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%V%dim_2d_ids), &
+                            part_of_state=.true., &
+                            category='2d', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('diffu1', self%diffu1(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('diffv1', 'm2/s2', 'momentum diffusion term in local y-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%V%dim_2d_ids), &
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.true., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('diffv1', self%diffv1(VG%imin:VG%imax,VG%jmin:VG%jmax))
+                            part_of_state=.true., &
+                            category='2d', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('diffv1', self%diffv1(VG%imin:VG%imax,VG%jmin:VG%jmax))
+   end if
 
    call self%fm%register('Ua', 'm2/s', 'advective transport in local x-direction', &
                          standard_name='', &
@@ -131,39 +133,73 @@ module SUBROUTINE momentum_register(self)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('Vi', self%Vi(UG%imin:UG%imax,UG%jmin:UG%jmax))
 
-   call self%fm%register('SxA', 'm2/s2', 'slow advection term in local x-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
+   if (self%store_slowterms) then
+      call self%fm%register('SxA', 'm2/s2', 'slow advection term in local x-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('SxA', self%SxA(UG%imin:UG%imax,UG%jmin:UG%jmax))
-   call self%fm%register('SyA', 'm2/s2', 'slow advection term in local y-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
+                            part_of_state=.false., &
+                            category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SxA', self%SxA(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('SyA', 'm2/s2', 'slow advection term in local y-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('SyA', self%SyA(UG%imin:UG%imax,UG%jmin:UG%jmax))
+                            part_of_state=.false., &
+                         category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SyA', self%SyA(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('SxB', 'm2/s2', 'slow buoyancy term in local x-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SxB', self%SxB(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('SyB', 'm2/s2', 'slow buoyancy term in local y-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SyB', self%SyB(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('SxD', 'm2/s2', 'slow diffusion term in local x-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SxD', self%SxD(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('SyD', 'm2/s2', 'slow diffusion term in local y-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
+  !KB                       output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SyD', self%SyD(UG%imin:UG%imax,UG%jmin:UG%jmax))
 
-   call self%fm%register('SxD', 'm2/s2', 'slow diffusion term in local x-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
+      call self%fm%register('SxF', 'm2/s2', 'slow friction term in local x-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('SxD', self%SxD(UG%imin:UG%imax,UG%jmin:UG%jmax))
-   call self%fm%register('SyD', 'm2/s2', 'slow diffusion term in local y-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
+                            part_of_state=.false., &
+                            category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SxF', self%SxF(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('SyF', 'm2/s2', 'slow friction term in local y-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('SyD', self%SyD(UG%imin:UG%imax,UG%jmin:UG%jmax))
+                            part_of_state=.false., &
+                            category='slowterms', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('SyF', self%SyF(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   end if
 
    call self%fm%register('pk', 'm2/s', 'transport in local x-direction (3D)', &
                          standard_name='', &

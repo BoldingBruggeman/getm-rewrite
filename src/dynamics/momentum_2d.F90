@@ -51,10 +51,14 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
    call mm_s('fU',self%fU,self%U,def=0._real64,stat=stat)
    call mm_s('fV',self%fV,self%V,def=0._real64,stat=stat)
-   call mm_s('advU',self%advU,self%U,def=0._real64,stat=stat)
-   call mm_s('advV',self%advV,self%V,def=0._real64,stat=stat)
-   call mm_s('diffu1',self%diffu1,self%U,def=0._real64,stat=stat)
-   call mm_s('diffv1',self%diffv1,self%V,def=0._real64,stat=stat)
+   if (self%store_advection) then
+      call mm_s('advU',self%advU,self%U,def=0._real64,stat=stat)
+      call mm_s('advV',self%advV,self%V,def=0._real64,stat=stat)
+   end if
+   if (self%store_diffusion) then
+      call mm_s('diffu1',self%diffu1,self%U,def=0._real64,stat=stat)
+      call mm_s('diffv1',self%diffv1,self%V,def=0._real64,stat=stat)
+   end if
    call mm_s('SxA',self%SxA,self%U,def=0._real64,stat=stat)
    call mm_s('SyA',self%SyA,self%V,def=0._real64,stat=stat)
    call mm_s('SxB',self%SxB,self%U,def=0._real64,stat=stat)
@@ -185,7 +189,9 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
          self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
       end do
    end do
+   if (self%store_advection) self%advU=self%U
    call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%U)
+   if (self%store_advection) self%advU=(self%U-self%advU)/dt
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%D(i,j)  = XG%D(i,j)
@@ -194,7 +200,9 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
          self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
       end do
    end do
+   if (self%store_advection) self%advV=self%V
    call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%V)
+   if (self%store_advection) self%advV=(self%V-self%advV)/dt
    end associate VGrid
    end associate UGrid
    end associate TGrid

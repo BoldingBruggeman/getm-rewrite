@@ -90,6 +90,9 @@ MODULE getm_momentum
       integer :: An_method=0
       real(real64) :: Am0=0._real64
       real(real64) :: An0=0._real64
+      logical :: store_advection=.false.
+      logical :: store_diffusion=.true.
+      logical :: store_slowterms=.false.
 #endif
 
       contains
