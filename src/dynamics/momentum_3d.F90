@@ -140,50 +140,6 @@ END SUBROUTINE w_momentum_3d
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE uv_advection_3d(self,dt)
-   !! 3D velocity advection
-
-   IMPLICIT NONE
-
-   class(type_getm_momentum), intent(inout) :: self
-   real(real64), intent(in) :: dt
-      !! timestep [s]
-
-!  Local constants
-
-!  Local variables
-   integer :: i,j,k
-!---------------------------------------------------------------------------
-   XGrid: associate( XG => self%domain%X )
-   TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
-         self%uadvgrid%hn(i,j,:) = TG%hn(i+1,j,:)
-         self%vadvgrid%hn(i,j,:) = XG%hn(i,j,:)
-         self%pka(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i+1,j,:))
-         self%qka(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i+1,j,:))
-      end do
-   end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pka,self%vadvgrid,self%qka,dt,UG,self%pk)
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
-         self%uadvgrid%hn(i,j,:) = XG%hn(i,j,:)
-         self%vadvgrid%hn(i,j,:) = TG%hn(i,j+1,:)
-         self%pka(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i,j+1,:))
-         self%qka(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i,j+1,:))
-      end do
-   end do
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pka,self%vadvgrid,self%qka,dt,VG,self%qk)
-   end associate VGrid
-   end associate UGrid
-   end associate TGrid
-   end associate XGrid
-END SUBROUTINE uv_advection_3d
-
-!---------------------------------------------------------------------------
-
 SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
 
    IMPLICIT NONE

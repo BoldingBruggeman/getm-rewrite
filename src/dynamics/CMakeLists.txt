@@ -7,8 +7,9 @@ add_library(getm_dynamics
     momentum.F90
     momentum_2d.F90
     momentum_3d.F90
+    uv_advection.F90
+    uv_diffusion.F90
     velocities.F90
-    velocity_diffusion.F90
     #shear.F90
     slow_terms.F90
     momentum_register.F90

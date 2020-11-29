@@ -21,7 +21,7 @@ MODULE SUBROUTINE uv_diffusion_2d(self)
 
 !  Local variables
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('diffusion_2d()',level=2)
+   if (associated(self%logs)) call self%logs%info('uv_diffusion_2d()',level=2)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
@@ -48,7 +48,7 @@ MODULE SUBROUTINE uivi_diffusion_2d(self)
 
 !  Local variables
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('diffusion_2d()',level=2)
+   if (associated(self%logs)) call self%logs%info('uivi_diffusion_2d()',level=2)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
@@ -76,7 +76,7 @@ MODULE SUBROUTINE uv_diffusion_3d(self)
 !  Local variables
    integer :: k
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('diffusion_2d()',level=2)
+   if (associated(self%logs)) call self%logs%info('diffusion_3d()',level=2)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
