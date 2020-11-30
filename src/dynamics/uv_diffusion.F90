@@ -2,13 +2,13 @@
 
 !!{!./code/velocity_diffusion.md!}
 
-SUBMODULE (getm_momentum) diffusion_smod
+SUBMODULE (getm_momentum) uv_diffusion_smod
 
 CONTAINS
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE uv_diffusion_2d(self)
+MODULE SUBROUTINE uv_diffusion_2d(self,dt)
 
    !! Velocity shear
 
@@ -16,6 +16,8 @@ MODULE SUBROUTINE uv_diffusion_2d(self)
 
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+      !! timestep [s]
 
 !  Local constants
 
@@ -28,6 +30,10 @@ MODULE SUBROUTINE uv_diffusion_2d(self)
    if (self%Am0 > 0._real64 .or. self%An_method > 0) then !KB - another check is required
       call diffusion_driver(self,self%U,self%V,TG%D,UG%D,VG%D,self%diffu1,self%diffv1)
    end if
+#ifdef _UPDATE_ADV_DIFF_
+   self%U=dt*self%diffu1
+   self%V=dt*self%diffv1
+#endif
    end associate VGrid
    end associate UGrid
    end associate TGrid
@@ -35,7 +41,7 @@ END SUBROUTINE uv_diffusion_2d
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE uivi_diffusion_2d(self)
+MODULE SUBROUTINE uv_diffusion_3d(self,dt)
 
    !! Velocity shear
 
@@ -43,33 +49,8 @@ MODULE SUBROUTINE uivi_diffusion_2d(self)
 
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
-
-!  Local constants
-
-!  Local variables
-!---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('uivi_diffusion_2d()',level=2)
-   TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
-   if (self%Am0 > 0._real64 .or. self%An_method > 0) then
-      call diffusion_driver(self,self%Ui,self%Vi,TG%D,UG%D,VG%D,self%SxD,self%SyD)
-   end if
-   end associate VGrid
-   end associate UGrid
-   end associate TGrid
-END SUBROUTINE uivi_diffusion_2d
-
-!---------------------------------------------------------------------------
-
-MODULE SUBROUTINE uv_diffusion_3d(self)
-
-   !! Velocity shear
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
+   real(real64), intent(in) :: dt
+      !! timestep [s]
 
 !  Local constants
 
@@ -87,11 +68,58 @@ MODULE SUBROUTINE uv_diffusion_3d(self)
                                self%diffuk(:,:,k),self%diffvk(:,:,k))
       end do
    end if
+#ifdef _UPDATE_ADV_DIFF_
+   self%pk=dt*self%diffuk
+   self%qk=dt*self%diffvk
+#endif
    end associate VGrid
    end associate UGrid
    end associate TGrid
 
 END SUBROUTINE uv_diffusion_3d
+
+!---------------------------------------------------------------------------
+
+MODULE SUBROUTINE slow_diffusion(self)
+
+   !! Diffusion of time averaged depth integrated transports and slow diffusion update
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('slow_diffusion()',level=2)
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   if (self%Am0 > 0._real64 .or. self%An_method > 0) then
+      call diffusion_driver(self,self%Ui,self%Vi,TG%D,UG%D,VG%D,self%SxD,self%SyD)
+
+      do j=UG%jmin,UG%jmax
+         do i=UG%imin,UG%imax
+            if (UG%mask(i,j) .ge. 1) then
+               self%SxD(i,j)=SUM(self%diffuk(i,j,1:))-self%SxD(i,j)
+            end if
+         end do
+      end do
+      do j=VG%jmin,VG%jmax
+         do i=VG%imin,VG%imax
+            if (VG%mask(i,j) .ge. 1) then
+               self%SyD(i,j)=SUM(self%diffvk(i,j,1:))-self%SyD(i,j)
+            end if
+         end do
+      end do
+   end if
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
+END SUBROUTINE slow_diffusion
 
 !---------------------------------------------------------------------------
 
@@ -234,4 +262,4 @@ END SUBROUTINE diffusion_driver
 
 !---------------------------------------------------------------------------
 
-END SUBMODULE diffusion_smod
+END SUBMODULE uv_diffusion_smod
