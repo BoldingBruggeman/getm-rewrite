@@ -12,6 +12,8 @@ SUBMODULE (getm_operators) diffusion_smod
 
 !-----------------------------------------------------------------------------
 
+   logical :: is_initialized=.false.
+
 CONTAINS
 
 #define _NORMAL_ORDER_
@@ -36,8 +38,8 @@ MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f)
    self%imin = lbound(f,1); self%imax = ubound(f,1)
    self%jmin = lbound(f,2); self%jmax = ubound(f,2)
    self%kmin = lbound(f,3); self%kmax = ubound(f,3)
-   allocate(self%auxn(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
    allocate(self%auxo(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
+   allocate(self%auxn(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
 #ifdef _NORMAL_ORDER_
 #define ORDER i,j,k
    allocate(self%a1(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%jmax))
@@ -54,6 +56,7 @@ MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f)
 #endif
    self%matrix_time = 0._real64
    self%tridiag_time = 0._real64
+   is_initialized=.true.
 END SUBROUTINE vertical_diffusion_initialize_field
 
 !---------------------------------------------------------------------------
@@ -77,24 +80,25 @@ MODULE SUBROUTINE vertical_diffusion_initialize_grid(self,grid)
    self%imin = grid%imin; self%imax = grid%imax
    self%jmin = grid%jmin; self%jmax = grid%jmax
    self%kmin = grid%kmin; self%kmax = grid%kmax
-   allocate(self%auxo(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%auxn(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%auxo(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%auxn(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
 #ifdef _NORMAL_ORDER_
 #define ORDER i,j,k
-   allocate(self%a1(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%a2(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%a3(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%a4(grid%l(1):grid%l(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a1(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a2(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a3(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a4(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
 #else
 #define ORDER k,i,j
-   allocate(self%a1(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
-   allocate(self%a2(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
-   allocate(self%a3(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
-   allocate(self%a4(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
+   allocate(self%a1(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
+   allocate(self%a2(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
+   allocate(self%a3(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
+   allocate(self%a4(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
 #endif
 #endif
    self%matrix_time = 0._real64
    self%tridiag_time = 0._real64
+   is_initialized=.true.
 END SUBROUTINE vertical_diffusion_initialize_grid
 
 !---------------------------------------------------------------------------
@@ -127,32 +131,8 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
 !  Local variables
    integer :: i,j,k
 !---------------------------------------------------------------------------
+   if (.not. is_initialized) stop 'vertical_diffusion is not initialized'
    if (self%kmax == 1) return
-#if 0
-write(*,*) lbound(mask)
-write(*,*) ubound(mask)
-write(*,*) lbound(dzo)
-write(*,*) ubound(dzo)
-write(*,*) lbound(nuh)
-write(*,*) ubound(nuh)
-write(*,*) lbound(var)
-write(*,*) ubound(var)
-#endif
-!KBreturn
-
-#if 0
-write(*,*) self%imin,self%imax
-write(*,*) self%jmin,self%jmax
-write(*,*) self%kmin,self%kmax
-write(*,*) lbound(dzn)
-write(*,*) ubound(dzn)
-write(*,*) lbound(nuh)
-write(*,*) ubound(nuh)
-write(*,*) lbound(var)
-write(*,*) ubound(var)
-write(*,*) var(1,1,self%kmin),var(1,1,self%kmax)
-stop
-#endif
 
    ! Setting up the matrix
    matrix: block
