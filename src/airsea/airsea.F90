@@ -48,6 +48,8 @@ MODULE getm_airsea
       class(type_getm_domain), pointer :: domain
 
       real(real64) :: taux0=0._real64, tauy0=0._real64
+      real(real64) :: swr0=0._real64
+      real(real64) :: shf0=0._real64
 
 #ifdef _STATIC_
       real(real64), dimension(E2DFIELD) :: p = 10._real64
@@ -59,6 +61,7 @@ MODULE getm_airsea
       real(real64), dimension(:,:), allocatable :: taux, tauy
       real(real64), dimension(:,:), allocatable :: sensible, latent
       real(real64), dimension(:,:), allocatable :: net_long_wave
+      real(real64), dimension(:,:), allocatable :: shf
          !! short wave radiation and albedo fields
 #endif
 
@@ -127,8 +130,8 @@ SUBROUTINE airsea_initialize(self,domain)
    call mm_s('taux',self%taux,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('tauy',self%tauy,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('sp',self%sp,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('shf',self%shf,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
 #endif
-
    if (associated(self%fm)) then
       call self%fm%register('sp', 'Pa', 'atmospheric surface pressure', &
                             standard_name='', &
@@ -152,6 +155,10 @@ SUBROUTINE airsea_initialize(self,domain)
                             category='airsea', field=f)
       call self%fm%send_data('tausy', self%tauy(TG%imin:TG%imax,TG%jmin:TG%jmax))
    end if
+   self%swr=self%swr0
+   self%shf=self%shf0
+   self%taux=self%taux0
+   self%tauy=self%tauy0
    end associate TGrid
 END SUBROUTINE airsea_initialize
 
@@ -184,6 +191,8 @@ SUBROUTINE airsea_update(self,n)
          self%tauy(i,j) = (1+n)/10*self%tauy0
          self%taux(i,j) = self%taux0
          self%tauy(i,j) = self%tauy0
+         self%swr(i,j) = self%swr0
+         self%shf(i,j) = self%shf0
       end do
    end do
 END SUBROUTINE airsea_update
