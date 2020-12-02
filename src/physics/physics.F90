@@ -89,6 +89,7 @@ SUBROUTINE physics_configure(self,logs,fm)
    if (present(fm)) then
       self%fm => fm
    end if
+   call self%radiation%configuration(logs,fm)
    call self%salinity%configuration(logs,fm)
    call self%temperature%configuration(logs,fm)
    call self%density%configure(logs,fm)
@@ -115,9 +116,9 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('physics_initialize()',level=1)
 
-!KB   call self%radiation%initialize(logs,grid)
+   call self%radiation%initialize(domain)
    call self%salinity%initialize(domain,advection,vertical_diffusion)
-   call self%temperature%initialize(domain)
+   call self%temperature%initialize(domain,advection,vertical_diffusion)
    call self%density%initialize(domain)
    call self%density%density(self%salinity%S,self%temperature%T)
    call self%density%buoyancy()
