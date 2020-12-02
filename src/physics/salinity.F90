@@ -6,15 +6,6 @@
 !> and calculating the advection-diffusion-equation, which includes
 !> penetrating short-wave radiation as source term (see {\tt do\_salinity}).
 
-!> @note
-!> ckeck dimension order of auxo and auxn
-!> ckeck dimension order of a1, a2, a3, a4
-!> @endnote
-
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
-
 MODULE getm_salinity
 
    !! Description:
@@ -186,7 +177,7 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
-   call self%advection%calculate(1,UG,uk,VG,vk,dt,TG,self%S)
+   call self%advection%calculate(self%advection_scheme,UG,uk,VG,vk,dt,TG,self%S)
    end associate VGrid
    end associate UGrid
    call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmols,nuh,self%S)
