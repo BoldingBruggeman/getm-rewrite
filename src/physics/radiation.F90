@@ -2,10 +2,6 @@
 
 !> Short wave radiation into the water column
 
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
-
 MODULE getm_radiation
 
    !! Description:
@@ -164,18 +160,6 @@ SUBROUTINE radiation_calculate(self,swr,albedo)
          end do
       end do
    end do
-#if 0
-   do j=TG%l(2),TG%u(2)
-      do i=TG%l(1),TG%u(1)
-         if (TG%mask(i,j) > 0) then
-            k=TG%l(3)
-            self%bottom_rad(i,j) = self%rad(i,j,k+1)*( &
-                              self%A(i,j) *exp(-TG%hn(i,j,k+1)/self%g1(i,j)) &
-                  +(1._real64-self%A(i,j))*exp(-TG%hn(i,j,k+1)/self%g2(i,j)))
-         end  if
-      end do
-   end do
-#endif
    end associate TGrid
 END SUBROUTINE radiation_calculate
 
