@@ -120,6 +120,7 @@ SUBROUTINE mixing_initialize(self,domain)
 
 !  Local variables
    integer :: stat
+   integer :: i,j
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('mixing_initialize()',level=2)
    self%domain => domain
@@ -161,6 +162,14 @@ SUBROUTINE mixing_initialize(self,domain)
                             part_of_state=.true.)
       call self%fm%send_data('nuh', self%tke(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+         if (TG%mask(i,j) > 0) then
+            self%num(i,j,:) = self%num0
+            self%nuh(i,j,:) = self%nuh0
+         end if
+      end do
+   end do
    end associate TGrid
 END SUBROUTINE mixing_initialize
 
