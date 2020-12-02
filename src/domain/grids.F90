@@ -153,10 +153,8 @@ SUBROUTINE allocate_grid_variables(self)
    call mm_s('sseo',self%sseo,self%H,def=-9999._real64,stat=stat)
    call mm_s('hn',self%hn,self%l(1:3),self%u(1:3),def=-9999._real64,stat=stat)
    call mm_s('ho',self%ho,self%hn,def=-9999._real64,stat=stat)
-#if 0
    call mm_s('zf',self%zf,self%hn,def=-9999._real64,stat=stat)
-   call mm_s('zc',self%zc,self%S%hn,def=-9999._real64,stat=stat)
-#endif
+   call mm_s('zc',self%zc,self%hn,def=-9999._real64,stat=stat)
    call mm_s('alpha',self%alpha,self%H,def=1._real64,stat=stat)
 #endif
 END SUBROUTINE allocate_grid_variables

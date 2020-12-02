@@ -203,8 +203,9 @@ MODULE getm_domain
       end subroutine init_vertical
 
 !      module subroutine init_vertical(self,z,zo)
-      module subroutine do_vertical(self)
+      module subroutine do_vertical(self,dt)
          class(type_getm_domain), intent(inout) :: self
+         real(real64), intent(in)  :: dt
 !         real(real64), dimension(:,:), intent(in) :: z,zo
       end subroutine do_vertical
 
@@ -324,7 +325,7 @@ SUBROUTINE domain_initialize(self)
    call self%cfl_check()
    if (self%T%kmax > 1) then
       call self%init_vertical()
-      call self%do_vertical()
+      call self%do_vertical(1._real64) ! KB
    end if
 
    self%domain_ready = .true.
