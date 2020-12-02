@@ -6,10 +6,6 @@
 !> and calculating the advection-diffusion-equation, which includes
 !> penetrating short-wave radiation as source term (see {\tt do\_temperature}).
 
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
-
 MODULE getm_pressure
 
    !! Description:
@@ -47,6 +43,7 @@ MODULE getm_pressure
       real(real64), dimension(:,:), allocatable :: dpdx, dpdy
       real(real64), dimension(:,:,:), allocatable :: idpdx, idpdy
 #endif
+      integer :: ip_method=1
 
       contains
 
@@ -68,8 +65,9 @@ MODULE getm_pressure
            !! pressure [Pa]
 #undef _T2_
       end subroutine pressure_surface
-      module subroutine pressure_internal(self)
+      module subroutine pressure_internal(self,buoy)
          class(type_getm_pressure), intent(inout) :: self
+         real(real64), intent(in) :: buoy(:,:,:)
       end subroutine pressure_internal
    END INTERFACE
 
@@ -118,7 +116,6 @@ SUBROUTINE pressure_initialize(self,domain)
 !  Local constants
 
 !  Local variables
-   integer :: imin,imax,jmin,jmax,kmax
    integer :: stat
    type (type_field), pointer :: f
 !---------------------------------------------------------------------------
@@ -146,6 +143,21 @@ SUBROUTINE pressure_initialize(self,domain)
                             part_of_state=.false., &
                             category='airsea', field=f)
       call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+
+      call self%fm%register('idpdx', 'Pa/m', 'internal pressure gradient - x', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_3d_ids), &
+    !KB                        output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='baroclinicity', field=f)
+      call self%fm%send_data('idpdx', self%idpdx(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      call self%fm%register('idpdy', 'Pa/m', 'internal pressure gradient - y', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_3d_ids), &
+    !KB                        output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='baroclinicity', field=f)
+      call self%fm%send_data('idpdy', self%idpdy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
    end associate TGrid
 END SUBROUTINE pressure_initialize
