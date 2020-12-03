@@ -157,6 +157,7 @@ MODULE getm_domain
       logical :: gamma_surf
       real(real64) :: ddl=-1._real64, ddu=-1._real64
       real(real64) :: lat0=-999._real64
+      integer :: method_vertical_coordinates=1
 
       contains
 

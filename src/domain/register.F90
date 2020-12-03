@@ -260,6 +260,56 @@ module SUBROUTINE register(self)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hvn', self%V%hn(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
 
+   call self%fm%register('zf', 'm', 'depth to upper cell face - T-points', &
+                      standard_name='cell thickness', &
+                      dimensions=(self%T%dim_3d_ids), &
+                      fill_value=-9999._real64, &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('zf', self%T%zf(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+   call self%fm%register('zfu', 'm', 'depth to upper cell face - U-points', &
+                      standard_name='cell thickness', &
+                      dimensions=(self%T%dim_3d_ids), &
+                      fill_value=-9999._real64, &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('zfu', self%U%zf(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
+   call self%fm%register('zfv', 'm', 'depth to upper cell face - V-points', &
+                      standard_name='depth to cell center', &
+                      dimensions=(self%T%dim_3d_ids), &
+                      fill_value=-9999._real64, &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('zfv', self%V%zf(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
+
+   call self%fm%register('zc', 'm', 'depth to cell center - T-points', &
+                      standard_name='cell thickness', &
+                      dimensions=(self%T%dim_3d_ids), &
+                      fill_value=-9999._real64, &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('zc', self%T%zc(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+   call self%fm%register('zcu', 'm', 'depth to cell center - U-points', &
+                      standard_name='cell thickness', &
+                      dimensions=(self%T%dim_3d_ids), &
+                      fill_value=-9999._real64, &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('zcu', self%U%zc(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
+   call self%fm%register('zcv', 'm', 'depth to cell center - V-points', &
+                      standard_name='depth to cell center', &
+                      dimensions=(self%T%dim_3d_ids), &
+                      fill_value=-9999._real64, &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('zcv', self%V%zc(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
+
    end associate XGrid
    end associate VGrid
    end associate UGrid

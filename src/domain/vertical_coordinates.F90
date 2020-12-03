@@ -22,6 +22,11 @@ INTERFACE
    end subroutine do_gvc
 END INTERFACE
 
+ENUM, BIND(C)
+   ENUMERATOR :: method_sigma=1
+   ENUMERATOR :: method_gvc=2
+END ENUM
+
 !-----------------------------------------------------------------------------
 
 CONTAINS
@@ -46,10 +51,13 @@ module SUBROUTINE init_vertical(self)
       self%T%ssen=self%T%z
    end where
 
-   call init_sigma(self)
-!KB   call init_gvc(self)
-
-   return
+   select case (self%method_vertical_coordinates)
+      case(method_sigma)
+         call init_sigma(self)
+         call depths(self%T); call depths(self%U); call depths(self%V)
+      case(method_gvc)
+         call init_gvc(self)
+   end select
 END SUBROUTINE init_vertical
 
 !---------------------------------------------------------------------------
@@ -70,57 +78,45 @@ module SUBROUTINE do_vertical(self,dt)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('do_vertical()',level=2)
 
-   call do_sigma(self)
-!KB   call do_gvc(self,dt)
-
-   TGrid: associate( TG => self%T )
-   do j=TG%jmin,TG%jmax+1
-      do i=TG%imin,TG%imax+1
-         if (TG%mask(i,j) > 1) then
-            TG%zf(i,j,0)=-TG%H(i,j)
-            TG%zf(i,j,1)=-TG%H(i,j)+TG%hn(i,j,1)
-            TG%zc(i,j,1)=-TG%H(i,j)+0.5_real64*TG%hn(i,j,1)
-            do k=2,TG%kmax
-               TG%zf(i,j,1)=TG%zf(i,j,k-1)+TG%hn(i,j,k)
-               TG%zc(i,j,k)=TG%zc(i,j,k-1)+0.5_real64*TG%hn(i,j,k)
-            end do
-         end if
-      end do
-   end do
-   end associate TGrid
-
-   UGrid: associate( UG => self%U )
-   do j=UG%jmin,UG%jmax+1
-      do i=UG%imin,UG%imax+1
-         if (UG%mask(i,j) > 1) then
-            UG%zf(i,j,0)=-UG%H(i,j)
-            UG%zf(i,j,1)=-UG%H(i,j)+UG%hn(i,j,1)
-            UG%zc(i,j,1)=-UG%H(i,j)+0.5_real64*UG%hn(i,j,1)
-            do k=2,UG%kmax
-               UG%zf(i,j,1)=UG%zf(i,j,k-1)+UG%hn(i,j,k)
-               UG%zc(i,j,k)=UG%zc(i,j,k-1)+0.5_real64*UG%hn(i,j,k)
-            end do
-         end if
-      end do
-   end do
-   end associate UGrid
-
-   VGrid: associate( VG => self%V )
-   do j=VG%jmin,VG%jmax+1
-      do i=VG%imin,VG%imax+1
-         if (VG%mask(i,j) > 1) then
-            VG%zf(i,j,0)=-VG%H(i,j)
-            VG%zf(i,j,1)=-VG%H(i,j)+VG%hn(i,j,1)
-            VG%zc(i,j,1)=-VG%H(i,j)+0.5_real64*VG%hn(i,j,1)
-            do k=2,VG%kmax
-               VG%zf(i,j,1)=VG%zf(i,j,k-1)+VG%hn(i,j,k)
-               VG%zc(i,j,k)=VG%zc(i,j,k-1)+0.5_real64*VG%hn(i,j,k)
-            end do
-         end if
-      end do
-   end do
-   end associate VGrid
+   select case (self%method_vertical_coordinates)
+      case(method_sigma)
+         call do_sigma(self)
+         call depths(self%T); call depths(self%U); call depths(self%V)
+      case(method_gvc)
+         call do_gvc(self,dt)
+   end select
 END SUBROUTINE do_vertical
+
+!---------------------------------------------------------------------------
+
+subroutine depths(self)
+   !! Cacluate the depth to the cell face and center
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_grid), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j,k
+!-----------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('depths()',level=3)
+   do j=self%jmin,self%jmax+1
+      do i=self%imin,self%imax+1
+         if (self%mask(i,j) > 0) then
+            self%zf(i,j,0)=-self%H(i,j)
+            self%zf(i,j,1)=-self%H(i,j)+self%hn(i,j,1)
+            self%zc(i,j,1)=-self%H(i,j)+0.5_real64*self%hn(i,j,1)
+            do k=2,self%kmax
+               self%zf(i,j,k)=self%zf(i,j,k-1)+self%hn(i,j,k)
+               self%zc(i,j,k)=self%zc(i,j,k-1)+0.5_real64*(self%hn(i,j,k-1)+self%hn(i,j,k))
+            end do
+         end if
+      end do
+   end do
+end subroutine depths
 
 !---------------------------------------------------------------------------
 

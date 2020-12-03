@@ -26,9 +26,10 @@ module SUBROUTINE init_sigma(self)
    real(real64), dimension(:), allocatable  :: ga
    integer :: k
 !-----------------------------------------------------------------------------
-   call self%logs%info('init_sigma()',level=3)
+   if (associated(self%logs)) call self%logs%info('init_sigma()',level=3)
+
    allocate(dga(1:self%T%kmax),stat=stat)
-   if (self%ddl .le. 0._real64 .and. self%ddu .le. 0._real64) then
+   if (self%ddl < 0._real64 .and. self%ddu < 0._real64) then
 #if 0
       ga(0) = -1._real64
       do k=1,self%T%kmax
@@ -42,8 +43,8 @@ module SUBROUTINE init_sigma(self)
       allocate(ga(0:self%T%kmax),stat=stat)
       ! Non-equidistant sigma coordinates
       ! This zooming routine is from Antoine Garapon, ICCH, DK
-      if (self%ddu .lt. 0._real64) self%ddu=0._real64
-      if (self%ddl .lt. 0._real64) self%ddl=0._real64
+      if (self%ddu < 0._real64) self%ddu=0._real64
+      if (self%ddl < 0._real64) self%ddl=0._real64
 !KB      allocate(dga(self%T%kmax),stat=stat)
 !KB      if (stat /= 0) STOP 'coordinates: Error allocating (dga)'
       ga(0)= -1._real64
@@ -52,7 +53,6 @@ module SUBROUTINE init_sigma(self)
          ga(k)=ga(k)/(tanh(self%ddl)+tanh(self%ddu)) - 1._real64
          dga(k)=ga(k)-ga(k-1)
       end do
-      deallocate(ga)
    end if
 END SUBROUTINE init_sigma
 
@@ -72,9 +72,10 @@ module SUBROUTINE do_sigma(self)
    integer :: i,j,k
    integer :: stat
 !-----------------------------------------------------------------------------
-   call self%logs%info('do_sigma()',level=3)
+   if (associated(self%logs)) call self%logs%info('do_sigma()',level=3)
+
    !! why not ho=hn as sseo=ssen
-#define TG self%T
+   TGrid: associate( TG => self%T )
    do j=TG%l(2),TG%u(2)
       do i=TG%l(1),TG%u(1)
          if (TG%mask(i,j) > 0) then
@@ -83,12 +84,12 @@ module SUBROUTINE do_sigma(self)
          end if
       end do
    end do
-#undef TG
+   end associate TGrid
 
    !! why not ho=hn as sseo=ssen
    !! if ssen and H are updated in halo zones - extend to all domain
    !! what about mask
-#define UG self%U
+   UGrid: associate( UG => self%U )
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
          if (UG%mask(i,j) > 0) then
@@ -97,10 +98,10 @@ module SUBROUTINE do_sigma(self)
          end if
       end do
    end do
-#undef UG
+   end associate UGrid
 
    !! if ssen and H are updated in halo zones - extend to all domain
-#define VG self%V
+   VGrid: associate( VG => self%V )
    do j=VG%l(2),VG%u(2)-1
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
@@ -109,7 +110,7 @@ module SUBROUTINE do_sigma(self)
          end if
       end do
    end do
-#undef VG
+   end associate VGrid
 END SUBROUTINE do_sigma
 
 !---------------------------------------------------------------------------
