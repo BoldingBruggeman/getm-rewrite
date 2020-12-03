@@ -35,9 +35,16 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
          self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
       end do
    end do
-   if (self%store_advection) self%advU=self%U
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%U)
-   if (self%store_advection) self%advU=(self%U-self%advU)/dt
+#ifndef _APPLY_ADV_DIFF_
+   self%advU=self%U
+#endif
+   where(UG%mask > 0) self%u1 = self%U/UG%D
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%u1)
+#ifdef _APPLY_ADV_DIFF_
+   where(UG%mask > 0) self%U = self%u1*UG%D
+#else
+   where(UG%mask > 0) self%advU=(self%u1*UG%D-self%advU)/dt
+#endif
 
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
@@ -47,9 +54,16 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
          self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
       end do
    end do
-   if (self%store_advection) self%advV=self%V
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%V)
-   if (self%store_advection) self%advV=(self%V-self%advV)/dt
+#ifndef _APPLY_ADV_DIFF_
+   self%advV=self%V
+#endif
+   where(VG%mask > 0) self%v1 = self%V/VG%D
+   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%v1)
+#ifdef _APPLY_ADV_DIFF_
+   where(VG%mask > 0) self%V = self%v1*VG%D
+#else
+   where(VG%mask > 0) self%advV=(self%v1*VG%D-self%advV)/dt
+#endif
 
    end associate VGrid
    end associate UGrid
