@@ -61,7 +61,7 @@ MODULE getm_mixing
 
       real(real64) :: num0=1.e-4_real64
       real(real64) :: nuh0=1.e-4_real64
-      integer :: mixing_method=use_constant
+      integer :: method_mixing=use_constant
 
       contains
 
@@ -209,7 +209,7 @@ SUBROUTINE mixing_calculate(self,SS,NN)
    if (associated(self%logs)) call self%logs%info('mixing_calculate()',level=2)
 
    TGrid: associate( TG => self%domain%T )
-   select case (self%mixing_method)
+   select case (self%method_mixing)
       case (use_constant)
          do j=TG%jmin,TG%jmax
             do i=TG%imin,TG%imax
