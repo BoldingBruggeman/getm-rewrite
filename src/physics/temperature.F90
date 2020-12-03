@@ -55,6 +55,7 @@ MODULE getm_temperature
    real(real64), dimension(I3DFIELD), target :: T = 10._real64
 #else
    real(real64), dimension(:,:,:), allocatable :: T
+   real(real64), dimension(:,:), allocatable :: sst
    real(real64), dimension(:,:,:), allocatable :: ea4
 #endif
       integer :: advection_scheme=1
@@ -130,21 +131,30 @@ SUBROUTINE temperature_initialize(self,domain,advection,vertical_diffusion)
    TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
    call mm_s('T',self%T,TG%l,TG%u,def=15._real64,stat=stat)
+   call mm_s('sst',self%sst,TG%l(1:2),TG%u(1:2),def=15._real64,stat=stat)
    call mm_s('ea4',self%ea4,self%T,def=0._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
-      call self%fm%register('temp', 'Celsius', 'potential temperature', &
+      call self%fm%register('temp', 'Celsius', 'conservative temperature', &
                             standard_name='sea_water_temperature', &
                             category='temperature_and_salinity', &
                             dimensions=(TG%dim_3d_ids), &
                             fill_value=-9999._real64, &
                             part_of_state=.true.)
       call self%fm%send_data('temp', self%T(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      call self%fm%register('sst', 'Celsius', 'potential temperature', &
+                            standard_name='sea_water_temperature', &
+                            category='temperature_and_salinity', &
+                            dimensions=(TG%dim_2d_ids), &
+                            fill_value=-9999._real64, &
+                            part_of_state=.false.)
+      call self%fm%send_data('sst', self%sst(TG%imin:TG%imax,TG%jmin:TG%jmax))
    end if
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax
          if (TG%mask(i,j) ==  0) then
             self%T(i,j,:) = -9999._real64
+            self%sst(i,j) = -9999._real64
          end if
       end do
    end do
