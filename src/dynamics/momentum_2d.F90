@@ -59,6 +59,8 @@ MODULE SUBROUTINE uv_initialize_2d(self)
       call mm_s('diffu1',self%diffu1,self%U,def=0._real64,stat=stat)
       call mm_s('diffv1',self%diffv1,self%V,def=0._real64,stat=stat)
    end if
+   call mm_s('dampU',self%dampU,self%U,def=0._real64,stat=stat)
+   call mm_s('dampV',self%dampV,self%V,def=0._real64,stat=stat)
    call mm_s('SxA',self%SxA,self%U,def=0._real64,stat=stat)
    call mm_s('SyA',self%SyA,self%V,def=0._real64,stat=stat)
    call mm_s('SxB',self%SxB,self%U,def=0._real64,stat=stat)
@@ -200,8 +202,9 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
             end if
             self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! (2.16) - note SxF is multiplied by alpha
                         +UG%alpha(i,j)*(-tausu/rho0-self%fV(i,j) &
-                                       -self%diffu1(i,j) &
-!KB                        +self%advU(i,j)-self%diffu1(i,j) &
+#ifndef _APPLY_ADV_DIFF_
+                        +self%advU(i,j)-self%diffu1(i,j)-self%dampU(i,j) &
+#endif
                         +self%SxA(i,j)-self%SxB(i,j)+self%SxD(i,j)+Slr))) &
                         /(1._real64+dt*self%ru(i,j)/UG%D(i,j))
             self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)
@@ -300,8 +303,9 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
             end if
             self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! (2.17) - note SxF is multiplied by alpha
                         +VG%alpha(i,j)*(-tausv/rho0+self%fU(i,j) &
-                                       -self%diffv1(i,j) &
-!KB                        +self%advV(i,j)-self%diffv1(i,j) &
+#ifndef _APPLY_ADV_DIFF_
+                        +self%advV(i,j)-self%diffv1(i,j)-self%dampV(i,j) &
+#endif
                         +self%SyA(i,j)-self%SyB(i,j)+self%SyD(i,j)+Slr))) &
                         /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
             self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)
