@@ -100,22 +100,24 @@ module SUBROUTINE momentum_register(self)
       call self%fm%send_data('diffv1', self%diffv1(VG%imin:VG%imax,VG%jmin:VG%jmax))
    end if
 
-   call self%fm%register('dampU', 'm2/s', 'numerical damping in local x-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
+   if (self%store_damping) then
+      call self%fm%register('dampU', 'm2/s', 'numerical damping in local x-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('dampU', self%dampU(UG%imin:UG%imax,UG%jmin:UG%jmax))
-   call self%fm%register('dampV', 'm2/s', 'numerical damping in local y-direction', &
-                         standard_name='', &
-                         dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
+                            part_of_state=.false., &
+                            category='2d', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('dampU', self%dampU(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('dampV', 'm2/s', 'numerical damping in local y-direction', &
+                            standard_name='', &
+                            dimensions=(self%domain%V%dim_2d_ids), & ! should be T point
   !KB                       output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='2d', field=f)
-   call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('dampV', self%dampV(UG%imin:UG%imax,UG%jmin:UG%jmax))
+                            part_of_state=.false., &
+                            category='2d', field=f)
+      call f%attributes%set('axis', 'X Y')
+      call self%fm%send_data('dampV', self%dampV(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   end if
 
    call self%fm%register('Ua', 'm2/s', 'advective transport in local x-direction', &
                          standard_name='', &

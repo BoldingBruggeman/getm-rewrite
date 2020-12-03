@@ -51,14 +51,10 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
    call mm_s('fU',self%fU,self%U,def=0._real64,stat=stat)
    call mm_s('fV',self%fV,self%V,def=0._real64,stat=stat)
-   if (self%store_advection) then
-      call mm_s('advU',self%advU,self%U,def=0._real64,stat=stat)
-      call mm_s('advV',self%advV,self%V,def=0._real64,stat=stat)
-   end if
-   if (self%store_diffusion) then
-      call mm_s('diffu1',self%diffu1,self%U,def=0._real64,stat=stat)
-      call mm_s('diffv1',self%diffv1,self%V,def=0._real64,stat=stat)
-   end if
+   call mm_s('advU',self%advU,self%U,def=0._real64,stat=stat)
+   call mm_s('advV',self%advV,self%V,def=0._real64,stat=stat)
+   call mm_s('diffu1',self%diffu1,self%U,def=0._real64,stat=stat)
+   call mm_s('diffv1',self%diffv1,self%V,def=0._real64,stat=stat)
    call mm_s('dampU',self%dampU,self%U,def=0._real64,stat=stat)
    call mm_s('dampV',self%dampV,self%V,def=0._real64,stat=stat)
    call mm_s('SxA',self%SxA,self%U,def=0._real64,stat=stat)

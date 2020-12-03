@@ -93,6 +93,7 @@ MODULE getm_momentum
       real(real64) :: An0=0._real64
       logical :: store_advection=.false.
       logical :: store_diffusion=.true.
+      logical :: store_damping=.true.
       logical :: store_slowterms=.false.
 #endif
 
