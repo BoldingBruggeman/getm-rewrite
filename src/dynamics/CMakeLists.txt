@@ -5,6 +5,7 @@ add_library(getm_dynamics
     pressure_surface.F90
     pressure_internal.F90
     ip_blumberg_mellor.F90
+    ip_shchepetkin_mcwilliams.F90
     momentum.F90
     momentum_2d.F90
     momentum_3d.F90

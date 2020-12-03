@@ -42,8 +42,16 @@ MODULE getm_pressure
 #else
       real(real64), dimension(:,:), allocatable :: dpdx, dpdy
       real(real64), dimension(:,:,:), allocatable :: idpdx, idpdy
+      ! shchepetkin_mcwilliams
+      real(real64), allocatable :: dR(:,:,:)
+      real(real64), allocatable :: dZ(:,:,:)
+      real(real64), allocatable :: P(:,:,:)
+      real(real64), allocatable :: FC(:,:)
+      real(real64), allocatable :: dZx(:,:)
+      real(real64), allocatable :: dRx(:,:)
+      real(real64) :: P_time,U_time,V_time
 #endif
-      integer :: ip_method=1
+      integer :: method_internal_pressure=1
 
       contains
 
@@ -51,7 +59,7 @@ MODULE getm_pressure
       procedure :: initialize => pressure_initialize
       procedure :: surface => pressure_surface
       procedure :: internal => pressure_internal
-!KB      procedure :: calculate => physics_calculate
+      procedure :: internal_initialize => pressure_internal_initialize
 
    end type type_getm_pressure
 
@@ -69,6 +77,9 @@ MODULE getm_pressure
          class(type_getm_pressure), intent(inout) :: self
          real(real64), intent(in) :: buoy(:,:,:)
       end subroutine pressure_internal
+      module subroutine pressure_internal_initialize(self)
+         class(type_getm_pressure), intent(inout) :: self
+      end subroutine pressure_internal_initialize
    END INTERFACE
 
 !---------------------------------------------------------------------------
@@ -125,8 +136,6 @@ SUBROUTINE pressure_initialize(self,domain)
 #ifndef _STATIC_
    call mm_s('dpdx',self%dpdx,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('dpdy',self%dpdy,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
-   call mm_s('idpdx',self%idpdx,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
-   call mm_s('idpdy',self%idpdy,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('dpdx', 'Pa/m', 'surface pressure gradient - x', &
@@ -144,21 +153,8 @@ SUBROUTINE pressure_initialize(self,domain)
                             category='airsea', field=f)
       call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
 
-      call self%fm%register('idpdx', 'Pa/m', 'internal pressure gradient - x', &
-                            standard_name='', &
-                            dimensions=(self%domain%T%dim_3d_ids), &
-    !KB                        output_level=output_level_debug, &
-                            part_of_state=.false., &
-                            category='baroclinicity', field=f)
-      call self%fm%send_data('idpdx', self%idpdx(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
-      call self%fm%register('idpdy', 'Pa/m', 'internal pressure gradient - y', &
-                            standard_name='', &
-                            dimensions=(self%domain%T%dim_3d_ids), &
-    !KB                        output_level=output_level_debug, &
-                            part_of_state=.false., &
-                            category='baroclinicity', field=f)
-      call self%fm%send_data('idpdy', self%idpdy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
+   call self%internal_initialize()
    end associate TGrid
 END SUBROUTINE pressure_initialize
 
