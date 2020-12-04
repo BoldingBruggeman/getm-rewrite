@@ -11,7 +11,7 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE init_sigma(self)
+MODULE SUBROUTINE init_sigma(self)
    !! A wrapper for vertical coordinate calculations
 
    IMPLICIT NONE
@@ -29,26 +29,17 @@ module SUBROUTINE init_sigma(self)
    if (associated(self%logs)) call self%logs%info('init_sigma()',level=3)
 
    allocate(dga(1:self%T%kmax),stat=stat)
-   if (self%ddl < 0._real64 .and. self%ddu < 0._real64) then
-#if 0
-      ga(0) = -1._real64
-      do k=1,self%T%kmax
-         ga(k) = ga(k-1) + 1._real64/self%T%kmax
-      end do
-      ga(self%T%kmax) = 0._real64
-#endif
+   if (self%ddl <= 0._real64 .and. self%ddu <= 0._real64) then
+      ! Equidistant sigma coordinates
       dga(:) = 1._real64/self%T%kmax
-      write(*,*) 'aaaaa', dga
    else
-      allocate(ga(0:self%T%kmax),stat=stat)
       ! Non-equidistant sigma coordinates
-      ! This zooming routine is from Antoine Garapon, ICCH, DK
       if (self%ddu < 0._real64) self%ddu=0._real64
       if (self%ddl < 0._real64) self%ddl=0._real64
-!KB      allocate(dga(self%T%kmax),stat=stat)
-!KB      if (stat /= 0) STOP 'coordinates: Error allocating (dga)'
+      allocate(ga(0:self%T%kmax),stat=stat)
       ga(0)= -1._real64
       do k=1,self%T%kmax
+         ! This zooming routine is from Antoine Garapon, ICCH, DK
          ga(k)=tanh((self%ddl+self%ddu)*k/float(self%T%kmax)-self%ddl)+tanh(self%ddl)
          ga(k)=ga(k)/(tanh(self%ddl)+tanh(self%ddu)) - 1._real64
          dga(k)=ga(k)-ga(k-1)
@@ -58,7 +49,7 @@ END SUBROUTINE init_sigma
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE do_sigma(self)
+MODULE SUBROUTINE do_sigma(self)
    !! A wrapper for vertical coordinate calculations
 
    IMPLICIT NONE
