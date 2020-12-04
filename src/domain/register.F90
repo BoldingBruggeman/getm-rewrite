@@ -78,15 +78,16 @@ module SUBROUTINE register(self)
                             no_default_dimensions=.true., &
                             category='domain',field=f)
          call f%attributes%set('axis', 'X')
-         call self%fm%send_data('lon', self%T%c1)
+         call self%fm%send_data('lon', self%T%c1(TG%imin:TG%imax))
          call self%fm%register('lat', 'degrees_north', 'latitude', &
                             standard_name='latitude', &
                             dimensions=(/self%id_dim_y/), &
                             no_default_dimensions=.true., &
                             category='domain',field=f)
          call f%attributes%set('axis', 'Y')
-         call self%fm%send_data('lat', self%T%c2)
+         call self%fm%send_data('lat', self%T%c2(TG%jmin:TG%jmax))
 
+#if 0
          call self%fm%register('loni', 'degrees_east', 'longitude', &
                             standard_name='longitude', &
                             dimensions=(/self%id_dim_xi/), &
@@ -103,7 +104,6 @@ module SUBROUTINE register(self)
          call f%attributes%set('axis', 'Y')
          call f%attributes%set('c_grid_axis_shift', -0.5_real64)
          call self%fm%send_data('lati', self%V%c2)
-#if 0
          call self%fm%register('xc', 'm', 'x-position', &
                             standard_name='x-position', &
                             dimensions=(/self%id_dim_x, self%id_dim_y/), &
@@ -129,6 +129,20 @@ module SUBROUTINE register(self)
                             category='domain',field=f)
          call f%attributes%set('axis', 'Z')
 #endif
+         call self%fm%register('dx', 'm', 'grid spacing - local x-direction', &
+                            standard_name='', &
+                            dimensions=(/self%id_dim_x, self%id_dim_y/), &
+                            no_default_dimensions=.true., &
+                            category='domain',field=f)
+         call f%attributes%set('axis', 'X Y')
+         call self%fm%send_data('dx', self%T%dx(TG%imin:TG%imax,TG%jmin:TG%jmax))
+         call self%fm%register('dy', 'm', 'grid spacing - local y-direction', &
+                            standard_name='', &
+                            dimensions=(/self%id_dim_x, self%id_dim_y/), &
+                            no_default_dimensions=.true., &
+                            category='domain',field=f)
+         call f%attributes%set('axis', 'X Y')
+         call self%fm%send_data('dy', self%T%dy(TG%imin:TG%imax,TG%jmin:TG%jmax))
       case (3)
          stop 'register()'
    end select
