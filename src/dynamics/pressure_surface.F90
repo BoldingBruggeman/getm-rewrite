@@ -56,7 +56,6 @@ module SUBROUTINE pressure_surface(self,z,sp)
    end do
    end associate VGrid
    end associate TGrid
-   return
 END SUBROUTINE pressure_surface
 
 !---------------------------------------------------------------------------

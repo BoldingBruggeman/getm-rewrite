@@ -70,12 +70,15 @@ module SUBROUTINE metrics(self)
             self%V%cor = 2._real64*omega*sin(deg2rad*self%lat0)
          end if
       case(spherical)
+!KB         do j=self%T%jmin-2,self%T%jmax+2
+!KB            do i=self%T%imin-2,self%T%imax+2
          do j=self%T%jmin,self%T%jmax
             do i=self%T%imin,self%T%imax
                self%T%lon(i,j) = self%T%c1(i)
                self%T%lat(i,j) = self%T%c2(j)
                self%T%dx(i,j) = deg2rad*dlon*rearth*cos(deg2rad*self%T%lat(i,j))
-!               self%V%dx(i,j) = deg2rad*dlon*rearth*cos(deg2rad*self%X%lat(i,j))
+!KB - need to get X%lat - now use T%lat
+               self%V%dx(i,j) = deg2rad*dlon*rearth*cos(deg2rad*self%T%lat(i,j))
             end do
          end do
          self%T%dy = deg2rad*dlat*rearth
@@ -83,6 +86,7 @@ module SUBROUTINE metrics(self)
          self%U%dx = self%T%dx
          self%U%dy = self%T%dy
 
+!KB         self%V%dx = self%T%dx !KB
          self%V%dy = self%T%dy
 
          self%X%dx = self%V%dx
