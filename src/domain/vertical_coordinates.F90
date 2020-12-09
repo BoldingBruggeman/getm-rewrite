@@ -57,6 +57,7 @@ module SUBROUTINE init_vertical(self)
          call depths(self%T); call depths(self%U); call depths(self%V)
       case(method_gvc)
          call init_gvc(self)
+         call depths(self%T); call depths(self%U); call depths(self%V)
    end select
 END SUBROUTINE init_vertical
 
@@ -84,6 +85,7 @@ module SUBROUTINE do_vertical(self,dt)
          call depths(self%T); call depths(self%U); call depths(self%V)
       case(method_gvc)
          call do_gvc(self,dt)
+         call depths(self%T); call depths(self%U); call depths(self%V)
    end select
 END SUBROUTINE do_vertical
 
