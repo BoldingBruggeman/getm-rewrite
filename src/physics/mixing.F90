@@ -146,21 +146,21 @@ SUBROUTINE mixing_initialize(self,domain)
                             dimensions=(TG%dim_3d_ids), &
                             fill_value=-99._real64, &
                             part_of_state=.true.)
-      call self%fm%send_data('eps', self%tke(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      call self%fm%send_data('eps', self%eps(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
       call self%fm%register('num', 'm2/s', 'viscosity', &
                             standard_name='', &
                             category='turbulence', &
                             dimensions=(TG%dim_3d_ids), &
                             fill_value=-99._real64, &
                             part_of_state=.true.)
-      call self%fm%send_data('num', self%tke(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      call self%fm%send_data('num', self%num(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
       call self%fm%register('nuh', 'm2/s', 'diffusivity', &
                             standard_name='', &
                             category='turbulence', &
                             dimensions=(TG%dim_3d_ids), &
                             fill_value=-99._real64, &
                             part_of_state=.true.)
-      call self%fm%send_data('nuh', self%tke(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      call self%fm%send_data('nuh', self%nuh(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax
