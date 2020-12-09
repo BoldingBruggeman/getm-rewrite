@@ -8,19 +8,20 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE register(self)
+MODULE SUBROUTINE register(self,runtype)
    !! Allocate all domain related variables
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
+   integer, intent(in) :: runtype
 
 !  Local constants
 
 !  Local variables
-   integer :: i,j,k
    type (type_field), pointer :: f
+   integer :: i,j,k
 !-----------------------------------------------------------------------------
    if (.not. associated(self%fm)) return
    if (associated(self%logs)) call self%logs%info('register()',level=2)
@@ -228,6 +229,8 @@ module SUBROUTINE register(self)
                          category='domain', field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('zo', TG%zo(TG%imin:TG%imax,TG%jmin:TG%jmax))
+
+   if (runtype > 1) then
    call self%fm%register('ssen', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%T%dim_2d_ids), &
@@ -323,6 +326,7 @@ module SUBROUTINE register(self)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('zcv', self%V%zc(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
+   end if
 
    end associate XGrid
    end associate VGrid

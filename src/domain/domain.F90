@@ -152,8 +152,8 @@ MODULE getm_domain
 
       real(real64) :: Dmin=1._real64
       real(real64) :: Dcrit=2._real64
-      real(real64) :: Dgamma
-      real(real64) :: Dmax
+      real(real64) :: Dgamma=1._real64
+      real(real64) :: Dmax=1._real64
       logical :: gamma_surf
       real(real64) :: ddl=-1._real64, ddu=-1._real64
       real(real64) :: lat0=-999._real64
@@ -180,8 +180,9 @@ MODULE getm_domain
          class(type_getm_domain), intent(inout) :: self
       end subroutine metrics
 
-      module subroutine register(self)
+      module subroutine register(self,runtype)
          class(type_getm_domain), intent(inout) :: self
+         integer, intent(in) :: runtype
       end subroutine register
 
       module subroutine uvx_depths(self)
@@ -286,7 +287,7 @@ END SUBROUTINE domain_configure
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE domain_initialize(self)
+SUBROUTINE domain_initialize(self,runtype)
 
    !! Configure the type_grid
 
@@ -294,6 +295,7 @@ SUBROUTINE domain_initialize(self)
 
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
+   integer, intent(in) :: runtype
 
 !  Local constants
 
@@ -304,7 +306,7 @@ SUBROUTINE domain_initialize(self)
 
    call self%metrics()
    call self%uvx_depths()
-   call self%register()
+   call self%register(runtype)
    where (self%T%mask > 0)
       self%T%z = 0._real64
       self%T%zo = 0._real64
