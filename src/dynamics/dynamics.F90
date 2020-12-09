@@ -89,7 +89,7 @@ END SUBROUTINE dynamics_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE dynamics_initialize(self,domain,advection,vertical_diffusion)
+SUBROUTINE dynamics_initialize(self,runtype,domain,advection,vertical_diffusion)
 
    !! Initialize all dynamical components
 
@@ -97,6 +97,7 @@ SUBROUTINE dynamics_initialize(self,domain,advection,vertical_diffusion)
 
 !  Subroutine arguments
    class(type_getm_dynamics), intent(inout) :: self
+   integer, intent(in) :: runtype
    class(type_getm_domain), intent(inout), target :: domain
    class(type_advection), intent(in), target :: advection
    class(type_vertical_diffusion), intent(in), target :: vertical_diffusion
@@ -108,47 +109,9 @@ SUBROUTINE dynamics_initialize(self,domain,advection,vertical_diffusion)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('dynamics_initialize()',level=1)
    call self%sealevel%initialize(domain)
-   call self%pressure%initialize(domain)
-   call self%momentum%initialize(domain,advection,vertical_diffusion)
+   call self%pressure%initialize(runtype,domain)
+   call self%momentum%initialize(runtype,domain,advection,vertical_diffusion)
 END SUBROUTINE dynamics_initialize
-
-!---------------------------------------------------------------------------
-
-SUBROUTINE dynamics_do_2d(logs)
-
-   !! Advection/diffusion of the temperature field
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_logging), intent(in) :: logs
-
-!  Local constants
-
-!  Local variables
-   integer :: rc
-!---------------------------------------------------------------------------
-!KB   if (associated(self%logs)) call self%logs%info('dynamics_do_2d()',level=1)
-END SUBROUTINE dynamics_do_2d
-
-!---------------------------------------------------------------------------
-
-SUBROUTINE dynamics_do_3d(logs)
-
-   !! Advection/diffusion of the temperature field
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_logging), intent(in) :: logs
-
-!  Local constants
-
-!  Local variables
-   integer :: rc
-!---------------------------------------------------------------------------
-!KB   if (associated(self%logs)) call logs%info('dynamics_do_3d()',level=1)
-END SUBROUTINE dynamics_do_3d
 
 !---------------------------------------------------------------------------
 

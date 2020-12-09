@@ -9,6 +9,7 @@ INTERFACE
       real(real64), intent(in) :: buoy(_T3_)
 #undef _T3_
    end subroutine blumberg_mellor
+
    module subroutine init_shchepetkin_mcwilliams(self)
       class(type_getm_pressure), intent(inout) :: self
    end subroutine init_shchepetkin_mcwilliams
@@ -18,6 +19,7 @@ INTERFACE
       real(real64), intent(in) :: buoy(_T3_)
 #undef _T3_
    end subroutine shchepetkin_mcwilliams
+
 END INTERFACE
 
 ENUM, BIND(C)
@@ -34,13 +36,14 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE pressure_internal_initialize(self)
+module SUBROUTINE pressure_internal_initialize(self,runtype)
    !! Internal/baroclinic pressure gradients
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_pressure), intent(inout) :: self
+   integer, intent(in) :: runtype
 
 !  Local constants
 
@@ -55,27 +58,29 @@ module SUBROUTINE pressure_internal_initialize(self)
    call mm_s('idpdx',self%idpdx,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
    call mm_s('idpdy',self%idpdy,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
 #endif
-   call self%fm%register('idpdx', 'Pa/m', 'internal pressure gradient - x', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_3d_ids), &
+   if (runtype > 2) then
+      call self%fm%register('idpdx', 'Pa/m', 'internal pressure gradient - x', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_3d_ids), &
     !KB                        output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='baroclinicity', field=f)
-   call self%fm%send_data('idpdx', self%idpdx(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
-   call self%fm%register('idpdy', 'Pa/m', 'internal pressure gradient - y', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_3d_ids), &
+                            part_of_state=.false., &
+                            category='baroclinicity', field=f)
+      call self%fm%send_data('idpdx', self%idpdx(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      call self%fm%register('idpdy', 'Pa/m', 'internal pressure gradient - y', &
+                            standard_name='', &
+                            dimensions=(self%domain%T%dim_3d_ids), &
     !KB                        output_level=output_level_debug, &
-                         part_of_state=.false., &
-                         category='baroclinicity', field=f)
-   call self%fm%send_data('idpdy', self%idpdy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
-   end associate TGrid
+                            part_of_state=.false., &
+                            category='baroclinicity', field=f)
+      call self%fm%send_data('idpdy', self%idpdy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
 
-   select case (self%method_internal_pressure)
-      case(method_blumberg_mellor)
-      case(method_shchepetkin_mcwilliams)
-         call init_shchepetkin_mcwilliams(self)
-   end select
+      select case (self%method_internal_pressure)
+         case(method_blumberg_mellor)
+         case(method_shchepetkin_mcwilliams)
+            call init_shchepetkin_mcwilliams(self)
+      end select
+   end if
+   end associate TGrid
 END SUBROUTINE pressure_internal_initialize
 
 !-----------------------------------------------------------------------------
@@ -104,11 +109,6 @@ module SUBROUTINE pressure_internal(self,buoy)
       case(method_shchepetkin_mcwilliams)
          call shchepetkin_mcwilliams(self,buoy)
    end select
-
-#if 0
-   self%SxB(i,j)=-SUM(self%idpdx(i,j,1:))
-   self%SyB(i,j)=-SUM(self%idpdy(i,j,1:))
-#endif
 END SUBROUTINE pressure_internal
 
 !---------------------------------------------------------------------------

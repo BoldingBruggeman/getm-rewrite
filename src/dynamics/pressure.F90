@@ -77,8 +77,9 @@ MODULE getm_pressure
          class(type_getm_pressure), intent(inout) :: self
          real(real64), intent(in) :: buoy(:,:,:)
       end subroutine pressure_internal
-      module subroutine pressure_internal_initialize(self)
+      module subroutine pressure_internal_initialize(self,runtype)
          class(type_getm_pressure), intent(inout) :: self
+         integer, intent(in) :: runtype
       end subroutine pressure_internal_initialize
    END INTERFACE
 
@@ -114,14 +115,14 @@ END SUBROUTINE pressure_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE pressure_initialize(self,domain)
-
-   !! Initialize all dynamical components
+SUBROUTINE pressure_initialize(self,runtype,domain)
+   !! Initialize all pressure components
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_pressure), intent(inout) :: self
+   integer, intent(in) :: runtype
    class(type_getm_domain), intent(in), target :: domain
 
 !  Local constants
@@ -154,7 +155,7 @@ SUBROUTINE pressure_initialize(self,domain)
       call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
 
    end if
-   call self%internal_initialize()
+   call self%internal_initialize(runtype)
    end associate TGrid
 END SUBROUTINE pressure_initialize
 
