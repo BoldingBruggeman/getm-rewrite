@@ -98,7 +98,7 @@ END SUBROUTINE physics_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
+SUBROUTINE physics_initialize(self,runtype,domain,advection,vertical_diffusion)
 
    !! Initialize all dynamical components
 
@@ -106,6 +106,7 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
 
 !  Subroutine arguments
    class(type_getm_physics), intent(inout) :: self
+   integer, intent(in) :: runtype
    class(type_getm_domain), intent(in), target :: domain
    class(type_advection), intent(in), target :: advection
    class(type_vertical_diffusion), intent(in), target :: vertical_diffusion
@@ -116,13 +117,17 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('physics_initialize()',level=1)
 
-   call self%radiation%initialize(domain)
-   call self%salinity%initialize(domain,advection,vertical_diffusion)
-   call self%temperature%initialize(domain,advection,vertical_diffusion)
-   call self%density%initialize(domain)
-   call self%density%density(self%salinity%S,self%temperature%T)
-   call self%density%buoyancy()
-   call self%mixing%initialize(domain)
+   if (runtype > 2) then
+      call self%radiation%initialize(domain)
+      call self%salinity%initialize(domain,advection,vertical_diffusion)
+      call self%temperature%initialize(domain,advection,vertical_diffusion)
+      call self%density%initialize(domain)
+      call self%density%density(self%salinity%S,self%temperature%T)
+      call self%density%buoyancy()
+   end if
+   if (runtype > 1) then
+      call self%mixing%initialize(domain)
+   end if
 END SUBROUTINE physics_initialize
 
 !---------------------------------------------------------------------------
