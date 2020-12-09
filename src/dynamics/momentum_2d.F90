@@ -2,26 +2,9 @@
 
 !!{!./pages/momentum_2d.md!}
 
-!> @note
-!> self%UEx(i,j)+self%SlUx(i,j)+Slr
-!> and
-!> self%VEx(i,j)+self%SlVx(i,j)+Slr
-
-!> should be replaced with:
-
-!> SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
-
-!> to be consistent with the old GETM documentation
-!>
-!> Ua, Va could be defined in here
-!>
-!> @endnote
-
 SUBMODULE (getm_momentum) momentum_2d_smod
 
 CONTAINS
-
-!KB      real(real64), dimension(:,:), allocatable :: Ua,Va
 
 !---------------------------------------------------------------------------
 
@@ -69,13 +52,14 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('An',self%An,self%U,def=0._real64,stat=stat)
    call mm_s('ru',self%ru,self%U,def=0._real64,stat=stat)
    call mm_s('rv',self%rv,self%V,def=0._real64,stat=stat)
-!   call mm_s('taub',self%taub,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-!   call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
-!   call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
-!   call mm_s('rru',self%rru,self%U,def=0._real64,stat=stat)
-!   call mm_s('rrv',self%rrv,self%V,def=0._real64,stat=stat)
+   call mm_s('rru',self%rru,self%U,def=0._real64,stat=stat)
+   call mm_s('rrv',self%rrv,self%V,def=0._real64,stat=stat)
    call mm_s('zub',self%zub,self%U,def=0._real64,stat=stat)
+   call mm_s('zub0',self%zub0,self%U,def=0._real64,stat=stat)
    call mm_s('zvb',self%zvb,self%V,def=0._real64,stat=stat)
+   call mm_s('zvb0',self%zvb0,self%V,def=0._real64,stat=stat)
+   call mm_s('u1',self%u1,self%U,def=0._real64,stat=stat)
+   call mm_s('v1',self%v1,self%V,def=0._real64,stat=stat)
 
 !KB
 !if (self%advection_scheme > 0) then
@@ -122,12 +106,14 @@ END SUBROUTINE uv_initialize_2d
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE uv_momentum_2d(self,dt,tausx,tausy,dpdx,dpdy)
+MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
+   integer, intent(in) :: runtype
+      !! model runtype
    real(real64), intent(in) :: dt
       !! timestep [s]
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
@@ -143,20 +129,23 @@ MODULE SUBROUTINE uv_momentum_2d(self,dt,tausx,tausy,dpdx,dpdy)
    logical :: ufirst=.false.
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_momentum_2d()',level=2)
-!KB call uv_advection_2d()
+   call self%bottom_friction_2d(runtype)
+   call self%uv_advection_2d(dt)
+   call self%uv_diffusion_2d(dt)
    if(ufirst) then
-      call v_cor(self)
       call u_2d(self,dt,tausx,dpdx)
-      call u_cor(self)
+      call self%coriolis_fu()
       call v_2d(self,dt,tausy,dpdy)
+      call self%coriolis_fv()
       ufirst = .false.
    else
-      call u_cor(self)
       call v_2d(self,dt,tausy,dpdy)
-      call v_cor(self)
+      call self%coriolis_fv()
       call u_2d(self,dt,tausx,dpdx)
+      call self%coriolis_fu()
       ufirst = .true.
    end if
+   call self%velocities_2d()
 END SUBROUTINE uv_momentum_2d
 
 !---------------------------------------------------------------------------
@@ -180,10 +169,9 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
 !  Local constants
 
 !  Local variables
-   integer :: i,j
    real(real64) :: tausu
-!KB
    real(real64) :: Slr
+   integer :: i,j
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('u_2d()',level=3)
    UGrid: associate( UG => self%domain%U )
@@ -212,56 +200,6 @@ END SUBROUTINE u_2d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE u_cor(self)
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
-      !! GETM momentum type
-
-!  Local constants
-
-!  Local variables
-   real(real64) :: Uloc, cord_curv=0._real64
-   integer :: i,j
-!---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('u_cor()',level=3)
-   ! Semi-implicit treatment of Coriolis force for V-momentum eq.
-   TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
-   XGrid: associate( XG => self%domain%X )
-   do j=VG%jmin,VG%jmax
-      do i=VG%imin,VG%imax
-         if(VG%mask(i,j) .ge. 1) then
-#ifdef NEW_CORI
-            ! Espelid et al. [2000], IJNME 49, 1521-1545
-            Uloc= &
-             ( self%U(i,j  )/sqrt(UG%D(i,j  ))+ self%U(i-1,j  )/sqrt(UG%D(i-1,j  ))  &
-             + self%U(i,j+1)/sqrt(UG%D(i,j+1))+ self%U(i-1,j+1)/sqrt(UG%D(i-1,j+1))) &
-               *0.25_real64*sqrt(VG%D(i,j))
-#else
-            Uloc=0.25_real64*(self%U(i-1,j)+self%U(i,j)+self%U(i-1,j+1)+self%U(i,j+1))
-#endif
-            if (self%domain%domain_type /= 1) then
-               cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j)) &
-                         -Uloc*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%inv_area(i,j)
-            end if
-            self%fU(i,j)=(cord_curv+VG%cor(i,j))*Uloc
-         else
-            self%fU(i,j)= 0._real64
-         end if
-      end do
-   end do
-   end associate XGrid
-   end associate VGrid
-   end associate UGrid
-   end associate TGrid
-END SUBROUTINE u_cor
-
-!---------------------------------------------------------------------------
-
 SUBROUTINE v_2d(self,dt,taus,dpdy)
 
    IMPLICIT NONE
@@ -281,10 +219,9 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
 !  Local constants
 
 !  Local variables
-   integer :: i,j
    real(real64) :: tausv
-!KB
    real(real64) :: Slr
+   integer :: i,j
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('v_2d()',level=3)
    VGrid: associate( VG => self%domain%V )
@@ -310,56 +247,6 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
    end do
    end associate VGrid
 END SUBROUTINE v_2d
-
-!---------------------------------------------------------------------------
-
-SUBROUTINE v_cor(self)
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
-      !! GETM momentum type
-
-!  Local constants
-
-!  Local variables
-   integer :: i,j
-   real(real64) :: Vloc, cord_curv
-!---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('v_cor()',level=3)
-   ! Semi-implicit treatment of Coriolis force for U-momentum eq.
-   TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
-   XGrid: associate( XG => self%domain%X )
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
-         if(UG%mask(i,j) .ge. 1) then
-#ifdef NEW_CORI
-            ! Espelid et al. [2000], IJNME 49, 1521-1545
-            Vloc= &
-             ( self%V(i,j  )/sqrt(VG%D(i,j  ))+ self%V(i-1,j  )/sqrt(VG%D(i-1,j  ))  &
-             + self%V(i,j+1)/sqrt(VG%D(i,j+1))+ self%V(i-1,j+1)/sqrt(VG%D(i-1,j+1))) &
-               *0.25_real64*sqrt(UG%D(i,j))
-#else
-            Vloc=0.25_real64*( self%V(i-1,j)+self%V(i,j)+self%V(i-1,j+1)+self%V(i,j+1))
-#endif
-            if (self%domain%domain_type /= 1) then
-               cord_curv=(Vloc*(TG%dy(i+1,j)-TG%dy(i,j))) &
-                         +self%U(i,j)*(XG%dx(i,j)-XG%dx(i,j-1))/UG%D(i,j)*UG%inv_area(i,j)
-            end if
-            self%fV(i,j)=(cord_curv+UG%cor(i,j))*Vloc
-         else
-            self%fV(i,j)= 0._real64
-         end if
-      end do
-   end do
-   end associate XGrid
-   end associate VGrid
-   end associate UGrid
-   end associate TGrid
-END subroutine v_cor
 
 !---------------------------------------------------------------------------
 

@@ -1,16 +1,22 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
+!! @note
+!! loop boundaries in w_momentum
+!! @endnote
+
+
 !!{!./pages/momentum_3d.md!}
 
 SUBMODULE (getm_momentum) momentum_3d_smod
 
-   real(real64) :: ip_fac=1._real64
+   real(real64) :: ip_fac=1._real64 !KB
 
 CONTAINS
 
 !---------------------------------------------------------------------------
 
 MODULE SUBROUTINE uv_initialize_3d(self)
+   !! initialize the 3D momentum sub-module
 
    IMPLICIT NONE
 
@@ -23,6 +29,7 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    integer :: stat
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_initialize_3d()',level=2)
+   TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
    call mm_s('pk',self%pk,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
@@ -36,11 +43,14 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('advqk',self%advqk,self%qk,def=0._real64,stat=stat)
    call mm_s('diffuk',self%diffuk,self%pk,def=0._real64,stat=stat)
    call mm_s('diffvk',self%diffvk,self%qk,def=0._real64,stat=stat)
+   call mm_s('uk',self%uk,self%pk,def=0._real64,stat=stat)
+   call mm_s('vk',self%vk,self%qk,def=0._real64,stat=stat)
+   call mm_s('taub',self%taub,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
+   call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
 !KB if (self%advection_scheme > 0) then
-   TGrid: associate( TG => self%domain%T )
    call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
    call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
-   end associate TGrid
 !KBend if
    call mm_s('num',self%num,self%pk,def=0._real64,stat=stat)
    call mm_s('ea2',self%ea2,self%pk,def=0._real64,stat=stat)
@@ -48,12 +58,13 @@ MODULE SUBROUTINE uv_initialize_3d(self)
 
    end associate VGrid
    end associate UGrid
+   end associate TGrid
 END SUBROUTINE uv_initialize_3d
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE uv_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
-   !! Solve the 3D momemtum equations
+MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
+   !! Solve the horizontal 3D momemtum equations - pk and qk
 
    IMPLICIT NONE
 
@@ -82,65 +93,34 @@ MODULE SUBROUTINE uv_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visco
 !  Local constants
 
 !  Local variables
-   logical, save :: ufirst=.false. ! should likely not have save
+   logical, save :: ufirst=.false. !KB should likely not have save
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_momentum_3d()',level=2)
+   call self%bottom_friction_3d()
    if(ufirst) then
-      call pk_cor(self)
       call pk_3d(self,dt,tausx,dpdx,idpdy,viscosity)
-      call qk_cor(self)
+      call self%coriolis_fpk()
       call qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
+      call self%coriolis_fqk()
       ufirst = .false.
    else
-      call qk_cor(self)
       call qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
-      call pk_cor(self)
+      call self%coriolis_fqk()
       call pk_3d(self,dt,tausx,dpdx,idpdy,viscosity)
+      call self%coriolis_fpk()
       ufirst = .true.
    end if
-END SUBROUTINE uv_momentum_3d
-
-!---------------------------------------------------------------------------
-
-MODULE SUBROUTINE w_momentum_3d(self,dt)
-
-   IMPLICIT NONE
-
-   class(type_getm_momentum), intent(inout) :: self
-   real(real64), intent(in) :: dt
-      !! timestep [s]
-
-!  Local constants
-
-!  Local variables
-   integer :: i,j,k
-   real(real64) :: dtm1
-!---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('w_momentum_3d()',level=2)
-   dtm1=1._real64/dt
-   TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
-   do k=TG%l(3),TG%u(3)-1
-      do j=TG%l(2)+1,TG%u(2)
-         do i=TG%l(1)+1,TG%u(1)
-            if (TG%mask(i,j) == 1) then
-                  self%ww(i,j,k) = self%ww(i,j,k-1)-(TG%hn(i,j,k)-TG%ho(i,j,k))*dtm1 &
-                              -(self%pk(i,j,k)*UG%dy(i,j)-self%pk(i-1,j  ,k)*UG%dy(i-1,j) &
-                               +self%qk(i,j,k)*VG%dx(i,j)-self%qk(i  ,j-1,k)*VG%dx(i,j-1)) &
-                               *TG%inv_area(i,j)
-            end if
-         end do
-      end do
-   end do
-   end associate VGrid
-   end associate UGrid
-   end associate TGrid
-END SUBROUTINE w_momentum_3d
+   call self%w_momentum_3d(dt)
+   call self%velocities_3d()
+   call self%uv_advection_3d(dt)
+   call self%uv_diffusion_3d(dt)
+   call self%stresses()
+END SUBROUTINE uvw_momentum_3d
 
 !---------------------------------------------------------------------------
 
 SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
+   !! solve the 3D momentum equation in the local x-direction
 
    IMPLICIT NONE
 
@@ -212,8 +192,6 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             self%pk(i,j,:)=self%pk(i,j,:)/UG%ho(i,j,:)
-!            self%ea2(i,j,:)=self%ea2(i,j,:)/UG%ho(i,j,:)
-!            self%ea4(i,j,:)=self%ea4(i,j,:)/UG%ho(i,j,:)
          end if
       end do
    end do
@@ -240,60 +218,8 @@ END SUBROUTINE pk_3d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE pk_cor(self)
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_momentum), intent(inout) :: self
-      !! GETM momentum type
-
-!  Local constants
-
-!  Local variables
-   real(real64) :: Vloc, cord_curv=0._real64
-   integer :: i,j,k
-!---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('pk_cor()',level=3)
-   TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
-   XGrid: associate( XG => self%domain%X )
-   do k=UG%kmin,UG%kmax
-      do j=UG%jmin,UG%jmax
-         do i=UG%imin,UG%imax
-            if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-#ifdef _ESPELID_
-               Vloc=0.25_real64*sqrt(UG%ho(i,j,k)*( &
-                                    +self%qk(i  ,j  ,k)/sqrt(VG%hvo(i  ,j  ,k)
-                                    +self%qk(i+1,j  ,k)/sqrt(VG%hvo(i+1,j  ,k)
-                                    +self%qk(i  ,j-1,k)/sqrt(VG%hvo(i  ,j-1,k)
-                                    +self%qk(i+1,j-1,k)/sqrt(VG%hvo(i+1,j-1,k)
-                                                  )
-#else
-               Vloc=0.25_real64*(self%qk(i,j  ,k)+self%qk(i+1,j  ,k) &
-                                +self%qk(i,j-1,k)+self%qk(i+1,j-1,k))
-#endif
-               if (self%domain%domain_type /= 1) then
-!KB                  cord_curv=(Vloc*(DYCIP1-DYC)-uu(i,j,k)*(DXX-DXXJM1))/huo(i,j,k)*ARUD1
-                  cord_curv=(Vloc*(TG%dy(i+1,j)-TG%dy(i,j)) &
-                            -self%pk(i,j,k)*(XG%dx(i,j)-XG%dx(i,j-1))) &
-                            /UG%ho(i,j,k)*UG%inv_area(i,j)
-               end if
-               self%fqk(i,j,k)=(cord_curv+UG%cor(i,j))*Vloc
-            end if
-         end do
-      end do
-   end do
-   end associate XGrid
-   end associate VGrid
-   end associate UGrid
-   end associate TGrid
-END SUBROUTINE pk_cor
-
-!---------------------------------------------------------------------------
-
 SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
+   !! solve the 3D momentum equation in the local y-direction
 
    IMPLICIT NONE
 
@@ -344,7 +270,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
       end do
    end do
 
-   ! Additional matrix elements for inner,  surface and bottom layer
+   ! Additional matrix elements for inner, surface and bottom layer
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
@@ -365,8 +291,6 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             self%qk(i,j,:)=self%qk(i,j,:)/VG%ho(i,j,:)
-!KB            self%ea2(i,j,:)=self%ea2(i,j,:)/VG%ho(i,j,:)
-!KB            self%ea4(i,j,:)=self%ea4(i,j,:)/VG%ho(i,j,:)
          end if
       end do
    end do
@@ -393,56 +317,42 @@ END SUBROUTINE qk_3d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE qk_cor(self)
+MODULE SUBROUTINE w_momentum_3d(self,dt)
+   !! Solve the vertical momemtum equation - w
 
    IMPLICIT NONE
 
-!  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
-      !! GETM momentum type
+   real(real64), intent(in) :: dt
+      !! timestep [s]
 
 !  Local constants
 
 !  Local variables
-   real(real64) :: Uloc, cord_curv=0._real64
+   real(real64) :: dtm1
    integer :: i,j,k
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('qk_cor()',level=3)
+   if (associated(self%logs)) call self%logs%info('w_momentum_3d()',level=3)
+   dtm1=1._real64/dt
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
-   XGrid: associate( XG => self%domain%X )
-   do k=VG%kmin,VG%kmax
-      do j=VG%jmin,VG%jmax
-         do i=VG%imin,VG%imax
-            if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-#ifdef _ESPELID_
-               Uloc=0.25_real64*sqrt(VG%ho(i,j,k)*( &
-                                    +self%pk(i  ,j  ,k)/sqrt(UG%ho(i  ,j  ,k)
-                                    +self%pk(i-1,j  ,k)/sqrt(UG%ho(i-1,j  ,k)
-                                    +self%pk(i  ,j+1,k)/sqrt(UG%ho(i  ,j+1,k)
-                                    +self%pk(i-1,j+1,k)/sqrt(UG%ho(i-1,j+1,k)
-                                                  )
-#else
-               Uloc=0.25_real64*(self%pk(i,j  ,k)+self%pk(i-1,j  ,k) &
-                                +self%pk(i,j+1,k)+self%pk(i-1,j+1,k))
-#endif
-               if (self%domain%domain_type /= 1) then
-!KB                  cord_curv=(Vloc*(DYCIP1-DYC)-uu(i,j,k)*(DXX-DXXJM1))/huo(i,j,k)*ARUD1
-                  cord_curv=(-Uloc*(TG%dx(i,j+1)-TG%dx(i,j)) &
-                            +self%qk(i,j,k)*(XG%dy(i,j)-XG%dy(i-1,j))) &
-                            /VG%ho(i,j,k)*VG%inv_area(i,j)
-               end if
-               self%fpk(i,j,k)=(cord_curv+VG%cor(i,j))*Uloc
+   do k=TG%l(3),TG%u(3)-1
+      do j=TG%l(2)+1,TG%u(2)
+         do i=TG%l(1)+1,TG%u(1)
+            if (TG%mask(i,j) == 1) then
+                  self%ww(i,j,k) = self%ww(i,j,k-1)-(TG%hn(i,j,k)-TG%ho(i,j,k))*dtm1 &
+                              -(self%pk(i,j,k)*UG%dy(i,j)-self%pk(i-1,j  ,k)*UG%dy(i-1,j) &
+                               +self%qk(i,j,k)*VG%dx(i,j)-self%qk(i  ,j-1,k)*VG%dx(i,j-1)) &
+                               *TG%inv_area(i,j)
             end if
          end do
       end do
    end do
-   end associate XGrid
    end associate VGrid
    end associate UGrid
    end associate TGrid
-END SUBROUTINE qk_cor
+END SUBROUTINE w_momentum_3d
 
 !---------------------------------------------------------------------------
 

@@ -8,13 +8,14 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE momentum_register(self)
+MODULE SUBROUTINE momentum_register(self,runtype)
    !! Allocate all domain related variables
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
+   integer, intent(in) :: runtype
 
 !  Local constants
 
@@ -43,6 +44,24 @@ module SUBROUTINE momentum_register(self)
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('V', self%V(VG%imin:VG%imax,VG%jmin:VG%jmax))
+
+   call self%fm%register('ru', 'm2/s2', 'friction factor in local x-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%U%dim_2d_ids), &
+!KB                         output_level=output_level_debug, &
+                         part_of_state=.true., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('ru', self%ru(UG%imin:UG%imax,UG%jmin:UG%jmax))
+
+   call self%fm%register('rv', 'm2/s2', 'friction factor in local y-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%V%dim_2d_ids), &
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.true., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('rv', self%rv(VG%imin:VG%imax,VG%jmin:VG%jmax))
 
    call self%fm%register('fU', 'm2/s2', 'Coriolis term in local x-direction', &
                          standard_name='', &
@@ -136,6 +155,28 @@ module SUBROUTINE momentum_register(self)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('Va', self%Va(UG%imin:UG%imax,UG%jmin:UG%jmax))
 
+   if (runtype > 1) then
+   call self%fm%register('pk', 'm2/s', 'transport in local x-direction (3D)', &
+                         standard_name='', &
+                         dimensions=(self%domain%U%dim_3d_ids), &
+                         part_of_state=.true., &
+                         category='3d', field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('pk', self%pk(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
+   call self%fm%register('qk', 'm2/s', 'transport in local y-direction (3D)', &
+                         standard_name='', &
+                         dimensions=(self%domain%V%dim_3d_ids), &
+                         part_of_state=.true., &
+                         category='3d', field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('qk', self%qk(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
+   call self%fm%register('ww', 'm/s', 'grid relataed vertical velocity', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_3d_ids), &
+                         part_of_state=.true., &
+                         category='3d', field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('ww', self%ww(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    call self%fm%register('Ui', 'm2/s', 'integrated 1D transport in local x-direction', &
                          standard_name='', &
                          dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
@@ -143,6 +184,7 @@ module SUBROUTINE momentum_register(self)
                          part_of_state=.false., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
+
    call self%fm%send_data('Ui', self%Ui(UG%imin:UG%imax,UG%jmin:UG%jmax))
    call self%fm%register('Vi', 'm2/s', 'integrated 1D transport in local y-direction', &
                          standard_name='', &
@@ -221,27 +263,7 @@ module SUBROUTINE momentum_register(self)
       call self%fm%send_data('SyF', self%SyF(UG%imin:UG%imax,UG%jmin:UG%jmax))
    end if
 
-   call self%fm%register('pk', 'm2/s', 'transport in local x-direction (3D)', &
-                         standard_name='', &
-                         dimensions=(self%domain%U%dim_3d_ids), &
-                         part_of_state=.true., &
-                         category='3d', field=f)
-   call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('pk', self%pk(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
-   call self%fm%register('qk', 'm2/s', 'transport in local y-direction (3D)', &
-                         standard_name='', &
-                         dimensions=(self%domain%V%dim_3d_ids), &
-                         part_of_state=.true., &
-                         category='3d', field=f)
-   call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('qk', self%qk(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
-   call self%fm%register('ww', 'm/s', 'grid relataed vertical velocity', &
-                         standard_name='', &
-                         dimensions=(self%domain%T%dim_3d_ids), &
-                         part_of_state=.true., &
-                         category='3d', field=f)
-   call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('ww', self%ww(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+   end if
    end associate VGrid
    end associate UGrid
    end associate TGrid
