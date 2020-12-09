@@ -22,7 +22,7 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('uv_advection_2d()',level=2)
+   if (associated(self%logs)) call self%logs%info('uv_advection_2d()',level=3)
    XGrid: associate( XG => self%domain%X )
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
@@ -87,7 +87,7 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
 !  Local variables
    integer :: i,j,k
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('uv_advection_3d()',level=2)
+   if (associated(self%logs)) call self%logs%info('uv_advection_3d()',level=3)
    XGrid: associate( XG => self%domain%X )
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
@@ -138,7 +138,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('slow_advection()',level=2)
+   if (associated(self%logs)) call self%logs%info('slow_advection()',level=3)
    XGrid: associate( XG => self%domain%X )
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )

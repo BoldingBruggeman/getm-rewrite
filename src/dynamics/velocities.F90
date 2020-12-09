@@ -18,7 +18,7 @@ MODULE SUBROUTINE velocities_2d(self)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('velocities_2d()',level=2)
+   if (associated(self%logs)) call self%logs%info('velocities_2d()',level=3)
 
    UGrid: associate( UG => self%domain%U )
    where (UG%mask > 0)
@@ -51,8 +51,7 @@ MODULE SUBROUTINE velocities_3d(self)
 !  Local variables
    integer :: i,j,k
 !---------------------------------------------------------------------------
-   if(associated(self%logs)) call self%logs%info('velocities_3d()',level=2)
-
+   if(associated(self%logs)) call self%logs%info('velocities_3d()',level=3)
    UGrid: associate( UG => self%domain%U )
    do k=UG%l(3),UG%u(3)
       do j=UG%l(2),UG%u(2)
@@ -83,7 +82,6 @@ MODULE SUBROUTINE velocities_3d(self)
 END SUBROUTINE velocities_3d
 
 !---------------------------------------------------------------------------
-
 
 MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
    !!{!./code/velocity_shear_frequency.md!}
