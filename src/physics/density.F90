@@ -155,7 +155,7 @@ SUBROUTINE density_calculate(self,S,T,p)
 !  Local variables
    integer :: i,j,k
 !-----------------------------------------------------------------------------
-!KB   call plogs%info('density_calculate()',2)
+   if (associated(self%logs)) call self%logs%info('density_calculate()',2)
 
 #if 1
    TGrid: associate( TG => self%domain%T )
@@ -197,6 +197,7 @@ SUBROUTINE buoyancy_calculate(self)
 !  Local variables
    integer :: i, j, k
 !-----------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('buoyancy_calculate()',3)
    TGrid: associate( TG => self%domain%T )
    do k=TG%l(3),TG%u(3)
       do j=TG%l(2),TG%u(2)
@@ -238,7 +239,7 @@ SUBROUTINE brunt_vaisala_calculate(self)
    real(real64) :: gravity, rho0 !!!! KB
    real(real64) :: dz, NNc, NNe, NNn, NNw, NNs
 !-----------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('brunt_vaisala()',2)
+   if (associated(self%logs)) call self%logs%info('brunt_vaisala_calculate()',3)
    TGrid: associate( TG => self%domain%T )
    do j=TG%jmin-1,TG%jmax+1
       do i=TG%imin-1,TG%imax+1
