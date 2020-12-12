@@ -50,28 +50,28 @@ class DistributedArray:
 
         self.sendtasks = []
         self.recvtasks = []
-        def add_task(neighbor, inner, outer):
+        def add_task(neighbor, sendtag, recvtag, inner, outer):
             assert inner.shape == outer.shape
             if neighbor is not None:
-                self.sendtasks.append((neighbor, inner, numpy.empty_like(inner)))
-                self.recvtasks.append((neighbor, outer, numpy.empty_like(outer)))
+                self.sendtasks.append((neighbor, sendtag, inner, numpy.empty_like(inner)))
+                self.recvtasks.append((neighbor, recvtag, outer, numpy.empty_like(outer)))
 
-        add_task(tiling.left, field[..., halo:-halo, halo:halo*2], field[..., halo:-halo, :halo])
-        add_task(tiling.right, field[..., halo:-halo, -halo*2:-halo], field[..., halo:-halo, -halo:])
-        add_task(tiling.top, field[..., -halo*2:-halo, halo:-halo], field[..., -halo:, halo:-halo])
-        add_task(tiling.bottom, field[..., halo:halo*2, halo:-halo], field[..., :halo, halo:-halo])
-        add_task(tiling.topleft, field[..., -halo*2:-halo, halo:halo*2], field[..., -halo:, :halo])
-        add_task(tiling.topright, field[..., -halo*2:-halo, -halo*2:-halo], field[..., -halo:, -halo:])
-        add_task(tiling.bottomleft, field[..., halo:halo*2, halo:halo*2], field[..., :halo, :halo])
-        add_task(tiling.bottomright, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
+        add_task(tiling.left, 0, 1, field[..., halo:-halo, halo:halo*2], field[..., halo:-halo, :halo])
+        add_task(tiling.right, 1, 0, field[..., halo:-halo, -halo*2:-halo], field[..., halo:-halo, -halo:])
+        add_task(tiling.top, 2, 3, field[..., -halo*2:-halo, halo:-halo], field[..., -halo:, halo:-halo])
+        add_task(tiling.bottom, 3, 2, field[..., halo:halo*2, halo:-halo], field[..., :halo, halo:-halo])
+        add_task(tiling.topleft, 4, 7, field[..., -halo*2:-halo, halo:halo*2], field[..., -halo:, :halo])
+        add_task(tiling.topright, 5, 6, field[..., -halo*2:-halo, -halo*2:-halo], field[..., -halo:, -halo:])
+        add_task(tiling.bottomleft, 6, 5, field[..., halo:halo*2, halo:halo*2], field[..., :halo, :halo])
+        add_task(tiling.bottomright, 7, 4, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
 
     def update_halos(self):
-        recreqs = [self.comm.Irecv(cache, neigbor) for neigbor, _, cache in self.recvtasks]
-        for neigbor, inner, cache in self.sendtasks:
+        recreqs = [self.comm.Irecv(cache, neigbor, tag) for neigbor, tag, _, cache in self.recvtasks]
+        for neigbor, tag, inner, cache in self.sendtasks:
             cache[...] = inner
-            self.comm.Isend(cache, neigbor)
+            self.comm.Isend(cache, neigbor, tag)
         Waitall(recreqs)
-        for _, outer, cache in self.recvtasks:
+        for _, _, outer, cache in self.recvtasks:
             outer[...] = cache
 
     def gather(self, root=0, out=None):
