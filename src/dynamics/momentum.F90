@@ -119,7 +119,7 @@ MODULE getm_momentum
       procedure :: uv_advection_3d => uv_advection_3d
       procedure :: uv_diffusion_3d => uv_diffusion_3d
       procedure :: velocities_3d => velocities_3d
-      procedure :: slow_terms => slow_terms
+      procedure :: slow_momentum_terms => slow_momentum_terms
       procedure :: slow_advection => slow_advection
       procedure :: slow_diffusion => slow_diffusion
       procedure :: slow_bottom_friction => slow_bottom_friction
@@ -246,14 +246,10 @@ MODULE getm_momentum
             !! timestep [s]
       END SUBROUTINE uv_diffusion_3d
 
-      MODULE SUBROUTINE slow_terms(self,dt,idpdx,idpdy)
+      MODULE SUBROUTINE slow_momentum_terms(self,dt)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-         real(real64), intent(in), optional :: idpdx(_T3_)
-         real(real64), intent(in), optional :: idpdy(_T3_)
-#undef _T3_
-      END SUBROUTINE slow_terms
+      END SUBROUTINE slow_momentum_terms
 
       MODULE SUBROUTINE velocities_2d(self)
          class(type_getm_momentum), intent(inout) :: self

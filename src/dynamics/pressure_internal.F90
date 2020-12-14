@@ -85,7 +85,7 @@ END SUBROUTINE pressure_internal_initialize
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE pressure_internal(self,buoy)
+module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
    !! Internal/baroclinic pressure gradients
 
    IMPLICIT NONE
@@ -95,6 +95,10 @@ module SUBROUTINE pressure_internal(self,buoy)
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: buoy(_T3_)
 #undef _T3_
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), intent(inout) :: SxB(_T2_)
+   real(real64), intent(inout) :: SyB(_T2_)
+#undef _T2_
 
 !  Local constants
 
@@ -109,6 +113,23 @@ module SUBROUTINE pressure_internal(self,buoy)
       case(method_shchepetkin_mcwilliams)
          call shchepetkin_mcwilliams(self,buoy)
    end select
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+   if(associated(self%logs)) call self%logs%info('slow_buoyancy()',level=3)
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+         if (UG%mask(i,j) > 0) then
+            SxB(i,j)=-SUM(self%idpdx(i,j,1:))
+         end if
+         if (VG%mask(i,j) > 0) then
+            SyB(i,j)=-SUM(self%idpdy(i,j,1:))
+         end if
+      end do
+   end do
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
 END SUBROUTINE pressure_internal
 
 !---------------------------------------------------------------------------

@@ -73,14 +73,18 @@ MODULE getm_pressure
            !! pressure [Pa]
 #undef _T2_
       end subroutine pressure_surface
-      module subroutine pressure_internal(self,buoy)
-         class(type_getm_pressure), intent(inout) :: self
-         real(real64), intent(in) :: buoy(:,:,:)
-      end subroutine pressure_internal
       module subroutine pressure_internal_initialize(self,runtype)
          class(type_getm_pressure), intent(inout) :: self
          integer, intent(in) :: runtype
       end subroutine pressure_internal_initialize
+      module subroutine pressure_internal(self,buoy,SxB,SyB)
+         class(type_getm_pressure), intent(inout) :: self
+         real(real64), intent(in) :: buoy(:,:,:)
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(inout) :: SxB(_T2_)
+         real(real64), intent(inout) :: SyB(_T2_)
+#undef _T2_
+      end subroutine pressure_internal
    END INTERFACE
 
 !---------------------------------------------------------------------------

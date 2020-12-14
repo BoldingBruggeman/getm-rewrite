@@ -5,9 +5,6 @@
 !>
 !> @endnote
 
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
 MODULE getm_density
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
