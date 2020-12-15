@@ -57,8 +57,11 @@ module SUBROUTINE uvx_depths(self)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uvx_depths()',level=2)
    TGrid: associate( TG => self%T )
-   UGrid: associate( UG => self%U )
+   ! Initialize time varying depths at T-points - U, V and X depths done in loops
+   TG%D = TG%H
+
    ! U-mask
+   UGrid: associate( UG => self%U )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (TG%mask(i,j) == 1 .and. TG%mask(i+1,j) == 1) then
@@ -89,6 +92,7 @@ module SUBROUTINE uvx_depths(self)
                      UG%H(i,j) = 0.5_real64 * ( TG%H(i,j) + TG%H(i+1,j) )
                   end if
             end select
+            UG%D(i,j) = UG%H(i,j)
          end if
       end do
    end do
@@ -126,19 +130,18 @@ module SUBROUTINE uvx_depths(self)
                      VG%H(i,j) = 0.5_real64 * ( TG%H(i,j) + TG%H(i,j+1) )
                   end if
             end select
+            VG%D(i,j) = VG%H(i,j)
          end if
       end do
    end do
    end associate VGrid
 
    XGrid: associate( XG => self%X )
-   UGrid: associate( UG => self%U )
-   VGrid: associate( VG => self%V )
    ! X-mask
    do j=XG%jmin+1,XG%jmax
       do i=XG%imin+1,XG%imax
-         if (TG%mask(i,j) > 0 .and. TG%mask(i+1,j) > 0 .and. &
-             TG%mask(i,j) > 0 .and. TG%mask(i,j+1) > 0) then
+         if (TG%mask(i  ,j  ) > 0 .and. TG%mask(i+1,j) > 0 .and. &
+             TG%mask(i+1,j+1) > 0 .and. TG%mask(i,j+1) > 0) then
             XG%mask(i,j)=1
          end if
       end do
@@ -147,17 +150,11 @@ module SUBROUTINE uvx_depths(self)
    do j=XG%jmin,XG%jmax
       do i=XG%imin,XG%imax
          if (XG%mask(i,j) > 0) then
-            XG%H(i,j) = 0.25_real64*(UG%H(i,j)+UG%H(i+1,j)+VG%H(i,j)+VG%H(i,j+1))
+            XG%H(i,j) = 0.25_real64*(TG%H(i,j)+TG%H(i+1,j)+TG%H(i+1,j+1)+TG%H(i,j+1))
+            XG%D(i,j) = XG%H(i,j)
          end if
       end do
    end do
-   ! Initialize time varying depths in U, V and X points
-   TG%D = TG%H
-   UG%D = UG%H
-   VG%D = VG%H
-   XG%D = XG%H
-   end associate VGrid
-   end associate UGrid
    end associate XGrid
    end associate TGrid
 END SUBROUTINE uvx_depths

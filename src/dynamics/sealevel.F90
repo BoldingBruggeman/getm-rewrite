@@ -1,6 +1,8 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 !! Calculate the time varying sealevel using ...
+!! [kaj](|url|/page//science/momentum.html)
+
 
 MODULE getm_sealevel
 
@@ -125,8 +127,8 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('sealevel_calculate()',level=2)
    TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
+   UGrid: associate( UG => self%domain%U )
    TG%zo = TG%z
    do j=TG%l(2)+1,TG%u(2)
       do i=TG%l(1)+1,TG%u(1)
@@ -141,31 +143,41 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
       end do
    end do
 
-! U-points
+   ! U-points
    UG%zo = UG%z
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
          if (UG%mask(i,j) > 0) then
-            UG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i+1,j) &
-                                      +TG%z(i,j)+TG%z(i+1,j)), &
-                                      -UG%H(i,j)+self%domain%Dmin)
+            UG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i+1,j)+TG%z(i,j)+TG%z(i+1,j)),-UG%H(i,j)+self%domain%Dmin)
          end if
       end do
    end do
+   end associate UGrid
 
-! V-points
+   ! V-points
    VG%zo = VG%z
-   do j=VG%l(2),VG%u(2)
-      do i=VG%l(1),VG%u(1)-1
+   do j=VG%l(2),VG%u(2)-1
+      do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
-            VG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i,j+1) &
-                                      +TG%z(i,j)+TG%z(i,j+1)), &
-                                      -VG%H(i,j)+self%domain%Dmin)
+            VG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i,j+1)+TG%z(i,j)+TG%z(i,j+1)),-VG%H(i,j)+self%domain%Dmin)
          end if
       end do
    end do
    end associate VGrid
-   end associate UGrid
+
+   ! X-points
+   XGrid: associate( XG => self%domain%X )
+   XG%zo = XG%z
+   do j=XG%l(2),XG%u(2)-1
+      do i=XG%l(1),XG%u(1)-1
+         if (XG%mask(i,j) > 0) then
+            XG%z(i,j)=max(0.125_real64*(TG%zo(i,j)+TG%zo(i+1,j)+TG%zo(i+1,j+1)+TG%zo(i,j+1) &
+                                       +TG%z (i,j)+TG%z (i+1,j)+TG%z (i+1,j+1)+TG%z (i,j+1)), &
+                          -XG%H(i,j)+self%domain%Dmin)
+         end if
+      end do
+   end do
+   end associate XGrid
    end associate TGrid
 END SUBROUTINE sealevel_calculate
 

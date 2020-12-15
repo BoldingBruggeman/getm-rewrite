@@ -14,6 +14,7 @@
    !! check dry calculation
    !! calculate depth in X-points - used in e.g. diffusion eq.
    !! dry_{z,u,v} ---> alpha (consistent with old GETM documentation)
+   !! note loop boundaries when using [UVX]G%z directly
    !! @endnote
 
 SUBMODULE (getm_domain) depth_update_smod
@@ -46,7 +47,7 @@ module SUBROUTINE depth_update(self)
 #ifdef USE_MASK
       if (TG%mask(i,j) > 0) then
 #endif
-         TG%D(i,j) = TG%z(i,j)+TG%H(i,j)
+         TG%D(i,j) = TG%H(i,j)+TG%z(i,j)
          TG%alpha(i,j)=max(0._real64,min(1._real64,(self%T%D(i,j)-self%Dmin)/(self%Dcrit-self%Dmin)))
 #ifdef USE_MASK
       end if
@@ -56,51 +57,58 @@ module SUBROUTINE depth_update(self)
 
    UGrid: associate( UG => self%U )
    do j=UG%l(2),UG%u(2)
-      do i=UG%l(1),UG%u(1)-1
+      do i=UG%l(1),UG%u(1)
 #ifdef USE_MASK
       if (UG%mask(i,j) > 0) then
 #endif
+#if 0
          x=max(0.25_real64*(TG%zo(i,j)+TG%zo(i+1,j)+TG%z(i,j)+TG%z(i+1,j)),-UG%H(i,j)+self%Dmin)
          UG%D(i,j) = x+UG%H(i,j)
+#else
+         UG%D(i,j) = UG%H(i,j)+UG%z(i,j)
+#endif
          UG%alpha(i,j)=max(0._real64,min(1._real64,(self%U%D(i,j)-self%Dmin)/(self%Dcrit-self%Dmin)))
 #ifdef USE_MASK
       end if
 #endif
       end do
    end do
+   end associate UGrid
 
    VGrid: associate( VG => self%V )
-   do j=VG%l(2),VG%u(2)-1
+   do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)
 #ifdef USE_MASK
       if (VG%mask(i,j) > 0) then
 #endif
+#if 0
          x=max(0.25_real64*(TG%zo(i,j)+TG%zo(i,j+1)+TG%z(i,j)+TG%z(i,j+1)),-VG%H(i,j)+self%Dmin)
          VG%D(i,j) = x+VG%H(i,j)
+#else
+         VG%D(i,j) = VG%H(i,j)+VG%z(i,j)
+#endif
          VG%alpha(i,j)=max(0._real64,min(1._real64,(self%V%D(i,j)-self%Dmin)/(self%Dcrit-self%Dmin)))
 #ifdef USE_MASK
       end if
 #endif
       end do
    end do
+   end associate VGrid
 
    XGrid: associate( XG => self%X )
-   do j=XG%l(2)+1,XG%u(2)
-      do i=XG%l(1)+1,XG%u(1)
+   do j=XG%l(2),XG%u(2)
+      do i=XG%l(1),XG%u(1)
 #ifdef USE_MASK
       if (XG%mask(i,j) > 0) then
 #endif
-         XG%D(i,j)=max(0.25_real64*(UG%D(i,j)+UG%D(i+1,j)+VG%D(i,j)+VG%D(i,j+1)),-XG%H(i,j)+self%Dmin)
-!KB
-         XG%alpha(i,j)=1._real64
+         XG%D(i,j) = XG%H(i,j)+XG%z(i,j)
+         XG%alpha(i,j)=1._real64 !KB
 #ifdef USE_MASK
       end if
 #endif
       end do
    end do
    end associate XGrid
-   end associate VGrid
-   end associate UGrid
    end associate TGrid
 END SUBROUTINE depth_update
 
