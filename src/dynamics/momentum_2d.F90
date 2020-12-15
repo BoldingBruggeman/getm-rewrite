@@ -61,6 +61,8 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('u1',self%u1,self%U,def=0._real64,stat=stat)
    call mm_s('v1',self%v1,self%V,def=0._real64,stat=stat)
 
+   if (self%Am0 > 0_real64) self%Am=self%Am0
+
 !KB
 !if (self%advection_scheme > 0) then
    TGrid: associate( TG => self%domain%T )

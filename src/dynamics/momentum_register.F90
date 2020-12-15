@@ -177,6 +177,48 @@ MODULE SUBROUTINE momentum_register(self,runtype)
                          category='3d', field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('ww', self%ww(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+
+   call self%fm%register('taus', 'm2/s', 'total surface stress at T-points', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_2d_ids), &
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('taus', self%taus(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%register('taub', 'm2/s', 'total bottom stress at T-points', &
+                         standard_name='', &
+                         dimensions=(self%domain%T%dim_2d_ids), &
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('taub', self%taub(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%register('taubx', 'm2/s', 'bottom momentum flux in local x-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%U%dim_2d_ids), &
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('taubx', self%taubx(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   call self%fm%register('tauby', 'm2/s', 'bottom momentum flux in local y-direction', &
+                         standard_name='', &
+                         dimensions=(self%domain%V%dim_2d_ids), &
+  !KB                       output_level=output_level_debug, &
+                         part_of_state=.false., &
+                         category='2d', field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('tauby', self%tauby(VG%imin:VG%imax,VG%jmin:VG%jmax))
+
+   call self%fm%register('SS', 's-1', 'shear stress', &
+                         standard_name='', &
+                         dimensions=(self%domain%V%dim_3d_ids), &
+                         part_of_state=.true., &
+                         category='3d', field=f)
+   call f%attributes%set('axis', 'X Y Z T')
+   call self%fm%send_data('SS', self%SS(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+
    call self%fm%register('Ui', 'm2/s', 'integrated 1D transport in local x-direction', &
                          standard_name='', &
                          dimensions=(self%domain%U%dim_2d_ids), & ! should be T point
@@ -184,8 +226,8 @@ MODULE SUBROUTINE momentum_register(self,runtype)
                          part_of_state=.false., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
-
    call self%fm%send_data('Ui', self%Ui(UG%imin:UG%imax,UG%jmin:UG%jmax))
+
    call self%fm%register('Vi', 'm2/s', 'integrated 1D transport in local y-direction', &
                          standard_name='', &
                          dimensions=(self%domain%V%dim_2d_ids), & ! should be T point

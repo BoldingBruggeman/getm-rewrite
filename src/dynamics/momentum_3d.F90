@@ -45,9 +45,11 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('diffvk',self%diffvk,self%qk,def=0._real64,stat=stat)
    call mm_s('uk',self%uk,self%pk,def=0._real64,stat=stat)
    call mm_s('vk',self%vk,self%qk,def=0._real64,stat=stat)
+   call mm_s('taus',self%taus,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('taub',self%taub,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
+   call mm_s('SS',self%SS,TG%l,TG%u,def=0._real64,stat=stat)
 !KB if (self%advection_scheme > 0) then
    call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
    call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
@@ -113,8 +115,11 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    call self%w_momentum_3d(dt)
    call self%velocities_3d()
    call self%uv_advection_3d(dt)
-   call self%uv_diffusion_3d(dt)
-   call self%stresses()
+#if 0
+   call self%uv_diffusion_3d(dt) !KB - makes model go wrong
+#endif
+   call self%shear_frequency(viscosity)
+   call self%stresses(tausx,tausy)
 END SUBROUTINE uvw_momentum_3d
 
 !---------------------------------------------------------------------------

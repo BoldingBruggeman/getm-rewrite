@@ -156,7 +156,7 @@ MODULE SUBROUTINE numerical_damping(self,U,V)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   call self%logs%info('numerical_damping()',level=2)
+   if (associated(self%logs)) call self%logs%info('numerical_damping()',level=3)
    TGrid: associate( TG => self%domain%T )
    XGrid: associate( XG => self%domain%X )
    UGrid: associate( UG => self%domain%U )
@@ -273,11 +273,29 @@ MODULE SUBROUTINE diffusion_driver(self,u,v,D,DU,DV,diffu,diffv)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   call self%logs%info('diffusion_driver()',level=2)
+!KB   if (associated(self%logs)) call self%logs%info('diffusion_driver()',level=2)
    TGrid: associate( TG => self%domain%T )
    XGrid: associate( XG => self%domain%X )
    UGrid: associate( UG => self%domain%U )
    ! Central for dx(2*Am*dx(U/DU))
+#if 0
+write(*,*) lbound(u)
+write(*,*) ubound(u)
+write(*,*) lbound(v)
+write(*,*) ubound(v)
+write(*,*) lbound(D)
+write(*,*) ubound(D)
+write(*,*) lbound(DU)
+write(*,*) ubound(DU)
+write(*,*) lbound(DV)
+write(*,*) ubound(DV)
+write(*,*) lbound(diffu)
+write(*,*) ubound(diffu)
+write(*,*) lbound(diffv)
+write(*,*) ubound(diffv)
+stop
+#endif
+#if 0
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax+1 ! work2d defined on T-points
          self%work2d(i,j)=0._real64
@@ -285,24 +303,26 @@ MODULE SUBROUTINE diffusion_driver(self,u,v,D,DU,DV,diffu,diffv)
             self%work2d(i,j)=2._real64*self%Am(i,j)*TG%dy(i,j)*D(i,j)*(u(i,j)-u(i-1,j))/TG%dx(i,j)
          end if
       end do
+   end do
+   do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax ! diffu defined on U-points
+         diffu(i,j)=0._real64
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             diffu(i,j)=-(self%work2d(i+1,j)-self%work2d(i,j))*UG%inv_area(i,j)
          end if
       end do
    end do
-
+#endif
+#if 0
    ! Central for dy(Am*(dy(U/DU)+dx(V/DV)))
    do j=XG%jmin-1,XG%jmax ! work2d defined on X-points
       do i=XG%imin,XG%imax
          self%work2d(i,j)=0._real64
-! XGrids must be fixed
-#if 0
+!KB XGrids must be fixed
          if (XG%mask(i,j) > 0) then
             self%work2d(i,j)=self%Am(i,j)*0.5_real64*(DU(i,j)+DU(i,j+1))*XG%dx(i,j)  &
                             *((u(i,j+1)-u(i,j))/XG%dy(i,j)+(v(i+1,j)-v(i,j))/XG%dx(i,j) )
          end if
-#endif
       end do
    end do
    do j=UG%jmin,UG%jmax ! diffu defined on U-points
@@ -312,36 +332,39 @@ MODULE SUBROUTINE diffusion_driver(self,u,v,D,DU,DV,diffu,diffv)
          end if
       end do
    end do
+#endif
    end associate UGrid
 
    ! Central for dx(Am*(dy(U/DU)+dx(V/DV)))
    VGrid: associate( VG => self%domain%V )
+#if 0
    do j=XG%jmin,XG%jmax
       do i=XG%imin-1,XG%imax ! work2d defined on X-points
          self%work2d(i,j)=0._real64
-! XGrids must be fixed
-#if 0
+!KB XGrids must be fixed
          if (XG%mask(i,j) > 0) then
             self%work2d(i,j)=self%Am(i,j)*0.5_real64*(DV(i,j)+DV(i+1,j))*XG%dy(i,j) &
                             *((u(i,j+1)-u(i,j))/XG%dy(i,j)+(v(i+1,j)-v(i,j))/XG%dx(i,j) )
          end if
-#endif
       end do
    end do
    do j=VG%jmin,VG%jmax ! diffv defined on V-points
       do i=VG%imin,VG%imax ! diffv defined on V-points
+         diffu(i,j)=0._real64
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             diffv(i,j)=-(self%work2d(i,j)-self%work2d(i-1,j))*VG%inv_area(i,j)
          end if
       end do
    end do
+#endif
 
    ! Central for dy(2*Am*dy(V/DV))
+#if 0
    do j=TG%jmin,TG%jmax+1 ! work2d defined on T-points
       do i=TG%imin,TG%imax
          self%work2d(i,j)=0._real64
          if (TG%mask(i,j) == 1) then
-            self%work2d(i,j)=2._real64*self%Am(i,j)*TG%dx(i,j)*XG%D(i,j)*(V(i,j)-V(i,j-1))/TG%dy(i,j)
+!KB            self%work2d(i,j)=2._real64*self%Am(i,j)*TG%dx(i,j)*TG%D(i,j)*(v(i,j)-v(i,j-1))/TG%dy(i,j)
          end if
       end do
    end do
@@ -352,6 +375,7 @@ MODULE SUBROUTINE diffusion_driver(self,u,v,D,DU,DV,diffu,diffv)
          end if
       end do
    end do
+#endif
    end associate VGrid
    end associate XGrid
    end associate TGrid

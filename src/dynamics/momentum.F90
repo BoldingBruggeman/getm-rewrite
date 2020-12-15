@@ -79,7 +79,9 @@ MODULE getm_momentum
       real(real64), dimension(:,:,:), allocatable :: advpk,advqk
       real(real64), dimension(:,:,:), allocatable :: diffuk,diffvk
       real(real64), dimension(:,:,:), allocatable :: uk,vk
-      real(real64), dimension(:,:), allocatable :: taub,taubx,tauby
+      real(real64), dimension(:,:), allocatable :: taus,taub
+      real(real64), dimension(:,:), allocatable :: taubx,tauby
+      real(real64), dimension(:,:,:), allocatable :: SS
       ! help variables
       real(real64), dimension(:,:,:), allocatable :: num,ea2,ea4
       real(real64), dimension(:,:), allocatable :: work2d
@@ -123,8 +125,8 @@ MODULE getm_momentum
       procedure :: slow_advection => slow_advection
       procedure :: slow_diffusion => slow_diffusion
       procedure :: slow_bottom_friction => slow_bottom_friction
+      procedure :: shear_frequency => shear_frequency
       procedure :: stresses => stresses
-      procedure :: shear => velocity_shear_frequency
       procedure :: list => momentum_list
       procedure :: set => momentum_set
 
@@ -259,16 +261,21 @@ MODULE getm_momentum
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE velocities_3d
 
-      MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
+      MODULE SUBROUTINE shear_frequency(self,num)
          class(type_getm_momentum), intent(inout) :: self
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
          real(real64), intent(in) :: num(_T3_)
-         real(real64), intent(inout) :: SS(_T3_)
 #undef _T3_
-      END SUBROUTINE velocity_shear_frequency
+      END SUBROUTINE shear_frequency
 
-      MODULE SUBROUTINE stresses(self)
+      MODULE SUBROUTINE stresses(self,tausx,tausy)
          class(type_getm_momentum), intent(inout) :: self
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: tausx(_T2_)
+            !! surface stresses - x-direction
+         real(real64), intent(in) :: tausy(_T2_)
+            !! surface stresses - y-direction
+#undef _T2_
       END SUBROUTINE stresses
 
    END INTERFACE

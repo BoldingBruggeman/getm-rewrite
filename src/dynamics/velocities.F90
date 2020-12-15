@@ -83,7 +83,7 @@ END SUBROUTINE velocities_3d
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
+MODULE SUBROUTINE shear_frequency(self,num)
    !!{!./code/velocity_shear_frequency.md!}
 
    IMPLICIT NONE
@@ -91,7 +91,6 @@ MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
    class(type_getm_momentum), intent(inout) :: self
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: num(_T3_)
-   real(real64), intent(inout) :: SS(_T3_)
 #undef _T3_
 
 !  Local constants
@@ -100,19 +99,17 @@ MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
    integer :: i,j,k
 !---------------------------------------------------------------------------
    if(associated(self%logs)) call self%logs%info('stresses()',level=2)
-! Just use already calculated velocities
-#if 1
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax
          if (TG%mask(i,j) .ge. 1 ) then
-            SS(i,j,TG%kmax) = 0._real64
+            self%SS(i,j,TG%kmax) = 0._real64
             do k=1,TG%kmax-1
 #ifndef NEW_SS
                ! This is an older version which we should keep here.
-               SS(i,j,k)=0.5_real64* ( &
+               self%SS(i,j,k)=0.5_real64* ( &
                    ((self%uk(i  ,j,k+1)-self%uk(i  ,j,k)) &
                    /(0.5_real64*(UG%hn(i  ,j,k+1)+UG%hn(i  ,j,k))))**2 &
                   +((self%uk(i-1,j,k+1)-self%uk(i-1,j,k)) &
@@ -124,7 +121,7 @@ MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
                                      )
 #else
                ! This version should better conserve energy.
-               SS(i,j,k)=0.5_real64* &
+               self%SS(i,j,k)=0.5_real64* &
                   ( &
                    (self%uk(i  ,j,k+1)-self%uk(i  ,j,k))**2 &
                    /(UG%hn(i  ,j,k+1)+UG%hn(i  ,j,k))*(num(i,j,k)+num(i+1,j,k)) &
@@ -143,60 +140,30 @@ MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
    end associate VGrid
    end associate UGrid
    end associate TGrid
-#else
-! This is an older version which we should keep here.
-#ifndef NEW_SS
-              SS(i,j,k)=_HALF_* (                                             &
-                   ( (pk(i,j,k+1)/hun(i,j,k+1)-pk(i,j,k)/hun(i,j,k))          &
-                   /(_HALF_*(hun(i,j,k+1)+hun(i,j,k))) )**2                   &
-                +  ( (pk(i-1,j,k+1)/hun(i-1,j,k+1)-pk(i-1,j,k)/hun(i-1,j,k))  &
-                   /(_HALF_*(hun(i-1,j,k+1)+hun(i-1,j,k))) )**2               &
-                +  ( (qk(i,j,k+1)/hvn(i,j,k+1)-qk(i,j,k)/hvn(i,j,k))          &
-                   /(_HALF_*(hvn(i,j,k+1)+hvn(i,j,k))) )**2                   &
-                +  ( (qk(i,j-1,k+1)/hvn(i,j-1,k+1)-qk(i,j-1,k)/hvn(i,j-1,k))  &
-                   /(_HALF_*(hvn(i,j-1,k+1)+hvn(i,j-1,k))) )**2               &
-                            )
-#else
-! This version should better conserve energy.
-              SS(i,j,k)=0.5_real64* ( &
-                   (pk(i,j,k+1)/hun(i,j,k+1)-pk(i,j,k)/hun(i,j,k))**2 &
-                   /(0.25_real64*(hun(i,j,k+1)+hun(i,j,k))*(num(i,j,k)+num(i+1,j,k)) &
-               +  (pk(i-1,j,k+1)/hun(i-1,j,k+1)-pk(i-1,j,k)/hun(i-1,j,k))**2  &
-                  /(_HALF_*(hun(i-1,j,k+1)+hun(i-1,j,k)))                     &
-                   *_HALF_*(num(i-1,j,k)+num(i,j,k))                          &
-                +  (qk(i,j,k+1)/hvn(i,j,k+1)-qk(i,j,k)/hvn(i,j,k))**2         &
-                   /(_HALF_*(hvn(i,j,k+1)+hvn(i,j,k)))                        &
-                    *_HALF_*(num(i,j,k)+num(i,j+1,k))                         &
-                +  (qk(i,j-1,k+1)/hvn(i,j-1,k+1)-qk(i,j-1,k)/hvn(i,j-1,k))**2 &
-                   /(_HALF_*(hvn(i,j-1,k+1)+hvn(i,j-1,k)))                    &
-                    *_HALF_*(num(i,j-1,k)+num(i,j,k))                         &
-                            )/(_HALF_*(hn(i,j,k)+hn(i,j,k+1)))/num(i,j,k)
-#endif
-            end do
-         end if
-      end do
-   end do
-#endif
-END SUBROUTINE velocity_shear_frequency
+END SUBROUTINE shear_frequency
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE stresses(self)
+MODULE SUBROUTINE stresses(self,tausx,tausy)
    !! Bottom stress
 
    IMPLICIT NONE
    class(type_getm_momentum), intent(inout) :: self
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), intent(in) :: tausx(_T2_)
+   real(real64), intent(in) :: tausy(_T2_)
+#undef _T2_
 
 !  Local constants
 
 !  Local variables
    integer :: i,j,k
 !---------------------------------------------------------------------------
-   if(associated(self%logs)) call self%logs%info('stresses()',level=2)
-   k=1
+   if(associated(self%logs)) call self%logs%info('stresses()',level=3)
+   k=1 !note
 !  x-component of bottom momentum flux at U-points
    UGrid: associate( UG => self%domain%U )
-   do j=UG%l(2)+1,UG%u(2)
+   do j=UG%l(2)+1,UG%u(2) !KB loop boundaries
       do i=UG%l(1)+1,UG%u(1)
          if (UG%mask(i,j) > 0) then
             !k = kumin(i,j) ! bottom index
@@ -208,7 +175,7 @@ MODULE SUBROUTINE stresses(self)
 
 !  y-component of bottom momentum flux at V-points
    VGrid: associate( VG => self%domain%V )
-   do j=VG%l(2)+1,VG%u(2)
+   do j=VG%l(2)+1,VG%u(2) !KB loop boundaries
       do i=VG%l(1)+1,VG%u(1)
          if (VG%mask(i,j) > 0) then
             !k          = kvmin(i,j) ! bottom index
@@ -220,22 +187,23 @@ MODULE SUBROUTINE stresses(self)
 
 !  stress magnitude
    TGrid: associate( TG => self%domain%T )
-   do j=TG%l(2)+1,TG%u(2)
+   do j=TG%l(2)+1,TG%u(2) !KB loop boundaries
       do i=TG%l(1)+1,TG%u(1)
          if (TG%mask(i,j) > 0) then
-#if 0
-         ! lower indices at U- and V-points
-         ku1=kumin(i-1,j  )
-         ku2=kumin(i  ,j  )
-         kv1=kvmin(i  ,j-1)
-         kv2=kvmin(i  ,j  )
+            ! total surface stress at T-points
+            self%taus(i,j)=sqrt(tausx(i,j)**2 + tausy(i,j)**2)/rho0
+
+            ! total bottom stress at T-points
+            self%taub(i,j)=sqrt(0.5_real64*( &
+#if 1
+                      (self%taubx(i-1,j  ))**2+(self%taubx(i,j))**2 &
+                     +(self%tauby(i  ,j-1))**2+(self%tauby(i,j))**2))
+#else
+                      (self%uk(i-1,j  ,k)*self%rru(i-1,j  ))**2 &
+                     +(self%uk(i  ,j  ,k)*self%rru(i  ,j  ))**2 &
+                     +(self%vk(i  ,j-1,k)*self%rrv(i  ,j-1))**2 &
+                     +(self%vk(i  ,j  ,k)*self%rrv(i  ,j  ))**2))
 #endif
-         ! total bottom stress at T-points
-         self%taub(i,j)=sqrt(0.5_real64*( &
-                   (self%uk(i-1,j  ,k)*self%rru(i-1,j  ))**2 &
-                  +(self%uk(i  ,j  ,k)*self%rru(i  ,j  ))**2 &
-                  +(self%vk(i  ,j-1,k)*self%rrv(i  ,j-1))**2 &
-                  +(self%vk(i  ,j  ,k)*self%rrv(i  ,j  ))**2))
          end if
       end do
    end do
