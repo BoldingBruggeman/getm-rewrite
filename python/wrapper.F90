@@ -1,6 +1,6 @@
 module pygetm
 
-   use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, C_NULL_CHAR
+   use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, C_NULL_CHAR, C_NULL_PTR
    use iso_fortran_env, only: real64
 
    use getm_domain, only: type_getm_domain, type_getm_grid
@@ -47,6 +47,7 @@ contains
       case ('U'); grid => domain%U
       case ('V'); grid => domain%V
       case ('X'); grid => domain%X
+      case default; grid => null()
       end select
       pgrid = c_loc(grid)
    end function
@@ -58,7 +59,7 @@ contains
       type(c_ptr)                                :: p
 
       type (type_getm_grid), pointer :: grid
-      character(len=8),      pointer :: pname
+      character(len=10),     pointer :: pname
 
       call c_f_pointer(pgrid, grid)
       call c_f_pointer(c_loc(name), pname)
@@ -80,6 +81,7 @@ contains
       case ('D'); p = c_loc(grid%D)
       case ('mask'); p = c_loc(grid%mask)
       case ('z'); p = c_loc(grid%z)
+      case default; p = C_NULL_PTR
       end select
    end function
 
@@ -163,6 +165,7 @@ contains
       select case (pname(:index(pname, C_NULL_CHAR) - 1))
       case ('U'); p = c_loc(momentum%U)
       case ('V'); p = c_loc(momentum%V)
+      case default; p = C_NULL_PTR
       end select
    end function
 
@@ -224,6 +227,7 @@ contains
       select case (pname(:index(pname, C_NULL_CHAR) - 1))
       case ('dpdx'); p = c_loc(pressure%dpdx)
       case ('dpdy'); p = c_loc(pressure%dpdy)
+      case default; p = C_NULL_PTR
       end select
    end function
 
