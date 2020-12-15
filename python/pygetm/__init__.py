@@ -96,6 +96,7 @@ class FortranObject:
     def __init__(self, get_function=None, names=(), default_shape=None, default_dtype=ctypes.c_double, shapes={}, dtypes={}, halo=None):
         for name in names:
             p = get_function(self.p, name.encode('ascii'))
+            assert p, 'Null pointer returned for %s' % name
 
             # Cast returned pointer to teh correct shape and dtype.
             shape = shapes.get(name, default_shape)
@@ -116,13 +117,20 @@ class Grid(FortranObject):
     def __init__(self, domain, grid_type='T'):
         self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
         self.halo = domain.halo
-        FortranObject.__init__(self, _pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z'), default_shape=domain.shape[1:], shapes={'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
+        self.domain = domain
+        FortranObject.__init__(self, _pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area'), default_shape=domain.shape[1:], shapes={'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)
         if fill is not None:
             data[...] = fill
         return data[self.halo:-self.halo, self.halo:-self.halo], data
+
+    def update_halos(self):
+        self.domain.distribute(self.dx_).update_halos()
+        self.domain.distribute(self.dy_).update_halos()
+        self.domain.distribute(self.mask_).update_halos()
+        self.domain.distribute(self.H_).update_halos()
 
 def find_interfaces(c):
     c_if = numpy.empty((c.size + 1),)
@@ -134,11 +142,11 @@ def find_interfaces(c):
 
 class Domain:
     @staticmethod
-    def create_cartesian(x, y, nlev, H=0.):
+    def create_cartesian(x, y, nlev, H=0., **kwargs):
         assert x.ndim == 1, 'x coordinate must be one-dimensional'
         assert y.ndim == 1, 'y coordinate must be one-dimensional'
         assert nlev >= 1, 'number of levels must be >= 1'
-        domain = Domain(1, nlev, 1, y.size, 1, x.size)
+        domain = Domain(1, nlev, 1, y.size, 1, x.size, tiling=parallel.Tiling(1, 1, **kwargs))
         domain.T.c1[:] = x
         domain.T.c2[:] = y
         domain.T.x[:, :] = x[numpy.newaxis, :]
@@ -154,13 +162,13 @@ class Domain:
         assert ny % tiling.nrow == 0
         assert global_domain is None or global_domain.initialized
 
-        domain = Domain(1, nlev, 1, ny // tiling.nrow, 1, nx // tiling.ncol)
+        domain = Domain(1, nlev, 1, ny // tiling.nrow, 1, nx // tiling.ncol, tiling=tiling)
 
         # Scatter coordinates, bathymetry and mask to subdomains
-        tiling.wrap(domain.T.x_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.x)
-        tiling.wrap(domain.T.y_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.y)
-        tiling.wrap(domain.T.H_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.H)
-        tiling.wrap(domain.T.mask_, halo=domain.halo).scatter(None if global_domain is None else global_domain.T.mask)
+        domain.distribute(domain.T.x_).scatter(None if global_domain is None else global_domain.T.x)
+        domain.distribute(domain.T.y_).scatter(None if global_domain is None else global_domain.T.y)
+        domain.distribute(domain.T.H_).scatter(None if global_domain is None else global_domain.T.H)
+        domain.distribute(domain.T.mask_).scatter(None if global_domain is None else global_domain.T.mask)
 
         # Extract 1D coordinate vectors per subdomain
         domain.T.c1_[:] = domain.T.x_[domain.halo, :]
@@ -168,17 +176,9 @@ class Domain:
 
         domain.initialize()
 
-        # Update U and V mask in halos
-        tiling.wrap(domain.U.mask_, halo=domain.halo).update_halos()
-        tiling.wrap(domain.V.mask_, halo=domain.halo).update_halos()
-        tiling.wrap(domain.U.H_, halo=domain.halo).update_halos()
-        tiling.wrap(domain.V.H_, halo=domain.halo).update_halos()
-        tiling.wrap(domain.U.D_, halo=domain.halo).update_halos()
-        tiling.wrap(domain.V.D_, halo=domain.halo).update_halos()
-
         return domain
 
-    def __init__(self, kmin, kmax, jmin, jmax, imin, imax):
+    def __init__(self, kmin, kmax, jmin, jmax, imin, imax, tiling=None):
         self.imin, self.imax = imin, imax
         self.jmin, self.jmax = jmin, jmax
         self.kmin, self.kmax = kmin, kmax
@@ -186,18 +186,36 @@ class Domain:
         self.p = _pygetm.domain_create(imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz)
         self.halo = halox.value
         self.shape = (kmax - kmin + 1, jmax - jmin + 1 + 2 * self.halo, imax - imin + 1 + 2 * self.halo)
+        self.tiling = tiling
         self.T = Grid(self, 'T')
         self.U = Grid(self, 'U')
         self.V = Grid(self, 'V')
         self.X = Grid(self, 'X')
+        if self.tiling:
+            self.dist_z = self.distribute(self.T.z_)
         self.initialized = False
 
     def initialize(self):
         _pygetm.domain_initialize(self.p)
+        if self.tiling:
+            self.T.update_halos()
+            self.U.update_halos()
+            self.V.update_halos()
+            self.X.update_halos()
+            self.depth_update()
         self.initialized = True
 
     def depth_update(self):
+        if self.tiling:
+            self.dist_z.update_halos()
         _pygetm.domain_depth_update(self.p)
+        if self.tiling:
+            self.distribute(self.U.D_).update_halos()
+            self.distribute(self.V.D_).update_halos()
+            self.distribute(self.X.D_).update_halos()
+
+    def distribute(self, field):
+        return self.tiling.wrap(field, halo=self.halo)
 
 class Advection:
     def __init__(self, domain, scheme):
