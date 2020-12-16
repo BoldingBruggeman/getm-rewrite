@@ -138,7 +138,7 @@ END SUBROUTINE slow_diffusion
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE numerical_damping(self,U,V)
+SUBROUTINE numerical_damping(self,U,V)
 
    IMPLICIT NONE
 
@@ -244,7 +244,7 @@ END SUBROUTINE numerical_damping
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE diffusion_driver(self,u,v,D,DU,DV,diffu,diffv)
+SUBROUTINE diffusion_driver(self,u,v,D,DU,DV,diffu,diffv)
    !! Driver routine for velocity diffusion
    !! @note
    !! this routine should likely be in a submodule

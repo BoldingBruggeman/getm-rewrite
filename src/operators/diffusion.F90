@@ -114,7 +114,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
 #define _T2_ self%imin-self%halo:,self%jmin-self%halo:
-   integer, dimension(:,:), intent(in) :: mask(_T2_)
+   integer, intent(in) :: mask(_T2_)
 #undef _T2_
 #define _T3_ self%imin-self%halo:,self%jmin-self%halo:,self%kmin:
    real(real64), intent(in) :: dzo(_T3_)
