@@ -8,7 +8,7 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE coriolis_fu(self)
+MODULE SUBROUTINE coriolis_fu(self)
 
    IMPLICIT NONE
 
@@ -72,7 +72,7 @@ END SUBROUTINE coriolis_fu
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE coriolis_fv(self)
+MODULE SUBROUTINE coriolis_fv(self)
 
    IMPLICIT NONE
 
@@ -137,7 +137,7 @@ END subroutine coriolis_fv
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE coriolis_fpk(self)
+MODULE SUBROUTINE coriolis_fpk(self)
 
    IMPLICIT NONE
 
@@ -205,7 +205,7 @@ END SUBROUTINE coriolis_fpk
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE coriolis_fqk(self)
+MODULE SUBROUTINE coriolis_fqk(self)
 
    IMPLICIT NONE
 

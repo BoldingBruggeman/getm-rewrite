@@ -113,16 +113,16 @@ MODULE getm_operators
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: cnpar
 #define _T2_ self%imin-self%halo:,self%jmin-self%halo:
-         integer, dimension(:,:), intent(in) :: mask
+         integer, intent(in) :: mask(_T2_)
 #undef _T2_
 #define _T3_ self%imin-self%halo:,self%jmin-self%halo:,self%kmin:
-         real(real64), dimension(:,:,:), intent(in) :: dzo(_T3_)
-         real(real64), dimension(:,:,:), intent(in) :: dzn(_T3_)
+         real(real64), intent(in) :: dzo(_T3_)
+         real(real64), intent(in) :: dzn(_T3_)
          real(real64), intent(in) :: molecular
-         real(real64), dimension(:,:,:), intent(in) :: nuh(_T3_)
-         real(real64), dimension(:,:,:), intent(inout) :: var(_T3_)
-         real(real64), dimension(:,:,:), intent(in), optional :: ea2(_T3_)
-         real(real64), dimension(:,:,:), intent(in), optional :: ea4(_T3_)
+         real(real64), intent(in) :: nuh(_T3_)
+         real(real64), intent(inout) :: var(_T3_)
+         real(real64), intent(in), optional :: ea2(_T3_)
+         real(real64), intent(in), optional :: ea4(_T3_)
 #undef _T3_
       end subroutine vertical_diffusion_calculate
    END INTERFACE

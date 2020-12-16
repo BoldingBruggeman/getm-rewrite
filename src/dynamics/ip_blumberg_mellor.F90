@@ -28,6 +28,7 @@ MODULE SUBROUTINE blumberg_mellor(self,buoy)
    real(real64) :: grdl,grdu,buoyl,buoyu,prgr,dxz,dyz
    real(real64) :: U_time,V_time
 !-----------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('blumberg_mellor()',level=3)
    TGrid: associate( TG => self%domain%T )
 
    UGrid: associate( UG => self%domain%U )
