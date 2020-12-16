@@ -154,7 +154,8 @@ class Domain:
         assert x.ndim == 1, 'x coordinate must be one-dimensional'
         assert y.ndim == 1, 'y coordinate must be one-dimensional'
         assert nlev >= 1, 'number of levels must be >= 1'
-        domain = Domain(1, nlev, 1, y.size, 1, x.size, tiling=parallel.Tiling(1, 1, **kwargs))
+        tiling = None if not kwargs else parallel.Tiling(1, 1, **kwargs)
+        domain = Domain(1, nlev, 1, y.size, 1, x.size, tiling=tiling)
         domain.T.c1[:] = x
         domain.T.c2[:] = y
         domain.T.x[:, :] = x[numpy.newaxis, :]
@@ -165,7 +166,7 @@ class Domain:
         return domain
 
     @staticmethod
-    def partition(tiling, nx, ny, nlev, global_domain):
+    def partition(tiling, nx, ny, nlev, global_domain, runtype):
         assert nx % tiling.ncol == 0
         assert ny % tiling.nrow == 0
         assert global_domain is None or global_domain.initialized
@@ -182,7 +183,7 @@ class Domain:
         domain.T.c1_[:] = domain.T.x_[domain.halo, :]
         domain.T.c2_[:] = domain.T.y_[:, domain.halo]
 
-        domain.initialize()
+        domain.initialize(runtype)
 
         return domain
 

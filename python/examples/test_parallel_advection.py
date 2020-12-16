@@ -31,14 +31,14 @@ if rank == 0:
     global_domain = pygetm.Domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=0.)
     global_domain.T.H[1:-1, 1:-1] = 1.
     global_domain.T.mask[1:-1, 1:-1] = 1
-    global_domain.initialize()
+    global_domain.initialize(runtype=1)
     f_glob, _ = global_domain.T.array()
     f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
 
 tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
 
 # Set up local subdomain 
-subdomain = pygetm.Domain.partition(tiling, nx, ny, nlev, global_domain)
+subdomain = pygetm.Domain.partition(tiling, nx, ny, nlev, global_domain, runtype=1)
 halo = subdomain.halo
 
 # Knut's mask hack, implemented by setting up global mask and scattering that
@@ -47,7 +47,7 @@ subdomain.T.mask_[...] = 0  # this ensure that outer halos [outside global domai
 if rank == 0:
     mask_glob, _ = global_domain.T.array(dtype=int)
     mask_glob[2:-2, 2:-2] = 1
-tiling.wrap(subdomain.T.mask_, halo=halo).scatter(mask_glob)
+subdomain.distribute(subdomain.T.mask_).scatter(mask_glob)
 
 # Set up velocities
 period = 600
@@ -70,12 +70,12 @@ if args.nmax:
 
 # Set up tracer field for subdomain, wrap it for halo updates, and MPI-scatter it from root node
 f, f_ = subdomain.T.array(fill=0.)
-distf = tiling.wrap(f_, halo=halo)
+distf = subdomain.distribute(f_)
 distf.scatter(f_glob)
 
 # Gather and plot global velocities
-u_glob = tiling.wrap(u_, halo=halo).gather()
-v_glob = tiling.wrap(v_, halo=halo).gather()
+u_glob = subdomain.distribute(u_).gather()
+v_glob = subdomain.distribute(v_).gather()
 if u_glob is not None and not args.noplot:
     fig = matplotlib.pyplot.figure()
     ax = fig.gca()
