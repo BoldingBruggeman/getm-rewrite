@@ -82,7 +82,7 @@ MODULE SUBROUTINE uv_initialize_2d(self)
    call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
 
    do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax-1 !KB - note
+      do i=UG%imin-1,UG%imax
          self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
          self%uadvgrid%dx(i,j) = TG%dx(i+1,j)
          self%uadvgrid%dy(i,j) = TG%dy(i+1,j)
@@ -90,7 +90,7 @@ MODULE SUBROUTINE uv_initialize_2d(self)
          self%vadvgrid%dy(i,j) = XG%dy(i,j)
       end do
    end do
-   do j=UG%jmin,UG%jmax-1 !KB - note
+   do j=UG%jmin-1,UG%jmax
       do i=UG%imin,UG%imax
          self%uadvgrid%dx(i,j) = XG%dx(i,j)
          self%uadvgrid%dy(i,j) = XG%dy(i,j)
