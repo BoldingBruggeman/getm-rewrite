@@ -145,7 +145,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
    VGrid: associate( VG => self%domain%V )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         self%uadvgrid%D(i,j)  = TG%H(i+1,j)+TG%ssen(i+1,j) !KB TG%D(i+1,j)
+         self%uadvgrid%D(i,j)  = TG%H(i+1,j)+TG%zin(i+1,j) !KB TG%D(i+1,j)
          self%vadvgrid%D(i,j)  = XG%D(i,j) ! Knut
          self%Ua(i,j) = 0.5_real64*(self%Ui(i,j) + self%Ui(i+1,j))
          self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i+1,j))
@@ -164,7 +164,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          self%uadvgrid%D(i,j)  = XG%D(i,j) ! Knut
-         self%vadvgrid%D(i,j)  = TG%H(i,j+1)+TG%ssen(i,j+1) !KB TG%D(i,j+1)
+         self%vadvgrid%D(i,j)  = TG%H(i,j+1)+TG%zin(i,j+1) !KB TG%D(i,j+1)
          self%Ua(i,j) = 0.5_real64*(self%Ui(i,j) + self%Ui(i,j+1))
          self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i,j+1))
       end do

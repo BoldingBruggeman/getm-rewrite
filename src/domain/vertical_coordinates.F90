@@ -1,7 +1,7 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
   !! @note
-  !! ssen and sseo for U and V points
+  !! zin and zio for U and V points
   !! @note
 
 SUBMODULE (getm_domain) vertical_coordinates_smod
@@ -48,7 +48,7 @@ module SUBROUTINE init_vertical(self)
    if (associated(self%logs)) call self%logs%info('init_vertical()',level=2)
 
    where (self%T%mask > 0)
-      self%T%ssen=self%T%z
+      self%T%zin=self%T%z
    end where
 
    select case (self%method_vertical_coordinates)

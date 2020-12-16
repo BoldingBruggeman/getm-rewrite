@@ -65,39 +65,39 @@ MODULE SUBROUTINE do_sigma(self)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('do_sigma()',level=3)
 
-   !! why not ho=hn as sseo=ssen
+   !! why not ho=hn as zio=zin
    TGrid: associate( TG => self%T )
    do j=TG%l(2),TG%u(2)
       do i=TG%l(1),TG%u(1)
          if (TG%mask(i,j) > 0) then
-            TG%ho(i,j,:)=(TG%sseo(i,j)+TG%H(i,j))*dga(:)
-            TG%hn(i,j,:)=(TG%ssen(i,j)+TG%H(i,j))*dga(:)
+            TG%ho(i,j,:)=(TG%zio(i,j)+TG%H(i,j))*dga(:)
+            TG%hn(i,j,:)=(TG%zin(i,j)+TG%H(i,j))*dga(:)
          end if
       end do
    end do
    end associate TGrid
 
-   !! why not ho=hn as sseo=ssen
-   !! if ssen and H are updated in halo zones - extend to all domain
+   !! why not ho=hn as zio=zin
+   !! if zin and H are updated in halo zones - extend to all domain
    !! what about mask
    UGrid: associate( UG => self%U )
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
          if (UG%mask(i,j) > 0) then
-            UG%ho(i,j,:)=(UG%sseo(i,j)+UG%H(i,j))*dga(:)
-            UG%hn(i,j,:)=(UG%ssen(i,j)+UG%H(i,j))*dga(:)
+            UG%ho(i,j,:)=(UG%zio(i,j)+UG%H(i,j))*dga(:)
+            UG%hn(i,j,:)=(UG%zin(i,j)+UG%H(i,j))*dga(:)
          end if
       end do
    end do
    end associate UGrid
 
-   !! if ssen and H are updated in halo zones - extend to all domain
+   !! if zin and H are updated in halo zones - extend to all domain
    VGrid: associate( VG => self%V )
    do j=VG%l(2),VG%u(2)-1
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
-            VG%ho(i,j,:)=(VG%sseo(i,j)+VG%H(i,j))*dga(:)
-            VG%hn(i,j,:)=(VG%ssen(i,j)+VG%H(i,j))*dga(:)
+            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
+            VG%hn(i,j,:)=(VG%zin(i,j)+VG%H(i,j))*dga(:)
          end if
       end do
    end do

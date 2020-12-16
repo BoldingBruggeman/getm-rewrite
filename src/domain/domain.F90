@@ -110,9 +110,9 @@ MODULE getm_domain
         !! mask=0 -> land
       real(real64), dimension(:,:), allocatable :: D
         !! total water depth - time varying
-      real(real64), dimension(:,:), allocatable :: ssen
+      real(real64), dimension(:,:), allocatable :: zin
         !! elevation at T-points baroclinic time step
-      real(real64), dimension(:,:), allocatable :: sseo
+      real(real64), dimension(:,:), allocatable :: zio
         !! previous timstep
       real(real64), dimension(:,:,:), allocatable :: hn
         !! layer heights - new time step
@@ -310,20 +310,20 @@ SUBROUTINE domain_initialize(self,runtype)
    where (self%T%mask > 0)
       self%T%z = 0._real64
       self%T%zo = 0._real64
-      self%T%ssen = 0._real64
-      self%T%sseo = 0._real64
+      self%T%zin = 0._real64
+      self%T%zio = 0._real64
    end where
    where (self%U%mask > 0)
       self%U%z = 0._real64
       self%U%zo = 0._real64
-      self%U%ssen = 0._real64
-      self%U%sseo = 0._real64
+      self%U%zin = 0._real64
+      self%U%zio = 0._real64
    end where
    where (self%V%mask > 0)
       self%V%z = 0._real64
       self%V%zo = 0._real64
-      self%V%ssen = 0._real64
-      self%V%sseo = 0._real64
+      self%V%zin = 0._real64
+      self%V%zio = 0._real64
    end where
    call self%cfl_check()
    if (self%T%kmax > 1) then
@@ -414,16 +414,16 @@ SUBROUTINE start_3d(self)
 !-----------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('start_3d()',level=2)
    TGrid: associate( TG => self%T )
-   TG%sseo=TG%ssen
-   TG%ssen=TG%z
+   TG%zio=TG%zin
+   TG%zin=TG%z
 
    UGrid: associate( UG => self%U )
-   UG%sseo=UG%ssen
+   UG%zio=UG%zin
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
          if (UG%mask(i,j) > 0) then
-            UG%ssen(i,j)=0.25*(TG%sseo(i,j)+TG%sseo(i+1,j)+TG%ssen(i,j)+TG%ssen(i+1,j))
-            UG%ssen(i,j)=max(UG%ssen(i,j),-UG%H(i,j)+self%Dmin)
+            UG%zin(i,j)=0.25*(TG%zio(i,j)+TG%zio(i+1,j)+TG%zin(i,j)+TG%zin(i+1,j))
+            UG%zin(i,j)=max(UG%zin(i,j),-UG%H(i,j)+self%Dmin)
          end if
       end do
    end do
@@ -431,12 +431,12 @@ SUBROUTINE start_3d(self)
    end associate UGrid
 
    VGrid: associate( VG => self%V )
-   VG%sseo=VG%ssen
+   VG%zio=VG%zin
    do j=VG%l(2),VG%u(2)-1
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
-            VG%ssen(i,j)=0.25*(TG%sseo(i,j)+TG%sseo(i,j+1)+TG%ssen(i,j)+TG%ssen(i,j+1))
-            VG%ssen(i,j)=max(VG%ssen(i,j),-VG%H(i,j)+self%Dmin)
+            VG%zin(i,j)=0.25*(TG%zio(i,j)+TG%zio(i,j+1)+TG%zin(i,j)+TG%zin(i,j+1))
+            VG%zin(i,j)=max(VG%zin(i,j),-VG%H(i,j)+self%Dmin)
          end if
       end do
    end do

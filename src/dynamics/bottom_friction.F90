@@ -187,7 +187,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)
          if (UG%mask(i,j) .ge. 1) then
-            Ui(i,j)=self%Uio(i,j)/(UG%sseo(i,j)+UG%H(i,j))
+            Ui(i,j)=self%Uio(i,j)/(UG%zio(i,j)+UG%H(i,j))
          else
             Ui(i,j)=0._real64
          end if
@@ -197,7 +197,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
    do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) .ge. 1) then
-            Vi(i,j)=self%Vio(i,j)/(VG%sseo(i,j)+VG%H(i,j))
+            Vi(i,j)=self%Vio(i,j)/(VG%zio(i,j)+VG%H(i,j))
          else
             Vi(i,j)=0._real64
          end if
@@ -209,7 +209,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
          self%ru(i,j)=0._real64
          self%work2d(i,j)=0._real64
          if (UG%mask(i,j) .ge. 1) then
-            hh=max(self%domain%Dmin,UG%ssen(i,j)+UG%H(i,j))
+            hh=max(self%domain%Dmin,UG%zin(i,j)+UG%H(i,j))
             self%rru(i,j)=(kappa/log((self%zub(i,j)+0.5_real64*HH)/self%zub(i,j)))**2
             vloc = 0.25_real64*(Vi(i,j)+Vi(i+1,j)+Vi(i,j-1)+Vi(i+1,j-1))
             self%ru(i,j) = self%rru(i,j)*sqrt(Ui(i,j)**2+vloc**2)
@@ -223,7 +223,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
          self%work2d(i,j)=0._real64
          if (VG%mask(i,j) .ge. 1) then
             ! why not VG%D !KB
-            hh=max(self%domain%Dmin,VG%ssen(i,j)+VG%H(i,j))
+            hh=max(self%domain%Dmin,VG%zin(i,j)+VG%H(i,j))
             self%rrv(i,j)=(kappa/log((self%zvb(i,j)+0.5_real64*hh)/self%zvb(i,j)))**2
             uloc = 0.25_real64*(Ui(i,j)+Ui(i+1,j)+Ui(i,j-1)+Ui(i+1,j-1))
             self%rv(i,j) = self%rrv(i,j)*sqrt(uloc**2+Vi(i,j)**2)
@@ -237,7 +237,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
          self%SxF(i,j)= 0._real64
          if (UG%mask(i,j) .ge. 1) then
 !KB            if (UG%kmax .gt. 1) then
-               self%SxF(i,j)=-self%ru(i,j)*self%Ui(i,j)/(0.5_real64*(UG%sseo(i,j)+UG%ssen(i,j))+UG%H(i,j)) &
+               self%SxF(i,j)=-self%ru(i,j)*self%Ui(i,j)/(0.5_real64*(UG%zio(i,j)+UG%zin(i,j))+UG%H(i,j)) &
                              +self%rru(i,j)*self%pk(i,j,k)/(0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k)))
 !KB            end if
          end if
@@ -250,7 +250,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
          self%SyF(i,j)= 0._real64
          if (VG%mask(i,j) .ge. 1) then
 !KB            if (VG%kmax .gt. 1) then
-               self%SyF(i,j)=-self%rv(i,j)*self%Vi(i,j)/(0.5_real64*(VG%sseo(i,j)+VG%ssen(i,j))+VG%H(i,j)) &
+               self%SyF(i,j)=-self%rv(i,j)*self%Vi(i,j)/(0.5_real64*(VG%zio(i,j)+VG%zin(i,j))+VG%H(i,j)) &
                              +self%rrv(i,j)*self%qk(i,j,k)/(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
 !KB            end if
          end if
@@ -305,7 +305,7 @@ MODULE PROCEDURE slow_bottom_friction
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)
          if (UG%mask(i,j) .ge. 1) then
-            Ui(i,j)=self%Uio(i,j)/(UG%sseo(i,j)+UG%H(i,j))
+            Ui(i,j)=self%Uio(i,j)/(UG%zio(i,j)+UG%H(i,j))
          else
             Ui(i,j)=0._real64
          end if
@@ -315,7 +315,7 @@ MODULE PROCEDURE slow_bottom_friction
    do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) .ge. 1) then
-            Vi(i,j)=self%Vio(i,j)/(VG%sseo(i,j)+VG%H(i,j))
+            Vi(i,j)=self%Vio(i,j)/(VG%zio(i,j)+VG%H(i,j))
          else
             Vi(i,j)=0._real64
          end if
@@ -325,7 +325,7 @@ MODULE PROCEDURE slow_bottom_friction
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)
          if (UG%mask(i,j) .ge. 1) then
-            HH=max(UG%ssen(i,j)+UG%H(i,j),self%domain%Dmin)
+            HH=max(UG%zin(i,j)+UG%H(i,j),self%domain%Dmin)
             ruu(i,j)=(self%zub(i,j)+0.5_real64*HH)/self%zub(i,j)
 #if 0
             if (ruu(i,j) .le. 1._real64) then
@@ -349,7 +349,7 @@ MODULE PROCEDURE slow_bottom_friction
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) .ge. 1) then
             ! why not VG%D !KB
-            HH=max(VG%ssen(i,j)+VG%H(i,j),self%domain%Dmin)
+            HH=max(VG%zin(i,j)+VG%H(i,j),self%domain%Dmin)
             ruu(i,j)=(self%zvb(i,j)+0.5_real64*HH)/self%zvb(i,j)
 #if 0
             if (ruu(i,j) .le. 1._real64) then
@@ -384,7 +384,7 @@ END PROCEDURE slow_bottom_friction
             if (UG%kmax .gt. 1) then
 !               self%Slru(i,j)=-self%ru(i,j)*self%Ui(i,j) &
                self%SxF(i,j)=-self%ru(i,j)*self%Ui(i,j) &
-                             /(0.5_real64*(UG%sseo(i,j)+UG%ssen(i,j))+UG%H(i,j)) &
+                             /(0.5_real64*(UG%zio(i,j)+UG%zin(i,j))+UG%H(i,j)) &
                              +self%rru(i,j)*self%pk(i,j,k) &
                              /(0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k)))
 #ifdef STRUCTURE_FRICTION
@@ -407,7 +407,7 @@ END PROCEDURE slow_bottom_friction
             if (VG%kmax .gt. 1) then
 !               self%Slrv(i,j)=-self%rv(i,j)*self%Vi(i,j) &
                self%SyF(i,j)=-self%rv(i,j)*self%Vi(i,j) &
-                             /(0.5_real64*(VG%sseo(i,j)+VG%ssen(i,j))+VG%H(i,j)) &
+                             /(0.5_real64*(VG%zio(i,j)+VG%zin(i,j))+VG%H(i,j)) &
                              +self%rrv(i,j)*self%qk(i,j,k) &
                              /(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
 #ifdef STRUCTURE_FRICTION

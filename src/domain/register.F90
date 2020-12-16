@@ -231,27 +231,27 @@ MODULE SUBROUTINE register(self,runtype)
    call self%fm%send_data('zo', TG%zo(TG%imin:TG%imax,TG%jmin:TG%jmax))
 
    if (runtype > 1) then
-   call self%fm%register('ssen', 'm', 'sea surface elevation', &
+   call self%fm%register('zin', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%T%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssen', self%T%ssen(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%send_data('zin', self%T%zin(TG%imin:TG%imax,TG%jmin:TG%jmax))
    call self%fm%register('ssun', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%U%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssun', self%U%ssen(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   call self%fm%send_data('ssun', self%U%zin(UG%imin:UG%imax,UG%jmin:UG%jmax))
    call self%fm%register('ssvn', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%V%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssvn', self%V%ssen(VG%imin:VG%imax,VG%jmin:VG%jmax))
+   call self%fm%send_data('ssvn', self%V%zin(VG%imin:VG%imax,VG%jmin:VG%jmax))
    call self%fm%register('hn', 'm', 'layer thickness', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
