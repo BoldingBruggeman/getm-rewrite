@@ -4,12 +4,12 @@ import numpy
 Waitall = MPI.Request.Waitall
 
 class Tiling:
-    def __init__(self, nrow, ncol, comm=MPI.COMM_WORLD, periodic_tb=False, periodic_lr=False):
+    def __init__(self, nrow, ncol, comm=MPI.COMM_WORLD, periodic_x=False, periodic_y=False):
         def find_neighbor(i, j):
-            if periodic_tb:
-                i = i % nrow
-            if periodic_lr:
+            if periodic_x:
                 j = j % ncol
+            if periodic_y:
+                i = i % nrow
             if i >= 0 and i < nrow and j >= 0 and j < ncol:
                 return self.map[i, j]
 

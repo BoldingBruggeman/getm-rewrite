@@ -85,14 +85,15 @@ contains
       end select
    end function
 
-   subroutine domain_initialize(pdomain) bind(c)
+   subroutine domain_initialize(pdomain, runtype) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: domain_initialize
-      type(c_ptr), intent(in), value :: pdomain
+      type(c_ptr),    intent(in), value :: pdomain
+      integer(c_int), intent(in), value :: runtype
 
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
-      call domain%initialize()
+      call domain%initialize(runtype)
    end subroutine
 
    subroutine domain_depth_update(pdomain) bind(c)
@@ -133,9 +134,11 @@ contains
      call advection%advection_calculate_2d(scheme, domain%U, u, domain%V, v, timestep, domain%T,var)
    end subroutine
 
-   function momentum_create(pdomain, padvection) result(pmomentum) bind(c)
+   function momentum_create(runtype, pdomain, padvection) result(pmomentum) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: momentum_create
-      type(c_ptr), intent(in), value :: pdomain, padvection
+      integer(c_int), intent(in), value :: runtype
+      type(c_ptr),    intent(in), value :: pdomain
+      type(c_ptr),    intent(in), value :: padvection
       type(c_ptr) :: pmomentum
 
       type (type_getm_domain),   pointer :: domain
@@ -146,7 +149,7 @@ contains
       call c_f_pointer(padvection, advection)
       allocate(momentum)
       call momentum%configure()
-      call momentum%initialize(domain, advection)
+      call momentum%initialize(runtype, domain, advection)
       pmomentum = c_loc(momentum)
    end function
 
@@ -169,20 +172,10 @@ contains
       end select
    end function
 
-   subroutine momentum_advection_2d(pmomentum, timestep) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_advection_2d
-      type(c_ptr),    intent(in), value :: pmomentum
-      real(c_double), intent(in), value :: timestep
-
-      type (type_getm_momentum), pointer :: momentum
-
-      call c_f_pointer(pmomentum, momentum)
-      call momentum%advection_2d(timestep)
-   end subroutine
-
-   subroutine momentum_uv_momentum_2d(pmomentum, timestep, ptausx, ptausy, pdpdx, pdpdy) bind(c)
+   subroutine momentum_uv_momentum_2d(pmomentum, runtype, timestep, ptausx, ptausy, pdpdx, pdpdy) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: momentum_uv_momentum_2d
       type(c_ptr),    intent(in), value :: pmomentum
+      integer(c_int), intent(in), value :: runtype
       real(c_double), intent(in), value :: timestep
       type(c_ptr),    intent(in), value :: ptausx, ptausy, pdpdx, pdpdy
 
@@ -194,12 +187,13 @@ contains
       call c_f_pointer(ptausy, tausy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
       call c_f_pointer(pdpdx, dpdx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
       call c_f_pointer(pdpdy, dpdy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
-      call momentum%uv_momentum_2d(timestep, tausx, tausy, dpdx, dpdy)
+      call momentum%uv_momentum_2d(runtype, timestep, tausx, tausy, dpdx, dpdy)
    end subroutine
 
-   function pressure_create(pdomain) result(ppressure) bind(c)
+   function pressure_create(runtype, pdomain) result(ppressure) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: pressure_create
-      type(c_ptr), intent(in), value :: pdomain
+      integer(c_int), intent(in), value :: runtype
+      type(c_ptr),    intent(in), value :: pdomain
       type(c_ptr) :: ppressure
 
       type (type_getm_domain),   pointer :: domain
@@ -208,7 +202,7 @@ contains
       call c_f_pointer(pdomain, domain)
       allocate(pressure)
       call pressure%configure()
-      call pressure%initialize(domain)
+      call pressure%initialize(runtype, domain)
       ppressure = c_loc(pressure)
    end function
 

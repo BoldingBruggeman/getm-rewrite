@@ -50,7 +50,7 @@ _pygetm.domain_get_grid.restype = ctypes.c_void_p
 _pygetm.grid_get_array.argtypes = [ctypes.c_void_p,  ctypes.c_char_p]
 _pygetm.grid_get_array.restype = ctypes.c_void_p
 
-_pygetm.domain_initialize.argtypes = [ctypes.c_void_p]
+_pygetm.domain_initialize.argtypes = [ctypes.c_void_p, ctypes.c_int]
 _pygetm.domain_initialize.restype = None
 
 _pygetm.domain_depth_update.argtypes = [ctypes.c_void_p]
@@ -65,19 +65,16 @@ arrtype2D = numpy.ctypeslib.ndpointer(dtype=ctypes.c_double, ndim=2, flags=CONTI
 _pygetm.advection_calculate.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, arrtype2D, arrtype2D, ctypes.c_double, arrtype2D]
 _pygetm.advection_calculate.restype = None
 
-_pygetm.momentum_create.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+_pygetm.momentum_create.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p]
 _pygetm.momentum_create.restype = ctypes.c_void_p
 
 _pygetm.momentum_get_array.argtypes = [ctypes.c_void_p,  ctypes.c_char_p]
 _pygetm.momentum_get_array.restype = ctypes.c_void_p
 
-_pygetm.momentum_advection_2d.argtypes = [ctypes.c_void_p, ctypes.c_double]
-_pygetm.momentum_advection_2d.restype = None
-
-_pygetm.momentum_uv_momentum_2d.argtypes = [ctypes.c_void_p, ctypes.c_double, arrtype2D, arrtype2D, arrtype2D, arrtype2D]
+_pygetm.momentum_uv_momentum_2d.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_double, arrtype2D, arrtype2D, arrtype2D, arrtype2D]
 _pygetm.momentum_uv_momentum_2d.restype = None
 
-_pygetm.pressure_create.argtypes = [ctypes.c_void_p]
+_pygetm.pressure_create.argtypes = [ctypes.c_int, ctypes.c_void_p]
 _pygetm.pressure_create.restype = ctypes.c_void_p
 
 _pygetm.pressure_surface.argtypes = [ctypes.c_void_p, arrtype2D, arrtype2D]
@@ -140,6 +137,17 @@ def find_interfaces(c):
     c_if[-1] = c[-1] + 0.5 * d[-1]
     return c_if
 
+class Simulation:
+    def __init__(self, domain, runtype, advection_scheme=4):
+        assert not domain.initialized
+        self.runtype = runtype
+        self.domain = domain
+        self.domain.initialize(self.runtype)
+        self.advection = Advection(self.domain, advection_scheme)
+        self.pressure = Pressure(self.runtype, self.domain)
+        self.momentum = Momentum(self.runtype, self.domain, self.advection)
+        self.sealevel = Sealevel(self.domain)
+
 class Domain:
     @staticmethod
     def create_cartesian(x, y, nlev, H=0., **kwargs):
@@ -195,8 +203,8 @@ class Domain:
             self.dist_z = self.distribute(self.T.z_)
         self.initialized = False
 
-    def initialize(self):
-        _pygetm.domain_initialize(self.p)
+    def initialize(self, runtype):
+        _pygetm.domain_initialize(self.p, runtype)
         if self.tiling:
             self.T.update_halos()
             self.U.update_halos()
@@ -227,19 +235,17 @@ class Advection:
         _pygetm.advection_calculate(self.p, self.scheme, self.pdomain, u, v, timestep, var)
 
 class Momentum(FortranObject):
-    def __init__(self, domain, advection):
-        self.p = _pygetm.momentum_create(domain.p, advection.p)
+    def __init__(self, runtype, domain, advection):
+        self.runtype = runtype
+        self.p = _pygetm.momentum_create(self.runtype, domain.p, advection.p)
         FortranObject.__init__(self, _pygetm.momentum_get_array, ('U', 'V'), default_shape=domain.shape[1:], halo=domain.halo)
 
-    def advection_2d(self, timestep):
-        _pygetm.momentum_advection_2d(self.p, timestep)
-
     def uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy):
-        _pygetm.momentum_uv_momentum_2d(self.p, timestep, tausx, tausy, dpdx, dpdy)
+        _pygetm.momentum_uv_momentum_2d(self.p, self.runtype, timestep, tausx, tausy, dpdx, dpdy)
 
 class Pressure(FortranObject):
-    def __init__(self, domain):
-        self.p = _pygetm.pressure_create(domain.p)
+    def __init__(self, runtype, domain):
+        self.p = _pygetm.pressure_create(runtype, domain.p)
         FortranObject.__init__(self, _pygetm.pressure_get_array, ('dpdx', 'dpdy'), default_shape=domain.shape[1:], halo=domain.halo)
 
     def surface(self, z, sp):
