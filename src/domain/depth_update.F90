@@ -61,12 +61,7 @@ module SUBROUTINE depth_update(self)
 #ifdef USE_MASK
       if (UG%mask(i,j) > 0) then
 #endif
-#if 0
-         x=max(0.25_real64*(TG%zo(i,j)+TG%zo(i+1,j)+TG%z(i,j)+TG%z(i+1,j)),-UG%H(i,j)+self%Dmin)
-         UG%D(i,j) = x+UG%H(i,j)
-#else
          UG%D(i,j) = UG%H(i,j)+UG%z(i,j)
-#endif
          UG%alpha(i,j)=max(0._real64,min(1._real64,(self%U%D(i,j)-self%Dmin)/(self%Dcrit-self%Dmin)))
 #ifdef USE_MASK
       end if
@@ -81,12 +76,7 @@ module SUBROUTINE depth_update(self)
 #ifdef USE_MASK
       if (VG%mask(i,j) > 0) then
 #endif
-#if 0
-         x=max(0.25_real64*(TG%zo(i,j)+TG%zo(i,j+1)+TG%z(i,j)+TG%z(i,j+1)),-VG%H(i,j)+self%Dmin)
-         VG%D(i,j) = x+VG%H(i,j)
-#else
          VG%D(i,j) = VG%H(i,j)+VG%z(i,j)
-#endif
          VG%alpha(i,j)=max(0._real64,min(1._real64,(self%V%D(i,j)-self%Dmin)/(self%Dcrit-self%Dmin)))
 #ifdef USE_MASK
       end if
