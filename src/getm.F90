@@ -30,7 +30,7 @@ MODULE getm_model
    use logging
    use field_manager
    use getm_domain
-   use getm_parallel
+!KB   use getm_parallel
    use getm_operators
    use getm_airsea
    use getm_physics
@@ -57,7 +57,7 @@ MODULE getm_model
       TYPE(type_logging) :: logs
       TYPE(type_field_manager) :: fm
       TYPE(type_getm_domain) :: domain
-      TYPE(type_getm_parallel) :: parallel
+!KB      TYPE(type_getm_parallel) :: parallel
       TYPE(type_vertical_diffusion) :: vertical_diffusion
       TYPE(type_advection) :: advection
       TYPE(type_getm_airsea) :: airsea
@@ -119,16 +119,13 @@ SUBROUTINE getm_settings(self)
    call get_command_argument(1,self%bathymetry%depth%f)
    self%bathymetry%depth%v = 'bathymetry'
 
-   self%runtype = 1
-   self%info_frequency = 100
-   self%mode_split = 20
+   self%runtype = 4
+   self%info_frequency = 10
    self%mode_split = 100000
-   self%timestep = 3600._real64
+   self%mode_split = 20
    self%timestep = 10._real64
-   self%sim_start = strptime("2020-01-01 00:00:00", time_format)
-   self%sim_stop = strptime("2020-01-01 00:02:00", time_format)
-   self%sim_stop = strptime("2019-01-01 00:00:00", time_format)
-   self%sim_stop = strptime("2020-01-01 03:30:00", time_format)
+   self%sim_stop = strptime("2020-01-02 00:00:00", time_format)
+   self%sim_stop = strptime("2020-01-01 01:00:00", time_format)
 
    self%imin = 1
    self%imax = 100
@@ -137,19 +134,35 @@ SUBROUTINE getm_settings(self)
    self%kmin = 1
    self%kmax = 20
 
-   self%domain%domain_type = 1
-   self%domain%Dmin = 1.0_real64
-   self%domain%Dcrit = 2.0_real64
-   self%domain%ddl = 1.0_real64
-   self%domain%ddu = 2.0_real64
+   self%domain%domain_type = 2
+   self%domain%method_vertical_coordinates = 1
    self%domain%Dmin = 0.5_real64
+   self%domain%Dcrit = 2.0_real64
+   self%domain%ddu = 1.0_real64
+   self%domain%ddl = 1.0_real64
+   self%domain%ddu = 0.0_real64
+   self%domain%ddl = 0.0_real64
+   self%domain%lat0 = 45._real64
    self%domain%lat0 = 0._real64
 
-   self%airsea%taux0 = 0.001_real64
-   self%airsea%tauy0 = 0.001_real64
+   self%airsea%taux0 = 0.01_real64
+   self%airsea%tauy0 = 0.01_real64
+   self%airsea%tauy0 = 0.0_real64
+   self%airsea%swr0 =  25._real64
+   self%airsea%shf0 = -25._real64
 
+   self%physics%mixing%method_mixing = 1 !KB constant
+   self%physics%mixing%num0 = 1.e-4_real64
+   self%physics%mixing%nuh0 = 1.e-4_real64
    self%physics%temperature%advection_scheme = 1
+
+   self%dynamics%pressure%method_internal_pressure = 1
+   self%dynamics%momentum%Am0 = 1.e-4_real64
    self%dynamics%momentum%advection_scheme = 1
+   self%dynamics%momentum%store_advection = .true.
+   self%dynamics%momentum%store_diffusion = .true.
+   self%dynamics%momentum%store_damping = .true.
+   self%dynamics%momentum%store_slowterms = .true.
 
 END SUBROUTINE getm_settings
 
@@ -180,7 +193,7 @@ SUBROUTINE getm_configure(self)
 
    call self%domain%configure(self%imin,self%imax,self%jmin,self%jmax,self%kmin,self%kmax,logs=self%logs,fm=self%fm)
 
-   call self%parallel%configure(self%domain%T)
+!KB   call self%parallel%configure(self%domain%T)
 
    call self%bathymetry%initialize(self%logs,self%domain%T,self%domain%domain_type)
 
@@ -233,11 +246,12 @@ SUBROUTINE getm_initialize(self)
 
 !-----------------------------------------------------------------------------
    call self%logs%info('getm_initialize()')
-   call self%domain%initialize()
+   call self%domain%initialize(self%runtype)
    call self%domain%report()
+   call self%vertical_diffusion%initialize(self%domain%T)
    call self%airsea%initialize(self%domain)
-   call self%physics%initialize(self%domain,self%advection,self%vertical_diffusion)
-   call self%dynamics%initialize(self%domain)
+   call self%physics%initialize(self%runtype,self%domain,self%advection,self%vertical_diffusion)
+   call self%dynamics%initialize(self%runtype,self%domain,self%advection,self%vertical_diffusion)
    call self%domain%depth_update()
    call self%output%initialize()
 !KB   call self%fm%list()
@@ -249,6 +263,7 @@ SUBROUTINE getm_integrate(self)
 
    !! Configure all component of the model
 
+   use gsw_mod_toolbox, only: gsw_pt_from_CT
    IMPLICIT NONE
 
 !  Subroutine arguments
@@ -260,13 +275,17 @@ SUBROUTINE getm_integrate(self)
   integer :: n
   TYPE(datetime) :: sim_time
   TYPE(timedelta) :: dt, remain
+  real(real64) :: dte,dti
   integer :: seconds, milliseconds
-
-!KB
-  real(real64), allocatable :: nuh(:,:,:),rad(:,:,:),shf(:,:)
-  integer :: momentum_adv_scheme=1
 !-----------------------------------------------------------------------------
-!KB   MOMENTUM: associate( MOMENTUM => self%dynamics%momentum )
+   xOutput: associate( output => self%output )
+   xDomain: associate( domain => self%domain )
+   xAirsea: associate( airsea => self%airsea )
+   xPHYSICS: associate(mixing=>self%physics%mixing, salinity=>self%physics%salinity, &
+                       temperature=>self%physics%temperature, radiation=>self%physics%radiation, &
+                       density=>self%physics%density)
+   xDYNAMICS: associate(momentum=>self%dynamics%momentum, pressure=>self%dynamics%pressure, &
+                        sealevel=>self%dynamics%sealevel)
 
    if (self%sim_start .gt. self%sim_stop) return
    call self%logs%info('getm_integrate()',level=0)
@@ -278,93 +297,62 @@ SUBROUTINE getm_integrate(self)
    dt = timedelta(seconds = nint(self%timestep), milliseconds = 0)
    remain = self%sim_stop - sim_time
 
+   dte=self%timestep
+   dti = self%mode_split*self%timestep
    do while (remain%total_seconds() .gt. 0._real64)
-!   do while (remain%total_seconds() .gt. 0._real64 .and. n .lt. 50)
       n = n+1
       sim_time = sim_time + dt
       self%logs%global_info_silence = mod(n,self%info_frequency) .ne. 0
       call self%logs%info(sim_time%isoformat(),level=1)
+
       call self%output%prepare_output(sim_time,n)
 
       ! call do_input(n)
-      call self%airsea%update(n)
-      call self%dynamics%momentum%advection_2d(self%timestep)
-      call self%dynamics%pressure%surface(self%domain%T%z,self%airsea%sp)
-      call self%dynamics%momentum%uv_momentum_2d(self%timestep,self%airsea%taux,self%airsea%tauy, &
-           self%dynamics%pressure%dpdx,self%dynamics%pressure%dpdy)
-      call self%dynamics%sealevel%update(self%timestep,self%dynamics%momentum%U,self%dynamics%momentum%V)
-      call self%domain%depth_update()
+      call airsea%update(n)
 
-      if (self%runtype > 1 .and. mod(n,self%mode_split) == 0) then ! 3D calculations
-         ! This is the GETM 3D call order - not carved in stone
-         ! call start_macro()
-         ! huo=hun; hvo=hvn
-         ! call structure_friction_3d
-         ! if (ufirst) then
-         !    call uu_momentum_3d(n,bdy3d)
-         !    call vv_momentum_3d(n,bdy3d)
-         !    ufirst=.false.
-         ! else
-         !    call vv_momentum_3d(n,bdy3d)
-         !    call uu_momentum_3d(n,bdy3d)
-         !    ufirst=.true.
-         ! end if
-         ! call coordinates(.false.)
-         ! call ww_momentum_3d()
-         !!!! call uv_advect_3d()
-         !!!! call uv_diffusion_3d()  ! Must be called after uv_advect_3d
-         ! call stresses_3d()
-         !!!! call gotm()
-         !!!! if (calc_temp) call do_temperature(n)
-         !!!! if (calc_salt) call do_salinity(n)
-         ! call do_eqstate()
-         ! call slow_bottom_friction()
-         !!!! call uv_advect(Uint,Vint,Dun,Dvn)
-         !!!! call uv_diffusion(0,Uint,Vint,Dn,Dun,Dvn) ! Has to be called after uv_advect.
-         ! call slow_terms()
-         ! call stop_macro()
+      ! 2D barotropic
+      call pressure%surface(domain%T%z,airsea%sp)
+      call momentum%uv_momentum_2d(self%runtype,dte,airsea%taux,airsea%tauy,pressure%dpdx,pressure%dpdy)
+      call momentum%velocities_2d()
+      call sealevel%update(dte,momentum%U,momentum%V)
+      call domain%depth_update()
+
+      ! 3D barotropic
+      if (self%runtype > 1 .and. mod(n,self%mode_split) == 0) then
+         momentum%Ui=momentum%Ui/self%mode_split
+         momentum%Vi=momentum%Vi/self%mode_split
 
          call self%domain%start_3d()
-! moved to momentum_3d
-!KB         self%dynamics%momentum%Uint=self%dynamics%momentum%Uint/self%mode_split
-!KB         self%dynamics%momentum%Vint=self%dynamics%momentum%Vint/self%mode_split
-         call self%dynamics%pressure%surface(self%domain%T%sseo,self%airsea%sp)
-!KB         call self%dynamics%momentum%uv_momentum_3d(self%mode_split)
-         call self%dynamics%momentum%vel_3d()
-         call self%domain%do_vertical()
-!KB         call self%dynamics%momentum%do_w(self%mode_split*self%timestep)
-         call self%dynamics%momentum%stresses()
+         call domain%do_vertical(dti)
+         call pressure%surface(domain%T%zio,airsea%sp)
+         if (self%runtype > 3) call pressure%internal(density%buoy,momentum%SxB,momentum%SyB)
+         call momentum%uvw_momentum_3d(dti,airsea%taux,airsea%tauy,pressure%dpdx,pressure%dpdy, &
+                                       pressure%idpdx,pressure%idpdy,mixing%num)
+         call momentum%stresses()
 
+         ! 3D baroclinic
          if (self%runtype > 3) then
-            xSalinity: associate( salinity => self%physics%salinity )
-            xTemperature: associate( temperature => self%physics%temperature )
-            xDensity: associate( density => self%physics%density )
-            xMomentum: associate( momentum => self%dynamics%momentum )
-
-            call salinity%calculate(self%timestep,momentum%pk,momentum%qk,nuh)
-            call temperature%calculate(self%timestep,momentum%pk,momentum%qk,nuh,rad,shf)
+            call radiation%calculate(airsea%swr,airsea%albedo)
+            call temperature%calculate(dti,momentum%pk,momentum%qk,mixing%nuh,radiation%rad,airsea%shf)
+            call salinity%calculate(dti,momentum%pk,momentum%qk,mixing%nuh)
+            temperature%sst=gsw_pt_from_CT(salinity%S(:,:,domain%T%kmax),temperature%T(:,:,domain%T%kmax))
             call density%density(salinity%S,temperature%T)
             call density%buoyancy()
-
-            end associate xMomentum
-            end associate xDensity
-            end associate xTemperature
-            end associate xSalinity
          end if
 
-         call self%dynamics%momentum%slow_bottom_friction()
-         !
-         !
-         call self%dynamics%momentum%slow_terms(self%dynamics%pressure%idpdx,self%dynamics%pressure%idpdy)
-         ! reset variables
-         self%dynamics%momentum%Uio=self%dynamics%momentum%Ui; self%dynamics%momentum%Ui=0._real64
-         self%dynamics%momentum%Vio=self%dynamics%momentum%Vi; self%dynamics%momentum%Vi=0._real64
+         ! MUST be the last routines to call in the 3D loop
+         ! update the slow terms with contribution from 3D advection, diffusion, buoyancy and friction
+         call momentum%slow_momentum_terms(dte)
       end if
 
       call self%output%do_output(sim_time)
       remain = self%sim_stop - sim_time
    end do
-!KB   end associate MOMENTUM
+   end associate xDYNAMICS
+   end associate xPHYSICS
+   end associate xAirsea
+   end associate xDomain
+   end associate xOutput
 END SUBROUTINE getm_integrate
 
 !---------------------------------------------------------------------------
@@ -384,7 +372,6 @@ SUBROUTINE getm_finalize(self)
 !-----------------------------------------------------------------------------
    call self%logs%info('getm_finalize()')
    call self%domain%cleanup()
-   call self%logs%info('done')
 END SUBROUTINE getm_finalize
 
 !---------------------------------------------------------------------------
