@@ -90,7 +90,7 @@ _pygetm.sealevel_update.argtypes = [ctypes.c_void_p, ctypes.c_double, arrtype2D,
 _pygetm.sealevel_update.restype = None
 
 class FortranObject:
-    def __init__(self, get_function=None, names=(), default_shape=None, default_dtype=ctypes.c_double, shapes={}, dtypes={}, halo=None):
+    def get_arrays(self, get_function=None, names=(), default_shape=None, default_dtype=ctypes.c_double, shapes={}, dtypes={}, halo=None):
         for name in names:
             p = get_function(self.p, name.encode('ascii'))
             assert p, 'Null pointer returned for %s' % name
@@ -115,7 +115,7 @@ class Grid(FortranObject):
         self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
         self.halo = domain.halo
         self.domain = domain
-        FortranObject.__init__(self, _pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area', 'cor'), default_shape=domain.shape[1:], shapes={'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
+        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area', 'cor'), default_shape=domain.shape[1:], shapes={'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)
@@ -239,7 +239,7 @@ class Momentum(FortranObject):
     def __init__(self, runtype, domain, advection):
         self.runtype = runtype
         self.p = _pygetm.momentum_create(self.runtype, domain.p, advection.p)
-        FortranObject.__init__(self, _pygetm.momentum_get_array, ('U', 'V'), default_shape=domain.shape[1:], halo=domain.halo)
+        self.get_arrays(_pygetm.momentum_get_array, ('U', 'V'), default_shape=domain.shape[1:], halo=domain.halo)
 
     def uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy):
         _pygetm.momentum_uv_momentum_2d(self.p, self.runtype, timestep, tausx, tausy, dpdx, dpdy)
@@ -247,7 +247,7 @@ class Momentum(FortranObject):
 class Pressure(FortranObject):
     def __init__(self, runtype, domain):
         self.p = _pygetm.pressure_create(runtype, domain.p)
-        FortranObject.__init__(self, _pygetm.pressure_get_array, ('dpdx', 'dpdy'), default_shape=domain.shape[1:], halo=domain.halo)
+        self.get_arrays(_pygetm.pressure_get_array, ('dpdx', 'dpdy'), default_shape=domain.shape[1:], halo=domain.halo)
 
     def surface(self, z, sp):
         _pygetm.pressure_surface(self.p, z, sp)
