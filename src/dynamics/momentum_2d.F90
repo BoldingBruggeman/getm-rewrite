@@ -147,7 +147,6 @@ MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
       call self%coriolis_fu()
       ufirst = .true.
    end if
-   call self%velocities_2d()
 END SUBROUTINE uv_momentum_2d
 
 !---------------------------------------------------------------------------
