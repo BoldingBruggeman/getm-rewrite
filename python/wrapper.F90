@@ -81,6 +81,7 @@ contains
       case ('D'); p = c_loc(grid%D)
       case ('mask'); p = c_loc(grid%mask)
       case ('z'); p = c_loc(grid%z)
+      case ('cor'); p = c_loc(grid%cor)
       case default; p = C_NULL_PTR
       end select
    end function

@@ -115,7 +115,7 @@ class Grid(FortranObject):
         self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
         self.halo = domain.halo
         self.domain = domain
-        FortranObject.__init__(self, _pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area'), default_shape=domain.shape[1:], shapes={'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
+        FortranObject.__init__(self, _pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area', 'cor'), default_shape=domain.shape[1:], shapes={'c1': (domain.shape[-1],), 'c2': (domain.shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)
