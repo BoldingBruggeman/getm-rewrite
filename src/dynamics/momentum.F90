@@ -10,10 +10,6 @@
 !> loop boundaries in uadvgrid and vadvgrid
 !> @nednote
 
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
-
 MODULE getm_momentum
 
    !! Description:
@@ -43,6 +39,8 @@ MODULE getm_momentum
       !! Gravity
    real(real64), parameter :: kappa = 0.4_real64
       !! constant
+   real(real64), parameter :: avmmol = 0.001_real64 !KB
+      !! constant
 
 !  Module types and variables
    type, public :: type_getm_momentum
@@ -57,31 +55,48 @@ MODULE getm_momentum
       real(real64), dimension(E2DFIELD) :: U, V
       real(real64), dimension(I3DFIELD) :: pk, qk, w
 #else
-      real(real64), dimension(:,:), allocatable :: U, V
-      real(real64), dimension(:,:), allocatable :: Ui, Vi
-      real(real64), dimension(:,:), allocatable :: Uio, Vio
-      real(real64), dimension(:,:), allocatable :: Uadv,Vadv
-      real(real64), dimension(:,:), allocatable :: u1, v1
-      real(real64), dimension(:,:), allocatable :: fU, fV
-      real(real64), dimension(:,:), allocatable :: Slru, Slrv ! Should go away
-      real(real64), dimension(:,:), allocatable :: UEx, VEx ! SxA, SyA, SxB, SyB, SxD, SyD, SxF, SyF
-      real(real64), dimension(:,:), allocatable :: SxA, SyA ! Slow advection
-      real(real64), dimension(:,:), allocatable :: SxB, SyB ! Slow internal pressure
-      real(real64), dimension(:,:), allocatable :: SxD, SyD ! Slow diffusion
-      real(real64), dimension(:,:), allocatable :: SxF, SyF ! Slow friction
-      real(real64), dimension(:,:), allocatable :: SlUx, SlVx ! Should go away
-      real(real64), dimension(:,:), allocatable :: ru, rv
-      real(real64), dimension(:,:,:), allocatable :: pk, qk, ww
-      real(real64), dimension(:,:,:), allocatable :: pkadv, qkadv
-      real(real64), dimension(:,:,:), allocatable :: uk, vk
-      real(real64), dimension(:,:,:), allocatable :: uuEx,vvEx ! 0
-      real(real64), dimension(:,:), allocatable :: taub,taubx, tauby
+      real(real64), dimension(:,:), allocatable :: U,V
+      real(real64), dimension(:,:), allocatable :: Ui,Vi
+      real(real64), dimension(:,:), allocatable :: Uio,Vio
+      real(real64), dimension(:,:), allocatable :: Ua,Va
+      real(real64), dimension(:,:), allocatable :: fU,fV
+      real(real64), dimension(:,:), allocatable :: advU,advV
+      real(real64), dimension(:,:), allocatable :: diffu1,diffv1
+      real(real64), dimension(:,:), allocatable :: dampU,dampV
+      real(real64), dimension(:,:), allocatable :: u1,v1
+      real(real64), dimension(:,:), allocatable :: SxA,SyA ! Slow advection
+      real(real64), dimension(:,:), allocatable :: SxB,SyB ! Slow internal pressure
+      real(real64), dimension(:,:), allocatable :: SxD,SyD ! Slow diffusion
+      real(real64), dimension(:,:), allocatable :: SxF,SyF ! Slow friction
       real(real64), dimension(:,:), allocatable :: rru,rrv
-      real(real64), dimension(:,:), allocatable :: zub,zvb
+      real(real64), dimension(:,:), allocatable :: zub0,zub
+      real(real64), dimension(:,:), allocatable :: zvb0,zvb
+      real(real64), dimension(:,:), allocatable :: ru,rv
+      real(real64), dimension(:,:), allocatable :: Am,An
+      real(real64), dimension(:,:,:), allocatable :: pk,qk,ww
+      real(real64), dimension(:,:,:), allocatable :: pka,qka
+      real(real64), dimension(:,:,:), allocatable :: fpk,fqk
+      real(real64), dimension(:,:,:), allocatable :: advpk,advqk
+      real(real64), dimension(:,:,:), allocatable :: diffuk,diffvk
+      real(real64), dimension(:,:,:), allocatable :: uk,vk
+      real(real64), dimension(:,:), allocatable :: taus,taub
+      real(real64), dimension(:,:), allocatable :: taubx,tauby
+      real(real64), dimension(:,:,:), allocatable :: SS
+      ! help variables
+      real(real64), dimension(:,:,:), allocatable :: num,ea2,ea4
+      real(real64), dimension(:,:), allocatable :: work2d
       type(type_getm_grid) :: uadvgrid,vadvgrid
       integer :: advection_scheme=1
+      integer :: coriolis_scheme=1
       real(real64) :: molecular=0._real64
-      real(real64) :: cnpar
+      real(real64) :: cnpar=1._real64
+      integer :: An_method=0
+      real(real64) :: Am0=0._real64
+      real(real64) :: An0=0._real64
+      logical :: store_advection=.false.
+      logical :: store_diffusion=.true.
+      logical :: store_damping=.true.
+      logical :: store_slowterms=.false.
 #endif
 
       contains
@@ -91,27 +106,46 @@ MODULE getm_momentum
       procedure :: register => momentum_register
       procedure :: initialize_2d => uv_initialize_2d
       procedure :: uv_momentum_2d => uv_momentum_2d
-      procedure :: advection_2d => uv_advection_2d
+      procedure :: bottom_friction_2d => bottom_friction_2d
+      procedure :: coriolis_fu => coriolis_fu
+      procedure :: coriolis_fv => coriolis_fv
+      procedure :: uv_advection_2d => uv_advection_2d
+      procedure :: uv_diffusion_2d => uv_diffusion_2d
+      procedure :: velocities_2d => velocities_2d
       procedure :: initialize_3d => uv_initialize_3d
-      procedure :: uv_momentum_3d => uv_momentum_3d
+      procedure :: uvw_momentum_3d => uvw_momentum_3d
+      procedure :: bottom_friction_3d => bottom_friction_3d
       procedure :: w_momentum_3d => w_momentum_3d
-      procedure :: advection_3d => uv_advection_3d
-      procedure :: vel_2d => velocities_2d
-      procedure :: vel_3d => velocities_3d
-      procedure :: stresses => stresses
-      procedure :: shear => velocity_shear_frequency
-      procedure :: slow_terms => slow_terms
+      procedure :: coriolis_fpk => coriolis_fpk
+      procedure :: coriolis_fqk => coriolis_fqk
+      procedure :: uv_advection_3d => uv_advection_3d
+      procedure :: uv_diffusion_3d => uv_diffusion_3d
+      procedure :: velocities_3d => velocities_3d
+      procedure :: slow_momentum_terms => slow_momentum_terms
+      procedure :: slow_advection => slow_advection
+      procedure :: slow_diffusion => slow_diffusion
       procedure :: slow_bottom_friction => slow_bottom_friction
+      procedure :: shear_frequency => shear_frequency
+      procedure :: stresses => stresses
+      procedure :: list => momentum_list
+      procedure :: set => momentum_set
 
    end type type_getm_momentum
 
    INTERFACE
-      ! 2D routines
+      MODULE SUBROUTINE momentum_register(self,runtype)
+         class(type_getm_momentum), intent(inout) :: self
+         integer, intent(in) :: runtype
+      END SUBROUTINE momentum_register
+
+      ! 2D momentum
       MODULE SUBROUTINE uv_initialize_2d(self)
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE uv_initialize_2d
-      MODULE SUBROUTINE uv_momentum_2d(self,dt,tausx,tausy,dpdx,dpdy)
+
+      MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
          class(type_getm_momentum), intent(inout) :: self
+         integer, intent(in) :: runtype
          real(real64), intent(in) :: dt
             !! timestep [s]
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
@@ -122,22 +156,15 @@ MODULE getm_momentum
 #undef _T2_
       END SUBROUTINE uv_momentum_2d
 
-      MODULE SUBROUTINE uv_advection_2d(self,dt)
-         class(type_getm_momentum), intent(inout) :: self
-         real(real64), intent(in) :: dt
-            !! timestep [s]
-      END SUBROUTINE uv_advection_2d
-
       ! 3D routines
       MODULE SUBROUTINE uv_initialize_3d(self)
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE uv_initialize_3d
-      MODULE SUBROUTINE uv_momentum_3d(self,mode_split,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
+      MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
          !! Solve the 3D momemtum equations
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-         integer, intent(in) :: mode_split
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
    real(real64), intent(in) :: tausx(_T2_)
      !! surface stress - x
@@ -156,28 +183,75 @@ MODULE getm_momentum
    real(real64), intent(in) :: viscosity(_T3_)
      !! viscosity
 #undef _T3_
-      END SUBROUTINE uv_momentum_3d
+      END SUBROUTINE uvw_momentum_3d
       MODULE SUBROUTINE w_momentum_3d(self,dt)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
       END SUBROUTINE w_momentum_3d
+
+      ! friction
+      MODULE SUBROUTINE bottom_friction_2d(self,runtype)
+         class(type_getm_momentum), intent(inout) :: self
+         integer, intent(in) :: runtype
+      END SUBROUTINE bottom_friction_2d
+      MODULE SUBROUTINE bottom_friction_3d(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE bottom_friction_3d
+      MODULE SUBROUTINE slow_bottom_friction(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE slow_bottom_friction
+
+      ! Coriolis
+      MODULE SUBROUTINE coriolis_fu(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE coriolis_fu
+      MODULE SUBROUTINE coriolis_fv(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE coriolis_fv
+      MODULE SUBROUTINE coriolis_fpk(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE coriolis_fpk
+      MODULE SUBROUTINE coriolis_fqk(self)
+         class(type_getm_momentum), intent(inout) :: self
+      END SUBROUTINE coriolis_fqk
+
+      ! advection
+      MODULE SUBROUTINE uv_advection_2d(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      END SUBROUTINE uv_advection_2d
+      MODULE SUBROUTINE slow_advection(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      END SUBROUTINE slow_advection
       MODULE SUBROUTINE uv_advection_3d(self,dt)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
       END SUBROUTINE uv_advection_3d
 
-      MODULE SUBROUTINE slow_terms(self,idpdx,idpdy)
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+      ! diffusion
+      MODULE SUBROUTINE uv_diffusion_2d(self,dt)
          class(type_getm_momentum), intent(inout) :: self
-         real(real64), intent(in) :: idpdx(_T3_)
-         real(real64), intent(in) :: idpdy(_T3_)
-#undef _T3_
-      END SUBROUTINE slow_terms
-      MODULE SUBROUTINE slow_bottom_friction(self)
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      END SUBROUTINE uv_diffusion_2d
+      MODULE SUBROUTINE slow_diffusion(self)
          class(type_getm_momentum), intent(inout) :: self
-      END SUBROUTINE slow_bottom_friction
+      END SUBROUTINE slow_diffusion
+      MODULE SUBROUTINE uv_diffusion_3d(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+      END SUBROUTINE uv_diffusion_3d
+
+      MODULE SUBROUTINE slow_momentum_terms(self,dt)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+      END SUBROUTINE slow_momentum_terms
 
       MODULE SUBROUTINE velocities_2d(self)
          class(type_getm_momentum), intent(inout) :: self
@@ -187,21 +261,22 @@ MODULE getm_momentum
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE velocities_3d
 
-      MODULE SUBROUTINE velocity_shear_frequency(self,num,SS)
+      MODULE SUBROUTINE shear_frequency(self,num)
          class(type_getm_momentum), intent(inout) :: self
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
          real(real64), intent(in) :: num(_T3_)
-         real(real64), intent(inout) :: SS(_T3_)
 #undef _T3_
-      END SUBROUTINE velocity_shear_frequency
+      END SUBROUTINE shear_frequency
 
-      MODULE SUBROUTINE stresses(self)
+      MODULE SUBROUTINE stresses(self,tausx,tausy)
          class(type_getm_momentum), intent(inout) :: self
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: tausx(_T2_)
+            !! surface stresses - x-direction
+         real(real64), intent(in) :: tausy(_T2_)
+            !! surface stresses - y-direction
+#undef _T2_
       END SUBROUTINE stresses
-
-      MODULE SUBROUTINE momentum_register(self)
-         class(type_getm_momentum), intent(inout) :: self
-      END SUBROUTINE momentum_register
 
    END INTERFACE
 
@@ -235,7 +310,7 @@ END SUBROUTINE momentum_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
+SUBROUTINE momentum_initialize(self,runtype,domain,advection,vertical_diffusion)
 
    !! Initialize all dynamical components
 
@@ -243,6 +318,7 @@ SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
 
 !  Subroutine arguments
    class(type_getm_momentum), intent(inout) :: self
+   integer, intent(in) :: runtype
    TYPE(type_getm_domain), intent(inout), target :: domain
    class(type_advection), intent(in), target, optional :: advection
    class(type_vertical_diffusion), intent(in), target, optional :: vertical_diffusion
@@ -266,29 +342,15 @@ SUBROUTINE momentum_initialize(self,domain,advection,vertical_diffusion)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
-
    call self%initialize_2d()
-   call self%initialize_3d()
-
-!KB should move to velocities
-   call mm_s('u1',self%u1,self%U,def=0._real64,stat=stat)
-   call mm_s('v1',self%v1,self%V,def=0._real64,stat=stat)
-   call mm_s('uk',self%uk,self%pk,def=0._real64,stat=stat)
-   call mm_s('vk',self%vk,self%qk,def=0._real64,stat=stat)
-
-!KB some of these should move to momentum_3d
-   call mm_s('taub',self%taub,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
-   call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
-   call mm_s('rru',self%rru,self%U,def=0._real64,stat=stat)
-   call mm_s('rrv',self%rrv,self%V,def=0._real64,stat=stat)
-   call mm_s('zub',self%zub,self%U,def=0._real64,stat=stat)
-   call mm_s('zvb',self%zvb,self%V,def=0._real64,stat=stat)
+   if (runtype > 1) then
+      call self%initialize_3d()
+   end if
+   call mm_s('work2d',self%work2d,self%U,def=0._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
-      call self%register()
+      call self%register(runtype)
    end if
-
    end associate VGrid
    end associate UGrid
    end associate TGrid
@@ -297,7 +359,55 @@ END SUBROUTINE momentum_initialize
 
 !---------------------------------------------------------------------------
 
-END MODULE getm_momentum
+SUBROUTINE momentum_list(self)
+   !! List the configurable parameters in type_getm_momentum
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+!---------------------------------------------------------------------------
+   write(*,*) 'Momentum settings:'
+   write(*,*) 'advection_scheme=    ',self%advection_scheme
+   write(*,*) 'cnpar=               ',self%cnpar
+   write(*,*) 'molecular viscosity= ',self%molecular
+END SUBROUTINE momentum_list
 
 !---------------------------------------------------------------------------
 
+SUBROUTINE momentum_set(self,adv,cnpar,mol)
+   !! List the configurable parameters in type_getm_momentum
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+   integer, intent(in), optional :: adv
+   real(real64), intent(in), optional :: cnpar
+   real(real64), intent(in), optional :: mol
+
+!  Local constants
+
+!  Local variables
+!---------------------------------------------------------------------------
+   if (present(adv)) then
+      self%advection_scheme=adv
+      write(*,*) 'setting advection_scheme to:',self%advection_scheme
+   end if
+   if (present(cnpar)) then
+      self%cnpar=cnpar
+      write(*,*) 'setting cnpar to:',self%cnpar
+   end if
+   if (present(cnpar)) then
+      self%molecular=mol
+      write(*,*) 'setting molecular to:',self%molecular
+   end if
+END SUBROUTINE momentum_set
+
+!---------------------------------------------------------------------------
+
+END MODULE getm_momentum

@@ -110,9 +110,9 @@ MODULE getm_domain
         !! mask=0 -> land
       real(real64), dimension(:,:), allocatable :: D
         !! total water depth - time varying
-      real(real64), dimension(:,:), allocatable :: ssen
+      real(real64), dimension(:,:), allocatable :: zin
         !! elevation at T-points baroclinic time step
-      real(real64), dimension(:,:), allocatable :: sseo
+      real(real64), dimension(:,:), allocatable :: zio
         !! previous timstep
       real(real64), dimension(:,:,:), allocatable :: hn
         !! layer heights - new time step
@@ -152,11 +152,12 @@ MODULE getm_domain
 
       real(real64) :: Dmin=1._real64
       real(real64) :: Dcrit=2._real64
-      real(real64) :: Dgamma
-      real(real64) :: Dmax
+      real(real64) :: Dgamma=1._real64
+      real(real64) :: Dmax=1._real64
       logical :: gamma_surf
       real(real64) :: ddl=-1._real64, ddu=-1._real64
       real(real64) :: lat0=-999._real64
+      integer :: method_vertical_coordinates=1
 
       contains
 
@@ -179,8 +180,9 @@ MODULE getm_domain
          class(type_getm_domain), intent(inout) :: self
       end subroutine metrics
 
-      module subroutine register(self)
+      module subroutine register(self,runtype)
          class(type_getm_domain), intent(inout) :: self
+         integer, intent(in) :: runtype
       end subroutine register
 
       module subroutine uvx_depths(self)
@@ -203,8 +205,9 @@ MODULE getm_domain
       end subroutine init_vertical
 
 !      module subroutine init_vertical(self,z,zo)
-      module subroutine do_vertical(self)
+      module subroutine do_vertical(self,dt)
          class(type_getm_domain), intent(inout) :: self
+         real(real64), intent(in)  :: dt
 !         real(real64), dimension(:,:), intent(in) :: z,zo
       end subroutine do_vertical
 
@@ -284,7 +287,7 @@ END SUBROUTINE domain_configure
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE domain_initialize(self)
+SUBROUTINE domain_initialize(self,runtype)
 
    !! Configure the type_grid
 
@@ -292,6 +295,7 @@ SUBROUTINE domain_initialize(self)
 
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
+   integer, intent(in) :: runtype
 
 !  Local constants
 
@@ -301,29 +305,31 @@ SUBROUTINE domain_initialize(self)
    if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
 
    call self%metrics()
+   call self%uvx_depths()
+   call self%register(runtype)
    where (self%T%mask > 0)
       self%T%z = 0._real64
       self%T%zo = 0._real64
-      self%T%ssen = 0._real64
-      self%T%sseo = 0._real64
+      self%T%zin = 0._real64
+      self%T%zio = 0._real64
    end where
    where (self%U%mask > 0)
       self%U%z = 0._real64
       self%U%zo = 0._real64
-      self%U%ssen = 0._real64
-      self%U%sseo = 0._real64
+      self%U%zin = 0._real64
+      self%U%zio = 0._real64
    end where
    where (self%V%mask > 0)
       self%V%z = 0._real64
       self%V%zo = 0._real64
-      self%V%ssen = 0._real64
-      self%V%sseo = 0._real64
+      self%V%zin = 0._real64
+      self%V%zio = 0._real64
    end where
-   call self%uvx_depths()
-   call self%register()
    call self%cfl_check()
-   call self%init_vertical()
-   call self%do_vertical()
+   if (self%T%kmax > 1) then
+      call self%init_vertical()
+      call self%do_vertical(1._real64) ! KB
+   end if
 
    self%domain_ready = .true.
 
@@ -332,7 +338,6 @@ SUBROUTINE domain_initialize(self)
 !>  part_domain
 !>  @endtodo
 
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE domain_initialize
 
 !-----------------------------------------------------------------------------
@@ -350,12 +355,11 @@ SUBROUTINE deallocate_variables(self)
 !  Local variables
 !-----------------------------------------------------------------------------
 #ifndef _STATIC_
-   if (associated(self%logs)) call self%logs%info('deallocate_variables()',level=2)
+   if (associated(self%logs)) call self%logs%info('deallocate_variables()',level=3)
    call deallocate_grid_variables(self%T)
    call deallocate_grid_variables(self%U)
    call deallocate_grid_variables(self%V)
    call deallocate_grid_variables(self%X)
-   if (associated(self%logs)) call self%logs%info('done',level=2)
 #endif
 END SUBROUTINE deallocate_variables
 
@@ -391,7 +395,6 @@ SUBROUTINE domain_report(self)
       call self%X%report(self%logs,gridunit,'X-grid info: ')
       close(gridunit)
    end if
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE domain_report
 
 !---------------------------------------------------------------------------
@@ -410,27 +413,36 @@ SUBROUTINE start_3d(self)
    integer :: i,j
 !-----------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('start_3d()',level=2)
+   TGrid: associate( TG => self%T )
+   TG%zio=TG%zin
+   TG%zin=TG%z
 
-   self%T%sseo=self%T%ssen
-   self%T%ssen=self%T%z
-
-   self%U%sseo=self%U%ssen
-   do j=self%U%l(2),self%U%l(2)
-      do i=self%U%l(1),self%U%l(1)-1
-         self%U%ssen(i,j)=0.25*(self%T%sseo(i,j)+self%T%sseo(i+1,j)+self%T%ssen(i,j)+self%T%ssen(i+1,j))
-         self%U%ssen(i,j)=max(self%U%ssen(i,j),-self%U%H(i,j)+self%Dmin)
+   UGrid: associate( UG => self%U )
+   UG%zio=UG%zin
+   do j=UG%l(2),UG%u(2)
+      do i=UG%l(1),UG%u(1)-1
+         if (UG%mask(i,j) > 0) then
+            UG%zin(i,j)=0.25*(TG%zio(i,j)+TG%zio(i+1,j)+TG%zin(i,j)+TG%zin(i+1,j))
+            UG%zin(i,j)=max(UG%zin(i,j),-UG%H(i,j)+self%Dmin)
+         end if
       end do
    end do
-   self%U%ho=self%U%hn
+   UG%ho=UG%hn
+   end associate UGrid
 
-   self%V%sseo=self%V%ssen
-   do j=self%V%l(2),self%V%l(2)-1
-      do i=self%V%l(1),self%V%l(1)
-         self%V%ssen(i,j)=0.25*(self%T%sseo(i,j)+self%T%sseo(i,j+1)+self%T%ssen(i,j)+self%T%ssen(i,j+1))
-         self%V%ssen(i,j)=max(self%V%ssen(i,j),-self%U%H(i,j)+self%Dmin)
+   VGrid: associate( VG => self%V )
+   VG%zio=VG%zin
+   do j=VG%l(2),VG%u(2)-1
+      do i=VG%l(1),VG%u(1)
+         if (VG%mask(i,j) > 0) then
+            VG%zin(i,j)=0.25*(TG%zio(i,j)+TG%zio(i,j+1)+TG%zin(i,j)+TG%zin(i,j+1))
+            VG%zin(i,j)=max(VG%zin(i,j),-VG%H(i,j)+self%Dmin)
+         end if
       end do
    end do
    self%V%ho=self%V%hn
+   end associate VGrid
+   end associate TGrid
 END SUBROUTINE start_3d
 
 !---------------------------------------------------------------------------
@@ -447,8 +459,7 @@ SUBROUTINE domain_cleanup(self)
 
 !  Local variables
 !-----------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('cleanup()',level=2)
-
+   if (associated(self%logs)) call self%logs%info('domain_cleanup()',level=2)
    call deallocate_variables(self)
 END SUBROUTINE domain_cleanup
 

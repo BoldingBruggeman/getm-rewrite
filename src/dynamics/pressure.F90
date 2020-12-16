@@ -6,10 +6,6 @@
 !> and calculating the advection-diffusion-equation, which includes
 !> penetrating short-wave radiation as source term (see {\tt do\_temperature}).
 
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
-
 MODULE getm_pressure
 
    !! Description:
@@ -46,7 +42,16 @@ MODULE getm_pressure
 #else
       real(real64), dimension(:,:), allocatable :: dpdx, dpdy
       real(real64), dimension(:,:,:), allocatable :: idpdx, idpdy
+      ! shchepetkin_mcwilliams
+      real(real64), allocatable :: dR(:,:,:)
+      real(real64), allocatable :: dZ(:,:,:)
+      real(real64), allocatable :: P(:,:,:)
+      real(real64), allocatable :: FC(:,:)
+      real(real64), allocatable :: dZx(:,:)
+      real(real64), allocatable :: dRx(:,:)
+      real(real64) :: P_time,U_time,V_time
 #endif
+      integer :: method_internal_pressure=1
 
       contains
 
@@ -54,7 +59,7 @@ MODULE getm_pressure
       procedure :: initialize => pressure_initialize
       procedure :: surface => pressure_surface
       procedure :: internal => pressure_internal
-!KB      procedure :: calculate => physics_calculate
+      procedure :: internal_initialize => pressure_internal_initialize
 
    end type type_getm_pressure
 
@@ -68,8 +73,17 @@ MODULE getm_pressure
            !! pressure [Pa]
 #undef _T2_
       end subroutine pressure_surface
-      module subroutine pressure_internal(self)
+      module subroutine pressure_internal_initialize(self,runtype)
          class(type_getm_pressure), intent(inout) :: self
+         integer, intent(in) :: runtype
+      end subroutine pressure_internal_initialize
+      module subroutine pressure_internal(self,buoy,SxB,SyB)
+         class(type_getm_pressure), intent(inout) :: self
+         real(real64), intent(in) :: buoy(:,:,:)
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(inout) :: SxB(_T2_)
+         real(real64), intent(inout) :: SyB(_T2_)
+#undef _T2_
       end subroutine pressure_internal
    END INTERFACE
 
@@ -105,20 +119,19 @@ END SUBROUTINE pressure_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE pressure_initialize(self,domain)
-
-   !! Initialize all dynamical components
+SUBROUTINE pressure_initialize(self,runtype,domain)
+   !! Initialize all pressure components
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_pressure), intent(inout) :: self
+   integer, intent(in) :: runtype
    class(type_getm_domain), intent(in), target :: domain
 
 !  Local constants
 
 !  Local variables
-   integer :: imin,imax,jmin,jmax,kmax
    integer :: stat
    type (type_field), pointer :: f
 !---------------------------------------------------------------------------
@@ -128,8 +141,6 @@ SUBROUTINE pressure_initialize(self,domain)
 #ifndef _STATIC_
    call mm_s('dpdx',self%dpdx,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('dpdy',self%dpdy,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
-   call mm_s('idpdx',self%idpdx,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
-   call mm_s('idpdy',self%idpdy,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('dpdx', 'Pa/m', 'surface pressure gradient - x', &
@@ -146,7 +157,9 @@ SUBROUTINE pressure_initialize(self,domain)
                             part_of_state=.false., &
                             category='airsea', field=f)
       call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+
    end if
+   call self%internal_initialize(runtype)
    end associate TGrid
 END SUBROUTINE pressure_initialize
 

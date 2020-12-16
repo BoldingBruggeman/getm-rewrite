@@ -19,7 +19,7 @@ PROGRAM test_advection
 !  Local constants
    real(real64), parameter :: Lx=100._real64, Ly=100._real64
    real(real64), parameter :: pi=3.1415926535897932384626433832795_real64
-   integer, parameter :: imin=1, imax=100, jmin=1, jmax=100, kmin=0, kmax=25
+   integer, parameter :: imin=1, imax=100, jmin=1, jmax=100, kmin=0, kmax=1
    integer, parameter :: halo=2
    integer, parameter :: nsave=1
 
@@ -137,6 +137,7 @@ CONTAINS
 !-----------------------------------------------------------------------------
 
    subroutine domain_setup()
+!KB      call domain%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,fm=fm)
       call domain%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax)
       do i=imin,imax
          domain%T%c1(i) = (i-1)*dx-x0
@@ -148,6 +149,7 @@ CONTAINS
       domain%T%H(imin+1:imax-1,jmin+1:jmax-1) = 1._real64
       where(domain%T%H .gt. 0._real64) domain%T%mask = 1
       domain%domain_type=1
+!      call domain%configure(fm=fm)
       call domain%initialize()
       call domain%report()
    end subroutine domain_setup
@@ -161,9 +163,9 @@ CONTAINS
       call fm%initialize(prepend_by_default=(/id_dim_lon,id_dim_lat/),append_by_default=(/id_dim_time/))
       call fm%register('dx','m','grid spacing - x',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%dx(imin:imax,jmin:jmax))
       call fm%register('dy','m','grid spacing - y',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%dy(imin:imax,jmin:jmax))
-      call fm%register('x','m','grid - x',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%x(imin:imax,jmin:jmax))
+!      call fm%register('x','m','grid - x',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%x(imin:imax,jmin:jmax))
 !write(*,*) domain%T%x(imin:imax,jmin:jmax)
-      call fm%register('y','m','grid - y',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%y(imin:imax,jmin:jmax))
+!      call fm%register('y','m','grid - y',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%y(imin:imax,jmin:jmax))
       call fm%register('H','m','depth',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=domain%T%H(imin:imax,jmin:jmax),fill_value=-10._real64)
       call fm%register('u','m/s','u-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=u(imin:imax,jmin:jmax),fill_value=0._real64)
       call fm%register('v','m/s','v-velocity',dimensions=(/id_dim_lon,id_dim_lat/),no_default_dimensions=.true.,data2d=v(imin:imax,jmin:jmax),fill_value=0._real64)

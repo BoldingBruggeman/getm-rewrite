@@ -2,10 +2,6 @@
 
 !> Short wave radiation into the water column
 
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
-
 MODULE getm_radiation
 
    !! Description:
@@ -43,6 +39,7 @@ MODULE getm_radiation
       TYPE(type_radiation_configuration) :: config
       class(type_logging), pointer :: logs => null()
       class(type_field_manager), pointer :: fm => null()
+      class(type_getm_domain), pointer :: domain
 
 #ifdef _STATIC_
       real(real64), dimension(A3DFIELD) :: rad = 10._real64
@@ -72,7 +69,7 @@ SUBROUTINE radiation_configuration(self,logs,fm)
 !  Subroutine arguments
    class(type_radiation), intent(out) :: self
    class(type_logging), intent(in), target, optional :: logs
-   class(type_field_manager), intent(inout), target, optional :: fm
+   class(type_field_manager), intent(in), target, optional :: fm
 
 !  Local constants
 
@@ -90,27 +87,40 @@ END SUBROUTINE radiation_configuration
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE radiation_initialize(self,grid)
+SUBROUTINE radiation_initialize(self,domain)
    !! Initialize the radiation field
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_radiation), intent(inout) :: self
-   class(type_getm_grid), intent(in) :: grid
+   class(type_getm_domain), intent(in), target :: domain
 
 !  Local constants
 
 !  Local variables
    integer :: stat
+   type (type_field), pointer :: f
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('radiation_initialize()',level=2)
+   self%domain => domain
+   TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
-   call mm_s('A',self%A,grid%l(1:2),grid%u(1:2),def=0.7_real64,stat=stat)
-   call mm_s('g1',self%g1,grid%l(1:2),grid%u(1:2),def=0.4_real64,stat=stat)
-   call mm_s('g2',self%g2,grid%l(1:2),grid%u(1:2),def=8._real64,stat=stat)
-   call mm_s('rad',self%rad,grid%l,grid%u,def=15._real64,stat=stat)
+   call mm_s('A',self%A,TG%l(1:2),TG%u(1:2),def=0.7_real64,stat=stat)
+   call mm_s('g1',self%g1,TG%l(1:2),TG%u(1:2),def=0.4_real64,stat=stat)
+   call mm_s('g2',self%g2,TG%l(1:2),TG%u(1:2),def=8._real64,stat=stat)
+   call mm_s('rad',self%rad,TG%l+(/0,0,-1/),TG%u,def=0._real64,stat=stat)
 #endif
+   if (associated(self%fm)) then
+      call self%fm%register('rad', 'W/m2', 'short wave radiation', &
+                            standard_name='', &
+                            dimensions=(TG%dim_3d_ids), &
+   !KB                         output_level=output_level_debug, &
+                            part_of_state=.false., &
+                            category='airsea', field=f)
+      call self%fm%send_data('rad', self%rad(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+   end if
+   end associate TGrid
 END SUBROUTINE radiation_initialize
 
 !---------------------------------------------------------------------------
@@ -118,16 +128,14 @@ END SUBROUTINE radiation_initialize
 !> Write description of algorithm for calculation radiation based on surface
 !> short-wave radiation
 
-SUBROUTINE radiation_calculate(self,grid,swr,albedo)
+SUBROUTINE radiation_calculate(self,swr,albedo)
    !!
 
    IMPLICIT NONE
 
 !  Subroutine arguments
-   class(type_radiation), intent(out) :: self
-   class(type_getm_grid), intent(in) :: grid
-!KB - should use a pointer for this
-#define _T2_ grid%l(1):,grid%l(2):
+   class(type_radiation), intent(inout) :: self
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
    real(real64), intent(in) :: swr(_T2_)
    real(real64), intent(in) :: albedo(_T2_)
 #undef _T2_
@@ -135,26 +143,24 @@ SUBROUTINE radiation_calculate(self,grid,swr,albedo)
 !  Local constants
 
 !  Local variables
-   real(real64) :: z
    integer :: i,j,k
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('radiation_calculate()',level=2)
 
-!KB - loop boundaries
-   self%rad(:,:,grid%u(3)) = (1._real64-albedo(:,:))*swr(:,:)
-   do k=grid%l(3),grid%u(3)-1
-      do j=grid%l(2),grid%u(2)
-         do i=grid%l(1),grid%u(1)
-            if (grid%mask(i,j) > 0) then
-               z = grid%zf(i,j,k)
-               self%rad(i,j,k) = self%rad(i,j,grid%u(3)) &
-                       *(self%A(i,j) &
-                       *exp(-z/self%g1(i,j)) &
-                       +(1._real64-self%A(i,j))*exp(-z/self%g2(i,j)))
+   TGrid: associate( TG => self%domain%T )
+   self%rad(:,:,TG%u(3)) = (1._real64-albedo(:,:))*swr(:,:)
+   do k=TG%u(3)-1,TG%l(3)-1,-1
+      do j=TG%l(2),TG%u(2)
+         do i=TG%l(1),TG%u(1)
+            if (TG%mask(i,j) > 0) then
+               self%rad(i,j,k) = self%rad(i,j,k+1)*( &
+                                 self%A(i,j) *exp(-TG%hn(i,j,k+1)/self%g1(i,j)) &
+                     +(1._real64-self%A(i,j))*exp(-TG%hn(i,j,k+1)/self%g2(i,j)))
             end  if
          end do
       end do
    end do
+   end associate TGrid
 END SUBROUTINE radiation_calculate
 
 !---------------------------------------------------------------------------
@@ -162,22 +168,6 @@ END SUBROUTINE radiation_calculate
 END MODULE getm_radiation
 
 #if 0
-
-  do j=jmin,jmax
-      do i=imin,imax
-         if (az(i,j) .ge. 1) then
-            swr_loc=swr(i,j)
-            rad(i,j,kmax)=swr_loc
-            zz = _ZERO_
-            do k=kmax-1,0,-1
-               zz=zz+hn(i,j,k+1)
-               rad(i,j,k)=swr_loc &
-                      *(A(i,j)*exp(-zz/g1(i,j))+(1-A(i,j))*exp(-zz/g2(i,j)))
-            end do
-         end if
-      end do
-   end do
-
             do k=0,kmax
                rad1d(k)=rad(i,j,k)
             end do

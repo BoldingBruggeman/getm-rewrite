@@ -6,15 +6,6 @@
 !> and calculating the advection-diffusion-equation, which includes
 !> penetrating short-wave radiation as source term (see {\tt do\_salinity}).
 
-!> @note
-!> ckeck dimension order of auxo and auxn
-!> ckeck dimension order of a1, a2, a3, a4
-!> @endnote
-
-#ifdef _STATIC_
-#include "dimensions.h"
-#endif
-
 MODULE getm_salinity
 
    !! Description:
@@ -38,7 +29,6 @@ MODULE getm_salinity
    PRIVATE  ! Private scope by default
 
 !  Module constants
-   real(real64), parameter :: avmols = 0._real64
 
 !  Module types and variables
    real(real64) :: cnpar
@@ -66,7 +56,7 @@ MODULE getm_salinity
 #endif
       integer :: advection_scheme=1
       real(real64) :: cnpar
-      real(real64) :: avmolt
+      real(real64) :: avmols=0._real64
 
       contains
 
@@ -187,11 +177,10 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
-   call self%advection%calculate(1,UG,uk,VG,vk,dt,TG,self%S)
+   call self%advection%calculate(self%advection_scheme,UG,uk,VG,vk,dt,TG,self%S)
    end associate VGrid
    end associate UGrid
-   !scheme,ugrid,u,vgrid,v,dt,tgrid,f
-   call self%vertical_diffusion%calculate(TG%mask,TG%hn,TG%hn,dt,self%cnpar,self%avmolt,nuh,self%S)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmols,nuh,self%S)
    end associate TGrid
 END SUBROUTINE salinity_calculate
 

@@ -1,7 +1,7 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
   !! @note
-  !! ssen and sseo for U and V points
+  !! zin and zio for U and V points
   !! @note
 
 SUBMODULE (getm_domain) vertical_coordinates_smod
@@ -21,6 +21,11 @@ INTERFACE
       real(real64), intent(in) :: dt
    end subroutine do_gvc
 END INTERFACE
+
+ENUM, BIND(C)
+   ENUMERATOR :: method_sigma=1
+   ENUMERATOR :: method_gvc=2
+END ENUM
 
 !-----------------------------------------------------------------------------
 
@@ -43,37 +48,77 @@ module SUBROUTINE init_vertical(self)
    if (associated(self%logs)) call self%logs%info('init_vertical()',level=2)
 
    where (self%T%mask > 0)
-      self%T%ssen=self%T%z
+      self%T%zin=self%T%z
    end where
 
-!KB   call init_sigma(self)
-!KB   call init_gvc(self)
-
-   return
+   select case (self%method_vertical_coordinates)
+      case(method_sigma)
+         call init_sigma(self)
+         call depths(self%T); call depths(self%U); call depths(self%V)
+      case(method_gvc)
+         call init_gvc(self)
+         call depths(self%T); call depths(self%U); call depths(self%V)
+   end select
 END SUBROUTINE init_vertical
 
 !---------------------------------------------------------------------------
 
-module SUBROUTINE do_vertical(self)
+module SUBROUTINE do_vertical(self,dt)
    !! A wrapper for vertical coordinate calculations
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
+   real(real64), intent(in) :: dt
 
 !  Local constants
 
 !  Local variables
-real(real64) :: dt
+   integer :: i,j,k
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('do_vertical()',level=2)
 
-!KB   call do_sigma(self)
-!KB   call do_gvc(self,dt)
-
-   return
+   select case (self%method_vertical_coordinates)
+      case(method_sigma)
+         call do_sigma(self)
+         call depths(self%T); call depths(self%U); call depths(self%V)
+      case(method_gvc)
+         call do_gvc(self,dt)
+         call depths(self%T); call depths(self%U); call depths(self%V)
+   end select
 END SUBROUTINE do_vertical
+
+!---------------------------------------------------------------------------
+
+subroutine depths(self)
+   !! Cacluate the depth to the cell face and center
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_grid), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j,k
+!-----------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('depths()',level=3)
+   do j=self%jmin,self%jmax+1
+      do i=self%imin,self%imax+1
+         if (self%mask(i,j) > 0) then
+            self%zf(i,j,0)=-self%H(i,j)
+            self%zf(i,j,1)=-self%H(i,j)+self%hn(i,j,1)
+            self%zc(i,j,1)=-self%H(i,j)+0.5_real64*self%hn(i,j,1)
+            do k=2,self%kmax
+               self%zf(i,j,k)=self%zf(i,j,k-1)+self%hn(i,j,k)
+               self%zc(i,j,k)=self%zc(i,j,k-1)+0.5_real64*(self%hn(i,j,k-1)+self%hn(i,j,k))
+            end do
+         end if
+      end do
+   end do
+end subroutine depths
 
 !---------------------------------------------------------------------------
 

@@ -1,0 +1,9 @@
+diffusion:
+  time_unit: dt
+  time_step: 1
+  i_start: 50
+  i_stop: 50
+  j_start: 50
+  j_stop: 50
+  variables:
+  - source: *

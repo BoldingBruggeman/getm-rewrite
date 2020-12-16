@@ -30,6 +30,7 @@ MODULE getm_physics
    use getm_salinity, only: type_salinity
    use getm_temperature, only: type_temperature
    use getm_density, only: type_density
+   use getm_mixing, only: type_getm_mixing
 !KB   use getm_turbulence, only: type_turbulence
 
    IMPLICIT NONE
@@ -48,6 +49,7 @@ MODULE getm_physics
       TYPE(type_salinity), public :: salinity
       TYPE(type_temperature), public :: temperature
       TYPE(type_density), public :: density
+      TYPE(type_getm_mixing), public :: mixing
 !KB      TYPE(type_turbulence), public :: turbulence
 
       contains
@@ -87,16 +89,16 @@ SUBROUTINE physics_configure(self,logs,fm)
    if (present(fm)) then
       self%fm => fm
    end if
+   call self%radiation%configuration(logs,fm)
    call self%salinity%configuration(logs,fm)
    call self%temperature%configuration(logs,fm)
    call self%density%configure(logs,fm)
-!KB   call self%turbulence%configuration(logs)
-   if (associated(self%logs)) call logs%info('done',level=1)
+   call self%mixing%configuration(logs,fm)
 END SUBROUTINE physics_configure
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
+SUBROUTINE physics_initialize(self,runtype,domain,advection,vertical_diffusion)
 
    !! Initialize all dynamical components
 
@@ -104,6 +106,7 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
 
 !  Subroutine arguments
    class(type_getm_physics), intent(inout) :: self
+   integer, intent(in) :: runtype
    class(type_getm_domain), intent(in), target :: domain
    class(type_advection), intent(in), target :: advection
    class(type_vertical_diffusion), intent(in), target :: vertical_diffusion
@@ -114,13 +117,17 @@ SUBROUTINE physics_initialize(self,domain,advection,vertical_diffusion)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('physics_initialize()',level=1)
 
-!KB   call self%radiation%initialize(logs,grid)
-   call self%salinity%initialize(domain,advection,vertical_diffusion)
-   call self%temperature%initialize(domain)
-   call self%density%initialize(domain)
-   call self%density%density(self%salinity%S,self%temperature%T)
-   call self%density%buoyancy()
-   if (associated(self%logs)) call self%logs%info('done',level=1)
+   if (runtype > 2) then
+      call self%radiation%initialize(domain)
+      call self%salinity%initialize(domain,advection,vertical_diffusion)
+      call self%temperature%initialize(domain,advection,vertical_diffusion)
+      call self%density%initialize(domain)
+      call self%density%density(self%salinity%S,self%temperature%T)
+      call self%density%buoyancy()
+   end if
+   if (runtype > 1) then
+      call self%mixing%initialize(domain)
+   end if
 END SUBROUTINE physics_initialize
 
 !---------------------------------------------------------------------------

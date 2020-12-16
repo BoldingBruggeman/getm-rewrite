@@ -65,7 +65,6 @@ SUBROUTINE configure_output(self,logs,fm)
       self%fm => fm
    end if
    call init_epoch()
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE configure_output
 
 !-----------------------------------------------------------------------------
@@ -87,7 +86,6 @@ SUBROUTINE initialize_output(self)
    allocate(type_getm_output::output_manager_host)
 !KB   call self%fm%list()
    call output_manager_init(self%fm,trim(title))
-   if (associated(self%logs)) call self%logs%info('done',level=1)
 END SUBROUTINE initialize_output
 
 !-----------------------------------------------------------------------------

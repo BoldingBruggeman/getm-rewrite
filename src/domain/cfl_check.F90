@@ -68,9 +68,7 @@ module SUBROUTINE cfl_check(self)
       call self%logs%info(trim(msg),level=3)
       write(msg,'(A,F9.2)') 'maxdt:   ',self%maxdt
       call self%logs%info(trim(msg),level=3)
-      call self%logs%info('done',level=2)
    end if
-   return
 END SUBROUTINE cfl_check
 
 !-----------------------------------------------------------------------------
