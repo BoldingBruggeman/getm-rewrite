@@ -188,7 +188,7 @@ MODULE SUBROUTINE register(self,runtype)
    call self%fm%register('DU', 'm', 'waterdepth', &
                       standard_name='total depth', &
                       dimensions=(/self%id_dim_xi, self%id_dim_y, id_dim_time/), &
-                      fill_value=-10._real64, &
+                      fill_value=-9999._real64, &
                       no_default_dimensions=.true., &
                       output_level=output_level_required, &
                       category='domain',field=f)
@@ -197,7 +197,7 @@ MODULE SUBROUTINE register(self,runtype)
    call self%fm%register('DV', 'm', 'waterdepth', &
                       standard_name='total depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_yi, id_dim_time/), &
-                      fill_value=-10._real64, &
+                      fill_value=-9999._real64, &
                       no_default_dimensions=.true., &
                       output_level=output_level_required, &
                       category='domain',field=f)
@@ -206,7 +206,7 @@ MODULE SUBROUTINE register(self,runtype)
    call self%fm%register('DX', 'm', 'waterdepth', &
                       standard_name='total depth', &
                       dimensions=(/self%id_dim_xi, self%id_dim_yi, id_dim_time/), &
-                      fill_value=-10._real64, &
+                      fill_value=-9999._real64, &
                       no_default_dimensions=.true., &
                       output_level=output_level_required, &
                       category='domain',field=f)
