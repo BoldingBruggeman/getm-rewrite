@@ -328,7 +328,7 @@ SUBROUTINE getm_integrate(self)
          if (self%runtype > 3) call pressure%internal(density%buoy,momentum%SxB,momentum%SyB)
          call momentum%uvw_momentum_3d(dti,airsea%taux,airsea%tauy,pressure%dpdx,pressure%dpdy, &
                                        pressure%idpdx,pressure%idpdy,mixing%num)
-         call momentum%stresses()
+         call momentum%stresses(airsea%taux,airsea%tauy)
 
          ! 3D baroclinic
          if (self%runtype > 3) then
