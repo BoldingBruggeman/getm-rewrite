@@ -42,7 +42,7 @@ MODULE getm_domain
    integer, parameter :: halo(3)=(/2,2,0/)
    integer, parameter :: cartesian=1, spherical=2, curvilinear=3
       !! Fortran precision
-   real(real64), parameter :: g = 9.81_real64
+   real(real64), parameter, public :: g = 9.81_real64
       !! Gravity
    real(real64), parameter :: rearth_default = 6378815._real64
    real(real64), parameter :: rearth = 6378815._real64
@@ -158,6 +158,24 @@ MODULE getm_domain
       real(real64) :: ddl=-1._real64, ddu=-1._real64
       real(real64) :: lat0=-999._real64
       integer :: method_vertical_coordinates=1
+      integer :: nwb=0,nnb=0,neb=0,nsb=0
+         !! # of western, northern, eastern and southern boundaries
+      integer :: nbdy=0
+         !! # of open boundaries
+      integer :: nbdyp=0
+         !! # of open boundary points
+      integer, allocatable :: wi(:),wfj(:),wlj(:)
+         !! indices for western boundaries
+      integer, allocatable :: nj(:),nfi(:),nli(:)
+         !! indices for northen boundaries
+      integer, allocatable :: ei(:),efj(:),elj(:)
+         !! indices for eastern boundaries
+      integer, allocatable :: sj(:),sfi(:),sli(:)
+         !! indices for southern boundaries
+      integer, allocatable :: bdy_2d_type(:)
+      integer, allocatable :: bdy_3d_type(:)
+      integer, allocatable :: bdy_index(:)
+      integer, allocatable :: bdy_map(:,:)
 
       contains
 
@@ -248,7 +266,7 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,logs,fm)
+SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,nwb,nnb,neb,nsb,logs,fm)
 
    !! Configure the type_grid
 
@@ -257,13 +275,14 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,logs,fm)
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
    integer, intent(in) :: imin,imax,jmin,jmax,kmin,kmax
+   integer, intent(in), optional :: nwb,nnb,neb,nsb
    class(type_logging), intent(in), target, optional :: logs
    TYPE(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
-   logical :: tgrid,ugrid, vgrid, xgrid
+   integer :: stat
 !-----------------------------------------------------------------------
    if (present(logs)) then
       self%logs => logs
@@ -276,6 +295,43 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,logs,fm)
    call self%U%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%V%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%X%configure(logs,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+
+   if (present(nwb)) then
+      self%nwb=nwb
+      if (self%nwb > 0) then
+         self%nbdy=self%nbdy+self%nwb
+         allocate(self%wi(self%nwb),stat=stat)
+         allocate(self%wfj,self%wlj,mold=self%wi,stat=stat)
+      end if
+   end if
+   if (present(nnb)) then
+      self%nnb=nnb
+      if (self%nnb > 0) then
+         self%nbdy=self%nbdy+self%nnb
+         allocate(self%nj(self%nnb),stat=stat)
+         allocate(self%nfi,self%nli,mold=self%nj,stat=stat)
+      end if
+   end if
+   if (present(neb)) then
+      self%neb=neb
+      if (self%neb > 0) then
+         self%nbdy=self%nbdy+self%neb
+         allocate(self%ei(self%neb),stat=stat)
+         allocate(self%efj,self%elj,mold=self%ei,stat=stat)
+      end if
+   end if
+   if (present(nsb)) then
+      self%nsb=nsb
+      if (self%nsb > 0) then
+         self%nbdy=self%nbdy+self%nsb
+         allocate(self%sj(self%nsb),stat=stat)
+         allocate(self%sfi,self%sli,mold=self%sj,stat=stat)
+      end if
+   end if
+   if (self%nbdy > 0) then
+      allocate(self%bdy_2d_type(self%nbdy),stat=stat)
+      allocate(self%bdy_3d_type(self%nbdy),stat=stat)
+   end if
 
 !  set local and global grid extend
 !KB   self%T%ill=self%T%l(1); self%T%ihl=self%T%u(1)
@@ -300,10 +356,10 @@ SUBROUTINE domain_initialize(self,runtype)
 !  Local constants
 
 !  Local variables
-   integer :: stat
 !-----------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
 
+   call boundary_bookkeeping(self)
    call self%metrics()
    call self%uvx_depths()
    call self%register(runtype)
@@ -339,6 +395,92 @@ SUBROUTINE domain_initialize(self,runtype)
 !>  @endtodo
 
 END SUBROUTINE domain_initialize
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE boundary_bookkeeping(self)
+   !! open boundary  book keeping
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: stat
+   integer :: i,j,il,jl,k,l,n
+!-----------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('boundary_bookkeeping()',level=2)
+   self%nbdyp=0
+   do n=1,self%nwb
+      self%nbdyp=self%nbdyp+self%wlj(n)-self%wfj(n)+1
+   end do
+   do n=1,self%nnb
+      self%nbdyp=self%nbdyp+self%nli(n)-self%nfi(n)+1
+   end do
+   do n=1,self%neb
+      self%nbdyp=self%nbdyp+self%elj(n)-self%efj(n)+1
+   end do
+   do n=1,self%nsb
+      self%nbdyp=self%nbdyp+self%sli(n)-self%sfi(n)+1
+   end do
+   if (self%nbdy > 0) then
+      allocate(self%bdy_index(self%nbdyp),stat=stat)
+      allocate(self%bdy_map(self%nbdyp,2),stat=stat)
+   end if
+   k=1
+   l=1
+   do n=1,self%nwb
+      self%bdy_index(l) = k
+      l=l+1
+      i=self%wi(n)
+      do j=self%wfj(n),self%wlj(n)
+         il=i-self%T%ioff; jl=j-self%T%joff
+         self%bdy_map(k,1)=i
+         self%bdy_map(k,2)=j
+         self%T%mask(il,jl)=2
+         k = k+1
+      end do
+   end do
+   do n=1,self%nnb
+      self%bdy_index(l)=k
+      l=l+1
+      j=self%nj(n)
+      do i=self%nfi(n),self%nli(n)
+         il=i-self%T%ioff; jl=j-self%T%joff
+         self%bdy_map(k,1)=i
+         self%bdy_map(k,2)=j
+         self%T%mask(il,jl)=2
+         k = k+1
+      end do
+   end do
+   do n=1,self%neb
+      self%bdy_index(l)=k
+      l=l+1
+      i=self%ei(n)
+      do j=self%efj(n),self%elj(n)
+         il=i-self%T%ioff; jl=j-self%T%joff
+         self%bdy_map(k,1)=i
+         self%bdy_map(k,2)=j
+         self%T%mask(il,jl)=2
+         k=k+1
+      end do
+   end do
+   do n=1,self%nsb
+      self%bdy_index(l)=k
+      l=l+1
+      j=self%sj(n)
+      do i=self%sfi(n),self%sli(n)
+         il=i-self%T%ioff; jl=j-self%T%joff
+         self%bdy_map(k,1)=i
+         self%bdy_map(k,2)=j
+         self%T%mask(il,jl)=2
+         k=k+1
+      end do
+   end do
+END SUBROUTINE boundary_bookkeeping
 
 !-----------------------------------------------------------------------------
 
