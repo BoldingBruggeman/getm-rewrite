@@ -1,6 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman
 
-PROGRAM test_uv_depths
+PROGRAM test_uvx_depths
    !! Testing calculation of depth at U and V points
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
@@ -17,7 +17,7 @@ PROGRAM test_uv_depths
    integer :: i, j
 !-----------------------------------------------------------------------------
    logs%prepend = ''
-   call logs%info('testing test_uv_depths():')
+   call logs%info('testing test_uvx_depths():')
 
    call domain%configure(imin,imax,jmin,jmax,kmin=-1,kmax=-1,logs=logs)
    domain%domain_type = 1
@@ -29,13 +29,13 @@ PROGRAM test_uv_depths
       domain%T%mask = 0
    end where
 
-   call domain%initialize()
+   call domain%initialize(1)
 
    call logs%info('H:')
    call domain%T%print_info(logs)
    call domain%T%print_mask(6)
 
-   call domain%uv_depths()
+   call domain%uvx_depths()
 
    call logs%info('HU:')
    call domain%U%print_mask(6)
@@ -45,4 +45,4 @@ PROGRAM test_uv_depths
    call domain%V%print_mask(6)
 !   write(*,*) domain%V%H
 
-END PROGRAM test_uv_depths
+END PROGRAM test_uvx_depths
