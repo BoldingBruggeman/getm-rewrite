@@ -31,6 +31,11 @@ endif(GETM_USE_PARALLEL)
 
 
 add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/extern/flom" extern/flom)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/extern/gotm/src/turbulence" extern/gotm)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/extern/gotm/src/util")
+#KBadd_subdirectory("extern/gotm" EXCLUDE_FROM_ALL)
+set(GOTM_BUILD_LIBRARIES_ONLY ON)
+#KBadd_compile_options(-ffree-line-length-none)
 
 # Various compilation options
 if( NOT GETM_USE_STATIC )
