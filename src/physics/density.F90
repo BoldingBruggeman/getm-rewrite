@@ -3,6 +3,9 @@
 !> @note
 !> how to deal with passing mask to calculation routines
 !>
+!> the NN calculation is not correct for non-equidistant vertical grids - as pmid does not reprensent the model
+!> interface - does it matter? What is the error?
+!>
 !> @endnote
 
 MODULE getm_density
@@ -98,7 +101,7 @@ SUBROUTINE density_initialize(self,domain)
 #ifndef _STATIC_
    call mm_s('rho',self%rho,TG%l,TG%u,def=-9999._real64,stat=stat)
    call mm_s('buoy',self%buoy,self%rho,def=-9999._real64,stat=stat)
-   call mm_s('NN',self%NN,self%rho,def=-9999._real64,stat=stat)
+   call mm_s('NN',self%NN,TG%l+(/0,0,-1/),TG%u,def=-9999._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('rho', 'kg/m3', 'density', &
@@ -216,28 +219,63 @@ END SUBROUTINE buoyancy_calculate
 !> [link](http://www.teos-10.org/pubs/gsw/html/gsw_Nsquared.html)
 !> @endnote
 
-SUBROUTINE brunt_vaisala_calculate(self)
+SUBROUTINE brunt_vaisala_calculate(self,S,T)
 
    !!{!./code/brunt_vaisala.md!}
+
+   use gsw_mod_toolbox, only: gsw_nsquared
 
    IMPLICIT NONE
 
 !  Subroutine arguments
    class(type_density), intent(inout) :: self
-!KB   real(real64), dimension(:,:,:), intent(inout) :: NN
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: S(_T3_)
+      !! absolute salinity
+   real(real64), intent(in) :: T(_T3_)
+      !! conservative temperature [C|K?]
+#undef _T3_
 
 !  Local constants
 
 !  Local variables
+!KB
+#if 0
    integer :: i, j, k
    real(real64), allocatable, dimension(:,:,:) :: x
 
    real(real64) :: small_bvf !!!! KB
    real(real64) :: gravity, rho0 !!!! KB
    real(real64) :: dz, NNc, NNe, NNn, NNw, NNs
+#else
+   real(real64), allocatable :: pmid(:),lat(:)
+   integer :: i,j
+#endif
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('brunt_vaisala_calculate()',3)
    TGrid: associate( TG => self%domain%T )
+   allocate(pmid(TG%l(3):TG%u(3)-1))
+   allocate(lat(TG%l(3):TG%u(3)))
+   lat=0._real64
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+         if (TG%mask(i,j) .ge. 1 ) then
+            self%NN(i,j,TG%u(3))=0._real64
+            call gsw_nsquared(S(i,j,:),T(i,j,:),TG%zc(i,j,:),lat,self%NN(i,j,TG%l(3):),pmid) !KB check index
+            self%NN(i,j,TG%l(3)-1)=0._real64
+         end if
+      end do
+   end do
+   end associate TGrid
+END SUBROUTINE brunt_vaisala_calculate
+
+!---------------------------------------------------------------------------
+
+END MODULE getm_density
+
+#if 0
+#if 1
+#else
    do j=TG%jmin-1,TG%jmax+1
       do i=TG%imin-1,TG%imax+1
          if (TG%mask(i,j) .ge. 1 ) then
@@ -308,10 +346,5 @@ SUBROUTINE brunt_vaisala_calculate(self)
       end do
    end do
 #endif
-   end associate TGrid
-
-END SUBROUTINE brunt_vaisala_calculate
-
-!---------------------------------------------------------------------------
-
-END MODULE getm_density
+#endif
+#endif

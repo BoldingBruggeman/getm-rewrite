@@ -126,10 +126,10 @@ SUBROUTINE mixing_initialize(self,domain)
    self%domain => domain
    TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
-   call mm_s('tke',self%tke,TG%l,TG%u,def=-99._real64,stat=stat)
-   call mm_s('eps',self%eps,self%tke,-99._real64,stat=stat)
-   call mm_s('num',self%num,self%tke,-99._real64,stat=stat)
-   call mm_s('nuh',self%nuh,self%tke,-99._real64,stat=stat)
+   call mm_s('tke',self%tke,TG%l+(/0,0,-1/),TG%u,def=-9999._real64,stat=stat)
+   call mm_s('eps',self%eps,self%tke,-9999._real64,stat=stat)
+   call mm_s('num',self%num,self%tke,-9999._real64,stat=stat)
+   call mm_s('nuh',self%nuh,self%tke,-9999._real64,stat=stat)
 #endif
 
    if (associated(self%fm)) then
@@ -175,11 +175,11 @@ END SUBROUTINE mixing_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE mixing_calculate(self,SS,NN)
+SUBROUTINE mixing_calculate(self,dt,taus,taub,SS,NN)
    !! Feeds your cats and dogs, if enough food is available. If not enough
    !! food is available, some of your pets will get angry.
 
-#if 0
+#if 1
    use turbulence, only: do_turbulence,cde
    use turbulence, only: tke1d => tke, eps1d => eps, L1d => L
    use turbulence, only: num1d => num, nuh1d => nuh
@@ -194,6 +194,14 @@ SUBROUTINE mixing_calculate(self,SS,NN)
 
 !  Subroutine arguments
    class(type_getm_mixing), intent(inout) :: self
+   real(real64), intent(in) :: dt
+      !! timestep [s]
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), intent(in) :: taus(_T2_)
+      !! surface stress []
+   real(real64), intent(in) :: taub(_T2_)
+      !! surface stress []
+#undef _T2_
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: SS(_T3_)
       !! shear stress []
@@ -205,6 +213,10 @@ SUBROUTINE mixing_calculate(self,SS,NN)
 
 !  Local variables
    integer :: i,j,k
+   real(real64) :: u_taus, u_taub
+   real(real64) :: avmback,avhback
+   real(real64) :: z0s,z0b
+   real(real64), allocatable :: h(:),SS1d(:),NN1d(:)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('mixing_calculate()',level=2)
 
@@ -229,25 +241,25 @@ stop 'mixing.F90: use_parabolic not implemented yet'
          end do
       case (use_gotm)
 stop 'mixing.F90: use_gotm not ready yet'
-#if 0
+#if 1
          do j=TG%jmin,TG%jmax
             do i=TG%imin,TG%imax
-               if (TG%mask > 0) then
+               if (TG%mask(i,j) > 0) then
                   u_taus = sqrt(taus(i,j))
                   u_taub = sqrt(taub(i,j))
                   h(:) = TG%hn(i,j,:)
                   SS1d(:) = SS(i,j,:)
                   NN1d(:) = NN(i,j,:)
-                  tke1d(:)=tke(i,j,:)
-                  eps1d(:)=eps(i,j,:)
-                  L1d(:)  =cde*tke1d(:)**1.5_real64/eps1d(:)
-                  num1d(:)=num(i,j,:)
-                  nuh1d(:)=nuh(i,j,:)
+                  tke1d(:) = self%tke(i,j,:)
+                  eps1d(:)= self%eps(i,j,:)
+                  L1d(:)  = cde*tke1d(:)**1.5_real64/eps1d(:)
+                  num1d(:) = self%num(i,j,:)
+                  nuh1d(:) = self%nuh(i,j,:)
                   call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,TG%hn(i,j,:),NN1D,SS1D)
-                  tke(i,j,:) = tke1d(:)
-                  eps(i,j,:) = eps1d(:)
-                  num(i,j,:) = num1d(:) + avmback
-                  nuh(i,j,:) = nuh1d(:) + avhback
+                  self%tke(i,j,:) = tke1d(:)
+                  self%eps(i,j,:) = eps1d(:)
+                  self%num(i,j,:) = num1d(:) + avmback
+                  self%nuh(i,j,:) = nuh1d(:) + avhback
                end if
             end do
          end do

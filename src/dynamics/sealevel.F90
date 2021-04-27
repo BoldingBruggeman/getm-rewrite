@@ -223,7 +223,7 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
    integer :: i,j,k,l,n
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('sealevel_boundaries()',level=2)
-   Domain: associate( domain => self%domain )
+   xDomain: associate( domain => self%domain )
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
@@ -318,7 +318,7 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
    end associate VGrid
    end associate UGrid
    end associate TGrid
-   end associate Domain
+   end associate xDomain
 END SUBROUTINE sealevel_boundaries
 
 !---------------------------------------------------------------------------
