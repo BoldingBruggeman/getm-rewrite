@@ -22,8 +22,5 @@ doc/html/
 *.out
 *.app
 
-# external dependencies
-extern/
-
 # Ford documentation
 ford/
