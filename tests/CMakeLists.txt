@@ -13,7 +13,7 @@ add_executable(test_getm_domain EXCLUDE_FROM_ALL
                ${CMAKE_CURRENT_LIST_DIR}/test_getm_domain.F90
               )
 target_link_libraries(test_getm_domain PRIVATE getm_input getm_domain flom )
-add_dependencies( test_all_getm ${test_all_getm}  test_getm_domain )
+#KB add_dependencies( test_all_getm ${test_all_getm}  test_getm_domain )
 #set_property(TARGET test_uv_depths PROPERTY FOLDER test_grids)
 
 add_executable(test_bathymetry EXCLUDE_FROM_ALL
@@ -28,11 +28,11 @@ add_executable(test_density EXCLUDE_FROM_ALL
 target_link_libraries(test_density PRIVATE getm_physics getm_domain flom)
 add_dependencies( test_all_getm ${test_all_getm}  test_density )
 
-add_executable(test_uv_depths EXCLUDE_FROM_ALL
-               ${CMAKE_CURRENT_LIST_DIR}/test_uv_depths.F90
+add_executable(test_uvx_depths EXCLUDE_FROM_ALL
+               ${CMAKE_CURRENT_LIST_DIR}/test_uvx_depths.F90
               )
-target_link_libraries(test_uv_depths PRIVATE getm_domain flom)
-add_dependencies( test_all_getm ${test_all_getm}  test_uv_depths )
+target_link_libraries(test_uvx_depths PRIVATE getm_domain flom)
+add_dependencies( test_all_getm ${test_all_getm}  test_uvx_depths )
 
 add_executable(test_advection EXCLUDE_FROM_ALL
                ${CMAKE_CURRENT_LIST_DIR}/test_advection.F90
@@ -50,5 +50,5 @@ add_executable(test_parallel EXCLUDE_FROM_ALL
                ${CMAKE_CURRENT_LIST_DIR}/test_parallel.F90
               )
 target_link_libraries(test_parallel PRIVATE getm_domain getm_parallel flom)
-add_dependencies( test_all_getm ${test_all_getm}  test_parallel )
+#KBadd_dependencies( test_all_getm ${test_all_getm}  test_parallel )
 
