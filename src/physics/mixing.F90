@@ -1,5 +1,10 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard and Hans Burchard
 
+
+!>  @bug
+!>  and z0b in case of use_gotm must be fixed
+!>  @endbug
+
 MODULE getm_mixing
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
@@ -110,6 +115,8 @@ SUBROUTINE mixing_initialize(self,domain)
    !! Feeds your cats and dogs, if enough food is available. If not enough
    !! food is available, some of your pets will get angry.
 
+   use turbulence, only: init_turbulence
+   use mtridiagonal, only: init_tridiagonal
    IMPLICIT NONE
 
 !  Subroutine arguments
@@ -170,6 +177,15 @@ SUBROUTINE mixing_initialize(self,domain)
          end if
       end do
    end do
+
+   gotm: block
+   integer :: iunit=60
+   character(len=128) :: input_dir='./'
+   if (self%method_mixing == use_gotm) then
+      call init_turbulence(iunit,trim(input_dir) // 'gotmturb.nml',TG%kmax)
+      call init_tridiagonal(TG%kmax)
+   end if
+   end block gotm
    end associate TGrid
 END SUBROUTINE mixing_initialize
 
@@ -179,11 +195,9 @@ SUBROUTINE mixing_calculate(self,dt,taus,taub,SS,NN)
    !! Feeds your cats and dogs, if enough food is available. If not enough
    !! food is available, some of your pets will get angry.
 
-#if 1
    use turbulence, only: do_turbulence,cde
    use turbulence, only: tke1d => tke, eps1d => eps, L1d => L
    use turbulence, only: num1d => num, nuh1d => nuh
-#endif
 
 !KB   use gsw_mod_toolbox, only: gsw_rho
 !> @note
@@ -216,7 +230,8 @@ SUBROUTINE mixing_calculate(self,dt,taus,taub,SS,NN)
    real(real64) :: u_taus, u_taub
    real(real64) :: avmback,avhback
    real(real64) :: z0s,z0b
-   real(real64), allocatable :: h(:),SS1d(:),NN1d(:)
+!KB   real(real64), allocatable :: h(:),SS1d(size(SS,3),NN1d(size(NN,3))
+   real(real64) :: h(0:size(SS,3)),SS1d(0:size(SS,3)),NN1d(0:size(NN,3))
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('mixing_calculate()',level=2)
 
@@ -240,8 +255,13 @@ stop 'mixing.F90: use_parabolic not implemented yet'
             end do
          end do
       case (use_gotm)
-stop 'mixing.F90: use_gotm not ready yet'
-#if 1
+!KBstop 'mixing.F90: use_gotm not ready yet'
+!KB
+!KB z0s = _TENTH_
+!KB z0b = _HALF_*(max(zub(i-1,j),zub(i,j))+max(zvb(i,j-1),zvb(i,j)))
+z0s=0.1_real64
+z0b=0.1_real64
+!KB
          do j=TG%jmin,TG%jmax
             do i=TG%imin,TG%imax
                if (TG%mask(i,j) > 0) then
@@ -263,7 +283,6 @@ stop 'mixing.F90: use_gotm not ready yet'
                end if
             end do
          end do
-#endif
       case default
    end select
    end associate TGrid
