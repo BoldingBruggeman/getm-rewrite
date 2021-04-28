@@ -55,6 +55,7 @@ MODULE getm_temperature
    real(real64), dimension(I3DFIELD), target :: T = 10._real64
 #else
    real(real64), dimension(:,:,:), allocatable :: T
+   real(real64), dimension(:,:), allocatable :: Tbdy
    real(real64), dimension(:,:), allocatable :: sst
    real(real64), dimension(:,:,:), allocatable :: ea4
 #endif
@@ -131,6 +132,9 @@ SUBROUTINE temperature_initialize(self,domain,advection,vertical_diffusion)
    TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
    call mm_s('T',self%T,TG%l,TG%u,def=15._real64,stat=stat)
+   if (domain%nbdy > 0) then
+      call mm_s('Tbdy',self%Tbdy,(/TG%l(3)-1,1/),(/TG%u(3),domain%nbdyp/),def=15._real64,stat=stat)
+   end if
    call mm_s('sst',self%sst,TG%l(1:2),TG%u(1:2),def=15._real64,stat=stat)
    call mm_s('ea4',self%ea4,self%T,def=0._real64,stat=stat)
 #endif

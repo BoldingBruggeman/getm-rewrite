@@ -53,6 +53,7 @@ MODULE getm_salinity
       real(real64), dimension(I3DFIELD) :: S = 10._real64
 #else
       real(real64), dimension(:,:,:), allocatable :: S
+      real(real64), dimension(:,:), allocatable :: Sbdy
 #endif
       integer :: advection_scheme=1
       real(real64) :: cnpar
@@ -130,6 +131,9 @@ SUBROUTINE salinity_initialize(self,domain,advection,vertical_diffusion)
    TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
    call mm_s('S',self%S,TG%l,TG%u,def=25._real64,stat=stat)
+   if (domain%nbdy > 0) then
+      call mm_s('Sbdy',self%Sbdy,(/TG%l(3)-1,1/),(/TG%u(3),domain%nbdyp/),def=15._real64,stat=stat)
+   end if
 #endif
    if (associated(self%fm)) then
       call self%fm%register('salt', 'g/kg', 'absolute salinity', &
