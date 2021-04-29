@@ -3,6 +3,7 @@
 
 !>  @bug
 !>  and z0b in case of use_gotm must be fixed
+!>  check NN and SS calculations for input to use_gotm
 !>  @endbug
 
 MODULE getm_mixing
@@ -211,9 +212,10 @@ SUBROUTINE mixing_calculate(self,dt,taus,taub,SS,NN)
    real(real64), intent(in) :: dt
       !! timestep [s]
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: taus(_T2_)
+   real(real64), intent(inout) :: taus(_T2_)
       !! surface stress []
-   real(real64), intent(in) :: taub(_T2_)
+!                         KB
+   real(real64), intent(inout) :: taub(_T2_)
       !! surface stress []
 #undef _T2_
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
@@ -255,6 +257,8 @@ stop 'mixing.F90: use_parabolic not implemented yet'
             end do
          end do
       case (use_gotm)
+if (associated(self%logs)) call self%logs%info('use_gotm is not ready',level=0)
+return
 !KBstop 'mixing.F90: use_gotm not ready yet'
 !KB
 !KB z0s = _TENTH_
@@ -269,13 +273,18 @@ z0b=0.1_real64
                   u_taub = sqrt(taub(i,j))
                   h(:) = TG%hn(i,j,:)
                   SS1d(:) = SS(i,j,:)
+SS1d=0.0001_real64
                   NN1d(:) = NN(i,j,:)
+NN1d=0.0001_real64
                   tke1d(:) = self%tke(i,j,:)
                   eps1d(:)= self%eps(i,j,:)
                   L1d(:)  = cde*tke1d(:)**1.5_real64/eps1d(:)
                   num1d(:) = self%num(i,j,:)
                   nuh1d(:) = self%nuh(i,j,:)
-                  call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,TG%hn(i,j,:),NN1D,SS1D)
+taus(i,j)=0.0001_real64
+taub(i,j)=0.0001_real64
+!KB                  call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,TG%hn(i,j,:),NN1D,SS1D)
+                  call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,h,NN1D,SS1D)
                   self%tke(i,j,:) = tke1d(:)
                   self%eps(i,j,:) = eps1d(:)
                   self%num(i,j,:) = num1d(:) + avmback
@@ -284,6 +293,7 @@ z0b=0.1_real64
             end do
          end do
       case default
+         stop 'non-valid method_mixing - mixing.F90'
    end select
    end associate TGrid
 END SUBROUTINE mixing_calculate
