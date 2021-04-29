@@ -85,7 +85,9 @@ MODULE getm_momentum
       real(real64), dimension(:,:,:), allocatable :: num,ea2,ea4
       real(real64), dimension(:,:), allocatable :: work2d
       type(type_getm_grid) :: uadvgrid,vadvgrid
+      logical :: apply_bottom_friction=.true.
       integer :: advection_scheme=1
+      logical :: apply_diffusion=.true.
       integer :: coriolis_scheme=1
       real(real64) :: molecular=0._real64
       real(real64) :: cnpar=1._real64

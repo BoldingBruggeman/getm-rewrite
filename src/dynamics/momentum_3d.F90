@@ -50,10 +50,10 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
    call mm_s('SS',self%SS,TG%l+(/0,0,-1/),TG%u,def=0._real64,stat=stat)
-!KB if (self%advection_scheme > 0) then
-   call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
-   call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
-!KBend if
+   if (self%advection_scheme > 0) then
+      call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+      call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+   end if
    call mm_s('num',self%num,self%pk,def=0._real64,stat=stat)
    call mm_s('ea2',self%ea2,self%pk,def=0._real64,stat=stat)
    call mm_s('ea4',self%ea4,self%pk,def=0._real64,stat=stat)
@@ -98,7 +98,7 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    logical, save :: ufirst=.false. !KB should likely not have save
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_momentum_3d()',level=2)
-   call self%bottom_friction_3d()
+   if (self%apply_bottom_friction) call self%bottom_friction_3d()
    if(ufirst) then
       call pk_3d(self,dt,tausx,dpdx,idpdy,viscosity)
       call self%coriolis_fpk()
@@ -117,6 +117,8 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    call self%uv_advection_3d(dt)
 #if 0
    call self%uv_diffusion_3d(dt) !KB - makes model go wrong
+#else
+if (associated(self%logs)) call self%logs%info('missing uv_diffusion_3d()',level=0)
 #endif
    call self%shear_frequency(viscosity)
    call self%stresses(tausx,tausy)
