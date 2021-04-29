@@ -52,12 +52,12 @@ MODULE getm_temperature
       TYPE(type_temperature_configuration) :: config
 
 #ifdef _STATIC_
-   real(real64), dimension(I3DFIELD), target :: T = 10._real64
+      real(real64), dimension(I3DFIELD), target :: T = 10._real64
 #else
-   real(real64), dimension(:,:,:), allocatable :: T
-   real(real64), dimension(:,:), allocatable :: Tbdy
-   real(real64), dimension(:,:), allocatable :: sst
-   real(real64), dimension(:,:,:), allocatable :: ea4
+      real(real64), dimension(:,:,:), allocatable :: T
+      real(real64), dimension(:,:), allocatable :: Tbdy
+      real(real64), dimension(:,:), allocatable :: sst
+      real(real64), dimension(:,:,:), allocatable :: ea4
 #endif
       integer :: advection_scheme=1
       real(real64) :: cnpar

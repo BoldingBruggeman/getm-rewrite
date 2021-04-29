@@ -116,6 +116,12 @@ SUBROUTINE density_initialize(self,domain)
                             fill_value=-9999._real64, &
                             category='temperature_and_salinity')
       call self%fm%send_data('buoy', self%buoy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      call self%fm%register('NN', 's-2', 'Brunt-Vaisala frequency squared', &
+                            standard_name='', &
+                            dimensions=(TG%dim_3d_ids), &
+                            fill_value=-9999._real64, &
+                            category='temperature_and_salinity')
+      call self%fm%send_data('NN', self%NN(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
    end if
 !   do j=grid%jmin,grid%jmax
 !      do i=grid%imin,grid%imax
