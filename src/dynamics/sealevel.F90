@@ -3,6 +3,13 @@
 !! Calculate the time varying sealevel using ...
 !! [kaj](|url|/page//science/momentum.html)
 
+!>  @bug
+!>  Northern and eastern open boundaries
+!>  index of first term in calculation of variable 'a' - only in case 4
+!>
+!>
+!>  @endbug
+
 
 MODULE getm_sealevel
 
@@ -25,7 +32,7 @@ MODULE getm_sealevel
       class(type_field_manager), pointer :: fm => null()
       class(type_getm_domain), pointer :: domain
 
-      real(real64), allocatable :: bdyz(:)
+      real(real64), allocatable :: zbdy(:)
 
       contains
 
@@ -96,8 +103,8 @@ SUBROUTINE sealevel_initialize(self,domain)
    if (associated(self%logs)) call self%logs%info('sealevel_initialize()',level=2)
    self%domain => domain
    if (self%domain%nbdyp > 0) then
-      allocate(self%bdyz(self%domain%nbdyp),stat=stat)
-      self%bdyz=0._real64
+      allocate(self%zbdy(self%domain%nbdyp),stat=stat)
+      self%zbdy=0._real64
    end if
 END SUBROUTINE sealevel_initialize
 
@@ -241,10 +248,10 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
 !                       change D(i,j) to _HALF_*(D(i,j)+D(i+1,j)) ?
                TG%z(i,j)=TG%z(i,j)+dt*sqrt(g*TG%D(i,j))*(TG%z(i+1,j)-TG%z(i,j))/TG%dx(i,j)
             case (clamped)
-               TG%z(i,j)=max(fac*self%bdyz(k),-TG%H(i,j)+domain%Dmin)
+               TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
                a= sqrt(UG%D(i,j)/g)*(U(i,j)/UG%D(i,j)-bdyu(k))
-               TG%z(i,j)=max(fac*(self%bdyz(k)-a),-TG%H(i,j)+domain%Dmin)
+               TG%z(i,j)=max(fac*(self%zbdy(k)-a),-TG%H(i,j)+domain%Dmin)
          end select
          k= k+1
       end do
@@ -263,10 +270,11 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
 !                       change D(i,j) to _HALF_*(D(i,j-1)+D(i,j)) ?
                TG%z(i,j)=TG%z(i,j)-dt*sqrt(g*TG%D(i,j))*(TG%z(i,j)-TG%z(i,j-1))/TG%dy(i,j)
             case (clamped)
-               TG%z(i,j)=max(fac*self%bdyz(k),-TG%H(i,j)+domain%Dmin)
+               TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
-               a=sqrt(VG%D(i,j)/g)*(V(i,j-1)/VG%D(i,j-1)-bdyv(k))
-               TG%z(i,j)=max(fac*(self%bdyz(k)+a),-TG%H(i,j)+domain%Dmin)
+!KB               a=sqrt(VG%D(i,j)/g)*(V(i,j-1)/VG%D(i,j-1)-bdyv(k))
+               a=sqrt(VG%D(i,j-1)/g)*(V(i,j-1)/VG%D(i,j-1)-bdyv(k))
+               TG%z(i,j)=max(fac*(self%zbdy(k)+a),-TG%H(i,j)+domain%Dmin)
          end select
          k=k+1
       end do
@@ -285,10 +293,11 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
 !                       change D(i,j) to _HALF_*(D(i-1,j)+D(i,j)) ?
                TG%z(i,j)=TG%z(i,j)-dt*sqrt(g*TG%D(i,j))*(TG%z(i,j)-TG%z(i-1,j))/TG%dx(i,j)
             case (clamped)
-               TG%z(i,j)=max(fac*self%bdyz(k),-TG%H(i,j)+domain%Dmin)
+               TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
-               a=sqrt(UG%D(i,j)/g)*(U(i-1,j)/UG%D(i-1,j)-bdyu(k))
-               TG%z(i,j)=max(fac*(self%bdyz(k)+a),-TG%H(i,j)+domain%Dmin)
+!KB               a=sqrt(UG%D(i,j)/g)*(U(i-1,j)/UG%D(i-1,j)-bdyu(k))
+               a=sqrt(UG%D(i-1,j)/g)*(U(i-1,j)/UG%D(i-1,j)-bdyu(k))
+               TG%z(i,j)=max(fac*(self%zbdy(k)+a),-TG%H(i,j)+domain%Dmin)
          end select
          k=k+1
       end do
@@ -307,10 +316,10 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
 !                       change D(i,j) to _HALF_*(D(i,j)+D(i,j+1)) ?
                TG%z(i,j)=TG%z(i,j)+dt*sqrt(g*TG%D(i,j))*(TG%z(i,j+1)-TG%z(i,j))/TG%dy(i,j)
             case (clamped)
-               TG%z(i,j)=max(fac*self%bdyz(k),-TG%H(i,j)+domain%Dmin)
+               TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
                a=sqrt(VG%D(i,j)/g)*(V(i,j)/VG%D(i,j)-bdyv(k))
-               TG%z(i,j)=max(fac*(self%bdyz(k)-a),-TG%H(i,j)+domain%Dmin)
+               TG%z(i,j)=max(fac*(self%zbdy(k)-a),-TG%H(i,j)+domain%Dmin)
          end select
          k=k+1
       end do
