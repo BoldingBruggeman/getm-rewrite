@@ -1,6 +1,11 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
 SUBMODULE (getm_operators) advection_smod
+!>  @bug
+!>  3D advection is not enabled yet
+!>  @endbug
+
+   IMPLICIT NONE
 
 !-----------------------------------------------------------------------------
 
@@ -44,7 +49,6 @@ module SUBROUTINE advection_initialize(self,scheme)
          call upstream_initialize()
    end select
 #endif
-   return
 END SUBROUTINE advection_initialize
 
 !---------------------------------------------------------------------------
