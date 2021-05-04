@@ -149,6 +149,8 @@ MODULE getm_domain
          !! dimension ids for the central points
       integer ::id_dim_xi, id_dim_yi, id_dim_zi
          !! dimension ids for the interface points
+      integer ::id_dim_xx, id_dim_yx
+         !! dimension ids for the X points
 
       real(real64) :: Dmin=1._real64
       real(real64) :: Dcrit=2._real64

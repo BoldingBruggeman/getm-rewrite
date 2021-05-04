@@ -138,8 +138,8 @@ module SUBROUTINE uvx_depths(self)
 
    XGrid: associate( XG => self%X )
    ! X-mask
-   do j=XG%jmin+1,XG%jmax
-      do i=XG%imin+1,XG%imax
+   do j=XG%jmin,XG%jmax
+      do i=XG%imin,XG%imax
          if (TG%mask(i  ,j  ) > 0 .and. TG%mask(i+1,j) > 0 .and. &
              TG%mask(i+1,j+1) > 0 .and. TG%mask(i,j+1) > 0) then
             XG%mask(i,j)=1
