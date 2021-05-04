@@ -118,7 +118,7 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
 #if 0
    call self%uv_diffusion_3d(dt) !KB - makes model go wrong
 #else
-if (associated(self%logs)) call self%logs%info('missing uv_diffusion_3d()',level=0)
+if (associated(self%logs)) call self%logs%info('*** missing uv_diffusion_3d() ***',level=0)
 #endif
    call self%shear_frequency(viscosity)
    call self%stresses(tausx,tausy)

@@ -218,7 +218,7 @@ SUBROUTINE mixing_calculate(self,dt,taus,taub,SS,NN)
    real(real64), intent(inout) :: taub(_T2_)
       !! surface stress []
 #undef _T2_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3)-1:
    real(real64), intent(in) :: SS(_T3_)
       !! shear stress []
    real(real64), intent(in) :: NN(_T3_)
@@ -232,7 +232,6 @@ SUBROUTINE mixing_calculate(self,dt,taus,taub,SS,NN)
    real(real64) :: u_taus, u_taub
    real(real64) :: avmback,avhback
    real(real64) :: z0s,z0b
-!KB   real(real64), allocatable :: h(:),SS1d(size(SS,3),NN1d(size(NN,3))
    real(real64) :: h(0:size(SS,3)),SS1d(0:size(SS,3)),NN1d(0:size(NN,3))
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('mixing_calculate()',level=2)
@@ -257,10 +256,7 @@ stop 'mixing.F90: use_parabolic not implemented yet'
             end do
          end do
       case (use_gotm)
-if (associated(self%logs)) call self%logs%info('use_gotm is not ready',level=0)
-return
-!KBstop 'mixing.F90: use_gotm not ready yet'
-!KB
+!KBif (associated(self%logs)) call self%logs%info('use_gotm is not ready',level=0)
 !KB z0s = _TENTH_
 !KB z0b = _HALF_*(max(zub(i-1,j),zub(i,j))+max(zvb(i,j-1),zvb(i,j)))
 z0s=0.1_real64
@@ -271,19 +267,14 @@ z0b=0.1_real64
                if (TG%mask(i,j) > 0) then
                   u_taus = sqrt(taus(i,j))
                   u_taub = sqrt(taub(i,j))
-                  h(:) = TG%hn(i,j,:)
+                  h(1:) = TG%hn(i,j,:)
                   SS1d(:) = SS(i,j,:)
-SS1d=0.0001_real64
                   NN1d(:) = NN(i,j,:)
-NN1d=0.0001_real64
                   tke1d(:) = self%tke(i,j,:)
                   eps1d(:)= self%eps(i,j,:)
                   L1d(:)  = cde*tke1d(:)**1.5_real64/eps1d(:)
                   num1d(:) = self%num(i,j,:)
                   nuh1d(:) = self%nuh(i,j,:)
-taus(i,j)=0.0001_real64
-taub(i,j)=0.0001_real64
-!KB                  call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,TG%hn(i,j,:),NN1D,SS1D)
                   call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,h,NN1D,SS1D)
                   self%tke(i,j,:) = tke1d(:)
                   self%eps(i,j,:) = eps1d(:)

@@ -6,6 +6,10 @@
 !> the NN calculation is not correct for non-equidistant vertical grids - as pmid does not reprensent the model
 !> interface - does it matter? What is the error?
 !>
+!> what is S and/or T equations are excluded
+!>
+!> lat in NN calculation !!!
+!>
 !> @endnote
 
 MODULE getm_density
@@ -254,21 +258,21 @@ SUBROUTINE brunt_vaisala_calculate(self,S,T)
    real(real64) :: gravity, rho0 !!!! KB
    real(real64) :: dz, NNc, NNe, NNn, NNw, NNs
 #else
-   real(real64), allocatable :: pmid(:),lat(:)
+   real(real64), allocatable :: lat(:),pmid(:)
    integer :: i,j
 #endif
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('brunt_vaisala_calculate()',3)
    TGrid: associate( TG => self%domain%T )
-   allocate(pmid(TG%l(3):TG%u(3)-1))
    allocate(lat(TG%l(3):TG%u(3)))
-   lat=0._real64
+   allocate(pmid(TG%l(3):TG%u(3)-1))
+   lat=0._real64 !KB!!!!!
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax
          if (TG%mask(i,j) .ge. 1 ) then
             self%NN(i,j,TG%u(3))=0._real64
-            call gsw_nsquared(S(i,j,:),T(i,j,:),TG%zc(i,j,:),lat,self%NN(i,j,TG%l(3):),pmid) !KB check index
-            self%NN(i,j,TG%l(3)-1)=0._real64
+            call gsw_nsquared(S(i,j,:),T(i,j,:),TG%zc(i,j,:),lat,self%NN(i,j,TG%l(3):TG%u(3)-1),pmid) !KB check index
+            self%NN(i,j,TG%l(3)-1)=0._real64; self%NN(i,j,TG%u(3))=0._real64
          end if
       end do
    end do
