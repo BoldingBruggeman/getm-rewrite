@@ -195,6 +195,7 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(UG,self%U)
    end associate UGrid
 END SUBROUTINE u_2d
 
@@ -245,6 +246,7 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(VG,self%V)
    end associate VGrid
 END SUBROUTINE v_2d
 

@@ -220,6 +220,7 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(UG,self%pk)
    end associate UGrid
 END SUBROUTINE pk_3d
 
@@ -319,6 +320,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(VG,self%qk)
    end associate VGrid
 END SUBROUTINE qk_3d
 

@@ -54,10 +54,10 @@ module SUBROUTINE init_vertical(self)
    select case (self%method_vertical_coordinates)
       case(method_sigma)
          call init_sigma(self)
-         call depths(self%T); call depths(self%U); call depths(self%V)
+         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
       case(method_gvc)
          call init_gvc(self)
-         call depths(self%T); call depths(self%U); call depths(self%V)
+         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
    end select
 END SUBROUTINE init_vertical
 
@@ -82,42 +82,45 @@ module SUBROUTINE do_vertical(self,dt)
    select case (self%method_vertical_coordinates)
       case(method_sigma)
          call do_sigma(self)
-         call depths(self%T); call depths(self%U); call depths(self%V)
+         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
       case(method_gvc)
          call do_gvc(self,dt)
-         call depths(self%T); call depths(self%U); call depths(self%V)
+         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
    end select
 END SUBROUTINE do_vertical
 
 !---------------------------------------------------------------------------
 
-subroutine depths(self)
+subroutine depths(domain,grid)
    !! Cacluate the depth to the cell face and center
 
    IMPLICIT NONE
 
 !  Subroutine arguments
-   class(type_getm_grid), intent(inout) :: self
+   class(type_getm_domain), intent(inout) :: domain
+   class(type_getm_grid), intent(inout) :: grid
 
 !  Local constants
 
 !  Local variables
    integer :: i,j,k
 !-----------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('depths()',level=3)
-   do j=self%jmin,self%jmax+1
-      do i=self%imin,self%imax+1
-         if (self%mask(i,j) > 0) then
-            self%zf(i,j,0)=-self%H(i,j)
-            self%zf(i,j,1)=-self%H(i,j)+self%hn(i,j,1)
-            self%zc(i,j,1)=-self%H(i,j)+0.5_real64*self%hn(i,j,1)
-            do k=2,self%kmax
-               self%zf(i,j,k)=self%zf(i,j,k-1)+self%hn(i,j,k)
-               self%zc(i,j,k)=self%zc(i,j,k-1)+0.5_real64*(self%hn(i,j,k-1)+self%hn(i,j,k))
+   if (associated(grid%logs)) call grid%logs%info('depths()',level=3)
+   do j=grid%jmin,grid%jmax+1
+      do i=grid%imin,grid%imax+1
+         if (grid%mask(i,j) > 0) then
+            grid%zf(i,j,0)=-grid%H(i,j)
+            grid%zf(i,j,1)=-grid%H(i,j)+grid%hn(i,j,1)
+            grid%zc(i,j,1)=-grid%H(i,j)+0.5_real64*grid%hn(i,j,1)
+            do k=2,grid%kmax
+               grid%zf(i,j,k)=grid%zf(i,j,k-1)+grid%hn(i,j,k)
+               grid%zc(i,j,k)=grid%zc(i,j,k-1)+0.5_real64*(grid%hn(i,j,k-1)+grid%hn(i,j,k))
             end do
          end if
       end do
    end do
+   call domain%mirror_bdys(grid,grid%zf)
+   call domain%mirror_bdys(grid,grid%zc)
 end subroutine depths
 
 !---------------------------------------------------------------------------

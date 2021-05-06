@@ -6,6 +6,10 @@
 !> and calculating the advection-diffusion-equation, which includes
 !> penetrating short-wave radiation as source term (see {\tt do\_temperature}).
 
+!> @note
+!> check dimension of Tbdy - also SBdy (0:kmax) or (1:kmax)
+!> @endnote
+
 MODULE getm_temperature
 
    !! Description:
@@ -133,7 +137,7 @@ SUBROUTINE temperature_initialize(self,domain,advection,vertical_diffusion)
 #ifndef _STATIC_
    call mm_s('T',self%T,TG%l,TG%u,def=15._real64,stat=stat)
    if (domain%nbdy > 0) then
-      call mm_s('Tbdy',self%Tbdy,(/TG%l(3)-1,1/),(/TG%u(3),domain%nbdyp/),def=15._real64,stat=stat)
+      call mm_s('Tbdy',self%Tbdy,(/TG%l(3),1/),(/TG%u(3),domain%nbdyp/),def=15._real64,stat=stat)
    end if
    call mm_s('sst',self%sst,TG%l(1:2),TG%u(1:2),def=15._real64,stat=stat)
    call mm_s('ea4',self%ea4,self%T,def=0._real64,stat=stat)
@@ -219,6 +223,8 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
    end do
    !KB max dt = 0.5*dz^2/nuh
    call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmolt,nuh,self%T,ea4=self%ea4)
+
+   call self%domain%mirror_bdys(TG,self%T)
    end associate TGrid
 END SUBROUTINE temperature_calculate
 

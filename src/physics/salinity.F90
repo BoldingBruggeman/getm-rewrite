@@ -132,7 +132,7 @@ SUBROUTINE salinity_initialize(self,domain,advection,vertical_diffusion)
 #ifndef _STATIC_
    call mm_s('S',self%S,TG%l,TG%u,def=25._real64,stat=stat)
    if (domain%nbdy > 0) then
-      call mm_s('Sbdy',self%Sbdy,(/TG%l(3)-1,1/),(/TG%u(3),domain%nbdyp/),def=15._real64,stat=stat)
+      call mm_s('Sbdy',self%Sbdy,(/TG%l(3),1/),(/TG%u(3),domain%nbdyp/),def=15._real64,stat=stat)
    end if
 #endif
    if (associated(self%fm)) then
@@ -185,6 +185,8 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
    end associate VGrid
    end associate UGrid
    call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmols,nuh,self%S)
+
+   call self%domain%mirror_bdys(TG,self%S)
    end associate TGrid
 END SUBROUTINE salinity_calculate
 

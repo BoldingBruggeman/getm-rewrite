@@ -54,6 +54,7 @@ module SUBROUTINE depth_update(self)
 #endif
       end do
    end do
+   call self%mirror_bdys(TG,TG%D)
 
    UGrid: associate( UG => self%U )
    do j=UG%l(2),UG%u(2)
@@ -68,6 +69,7 @@ module SUBROUTINE depth_update(self)
 #endif
       end do
    end do
+   call self%mirror_bdys(UG,UG%D)
    end associate UGrid
 
    VGrid: associate( VG => self%V )
@@ -83,6 +85,7 @@ module SUBROUTINE depth_update(self)
 #endif
       end do
    end do
+   call self%mirror_bdys(VG,VG%D)
    end associate VGrid
 
    XGrid: associate( XG => self%X )
@@ -98,6 +101,7 @@ module SUBROUTINE depth_update(self)
 #endif
       end do
    end do
+!KB - not sure if necessary (or correct)   call self%mirror_bdys(XG,XG%D)
    end associate XGrid
    end associate TGrid
 END SUBROUTINE depth_update

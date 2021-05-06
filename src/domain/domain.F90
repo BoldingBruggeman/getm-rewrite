@@ -58,6 +58,13 @@ MODULE getm_domain
 !  Module types and variables
    integer :: vel_depth_method = 0
 
+   ENUM, BIND(C)
+      ENUMERATOR :: TGRID=1
+      ENUMERATOR :: UGRID=2
+      ENUMERATOR :: VGRID=3
+      ENUMERATOR :: XGRID=4
+   END ENUM
+
    type, public :: type_grid_config
       !! author: Karsten Bolding
       !! version: v0.1
@@ -75,6 +82,8 @@ MODULE getm_domain
 
       class(type_logging), pointer :: logs => null()
 
+      integer :: grid_type=-1
+        !!  T, U, V or X grid
       integer :: iextr=-1,jextr=-1
         !!  global grid extend
       integer :: ioff=0,joff=0
@@ -142,6 +151,8 @@ MODULE getm_domain
       logical :: domain_ready = .false.
 
       real(real64) :: maxdt=huge(1._real64)
+
+      character(len=32) :: layout='Arakawa C - NE index convention'
       TYPE(type_getm_grid) :: T, U, V, X
          !! C-grid
          !! T, U, V, X grid - Tracer, U-momentum, V-momentum and corners
@@ -187,6 +198,9 @@ MODULE getm_domain
       procedure :: metrics => metrics
       procedure :: register => register
       procedure :: uvx_depths => uvx_depths
+      procedure :: mirror_bdy_2d => mirror_bdy_2d
+      procedure :: mirror_bdy_3d => mirror_bdy_3d
+      generic   :: mirror_bdys => mirror_bdy_2d, mirror_bdy_3d
       procedure :: cfl_check => cfl_check
       procedure :: depth_update => depth_update
       procedure :: start_3d => start_3d
@@ -196,6 +210,7 @@ MODULE getm_domain
    end type type_getm_domain
 
    INTERFACE
+
       module subroutine metrics(self)
          class(type_getm_domain), intent(inout) :: self
       end subroutine metrics
@@ -216,6 +231,18 @@ MODULE getm_domain
       module subroutine depth_update(self)
          class(type_getm_domain), intent(inout) :: self
       end subroutine depth_update
+
+      module subroutine mirror_bdy_2d(self,grid,f)
+         class(type_getm_domain), intent(inout) :: self
+         class(type_getm_grid), intent(in) :: grid
+         real(real64), dimension(:,:), intent(inout) :: f(grid%l(1):,grid%l(2):)
+      end subroutine mirror_bdy_2d
+
+      module subroutine mirror_bdy_3d(self,grid,f)
+         class(type_getm_domain), intent(inout) :: self
+         class(type_getm_grid), intent(in) :: grid
+         real(real64), dimension(:,:,:), intent(inout) :: f(grid%l(1):,grid%l(2):,grid%l(3):)
+      end subroutine mirror_bdy_3d
 
 !      module subroutine init_vertical(self,z,zo)
       module subroutine init_vertical(self)
@@ -289,14 +316,21 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,nwb,nnb,neb,nsb,l
    if (present(logs)) then
       self%logs => logs
       call self%logs%info('domain_configure()',level=1)
+      call self%logs%info(trim(self%layout),level=2)
    end if
    if (present(fm)) then
       self%fm => fm
    end if
+
+   ! grid types must be set - not part of API for now
    call self%T%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
+   self%T%grid_type=TGRID
    call self%U%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+   self%U%grid_type=UGRID
    call self%V%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+   self%V%grid_type=VGRID
    call self%X%configure(logs,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+   self%X%grid_type=XGRID
 
    if (present(nwb)) then
       self%nwb=nwb
@@ -362,6 +396,7 @@ SUBROUTINE domain_initialize(self,runtype)
    if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
 
    call boundary_bookkeeping(self)
+   call self%mirror_bdys(self%T,self%T%H)
    call self%metrics()
    call self%uvx_depths()
    call self%register(runtype)
@@ -526,8 +561,8 @@ SUBROUTINE domain_report(self)
    if (.not. self%domain_ready) then
       write(*,*) 'domain is not - fully - configured'
    else
-      open(newunit=gridunit,file='sgrid.dat')
-      call self%T%report(self%logs,gridunit,'S-grid info: ')
+      open(newunit=gridunit,file='tgrid.dat')
+      call self%T%report(self%logs,gridunit,'T-grid info: ')
       close(gridunit)
       open(newunit=gridunit,file='ugrid.dat')
       call self%U%report(self%logs,gridunit,'U-grid info: ')
@@ -566,7 +601,7 @@ SUBROUTINE start_3d(self)
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
          if (UG%mask(i,j) > 0) then
-            UG%zin(i,j)=0.25*(TG%zio(i,j)+TG%zio(i+1,j)+TG%zin(i,j)+TG%zin(i+1,j))
+            UG%zin(i,j)=0.25_real64*(TG%zio(i,j)+TG%zio(i+1,j)+TG%zin(i,j)+TG%zin(i+1,j))
             UG%zin(i,j)=max(UG%zin(i,j),-UG%H(i,j)+self%Dmin)
          end if
       end do
@@ -579,7 +614,7 @@ SUBROUTINE start_3d(self)
    do j=VG%l(2),VG%u(2)-1
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
-            VG%zin(i,j)=0.25*(TG%zio(i,j)+TG%zio(i,j+1)+TG%zin(i,j)+TG%zin(i,j+1))
+            VG%zin(i,j)=0.25_real64*(TG%zio(i,j)+TG%zio(i,j+1)+TG%zin(i,j)+TG%zin(i,j+1))
             VG%zin(i,j)=max(VG%zin(i,j),-VG%H(i,j)+self%Dmin)
          end if
       end do

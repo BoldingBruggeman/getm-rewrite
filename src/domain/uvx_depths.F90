@@ -96,6 +96,8 @@ module SUBROUTINE uvx_depths(self)
          end if
       end do
    end do
+   call self%mirror_bdys(UG,UG%H)
+   call self%mirror_bdys(UG,UG%D)
    end associate UGrid
 
    ! V-mask
@@ -134,6 +136,8 @@ module SUBROUTINE uvx_depths(self)
          end if
       end do
    end do
+   call self%mirror_bdys(VG,VG%H)
+   call self%mirror_bdys(VG,VG%D)
    end associate VGrid
 
    XGrid: associate( XG => self%X )
@@ -155,6 +159,8 @@ module SUBROUTINE uvx_depths(self)
          end if
       end do
    end do
+!KB - needed?   call self%mirror_bdys(XG,XG%H)
+!KB - needed?   call self%mirror_bdys(XG,XG%D)
    end associate XGrid
    end associate TGrid
 END SUBROUTINE uvx_depths
