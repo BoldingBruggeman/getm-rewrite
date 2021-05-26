@@ -27,3 +27,4 @@ extern/
 
 # Ford documentation
 ford/
+*.pyc

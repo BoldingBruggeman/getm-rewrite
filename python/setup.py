@@ -20,7 +20,7 @@ setup(
     author='Bolding-Bruggeman ApS',
     author_email='jorn@bolding-bruggeman.com',
     license='GPL',
-    packages=['pygetm'],
+    packages=['pygetm', 'pygetm.input'],
     package_data={'pygetm': ['*.so', '*.dll', '*.dylib', 'schemas/*']},
     cmdclass={'bdist_wheel': bdist_wheel},
     zip_safe=False
