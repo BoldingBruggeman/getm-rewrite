@@ -207,9 +207,6 @@ class Domain:
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
 
-        # NB the use of numpy.broadcast_to below will ensure thet all resulting arrays are of the base-class array
-        # (because it defaults to subok=False)
-        # Thus, the user can pass in xarray DataArrays; we are converting these to numpy arrays here.
         halo = 2
 
         shape = (2 * ny + 1, 2 * nx + 1)
@@ -221,31 +218,31 @@ class Domain:
             tiling = parallel.Tiling(1, 1, **kwargs)
         self.tiling = tiling
 
-        def exchange_metric(data, relative_in_x: bool=False, relative_in_y: bool=False):
+        def exchange_metric(data, relative_in_x: bool=False, relative_in_y: bool=False, fill_value=numpy.nan):
             if not self.tiling:
                 return
 
             # Expand the data array one each side
-            data_ext = numpy.empty((data.shape[0] + 2, data.shape[1] + 2), dtype=data.dtype)
+            data_ext = numpy.full((data.shape[0] + 2, data.shape[1] + 2), fill_value, dtype=data.dtype)
             data_ext[1:-1, 1:-1] = data
             self.tiling.wrap(data_ext, superhalo + 1).update_halos()
-
-            # Since subdomains share the outer boundary, that will be replicated in the interior and in the first halo point
-            # We move the outer strips one point inwards to eliminate that overlapping point
-            data[:superhalo, :] = data_ext[:superhalo, 1:-1]
-            data[-superhalo:, :] = data_ext[-superhalo:, 1:-1]
-            data[:, :superhalo] = data_ext[1:-1, :superhalo]
-            data[:, -superhalo:] = data_ext[1:-1, -superhalo:]
 
             # For values in the halo, compute their difference of the outer boundary of the subdomain we exchanged with (now the innermost halo point).
             # Then use that difference plus the value on our own boundary as values inside the halo.
             # This is needed for coordinate variables if periodic boundary conditions are used.
             if relative_in_x:
-                data[:, :superhalo] += data[:, superhalo:superhalo + 1] - data_ext[1:-1, superhalo:superhalo + 1]
-                data[:, -superhalo:] += data[:, -superhalo - 1:-superhalo] - data_ext[1:-1, -superhalo - 1:-superhalo]
+                data_ext[:, :superhalo + 1] += data_ext[:, superhalo + 1:superhalo + 2] - data_ext[:, superhalo:superhalo + 1]
+                data_ext[:, -superhalo - 1:] += data_ext[:, -superhalo - 2:-superhalo - 1] - data_ext[:, -superhalo - 1:-superhalo]
             if relative_in_y:
-                data[:superhalo, :] += data[superhalo:superhalo + 1, :] - data_ext[superhalo:superhalo + 1, 1:-1]
-                data[-superhalo:, :] += data[-superhalo - 1:-superhalo, :] - data_ext[-superhalo - 1:-superhalo, 1:-1]
+                data_ext[:superhalo + 1, :] += data_ext[superhalo + 1:superhalo + 2, :] - data_ext[superhalo:superhalo + 1, :]
+                data_ext[-superhalo - 1:, :] += data_ext[-superhalo - 2:-superhalo - 1, :] - data_ext[-superhalo - 1:-superhalo, :]
+
+            # Since subdomains share the outer boundary, that boundary will be replicated in the outermost interior point and in the innermost halo point
+            # We move the outer part of the halos (all but the innermost points) one point inwards to eliminate that overlapping point
+            data[:superhalo, :] = data_ext[:superhalo, 1:-1]
+            data[-superhalo:, :] = data_ext[-superhalo:, 1:-1]
+            data[:, :superhalo] = data_ext[1:-1, :superhalo]
+            data[:, -superhalo:] = data_ext[1:-1, -superhalo:]
 
         def setup_metric(source: Optional[numpy.ndarray]=None, optional: bool=False, fill_value=numpy.nan, relative_in_x: bool=False, relative_in_y: bool=False, dtype: numpy.typing.DTypeLike=float) -> Tuple[Optional[numpy.ndarray], Optional[numpy.ndarray]]:
             if optional and source is None:
@@ -254,7 +251,7 @@ class Domain:
             data_int = data[superhalo:-superhalo, superhalo:-superhalo]
             if source is not None:
                 data_int[...] = source
-                exchange_metric(data, relative_in_x, relative_in_y)
+                exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
             return data_int, data
 
         # Supergrid metrics (without underscore=interior only, with underscore=including halos)
