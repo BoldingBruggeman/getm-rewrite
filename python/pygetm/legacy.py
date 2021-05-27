@@ -43,9 +43,9 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
 def load_bdyinfo(dom: domain.Domain, path: str):
     with open(path) as f:
         def get_line() -> str:
-            while 1:
+            while True:
                 l = f.readline()
-                assert l != ''
+                assert l != '', 'End-of-file reached in %s while trying to read next line.' % path
                 l = l.rstrip()
                 if l and not (l.startswith('!') or l.startswith('#')):
                     return l
