@@ -75,7 +75,7 @@ def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: in
 
     masked_values = []
     if hasattr(ncvar, 'missing_value'):
-        masked_values.append(ncvar.missing_value)
+        masked_values.append(numpy.array(ncvar.missing_value, ncvar.dtype))
 
     # Extend the read domain (T grid) by 1 each side, where possible
     # That will allow us to interpolate (rater than extrapolate) to values at the interfaces
@@ -131,7 +131,7 @@ def interfaces_to_supergrid_1d(data) -> numpy.ndarray:
 
 class Domain:
     @staticmethod
-    def from_getm_topo(path: str, nlev: Optional[int]=None, rearth: float=6378815., ioffset: int=0, joffset: int=0, nx: Optional[int]=None, ny: Optional[int]=None, **kwargs) -> 'Domain':
+    def from_getm_topo(path: str, nlev: Optional[int]=None, rearth: float=6378815., ioffset: int=0, joffset: int=0, nx: Optional[int]=None, ny: Optional[int]=None, z0_const=0.01, **kwargs) -> 'Domain':
         lon, lat, x, y, z0 = None, None, None, None, None
         with netCDF4.Dataset(path) as nc:
             nc.set_auto_mask(False)
@@ -157,8 +157,8 @@ class Domain:
                 lat = lat[:, numpy.newaxis]
 
                 H = read_centers_to_supergrid(nc['bathymetry'], ioffset, joffset, nx, ny)
-                z0 = read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny)
-                return Domain(nx, ny, nlev, lon=lon, lat=lat, H=H.filled(), z0=z0.filled(), spherical=True, mask=~numpy.ma.getmaskarray(H), **kwargs)
+                z0 = z0_const if 'z0' not in nc.variables else read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny)
+                return Domain(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=~numpy.ma.getmaskarray(H), **kwargs)
             elif grid_type == 3:
                 # planar curvilinear
                 pass
