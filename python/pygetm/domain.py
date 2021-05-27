@@ -51,18 +51,21 @@ class Grid(FortranObject):
 
     def add_to_netcdf(self, nc: netCDF4.Dataset, postfix: str=''):
         xdim, ydim = 'x' + postfix, 'y' + postfix
-        def create(name):
+        def save(name, units='', long_name=None):
             data = getattr(self, name)
             ncvar = nc.createVariable(name + postfix, data.dtype, (ydim, xdim))
             ncvar[...] = data
+            ncvar.units = units
+            ncvar.long_name = long_name or name
         ny, nx = self.x.shape
         nc.createDimension(xdim, nx)
         nc.createDimension(ydim, ny)
-        create('dx')
-        create('dy')
-        create('H')
-        create('mask')
-        create('area')
+        save('dx', 'm')
+        save('dy', 'm')
+        save('H', 'm', 'undisturbed water depth')
+        save('mask')
+        save('area', 'm2')
+        save('cor', 's-1', 'Coriolis parameter')
 
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
     if dtype is None:
@@ -108,8 +111,9 @@ def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: in
 
     return data
 
-deg2rad = numpy.pi / 180
-rearth = 6378815.
+deg2rad = numpy.pi / 180        # degree to radian conversion
+rearth = 6378815.               # radius of the earth (m)
+omega = 2. * numpy.pi / 86164.  # rotation rate of the earth (rad/s), 86164 is number of seconds in a sidereal day
 
 def center_to_supergrid_1d(data) -> numpy.ndarray:
     assert data.ndim == 1, 'data must be one-dimensional'
@@ -202,7 +206,7 @@ class Domain:
 
         return domain
 
-    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=None, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, **kwargs):
+    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=None, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, **kwargs):
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
@@ -262,6 +266,9 @@ class Domain:
         self.H, self.H_ = setup_metric(H)
         self.z0, self.z0_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=int, fill_value=0)
+
+        cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * self.lat)
+        self.cor, self.cor_ = setup_metric(cor)
 
         # Compute dx, dy from Cartesian or spherical coordinates
         # These have had their halo exchanges as part of setup_metric and are therefore defined inside the halos too.
@@ -328,6 +335,7 @@ class Domain:
             grid.dy_[:, :] = self.dy_[j::2, i::2]
             grid.lon_[:, :] = self.lon_[j::2, i::2]
             grid.lat_[:, :] = self.lat_[j::2, i::2]
+            grid.cor_[:, :] = self.cor_[j::2, i::2]
             grid.area_[:, :] = grid.dx_ * grid.dy_
         fill_grid(self.T, i=1, j=1)
         fill_grid(self.U, i=2, j=1)
