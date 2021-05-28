@@ -1,10 +1,11 @@
+from typing import Optional
 from mpi4py import MPI
 import numpy
 
 Waitall = MPI.Request.Waitall
 
 class Tiling:
-    def __init__(self, nrow, ncol, comm=MPI.COMM_WORLD, periodic_x=False, periodic_y=False):
+    def __init__(self, nrow: int, ncol: int, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False):
         def find_neighbor(i, j):
             if periodic_x:
                 j = j % ncol
@@ -30,7 +31,7 @@ class Tiling:
         self.bottomleft = find_neighbor(self.irow - 1, self.icol - 1)
         self.bottomright = find_neighbor(self.irow - 1, self.icol + 1)
 
-    def wrap(self, field, halo):
+    def wrap(self, field, halo: int):
         return DistributedArray(self, field, halo)
 
     def describe(self):
@@ -39,9 +40,22 @@ class Tiling:
         print('{:^3} [{:^3}] {:^3}'.format(p(self.left), self.rank, p(self.right)))
         print('{:^3}  {:^3}  {:^3}'.format(p(self.bottomleft), p(self.bottom), p(self.bottomright)))
 
+    def plot(self, ax=None):
+        x = numpy.linspace(0., self.ncol, self.ncol + 1)
+        y = numpy.linspace(0., self.nrow, self.nrow + 1)
+        if ax is None:
+            import matplotlib.pyplot
+            fig, ax = matplotlib.pyplot.subplots()
+        shape = self.map.shape
+        edge_shape = (shape[0] + 1, shape[1] + 1)
+        ax.pcolormesh(numpy.broadcast_to(x[numpy.newaxis, :], edge_shape), numpy.broadcast_to(y[:, numpy.newaxis], edge_shape), numpy.ones_like(self.map), edgecolors='k')
+        for i in range(self.nrow):
+            for j in range(self.ncol):
+                ax.text(0.5 * (x[j] + x[j + 1]), 0.5 * (y[i] + y[i + 1]), '%i' % self.map[i, j], horizontalalignment='center', verticalalignment='center')
+
 class DistributedArray:
     __slots__ = ['tiling', 'comm', 'sendtasks', 'recvtasks', 'f_', 'f', 'halo']
-    def __init__(self, tiling, field, halo):
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int):
         self.tiling = tiling
         self.comm = tiling.comm
         self.f_ = field
@@ -74,7 +88,7 @@ class DistributedArray:
         for _, _, outer, cache in self.recvtasks:
             outer[...] = cache
 
-    def gather(self, root=0, out=None):
+    def gather(self, root: int=0, out: Optional[numpy.ndarray]=None):
         rankmap = self.tiling.map
         rank = self.comm.Get_rank()
         sendbuf = numpy.ascontiguousarray(self.f)
@@ -92,7 +106,7 @@ class DistributedArray:
                     out[..., i * ny:(i + 1) * ny, j * nx:(j + 1) * nx] = recvbuf[rankmap[i, j], ...]
             return out
 
-    def scatter(self, data, root=0):
+    def scatter(self, data: numpy.ndarray, root: int=0):
         rankmap = self.tiling.map
         rank = self.comm.Get_rank()
         recvbuf = numpy.empty_like(self.f_)
