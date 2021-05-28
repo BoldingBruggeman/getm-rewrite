@@ -202,8 +202,7 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn, &
-             self%molecular,self%num,self%pk,ea2=self%ea2,ea4=self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,self%num,self%pk,ea2=self%ea2,ea4=self%ea4)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
@@ -303,8 +302,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn, &
-            self%molecular,self%num,self%qk,ea2=self%ea2,ea4=self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,self%num,self%qk,ea2=self%ea2,ea4=self%ea4)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
@@ -355,7 +353,7 @@ MODULE SUBROUTINE w_momentum_3d(self,dt)
                   self%ww(i,j,k) = self%ww(i,j,k-1)-(TG%hn(i,j,k)-TG%ho(i,j,k))*dtm1 &
                               -(self%pk(i,j,k)*UG%dy(i,j)-self%pk(i-1,j  ,k)*UG%dy(i-1,j) &
                                +self%qk(i,j,k)*VG%dx(i,j)-self%qk(i  ,j-1,k)*VG%dx(i,j-1)) &
-                               *TG%inv_area(i,j)
+                               *TG%iarea(i,j)
             end if
          end do
       end do

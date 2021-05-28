@@ -173,7 +173,7 @@ SUBROUTINE numerical_damping(self,U,V)
       do i=UG%imin,UG%imax
          self%dampU(i,j)=0._real64
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            self%dampU(i,j)=-(self%work2d(i+1,j)-self%work2d(i,j))*UG%inv_area(i,j)
+            self%dampU(i,j)=-(self%work2d(i+1,j)-self%work2d(i,j))*UG%iarea(i,j)
          end if
       end do
    end do
@@ -193,7 +193,7 @@ SUBROUTINE numerical_damping(self,U,V)
    do j=UG%jmin,UG%jmax ! dampU defined on U-points
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            self%dampU(i,j)=self%dampU(i,j)-(self%work2d(i,j)-self%work2d(i,j-1))*UG%inv_area(i,j)
+            self%dampU(i,j)=self%dampU(i,j)-(self%work2d(i,j)-self%work2d(i,j-1))*UG%iarea(i,j)
          end if
       end do
    end do
@@ -216,7 +216,7 @@ SUBROUTINE numerical_damping(self,U,V)
       do i=VG%imin,VG%imax
          self%dampV(i,j)=0._real64
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            self%dampV(i,j)=-(self%work2d(i,j)-self%work2d(i-1,j))*VG%inv_area(i,j)
+            self%dampV(i,j)=-(self%work2d(i,j)-self%work2d(i-1,j))*VG%iarea(i,j)
          end if
       end do
    end do
@@ -233,7 +233,7 @@ SUBROUTINE numerical_damping(self,U,V)
    do j=VG%jmin,VG%jmax ! dampV defined on V-points
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            self%dampV(i,j)=self%dampV(i,j)-(self%work2d(i,j+1)-self%work2d(i,j))*VG%inv_area(i,j)
+            self%dampV(i,j)=self%dampV(i,j)-(self%work2d(i,j+1)-self%work2d(i,j))*VG%iarea(i,j)
          end if
       end do
    end do
@@ -308,7 +308,7 @@ stop
       do i=UG%imin,UG%imax ! diffu defined on U-points
          diffu(i,j)=0._real64
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            diffu(i,j)=-(self%work2d(i+1,j)-self%work2d(i,j))*UG%inv_area(i,j)
+            diffu(i,j)=-(self%work2d(i+1,j)-self%work2d(i,j))*UG%iarea(i,j)
          end if
       end do
    end do
@@ -328,7 +328,7 @@ stop
    do j=UG%jmin,UG%jmax ! diffu defined on U-points
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            diffu(i,j)=diffu(i,j)-(self%work2d(i,j)-self%work2d(i,j-1))*UG%inv_area(i,j)
+            diffu(i,j)=diffu(i,j)-(self%work2d(i,j)-self%work2d(i,j-1))*UG%iarea(i,j)
          end if
       end do
    end do
@@ -352,7 +352,7 @@ stop
       do i=VG%imin,VG%imax ! diffv defined on V-points
          diffu(i,j)=0._real64
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            diffv(i,j)=-(self%work2d(i,j)-self%work2d(i-1,j))*VG%inv_area(i,j)
+            diffv(i,j)=-(self%work2d(i,j)-self%work2d(i-1,j))*VG%iarea(i,j)
          end if
       end do
    end do
@@ -371,7 +371,7 @@ stop
    do j=VG%jmin,VG%jmax ! diffv defined on V-points
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            diffv(i,j)=diffv(i,j)-(self%work2d(i,j+1)-self%work2d(i,j))*VG%inv_area(i,j)
+            diffv(i,j)=diffv(i,j)-(self%work2d(i,j+1)-self%work2d(i,j))*VG%iarea(i,j)
          end if
       end do
    end do

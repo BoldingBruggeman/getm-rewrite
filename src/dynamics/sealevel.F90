@@ -158,8 +158,8 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
             TG%z(i,j)=TG%z(i,j) &
                      -dt*((U(i,j)*UG%dy(i,j)-U(i-1,j  )*UG%dy(i-1,j)) &
                          +(V(i,j)*VG%dx(i,j)-V(i  ,j-1)*VG%dx(i,j-1))) &
-                         *TG%inv_area(i,j)
-!                         *TG%inv_area(i,j) &
+                         *TG%iarea(i,j)
+!                         *TG%iarea(i,j) &
 !                         +dt*fwf(i,j)
          end if
       end do
