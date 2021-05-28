@@ -125,9 +125,9 @@ def center_to_supergrid_1d(data) -> numpy.ndarray:
     assert data.size > 1, 'data must have at least 2 elements'
     data_sup = numpy.empty((data.size * 2 + 1,))
     data_sup[1::2] = data
-    data_sup[2::2] = 0.5 * (data[1:] + data[:-1])
-    data_sup[0] = 2 * data[0] - data[1]
-    data_sup[-1] = 2 * data[-1] - data[-2]
+    data_sup[2:-2:2] = 0.5 * (data[1:] + data[:-1])
+    data_sup[0] = 2 * data_sup[1] - data_sup[2]
+    data_sup[-1] = 2 * data_sup[-2] - data_sup[-3]
     return data_sup
 
 def interfaces_to_supergrid_1d(data) -> numpy.ndarray:
@@ -150,7 +150,7 @@ class Domain:
         else:
             nx, ny = x.size, y.size
             x, y = center_to_supergrid_1d(x), center_to_supergrid_1d(y)
-        domain = Domain(nx, ny, nz, x=x, y=y, **kwargs)
+        domain = Domain(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
         return domain
 
     @staticmethod
@@ -208,6 +208,7 @@ class Domain:
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
+        assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
         halo = 2
 
@@ -239,7 +240,7 @@ class Domain:
         self.z0, self.z0_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=int, fill_value=0)
 
-        cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * self.lat)
+        cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * lat)
         self.cor, self.cor_ = setup_metric(cor)
 
         # Compute dx, dy from Cartesian or spherical coordinates
@@ -328,10 +329,17 @@ class Domain:
             grid.mask_[:, :] = mask_[j::2, i::2]
             grid.dx_[:, :] = self.dx_[j::2, i::2]
             grid.dy_[:, :] = self.dy_[j::2, i::2]
-            grid.lon_[:, :] = self.lon_[j::2, i::2]
-            grid.lat_[:, :] = self.lat_[j::2, i::2]
+            if self.lon_ is not None:
+                grid.lon_[:, :] = self.lon_[j::2, i::2]
+            if self.lat_ is not None:
+                grid.lat_[:, :] = self.lat_[j::2, i::2]
+            if self.x_ is not None:
+                grid.x_[:, :] = self.x_[j::2, i::2]
+            if self.y_ is not None:
+                grid.y_[:, :] = self.y_[j::2, i::2]
             grid.cor_[:, :] = self.cor_[j::2, i::2]
             grid.area_[:, :] = grid.dx_ * grid.dy_
+            grid.inv_area_[:, :] = 1. / grid.area_[:, :]
         fill_grid(self.T, i=1, j=1)
         fill_grid(self.U, i=2, j=1)
         fill_grid(self.V, i=1, j=2)
