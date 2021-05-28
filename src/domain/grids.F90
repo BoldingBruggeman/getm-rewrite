@@ -10,7 +10,7 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
+module SUBROUTINE grid_configure(self,logs,grid_type,imin,imax,jmin,jmax,kmin,kmax,halo)
 
    !! Configure the type_grid
 
@@ -19,6 +19,7 @@ module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
 !  Subroutine arguments
    class(type_getm_grid), intent(inout) :: self
    class(type_logging), intent(in), target, optional :: logs
+   integer, intent(in), optional :: grid_type
    integer, intent(in), optional :: imin,imax
    integer, intent(in), optional :: jmin,jmax
    integer, intent(in), optional :: kmin,kmax
@@ -38,8 +39,32 @@ module SUBROUTINE grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
    call self%type_3d_grid%create(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
    call allocate_grid_variables(self)
 
+   if (present(grid_type)) self%grid_type=grid_type
+
    self%is_initialized = .true.
 END SUBROUTINE grid_configure
+
+!-----------------------------------------------------------------------------
+
+module SUBROUTINE set_mask(self,logs,il,jl,ih,jh,val)
+
+   !! Manually masking an area of the grid
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_grid), intent(inout) :: self
+   class(type_logging), intent(in) :: logs
+   integer, intent(in) :: il,jl,ih,jh,val
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+!-----------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('set_mask()',level=2)
+   self%mask(il-self%ioff:ih-self%ioff,jl-self%joff:jh-self%joff) = val
+END SUBROUTINE set_mask
 
 !-----------------------------------------------------------------------------
 
@@ -89,13 +114,14 @@ END SUBROUTINE grid_print_info
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE grid_print_mask(self,unit)
+module SUBROUTINE grid_print_mask(self,unit,print_halos)
 
   IMPLICIT NONE
 
 ! Subroutine arguments
    class(type_getm_grid), intent(in) :: self
    integer, intent(in) :: unit
+   logical, intent(in), optional :: print_halos
 
 !  Local constants
 
@@ -109,7 +135,11 @@ module SUBROUTINE grid_print_mask(self,unit)
    end do
 #else
    do j=self%jmax,self%jmin,-1
-      write(unit,'(*(i1))') (self%mask(i,j), i=self%imin,self%imax)
+      if (mod(j,10) == 0) then
+         write(unit,'(a,*(i1))') '* ',(self%mask(i,j), i=self%imin,self%imax)
+      else
+         write(unit,'(a,*(i1))') '  ',(self%mask(i,j), i=self%imin,self%imax)
+      endif
    end do
 #endif
 END SUBROUTINE grid_print_mask
@@ -133,19 +163,21 @@ SUBROUTINE allocate_grid_variables(self)
 #ifndef _STATIC_
    call mm_s('c1',self%c1,self%l(1),self%u(1),def=0._real64,stat=stat)
    call mm_s('c2',self%c2,self%l(2),self%u(2),def=0._real64,stat=stat)
-   call mm_s('H',self%H,self%l(1:2),self%u(1:2),def=-10._real64,stat=stat)
-   call mm_s('x',self%x,self%H,def=-9999._real64,stat=stat)
-   call mm_s('y',self%y,self%H,def=-9999._real64,stat=stat)
-   call mm_s('dx',self%dx,self%H,def=-9999._real64,stat=stat)
-   call mm_s('dy',self%dy,self%H,def=-9999._real64,stat=stat)
    call mm_s('lon',self%lon,self%H,def=-9999._real64,stat=stat)
    call mm_s('lat',self%lat,self%H,def=-9999._real64,stat=stat)
+   call mm_s('x',self%x,self%H,def=-9999._real64,stat=stat)
+   call mm_s('y',self%y,self%H,def=-9999._real64,stat=stat)
+   call mm_s('H',self%H,self%l(1:2),self%u(1:2),def=-10._real64,stat=stat)
+   call mm_s('mask',self%mask,self%l(1:2),self%u(1:2),def=0,stat=stat)
    call mm_s('dlon',self%dlon,self%H,def=-9999._real64,stat=stat)
    call mm_s('dlat',self%dlat,self%H,def=-9999._real64,stat=stat)
+   call mm_s('dx',self%dx,self%H,def=-9999._real64,stat=stat)
+   call mm_s('dy',self%dy,self%H,def=-9999._real64,stat=stat)
+   call mm_s('idx',self%idx,self%H,def=-9999._real64,stat=stat)
+   call mm_s('idy',self%idy,self%H,def=-9999._real64,stat=stat)
    call mm_s('area',self%area,self%H,def=-9999._real64,stat=stat)
-   call mm_s('inv_area',self%inv_area,self%H,def=-9999._real64,stat=stat)
+   call mm_s('iarea',self%iarea,self%H,def=-9999._real64,stat=stat)
    call mm_s('cor',self%cor,self%H,def=0._real64,stat=stat)
-   call mm_s('mask',self%mask,self%l(1:2),self%u(1:2),def=0,stat=stat)
    call mm_s('z',self%z,self%H,def=-9999._real64,stat=stat)
    call mm_s('zo',self%zo,self%H,def=-9999._real64,stat=stat)
    call mm_s('D',self%D,self%H,def=-9999._real64,stat=stat)
@@ -177,19 +209,21 @@ module SUBROUTINE deallocate_grid_variables(self)
 #ifndef _STATIC_
    deallocate(self%c1)
    deallocate(self%c2)
-   deallocate(self%H)
-   deallocate(self%x)
-   deallocate(self%y)
-   deallocate(self%dx)
-   deallocate(self%dy)
    deallocate(self%lon)
    deallocate(self%lat)
+   deallocate(self%x)
+   deallocate(self%y)
+   deallocate(self%H)
+   deallocate(self%mask)
    deallocate(self%dlon)
    deallocate(self%dlat)
+   deallocate(self%dx)
+   deallocate(self%dy)
+   deallocate(self%idx)
+   deallocate(self%idy)
    deallocate(self%area)
-   deallocate(self%inv_area)
+   deallocate(self%iarea)
    deallocate(self%cor)
-   deallocate(self%mask)
    deallocate(self%z)
    deallocate(self%zo)
    deallocate(self%D)
@@ -199,6 +233,7 @@ module SUBROUTINE deallocate_grid_variables(self)
    deallocate(self%ho)
    deallocate(self%zf)
    deallocate(self%zc)
+   deallocate(self%alpha)
 #endif
 END SUBROUTINE deallocate_grid_variables
 

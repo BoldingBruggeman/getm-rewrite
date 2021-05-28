@@ -99,24 +99,28 @@ MODULE getm_domain
         !! cordinate variables from NetCDF file
       real(real64), dimension(:,:), allocatable :: lon,lat
         !! longitude and latitude of grid
-      real(real64), dimension(:,:), allocatable :: dlon,dlat
-        !! grid spacing in degrees
       real(real64), dimension(:,:), allocatable :: x,y
         !! cartesian cordinates off grid - e.g. UTM
-      real(real64), dimension(:,:), allocatable :: dx,dy
-        !! grid spacing in meters
-      real(real64), dimension(:,:), allocatable :: cor
-        !! Coriolis term
-      real(real64), dimension(:,:), allocatable :: area,inv_area
-        !! grid area in m2 and inverse area
       real(real64), dimension(:,:), allocatable :: H
         !! undisturbed water depth
+      integer, dimension(:,:), allocatable :: mask
+        !! mask=0 -> land
+      real(real64), dimension(:,:), allocatable :: dlon,dlat
+        !! grid spacing in degrees
+      real(real64), dimension(:,:), allocatable :: dx,dy
+        !! grid spacing in meters
+      real(real64), dimension(:,:), allocatable :: idx,idy
+        !! inverse grid spacing
+      real(real64), dimension(:,:), allocatable :: area
+        !! grid area in m2
+      real(real64), dimension(:,:), allocatable :: iarea
+        !! inverse area
+      real(real64), dimension(:,:), allocatable :: cor
+        !! Coriolis term
       real(real64), dimension(:,:), allocatable :: z
         !! sea surface elevation
       real(real64), dimension(:,:), allocatable :: zo
         !! previous time step
-      integer, dimension(:,:), allocatable :: mask
-        !! mask=0 -> land
       real(real64), dimension(:,:), allocatable :: D
         !! total water depth - time varying
       real(real64), dimension(:,:), allocatable :: zin
@@ -136,6 +140,7 @@ MODULE getm_domain
       contains
 
       procedure :: configure => grid_configure
+      procedure :: set_mask => set_mask
       procedure :: print_info => grid_print_info
       procedure :: print_mask => grid_print_mask
       procedure :: report => grid_report
@@ -149,13 +154,14 @@ MODULE getm_domain
          !! Cartesian, spherical or curvi-linear
          !! Infer from NetCDF bathymetry file
       logical :: domain_ready = .false.
+      logical :: have_metrics = .false.
 
       real(real64) :: maxdt=huge(1._real64)
 
       character(len=32) :: layout='Arakawa C - NE index convention'
       TYPE(type_getm_grid) :: T, U, V, X
          !! C-grid
-         !! T, U, V, X grid - Tracer, U-momentum, V-momentum and corners
+         !! T, U, V, X grid - Tracer, U-momentum, V-momentum and vorticity
       integer ::id_dim_x, id_dim_y, id_dim_z, id_dim_time
          !! dimension ids for the central points
       integer ::id_dim_xi, id_dim_yi, id_dim_zi
@@ -195,7 +201,7 @@ MODULE getm_domain
       procedure :: configure => domain_configure
       procedure :: initialize => domain_initialize
       procedure :: report => domain_report
-      procedure :: metrics => metrics
+      procedure :: imetrics => imetrics
       procedure :: register => register
       procedure :: uvx_depths => uvx_depths
       procedure :: mirror_bdy_2d => mirror_bdy_2d
@@ -211,9 +217,9 @@ MODULE getm_domain
 
    INTERFACE
 
-      module subroutine metrics(self)
+      module subroutine imetrics(self)
          class(type_getm_domain), intent(inout) :: self
-      end subroutine metrics
+      end subroutine imetrics
 
       module subroutine register(self,runtype)
          class(type_getm_domain), intent(inout) :: self
@@ -258,14 +264,21 @@ MODULE getm_domain
 !         real(real64), dimension(:,:), intent(in) :: z,zo
       end subroutine do_vertical
 
-      module subroutine grid_configure(self,logs,imin,imax,jmin,jmax,kmin,kmax,halo)
+      module subroutine grid_configure(self,logs,grid_type,imin,imax,jmin,jmax,kmin,kmax,halo)
          class(type_getm_grid), intent(inout) :: self
          class(type_logging), intent(in), target, optional :: logs
+         integer, intent(in), optional :: grid_type
          integer, intent(in), optional :: imin,imax
          integer, intent(in), optional :: jmin,jmax
          integer, intent(in), optional :: kmin,kmax
          integer, intent(in), dimension(3), optional :: halo
       end subroutine grid_configure
+
+      module subroutine set_mask(self,logs,il,jl,ih,jh,val)
+         class(type_getm_grid), intent(inout) :: self
+         class(type_logging), intent(in) :: logs
+         integer, intent(in) :: il,jl,ih,jh,val
+      end subroutine set_mask
 
       module subroutine grid_report(self,logs,unit,header)
          class(type_getm_grid), intent(inout) :: self
@@ -279,9 +292,10 @@ MODULE getm_domain
          class(type_logging), intent(in) :: logs
       end subroutine grid_print_info
 
-      module subroutine grid_print_mask(self,unit)
+      module subroutine grid_print_mask(self,unit,print_halos)
          class(type_getm_grid), intent(in) :: self
          integer, intent(in) :: unit
+         logical, intent(in), optional :: print_halos
       end subroutine grid_print_mask
 
       module subroutine deallocate_grid_variables(self)
@@ -322,15 +336,10 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,nwb,nnb,neb,nsb,l
       self%fm => fm
    end if
 
-   ! grid types must be set - not part of API for now
-   call self%T%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
-   self%T%grid_type=TGRID
-   call self%U%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
-   self%U%grid_type=UGRID
-   call self%V%configure(logs,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
-   self%V%grid_type=VGRID
-   call self%X%configure(logs,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
-   self%X%grid_type=XGRID
+   call self%T%configure(logs,grid_type=TGRID,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=halo)
+   call self%U%configure(logs,grid_type=UGRID,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+   call self%V%configure(logs,grid_type=VGRID,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+   call self%X%configure(logs,grid_type=XGRID,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
 
    if (present(nwb)) then
       self%nwb=nwb
@@ -397,8 +406,10 @@ SUBROUTINE domain_initialize(self,runtype)
 
    call boundary_bookkeeping(self)
    call self%mirror_bdys(self%T,self%T%H)
-   call self%metrics()
-   call self%uvx_depths()
+   call self%imetrics()
+   if (.not. self%have_metrics) then
+      call self%uvx_depths()
+   end if
    call self%register(runtype)
    where (self%T%mask > 0)
       self%T%z = 0._real64
@@ -619,7 +630,7 @@ SUBROUTINE start_3d(self)
          end if
       end do
    end do
-   self%V%ho=self%V%hn
+   VG%ho=VG%hn
    end associate VGrid
    end associate TGrid
 END SUBROUTINE start_3d

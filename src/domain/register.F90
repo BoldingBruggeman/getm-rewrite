@@ -223,6 +223,8 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('DX', self%X%D(XG%imin:XG%imax,XG%jmin:XG%jmax))
+
+   ! Time varying sea surface elevation at T, U, V and X points
    call self%fm%register('elev', 'm', 'sea surface elevation', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
@@ -230,9 +232,8 @@ MODULE SUBROUTINE register(self,runtype)
                          part_of_state=.true., &
                          category='domain', field=f)
    call f%attributes%set('axis', 'X Y')
-
-   ! Time varying sea surface elevation at T, U, V and X points
    call self%fm%send_data('elev', TG%z(TG%imin:TG%imax,TG%jmin:TG%jmax))
+
    call self%fm%register('zo', 'm', 'sea surface eleveation - previous timestep', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
@@ -251,23 +252,23 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
    call self%fm%send_data('zin', self%T%zin(TG%imin:TG%imax,TG%jmin:TG%jmax))
-   call self%fm%register('ssun', 'm', 'sea surface elevation', &
+   call self%fm%register('ziun', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%U%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssun', self%U%zin(UG%imin:UG%imax,UG%jmin:UG%jmax))
-   call self%fm%register('ssvn', 'm', 'sea surface elevation', &
+   call self%fm%send_data('ziun', self%U%zin(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   call self%fm%register('zivn', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%V%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssvn', self%V%zin(VG%imin:VG%imax,VG%jmin:VG%jmax))
+   call self%fm%send_data('zivn', self%V%zin(VG%imin:VG%imax,VG%jmin:VG%jmax))
 
    ! Time varying layer thickness at T, U and V
-   call self%fm%register('hn', 'm', 'layer thickness', &
+   call self%fm%register('hn', 'm', 'layer thickness - T-points', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
                       fill_value=-9999._real64, &
@@ -275,7 +276,7 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hn', self%T%hn(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
-   call self%fm%register('hun', 'm', 'layer thickness', &
+   call self%fm%register('hun', 'm', 'layer thickness - U-points', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
                       fill_value=-9999._real64, &
@@ -283,7 +284,7 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hun', self%U%hn(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
-   call self%fm%register('hvn', 'm', 'layer thickness', &
+   call self%fm%register('hvn', 'm', 'layer thickness - V-points', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
                       fill_value=-9999._real64, &
