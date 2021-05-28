@@ -20,11 +20,19 @@ INTERFACE
       class(type_getm_domain), intent(inout) :: self
       real(real64), intent(in) :: dt
    end subroutine do_gvc
+   module subroutine init_adaptive(self)
+      class(type_getm_domain), intent(inout) :: self
+   end subroutine init_adaptive
+   module subroutine do_adaptive(self,dt)
+      class(type_getm_domain), intent(inout) :: self
+      real(real64), intent(in) :: dt
+   end subroutine do_adaptive
 END INTERFACE
 
 ENUM, BIND(C)
    ENUMERATOR :: method_sigma=1
    ENUMERATOR :: method_gvc=2
+   ENUMERATOR :: method_adaptive=3
 END ENUM
 
 !-----------------------------------------------------------------------------
