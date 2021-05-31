@@ -125,9 +125,9 @@ def center_to_supergrid_1d(data) -> numpy.ndarray:
     assert data.size > 1, 'data must have at least 2 elements'
     data_sup = numpy.empty((data.size * 2 + 1,))
     data_sup[1::2] = data
-    data_sup[2::2] = 0.5 * (data[1:] + data[:-1])
-    data_sup[0] = 2 * data[0] - data[1]
-    data_sup[-1] = 2 * data[-1] - data[-2]
+    data_sup[2:-2:2] = 0.5 * (data[1:] + data[:-1])
+    data_sup[0] = 2 * data_sup[1] - data_sup[2]
+    data_sup[-1] = 2 * data_sup[-2] - data_sup[-3]
     return data_sup
 
 def interfaces_to_supergrid_1d(data) -> numpy.ndarray:
@@ -150,7 +150,7 @@ class Domain:
         else:
             nx, ny = x.size, y.size
             x, y = center_to_supergrid_1d(x), center_to_supergrid_1d(y)
-        domain = Domain(nx, ny, nz, x=x, y=y, **kwargs)
+        domain = Domain(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
         return domain
 
     @staticmethod
@@ -175,10 +175,40 @@ class Domain:
 
         return domain
 
+    def exchange_metric(self, data, relative_in_x: bool=False, relative_in_y: bool=False, fill_value=numpy.nan):
+        if not self.tiling:
+            return
+
+        halo = 2
+        superhalo = 2 * halo
+
+        # Expand the data array one each side
+        data_ext = numpy.full((data.shape[0] + 2, data.shape[1] + 2), fill_value, dtype=data.dtype)
+        data_ext[1:-1, 1:-1] = data
+        self.tiling.wrap(data_ext, superhalo + 1).update_halos()
+
+        # For values in the halo, compute their difference of the outer boundary of the subdomain we exchanged with (now the innermost halo point).
+        # Then use that difference plus the value on our own boundary as values inside the halo.
+        # This is needed for coordinate variables if periodic boundary conditions are used.
+        if relative_in_x:
+            data_ext[:, :superhalo + 1] += data_ext[:, superhalo + 1:superhalo + 2] - data_ext[:, superhalo:superhalo + 1]
+            data_ext[:, -superhalo - 1:] += data_ext[:, -superhalo - 2:-superhalo - 1] - data_ext[:, -superhalo - 1:-superhalo]
+        if relative_in_y:
+            data_ext[:superhalo + 1, :] += data_ext[superhalo + 1:superhalo + 2, :] - data_ext[superhalo:superhalo + 1, :]
+            data_ext[-superhalo - 1:, :] += data_ext[-superhalo - 2:-superhalo - 1, :] - data_ext[-superhalo - 1:-superhalo, :]
+
+        # Since subdomains share the outer boundary, that boundary will be replicated in the outermost interior point and in the innermost halo point
+        # We move the outer part of the halos (all but the innermost points) one point inwards to eliminate that overlapping point
+        data[:superhalo, :] = data_ext[:superhalo, 1:-1]
+        data[-superhalo:, :] = data_ext[-superhalo:, 1:-1]
+        data[:, :superhalo] = data_ext[1:-1, :superhalo]
+        data[:, -superhalo:] = data_ext[1:-1, -superhalo:]
+
     def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=None, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, **kwargs):
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
+        assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
         halo = 2
 
@@ -191,32 +221,6 @@ class Domain:
             tiling = parallel.Tiling(1, 1, **kwargs)
         self.tiling = tiling
 
-        def exchange_metric(data, relative_in_x: bool=False, relative_in_y: bool=False, fill_value=numpy.nan):
-            if not self.tiling:
-                return
-
-            # Expand the data array one each side
-            data_ext = numpy.full((data.shape[0] + 2, data.shape[1] + 2), fill_value, dtype=data.dtype)
-            data_ext[1:-1, 1:-1] = data
-            self.tiling.wrap(data_ext, superhalo + 1).update_halos()
-
-            # For values in the halo, compute their difference of the outer boundary of the subdomain we exchanged with (now the innermost halo point).
-            # Then use that difference plus the value on our own boundary as values inside the halo.
-            # This is needed for coordinate variables if periodic boundary conditions are used.
-            if relative_in_x:
-                data_ext[:, :superhalo + 1] += data_ext[:, superhalo + 1:superhalo + 2] - data_ext[:, superhalo:superhalo + 1]
-                data_ext[:, -superhalo - 1:] += data_ext[:, -superhalo - 2:-superhalo - 1] - data_ext[:, -superhalo - 1:-superhalo]
-            if relative_in_y:
-                data_ext[:superhalo + 1, :] += data_ext[superhalo + 1:superhalo + 2, :] - data_ext[superhalo:superhalo + 1, :]
-                data_ext[-superhalo - 1:, :] += data_ext[-superhalo - 2:-superhalo - 1, :] - data_ext[-superhalo - 1:-superhalo, :]
-
-            # Since subdomains share the outer boundary, that boundary will be replicated in the outermost interior point and in the innermost halo point
-            # We move the outer part of the halos (all but the innermost points) one point inwards to eliminate that overlapping point
-            data[:superhalo, :] = data_ext[:superhalo, 1:-1]
-            data[-superhalo:, :] = data_ext[-superhalo:, 1:-1]
-            data[:, :superhalo] = data_ext[1:-1, :superhalo]
-            data[:, -superhalo:] = data_ext[1:-1, -superhalo:]
-
         def setup_metric(source: Optional[numpy.ndarray]=None, optional: bool=False, fill_value=numpy.nan, relative_in_x: bool=False, relative_in_y: bool=False, dtype: numpy.typing.DTypeLike=float) -> Tuple[Optional[numpy.ndarray], Optional[numpy.ndarray]]:
             if optional and source is None:
                 return None, None
@@ -224,7 +228,7 @@ class Domain:
             data_int = data[superhalo:-superhalo, superhalo:-superhalo]
             if source is not None:
                 data_int[...] = source
-                exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
+                self.exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
             return data_int, data
 
         # Supergrid metrics (without underscore=interior only, with underscore=including halos)
@@ -236,7 +240,7 @@ class Domain:
         self.z0, self.z0_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=int, fill_value=0)
 
-        cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * self.lat)
+        cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * lat)
         self.cor, self.cor_ = setup_metric(cor)
 
         # Compute dx, dy from Cartesian or spherical coordinates
@@ -254,8 +258,8 @@ class Domain:
 
         # Halo exchange for dx, dy, needed to ensure the outer strips of the halos are valid
         # Those outermost strips could not be computed by central-differencing the coordinates as that would require points outside the domain.
-        exchange_metric(self.dx_)
-        exchange_metric(self.dy_)
+        self.exchange_metric(self.dx_)
+        self.exchange_metric(self.dy_)
 
         self.spherical = spherical
 
@@ -284,38 +288,58 @@ class Domain:
             self.dist_z = self.distribute(self.T.z_)
 
         self.initialized = False
+        self.open_boundaries = {}
 
-    def add_open_boundary(self, side: int, wi: int, wfj: int, wlj: int, type_2d: int, type_3d: int):
-        if side == WEST:
-            self.mask[-1 + 2 * wfj:2 * wlj + 1:2, wi * 2 - 1] = 2
-        elif side == EAST:
-            self.mask[-1 + 2 * wfj:2 * wlj + 1:2, wi * 2 - 1] = 2
-        elif side == SOUTH:
-            self.mask[wi * 2 - 1, -1 + 2 * wfj:2 * wlj + 1:2] = 2
-        elif side == NORTH:
-            self.mask[wi * 2 - 1, -1 + 2 * wfj:2 * wlj + 1:2] = 2
+    def add_open_boundary(self, side: int, l: int, mstart: int, mstop: int, type_2d: int, type_3d: int):
+        self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
 
     def initialize(self, runtype):
-        mask_ = numpy.array(self.mask_, copy=True)
+        # Mask U,V,X points without any valid T neighbor - this mask will be maintained by the domain to be used for e.g. plotting
+        tmask = self.mask_[1::2, 1::2]
+        self.mask_[2:-2:2, 1::2][numpy.logical_and(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
+        self.mask_[1::2, 2:-2:2][numpy.logical_and(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
+        self.mask_[2:-2:2, 2:-2:2][numpy.logical_and(numpy.logical_and(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_and(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
+        self.exchange_metric(self.mask_)
 
-        # use T mask to set U,V,X masks
+        for side, bounds in self.open_boundaries.items():
+            for l, mstart, mstop, type_2d, type_3d in bounds:
+                if side == WEST:
+                    self.mask[-1 + 2 * mstart:2 * mstop:2, l * 2 - 1] = 2
+                    self.mask[2 * mstart:2 * mstop:2, l * 2 - 1] = 3
+                elif side == EAST:
+                    self.mask[-1 + 2 * mstart:2 * mstop:2, l * 2 - 1] = 2
+                    self.mask[2 * mstart:2 * mstop:2, l * 2 - 1] = 3
+                elif side == SOUTH:
+                    self.mask[l * 2 - 1, -1 + 2 * mstart:2 * mstop:2] = 2
+                    self.mask[l * 2 - 1, 2 * mstart:2 * mstop:2] = 3
+                elif side == NORTH:
+                    self.mask[l * 2 - 1, -1 + 2 * mstart:2 * mstop:2] = 2
+                    self.mask[l * 2 - 1, 2 * mstart:2 * mstop:2] = 3
+
+        # Mask U,V,X points unless all their T neighbors are valid - this mask will be sent to Fortran and determine which points are computed
+        mask_ = numpy.array(self.mask_, copy=True)
         tmask = mask_[1::2, 1::2]
-        mask_[0, :] = 0
-        mask_[-1, :] = 0
-        mask_[:, 0] = 0
-        mask_[:, -1] = 0
-        mask_[2:-2:2, 1::2] = numpy.logical_and(tmask[1:, :] == 1, tmask[:-1, :] == 1)
-        mask_[1::2, 2:-2:2] = numpy.logical_and(tmask[:, 1:] == 1, tmask[:, :-1] == 1)
+        mask_[2:-2:2, 1::2][numpy.logical_or(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
+        mask_[1::2, 2:-2:2][numpy.logical_or(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
+        mask_[2:-2:2, 2:-2:2][numpy.logical_or(numpy.logical_or(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_or(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
+        self.exchange_metric(mask_)
 
         def fill_grid(grid: Grid, i: int, j: int):
             grid.H_[:, :] = self.H_[j::2, i::2]
             grid.mask_[:, :] = mask_[j::2, i::2]
             grid.dx_[:, :] = self.dx_[j::2, i::2]
             grid.dy_[:, :] = self.dy_[j::2, i::2]
-            grid.lon_[:, :] = self.lon_[j::2, i::2]
-            grid.lat_[:, :] = self.lat_[j::2, i::2]
+            if self.lon_ is not None:
+                grid.lon_[:, :] = self.lon_[j::2, i::2]
+            if self.lat_ is not None:
+                grid.lat_[:, :] = self.lat_[j::2, i::2]
+            if self.x_ is not None:
+                grid.x_[:, :] = self.x_[j::2, i::2]
+            if self.y_ is not None:
+                grid.y_[:, :] = self.y_[j::2, i::2]
             grid.cor_[:, :] = self.cor_[j::2, i::2]
             grid.area_[:, :] = grid.dx_ * grid.dy_
+            grid.inv_area_[:, :] = 1. / grid.area_[:, :]
         fill_grid(self.T, i=1, j=1)
         fill_grid(self.U, i=2, j=1)
         fill_grid(self.V, i=1, j=2)

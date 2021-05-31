@@ -53,5 +53,7 @@ def load_bdyinfo(dom: domain.Domain, path: str):
         for side in (domain.WEST, domain.NORTH, domain.EAST, domain.SOUTH):
             n = int(get_line())
             for _ in range(n):
-                wi, wfj, wlj, type_2d, type_3d = map(int, get_line().split())
-                dom.add_open_boundary(side, wi, wfj, wlj, type_2d, type_3d)
+                # Note: for Western and Eastern boundaries, l and m are indices in x and y dimensions, respectively, 
+                # but that is the other way around (y and , respectively) for Northern and Southern boundaries.
+                l, mstart, mstop, type_2d, type_3d = map(int, get_line().split())
+                dom.add_open_boundary(side, l, mstart, mstop, type_2d, type_3d)
