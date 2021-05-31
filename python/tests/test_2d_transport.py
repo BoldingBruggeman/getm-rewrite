@@ -6,19 +6,17 @@ import pygetm
 import pygetm.domain
 
 def check_range(name, values, rtol=1e-12, atol=1e-12):
+    print('  %s... ' % name, end='', flush=True)
     absrange = values.max() - values.min()
     mean = values.mean()
     crit = rtol * mean + atol
     valid = absrange < crit
-    if not valid:
-        relrange = absrange / mean
-        print('  Range check failed on %s:' % name)
-        print('    absolute range: %s' % (absrange,))
-        print('    relative range: %s' % (relrange,))
+    relrange = 0 if absrange == 0 else absrange / abs(mean)
+    print('%s (mean %.6g, spread %.6g, relative spread %.6g)' % ('OK' if valid else 'FAILED', mean, absrange, relrange))
     return valid
 
 def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=10., ntime=360):
-    print('%s:' % name, flush=True)
+    print('%s...' % name, flush=True)
 
     # Set up rectangular domain with outer points masked
     domain = pygetm.domain.Domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
