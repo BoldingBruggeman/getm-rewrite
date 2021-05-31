@@ -25,26 +25,42 @@ def find_interfaces(c: numpy.ndarray):
     return c_if
 
 class Grid(FortranObject):
-    def __init__(self, domain: 'Domain', grid_type: str='T'):
-        self.p = _pygetm.domain_get_grid(domain.p, grid_type.encode('ascii'))
+    def __init__(self, domain: 'Domain', grid_type: str, ioffset: int, joffset: int):
         self.halo = domain.halo
         self.domain = domain
-        default_shape = domain.shape[1:]
-        if grid_type == 'X':
+        self.p = None
+        self.type = grid_type
+        self.ioffset = ioffset
+        self.joffset = joffset
+
+    def initialize(self):
+        self.p = _pygetm.domain_get_grid(self.domain.p, self.type.encode('ascii'))
+        default_shape = self.domain.shape[1:]
+        if self.type == 'X':
             default_shape = [n + 1 for n in default_shape]
-        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area', 'cor'), default_shape=default_shape, shapes={'c1': (default_shape[-1],), 'c2': (default_shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=domain.halo)
+        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area', 'cor'), default_shape=default_shape, shapes={'c1': (default_shape[-1],), 'c2': (default_shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=self.halo)
+        self.fill()
+
+    def fill(self):
+        nj, ni = self.H_.shape
+        has_bounds = self.ioffset > 0 and self.joffset > 0 and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
+        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area'):
+            source = getattr(self.domain, name + '_')
+            if source is not None:
+                getattr(self, name + '_')[:, :] = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
+                if has_bounds:
+                    # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
+                    # The interface coordinates are slices that point to the supergrid data; they thus do not consume additional memory.
+                    values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
+                    setattr(self, name + 'i_', values_i)
+                    setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
+        self.inv_area_[:, :] = 1. / self.area_[:, :]
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)
         if fill is not None:
             data[...] = fill
         return data[self.halo:-self.halo, self.halo:-self.halo], data
-
-    def update_halos(self):
-        self.domain.distribute(self.dx_).update_halos()
-        self.domain.distribute(self.dy_).update_halos()
-        self.domain.distribute(self.mask_).update_halos()
-        self.domain.distribute(self.H_).update_halos()
 
     def as_xarray(self, data):
         assert data.shape == self.x.shape
@@ -187,9 +203,9 @@ class Domain:
         data_ext[1:-1, 1:-1] = data
         self.tiling.wrap(data_ext, superhalo + 1).update_halos()
 
-        # For values in the halo, compute their difference of the outer boundary of the subdomain we exchanged with (now the innermost halo point).
+        # For values in the halo, compute their difference with the outer boundary of the subdomain we exchanged with (now the innermost halo point).
         # Then use that difference plus the value on our own boundary as values inside the halo.
-        # This is needed for coordinate variables if periodic boundary conditions are used.
+        # This ensures coordinate variables are monotonically increasing in interior AND halos, even if periodic boundary conditions are used.
         if relative_in_x:
             data_ext[:, :superhalo + 1] += data_ext[:, superhalo + 1:superhalo + 2] - data_ext[:, superhalo:superhalo + 1]
             data_ext[:, -superhalo - 1:] += data_ext[:, -superhalo - 2:-superhalo - 1] - data_ext[:, -superhalo - 1:-superhalo]
@@ -198,7 +214,7 @@ class Domain:
             data_ext[-superhalo - 1:, :] += data_ext[-superhalo - 2:-superhalo - 1, :] - data_ext[-superhalo - 1:-superhalo, :]
 
         # Since subdomains share the outer boundary, that boundary will be replicated in the outermost interior point and in the innermost halo point
-        # We move the outer part of the halos (all but the innermost points) one point inwards to eliminate that overlapping point
+        # We move the outer part of the halos (all but their innermost point) one point inwards to eliminate that overlapping point
         data[:superhalo, :] = data_ext[:superhalo, 1:-1]
         data[-superhalo:, :] = data_ext[-superhalo:, 1:-1]
         data[:, :superhalo] = data_ext[1:-1, :superhalo]
@@ -261,6 +277,8 @@ class Domain:
         self.exchange_metric(self.dx_)
         self.exchange_metric(self.dy_)
 
+        self.area, self.area_ = setup_metric(self.dx * self.dy)
+
         self.spherical = spherical
 
         # Determine if we have simple coordinates (useful for xarray and plotting in general)
@@ -279,13 +297,10 @@ class Domain:
         self.shape = (nz, ny + 2 * self.halo, nx + 2 * self.halo)
 
         # Create grids
-        self.T = Grid(self, 'T')
-        self.U = Grid(self, 'U')
-        self.V = Grid(self, 'V')
-        self.X = Grid(self, 'X')
-
-        if self.tiling:
-            self.dist_z = self.distribute(self.T.z_)
+        self.T = Grid(self, 'T', ioffset=1, joffset=1)
+        self.U = Grid(self, 'U', ioffset=2, joffset=1)
+        self.V = Grid(self, 'V', ioffset=1, joffset=2)
+        self.X = Grid(self, 'X', ioffset=0, joffset=0)
 
         self.initialized = False
         self.open_boundaries = {}
@@ -324,40 +339,17 @@ class Domain:
         mask_[2:-2:2, 2:-2:2][numpy.logical_or(numpy.logical_or(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_or(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
         self.exchange_metric(mask_)
 
-        def fill_grid(grid: Grid, i: int, j: int):
-            grid.H_[:, :] = self.H_[j::2, i::2]
-            grid.mask_[:, :] = mask_[j::2, i::2]
-            grid.dx_[:, :] = self.dx_[j::2, i::2]
-            grid.dy_[:, :] = self.dy_[j::2, i::2]
-            if self.lon_ is not None:
-                grid.lon_[:, :] = self.lon_[j::2, i::2]
-            if self.lat_ is not None:
-                grid.lat_[:, :] = self.lat_[j::2, i::2]
-            if self.x_ is not None:
-                grid.x_[:, :] = self.x_[j::2, i::2]
-            if self.y_ is not None:
-                grid.y_[:, :] = self.y_[j::2, i::2]
-            grid.cor_[:, :] = self.cor_[j::2, i::2]
-            grid.area_[:, :] = grid.dx_ * grid.dy_
-            grid.inv_area_[:, :] = 1. / grid.area_[:, :]
-        fill_grid(self.T, i=1, j=1)
-        fill_grid(self.U, i=2, j=1)
-        fill_grid(self.V, i=1, j=2)
-        fill_grid(self.X, i=0, j=0)
+        for grid in (self.T, self.U, self.V, self.X):
+            grid.initialize()
 
         _pygetm.domain_initialize(self.p, runtype)
 
         # Temporary: undo the grid assignments that were done from Fortran
-        fill_grid(self.T, i=1, j=1)
-        fill_grid(self.U, i=2, j=1)
-        fill_grid(self.V, i=1, j=2)
-        fill_grid(self.X, i=0, j=0)
+        for grid in (self.T, self.U, self.V, self.X):
+            grid.fill()
 
         if self.tiling:
-            self.T.update_halos()
-            self.U.update_halos()
-            self.V.update_halos()
-            self.X.update_halos()
+            self.dist_z = self.distribute(self.T.z_)
             self.depth_update()
 
         self.initialized = True
