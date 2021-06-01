@@ -158,16 +158,16 @@ SUBROUTINE allocate_grid_variables(self)
 !  Local constants
 
 !  Local variables
-   integer :: stat
+   integer :: stat, l(3)
 !-----------------------------------------------------------------------------
 #ifndef _STATIC_
+   call mm_s('H',self%H,self%l(1:2),self%u(1:2),def=-10._real64,stat=stat)
    call mm_s('c1',self%c1,self%l(1),self%u(1),def=0._real64,stat=stat)
    call mm_s('c2',self%c2,self%l(2),self%u(2),def=0._real64,stat=stat)
    call mm_s('lon',self%lon,self%H,def=-9999._real64,stat=stat)
    call mm_s('lat',self%lat,self%H,def=-9999._real64,stat=stat)
    call mm_s('x',self%x,self%H,def=-9999._real64,stat=stat)
    call mm_s('y',self%y,self%H,def=-9999._real64,stat=stat)
-   call mm_s('H',self%H,self%l(1:2),self%u(1:2),def=-10._real64,stat=stat)
    call mm_s('mask',self%mask,self%l(1:2),self%u(1:2),def=0,stat=stat)
    call mm_s('dlon',self%dlon,self%H,def=-9999._real64,stat=stat)
    call mm_s('dlat',self%dlat,self%H,def=-9999._real64,stat=stat)
@@ -185,7 +185,8 @@ SUBROUTINE allocate_grid_variables(self)
    call mm_s('zio',self%zio,self%H,def=-9999._real64,stat=stat)
    call mm_s('hn',self%hn,self%l(1:3),self%u(1:3),def=-9999._real64,stat=stat)
    call mm_s('ho',self%ho,self%hn,def=-9999._real64,stat=stat)
-   call mm_s('zf',self%zf,self%l+(/0,0,-1/),self%u,def=-9999._real64,stat=stat)
+   l = self%l+(/0,0,-1/)
+   call mm_s('zf',self%zf,l,self%u,def=-9999._real64,stat=stat)
    call mm_s('zc',self%zc,self%hn,def=-9999._real64,stat=stat)
    call mm_s('alpha',self%alpha,self%H,def=1._real64,stat=stat)
 #endif
