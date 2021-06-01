@@ -90,7 +90,7 @@ MODULE SUBROUTINE coriolis_fv(self)
 
 !  Local variables
    integer :: i,j
-   real(real64) :: cord_curv
+   real(real64) :: cord_curv=0._real64
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('coriolis_fv()',level=3)
    ! Semi-implicit treatment of Coriolis force for U-momentum eq.
