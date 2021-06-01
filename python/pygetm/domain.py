@@ -38,7 +38,7 @@ class Grid(FortranObject):
         default_shape = self.domain.shape[1:]
         if self.type == 'X':
             default_shape = [n + 1 for n in default_shape]
-        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'inv_area', 'cor'), default_shape=default_shape, shapes={'c1': (default_shape[-1],), 'c2': (default_shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=self.halo)
+        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'iarea', 'cor'), default_shape=default_shape, shapes={'c1': (default_shape[-1],), 'c2': (default_shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=self.halo)
         self.fill()
 
     def fill(self):
@@ -54,7 +54,7 @@ class Grid(FortranObject):
                     values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
                     setattr(self, name + 'i_', values_i)
                     setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
-        self.inv_area_[:, :] = 1. / self.area_[:, :]
+        self.iarea_[:, :] = 1. / self.area_[:, :]
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)

@@ -76,7 +76,7 @@ contains
       case ('dlon'); p = c_loc(grid%dlon)
       case ('dlat'); p = c_loc(grid%dlat)
       case ('area'); p = c_loc(grid%area)
-      case ('inv_area'); p = c_loc(grid%inv_area)
+      case ('iarea'); p = c_loc(grid%iarea)
       case ('H'); p = c_loc(grid%H)
       case ('D'); p = c_loc(grid%D)
       case ('mask'); p = c_loc(grid%mask)
@@ -267,7 +267,8 @@ contains
       call c_f_pointer(psealevel, sealevel)
       call c_f_pointer(pU, U, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
       call c_f_pointer(pV, V, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
-      call sealevel%update(timestep, U, V)
+      call sealevel%t(timestep, U, V)
+      call sealevel%uvx()
    end subroutine
 
 end module
