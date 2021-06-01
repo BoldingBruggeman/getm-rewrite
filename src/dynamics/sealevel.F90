@@ -38,18 +38,18 @@ MODULE getm_sealevel
 
       procedure :: configure => sealevel_configure
       procedure :: initialize => sealevel_initialize
-      procedure :: update => sealevel_calculate
+      procedure :: t => sealevel_t
+      procedure :: uvx => sealevel_uvx
       procedure :: boundaries => sealevel_boundaries
 
    end type type_getm_sealevel
 
-ENUM, BIND(C)
-   ENUMERATOR :: zero_gradient=1
-   ENUMERATOR :: sommerfeld=2
-   ENUMERATOR :: clamped=3
-   ENUMERATOR :: flather_elev=4
-END ENUM
-
+   ENUM, BIND(C)
+      ENUMERATOR :: zero_gradient=1
+      ENUMERATOR :: sommerfeld=2
+      ENUMERATOR :: clamped=3
+      ENUMERATOR :: flather_elev=4
+   END ENUM
 
 !---------------------------------------------------------------------------
 
@@ -110,7 +110,7 @@ END SUBROUTINE sealevel_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
+SUBROUTINE sealevel_t(self,dt,U,V,fwf)
 
    !! Sealevel calculation based on equation
    !! Here, the sea surface elevation is iterated according to the vertically
@@ -147,40 +147,87 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('sealevel_calculate()',level=2)
+   if (associated(self%logs)) call self%logs%info('sealevel_t()',level=2)
    TGrid: associate( TG => self%domain%T )
    VGrid: associate( VG => self%domain%V )
    UGrid: associate( UG => self%domain%U )
    TG%zo = TG%z
+#if 0
    do j=TG%l(2)+1,TG%u(2)
       do i=TG%l(1)+1,TG%u(1)
+#else
+   do j=TG%jmin,TG%jmax
+      do i=TG%imin,TG%imax
+#endif
          if (TG%mask(i,j) == 1) then
             TG%z(i,j)=TG%z(i,j) &
                      -dt*((U(i,j)*UG%dy(i,j)-U(i-1,j  )*UG%dy(i-1,j)) &
                          +(V(i,j)*VG%dx(i,j)-V(i  ,j-1)*VG%dx(i,j-1))) &
                          *TG%iarea(i,j)
-!                         *TG%iarea(i,j) &
+!                         *TG%inv_area(i,j) &
 !                         +dt*fwf(i,j)
          end if
       end do
    end do
+   end associate UGrid
+   end associate VGrid
+   end associate TGrid
+END SUBROUTINE sealevel_t
 
-   ! U-points
+!---------------------------------------------------------------------------
+
+SUBROUTINE sealevel_uvx(self)
+
+   !! Sealevel calculation based on equation
+   !! Here, the sea surface elevation is iterated according to the vertically
+   !! integrated continuity equation given in (\ref{Elevation}) on page
+   !! \pageref{Elevation}.
+   !!
+   !! When working with the option {\tt SLICE\_MODEL}, the elevations
+   !! at $j=2$ are copied to $j=3$.
+   !!
+   !! Now with consideration of fresh water fluxes (precipitation and
+   !! evaporation). Positive for flux into the water.
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_sealevel), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('sealevel_uvx()',level=2)
+   TGrid: associate( TG => self%domain%T )
+
+   UGrid: associate( UG => self%domain%U )
    UG%zo = UG%z
+#if 0
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
-         if (UG%mask(i,j) > 0) then
+#else
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
+#endif
+         if (UG%mask(i,j) == 1) then
             UG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i+1,j)+TG%z(i,j)+TG%z(i+1,j)),-UG%H(i,j)+self%domain%Dmin)
          end if
       end do
    end do
    end associate UGrid
 
-   ! V-points
+   VGrid: associate( VG => self%domain%V )
    VG%zo = VG%z
+#if 0
    do j=VG%l(2),VG%u(2)-1
       do i=VG%l(1),VG%u(1)
-         if (VG%mask(i,j) > 0) then
+#else
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
+#endif
+         if (VG%mask(i,j) == 1) then
             VG%z(i,j)=max(0.25_real64*(TG%zo(i,j)+TG%zo(i,j+1)+TG%z(i,j)+TG%z(i,j+1)),-VG%H(i,j)+self%domain%Dmin)
          end if
       end do
@@ -190,9 +237,14 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
    ! X-points
    XGrid: associate( XG => self%domain%X )
    XG%zo = XG%z
+#if 0
    do j=XG%l(2),XG%u(2)-1
       do i=XG%l(1),XG%u(1)-1
-         if (XG%mask(i,j) > 0) then
+#else
+   do j=XG%jmin,XG%jmax
+      do i=XG%imin,XG%imax
+#endif
+         if (XG%mask(i,j) == 1) then
             XG%z(i,j)=max(0.125_real64*(TG%zo(i,j)+TG%zo(i+1,j)+TG%zo(i+1,j+1)+TG%zo(i,j+1) &
                                        +TG%z (i,j)+TG%z (i+1,j)+TG%z (i+1,j+1)+TG%z (i,j+1)), &
                           -XG%H(i,j)+self%domain%Dmin)
@@ -201,7 +253,7 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
    end do
    end associate XGrid
    end associate TGrid
-END SUBROUTINE sealevel_calculate
+END SUBROUTINE sealevel_uvx
 
 !---------------------------------------------------------------------------
 
