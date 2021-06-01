@@ -29,7 +29,8 @@ MODULE getm_sealevel
 
       procedure :: configure => sealevel_configure
       procedure :: initialize => sealevel_initialize
-      procedure :: update => sealevel_calculate
+      procedure :: t => sealevel_t
+      procedure :: uvx => sealevel_uvx
 
    end type type_getm_sealevel
 
@@ -88,7 +89,7 @@ END SUBROUTINE sealevel_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
+SUBROUTINE sealevel_t(self,dt,U,V,fwf)
 
    !! Sealevel calculation based on equation
    !! Here, the sea surface elevation is iterated according to the vertically
@@ -125,7 +126,7 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
 !  Local variables
    integer :: i,j
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('sealevel_calculate()',level=2)
+   if (associated(self%logs)) call self%logs%info('sealevel_t()',level=2)
    TGrid: associate( TG => self%domain%T )
    VGrid: associate( VG => self%domain%V )
    UGrid: associate( UG => self%domain%U )
@@ -142,8 +143,40 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
          end if
       end do
    end do
+   end associate UGrid
+   end associate VGrid
+   end associate TGrid
+END SUBROUTINE sealevel_t
 
-   ! U-points
+!---------------------------------------------------------------------------
+
+SUBROUTINE sealevel_uvx(self)
+
+   !! Sealevel calculation based on equation
+   !! Here, the sea surface elevation is iterated according to the vertically
+   !! integrated continuity equation given in (\ref{Elevation}) on page
+   !! \pageref{Elevation}.
+   !!
+   !! When working with the option {\tt SLICE\_MODEL}, the elevations
+   !! at $j=2$ are copied to $j=3$.
+   !!
+   !! Now with consideration of fresh water fluxes (precipitation and
+   !! evaporation). Positive for flux into the water.
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_sealevel), intent(inout) :: self
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('sealevel_uvx()',level=2)
+   TGrid: associate( TG => self%domain%T )
+
+   UGrid: associate( UG => self%domain%U )
    UG%zo = UG%z
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1)-1
@@ -154,7 +187,7 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
    end do
    end associate UGrid
 
-   ! V-points
+   VGrid: associate( VG => self%domain%V )
    VG%zo = VG%z
    do j=VG%l(2),VG%u(2)-1
       do i=VG%l(1),VG%u(1)
@@ -179,7 +212,7 @@ SUBROUTINE sealevel_calculate(self,dt,U,V,fwf)
    end do
    end associate XGrid
    end associate TGrid
-END SUBROUTINE sealevel_calculate
+END SUBROUTINE sealevel_uvx
 
 !---------------------------------------------------------------------------
 
