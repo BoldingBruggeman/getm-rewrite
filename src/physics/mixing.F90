@@ -1,5 +1,11 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard and Hans Burchard
 
+
+!>  @bug
+!>  and z0b in case of use_gotm must be fixed
+!>  check NN and SS calculations for input to use_gotm
+!>  @endbug
+
 MODULE getm_mixing
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
@@ -110,6 +116,8 @@ SUBROUTINE mixing_initialize(self,domain)
    !! Feeds your cats and dogs, if enough food is available. If not enough
    !! food is available, some of your pets will get angry.
 
+   use turbulence, only: init_turbulence
+   use mtridiagonal, only: init_tridiagonal
    IMPLICIT NONE
 
 !  Subroutine arguments
@@ -126,10 +134,10 @@ SUBROUTINE mixing_initialize(self,domain)
    self%domain => domain
    TGrid: associate( TG => self%domain%T )
 #ifndef _STATIC_
-   call mm_s('tke',self%tke,TG%l,TG%u,def=-99._real64,stat=stat)
-   call mm_s('eps',self%eps,self%tke,-99._real64,stat=stat)
-   call mm_s('num',self%num,self%tke,-99._real64,stat=stat)
-   call mm_s('nuh',self%nuh,self%tke,-99._real64,stat=stat)
+   call mm_s('tke',self%tke,TG%l+(/0,0,-1/),TG%u,def=-9999._real64,stat=stat)
+   call mm_s('eps',self%eps,self%tke,-9999._real64,stat=stat)
+   call mm_s('num',self%num,self%tke,-9999._real64,stat=stat)
+   call mm_s('nuh',self%nuh,self%tke,-9999._real64,stat=stat)
 #endif
 
    if (associated(self%fm)) then
@@ -170,20 +178,27 @@ SUBROUTINE mixing_initialize(self,domain)
          end if
       end do
    end do
+
+   gotm: block
+   integer :: iunit=60
+   character(len=128) :: input_dir='./'
+   if (self%method_mixing == use_gotm) then
+      call init_turbulence(iunit,trim(input_dir) // 'gotmturb.nml',TG%kmax)
+      call init_tridiagonal(TG%kmax)
+   end if
+   end block gotm
    end associate TGrid
 END SUBROUTINE mixing_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE mixing_calculate(self,SS,NN)
+SUBROUTINE mixing_calculate(self,dt,taus,taub,SS,NN)
    !! Feeds your cats and dogs, if enough food is available. If not enough
    !! food is available, some of your pets will get angry.
 
-#if 0
    use turbulence, only: do_turbulence,cde
    use turbulence, only: tke1d => tke, eps1d => eps, L1d => L
    use turbulence, only: num1d => num, nuh1d => nuh
-#endif
 
 !KB   use gsw_mod_toolbox, only: gsw_rho
 !> @note
@@ -194,7 +209,16 @@ SUBROUTINE mixing_calculate(self,SS,NN)
 
 !  Subroutine arguments
    class(type_getm_mixing), intent(inout) :: self
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: dt
+      !! timestep [s]
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+   real(real64), intent(inout) :: taus(_T2_)
+      !! surface stress []
+!                         KB
+   real(real64), intent(inout) :: taub(_T2_)
+      !! surface stress []
+#undef _T2_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3)-1:
    real(real64), intent(in) :: SS(_T3_)
       !! shear stress []
    real(real64), intent(in) :: NN(_T3_)
@@ -205,6 +229,10 @@ SUBROUTINE mixing_calculate(self,SS,NN)
 
 !  Local variables
    integer :: i,j,k
+   real(real64) :: u_taus, u_taub
+   real(real64) :: avmback,avhback
+   real(real64) :: z0s,z0b
+   real(real64) :: h(0:size(SS,3)),SS1d(0:size(SS,3)),NN1d(0:size(NN,3))
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('mixing_calculate()',level=2)
 
@@ -228,31 +256,35 @@ stop 'mixing.F90: use_parabolic not implemented yet'
             end do
          end do
       case (use_gotm)
-stop 'mixing.F90: use_gotm not ready yet'
-#if 0
+!KBif (associated(self%logs)) call self%logs%info('use_gotm is not ready',level=0)
+!KB z0s = _TENTH_
+!KB z0b = _HALF_*(max(zub(i-1,j),zub(i,j))+max(zvb(i,j-1),zvb(i,j)))
+z0s=0.1_real64
+z0b=0.1_real64
+!KB
          do j=TG%jmin,TG%jmax
             do i=TG%imin,TG%imax
-               if (TG%mask > 0) then
+               if (TG%mask(i,j) > 0) then
                   u_taus = sqrt(taus(i,j))
                   u_taub = sqrt(taub(i,j))
-                  h(:) = TG%hn(i,j,:)
+                  h(1:) = TG%hn(i,j,:)
                   SS1d(:) = SS(i,j,:)
                   NN1d(:) = NN(i,j,:)
-                  tke1d(:)=tke(i,j,:)
-                  eps1d(:)=eps(i,j,:)
-                  L1d(:)  =cde*tke1d(:)**1.5_real64/eps1d(:)
-                  num1d(:)=num(i,j,:)
-                  nuh1d(:)=nuh(i,j,:)
-                  call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,TG%hn(i,j,:),NN1D,SS1D)
-                  tke(i,j,:) = tke1d(:)
-                  eps(i,j,:) = eps1d(:)
-                  num(i,j,:) = num1d(:) + avmback
-                  nuh(i,j,:) = nuh1d(:) + avhback
+                  tke1d(:) = self%tke(i,j,:)
+                  eps1d(:)= self%eps(i,j,:)
+                  L1d(:)  = cde*tke1d(:)**1.5_real64/eps1d(:)
+                  num1d(:) = self%num(i,j,:)
+                  nuh1d(:) = self%nuh(i,j,:)
+                  call do_turbulence(TG%kmax,dt,TG%D(i,j),u_taus,u_taub,z0s,z0b,h,NN1D,SS1D)
+                  self%tke(i,j,:) = tke1d(:)
+                  self%eps(i,j,:) = eps1d(:)
+                  self%num(i,j,:) = num1d(:) + avmback
+                  self%nuh(i,j,:) = nuh1d(:) + avhback
                end if
             end do
          end do
-#endif
       case default
+         stop 'non-valid method_mixing - mixing.F90'
    end select
    end associate TGrid
 END SUBROUTINE mixing_calculate

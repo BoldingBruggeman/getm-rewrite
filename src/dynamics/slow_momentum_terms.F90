@@ -26,8 +26,8 @@ MODULE SUBROUTINE slow_momentum_terms(self,dt)
 !---------------------------------------------------------------------------
    if(associated(self%logs)) call self%logs%info('slow_momentum_terms()',level=2)
    call self%slow_advection(dt)
-   call self%slow_diffusion()
-   call self%slow_bottom_friction()
+   if (self%apply_diffusion) call self%slow_diffusion()
+   if (self%apply_bottom_friction) call self%slow_bottom_friction()
    self%Uio=self%Ui; self%Ui=0._real64
    self%Vio=self%Vi; self%Vi=0._real64
 END SUBROUTINE slow_momentum_terms

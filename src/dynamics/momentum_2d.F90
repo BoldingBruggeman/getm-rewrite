@@ -63,45 +63,44 @@ MODULE SUBROUTINE uv_initialize_2d(self)
 
    if (self%Am0 > 0_real64) self%Am=self%Am0
 
-!KB
-!if (self%advection_scheme > 0) then
-   TGrid: associate( TG => self%domain%T )
-   XGrid: associate( XG => self%domain%X )
-   ! Grids for U and V advection - updates of time varying fields in advection calling routine
-   call mm_s('uadvmask',self%uadvgrid%mask,TG%mask,def=0,stat=stat)
-   call mm_s('uadvdx',self%uadvgrid%dx,TG%dx,def=0._real64,stat=stat)
-   call mm_s('uadvdy',self%uadvgrid%dy,TG%dy,def=0._real64,stat=stat)
-   call mm_s('uadvD',self%uadvgrid%D,TG%D,def=0._real64,stat=stat)
+   if (self%advection_scheme > 0) then
+      TGrid: associate( TG => self%domain%T )
+      XGrid: associate( XG => self%domain%X )
+      ! Grids for U and V advection - updates of time varying fields in advection calling routine
+      call mm_s('uadvmask',self%uadvgrid%mask,TG%mask,def=0,stat=stat)
+      call mm_s('uadvdx',self%uadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+      call mm_s('uadvdy',self%uadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+      call mm_s('uadvD',self%uadvgrid%D,TG%D,def=0._real64,stat=stat)
 
-   call mm_s('vadvmask',self%vadvgrid%mask,TG%mask,def=0,stat=stat)
-   call mm_s('vadvdx',self%vadvgrid%dx,TG%dx,def=0._real64,stat=stat)
-   call mm_s('vadvdy',self%vadvgrid%dy,TG%dy,def=0._real64,stat=stat)
-   call mm_s('vadvD',self%vadvgrid%D,TG%D,def=0._real64,stat=stat)
+      call mm_s('vadvmask',self%vadvgrid%mask,TG%mask,def=0,stat=stat)
+      call mm_s('vadvdx',self%vadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+      call mm_s('vadvdy',self%vadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+      call mm_s('vadvD',self%vadvgrid%D,TG%D,def=0._real64,stat=stat)
 
-   call mm_s('Ua',self%Ua,self%U,def=0._real64,stat=stat)
-   call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
+      call mm_s('Ua',self%Ua,self%U,def=0._real64,stat=stat)
+      call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
 
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin-1,UG%imax
-         self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
-         self%uadvgrid%dx(i,j) = TG%dx(i+1,j)
-         self%uadvgrid%dy(i,j) = TG%dy(i+1,j)
-         self%vadvgrid%dx(i,j) = XG%dx(i,j)
-         self%vadvgrid%dy(i,j) = XG%dy(i,j)
+      do j=UG%jmin,UG%jmax
+         do i=UG%imin-1,UG%imax
+            self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
+            self%uadvgrid%dx(i,j) = TG%dx(i+1,j)
+            self%uadvgrid%dy(i,j) = TG%dy(i+1,j)
+            self%vadvgrid%dx(i,j) = XG%dx(i,j)
+            self%vadvgrid%dy(i,j) = XG%dy(i,j)
+         end do
       end do
-   end do
-   do j=UG%jmin-1,UG%jmax
-      do i=UG%imin,UG%imax
-         self%uadvgrid%dx(i,j) = XG%dx(i,j)
-         self%uadvgrid%dy(i,j) = XG%dy(i,j)
-         self%vadvgrid%mask(i,j) = TG%mask(i,j+1) ! check this
-         self%vadvgrid%dx(i,j) = TG%dx(i,j+1)
-         self%vadvgrid%dy(i,j) = TG%dy(i,j+1)
+      do j=UG%jmin-1,UG%jmax
+         do i=UG%imin,UG%imax
+            self%uadvgrid%dx(i,j) = XG%dx(i,j)
+            self%uadvgrid%dy(i,j) = XG%dy(i,j)
+            self%vadvgrid%mask(i,j) = TG%mask(i,j+1) !KB check this
+            self%vadvgrid%dx(i,j) = TG%dx(i,j+1)
+            self%vadvgrid%dy(i,j) = TG%dy(i,j+1)
+         end do
       end do
-   end do
-   end associate XGrid
-   end associate TGrid
-!end if
+      end associate XGrid
+      end associate TGrid
+   end if
    end associate VGrid
    end associate UGrid
 END SUBROUTINE uv_initialize_2d
@@ -131,9 +130,9 @@ MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
    logical :: ufirst=.false.
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_momentum_2d()',level=2)
-   call self%bottom_friction_2d(runtype)
-   call self%uv_advection_2d(dt)
-   call self%uv_diffusion_2d(dt)
+   if (self%apply_bottom_friction) call self%bottom_friction_2d(runtype)
+   if (self%advection_scheme > 0) call self%uv_advection_2d(dt)
+   if (self%apply_diffusion) call self%uv_diffusion_2d(dt)
    if(ufirst) then
       call u_2d(self,dt,tausx,dpdx)
       call self%coriolis_fu()
@@ -196,6 +195,7 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(UG,self%U)
    end associate UGrid
 END SUBROUTINE u_2d
 
@@ -246,6 +246,7 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(VG,self%V)
    end associate VGrid
 END SUBROUTINE v_2d
 

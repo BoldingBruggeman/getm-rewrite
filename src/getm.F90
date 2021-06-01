@@ -106,6 +106,7 @@ SUBROUTINE getm_settings(self)
 
 !  Local variables
    TYPE(timedelta) :: timediff
+   integer :: adv_scheme=1
 !---------------------------------------------------------------------------
 
 !write(*,*) 'This file was compiled by ', compiler_version(), ' using the options ', compiler_options()
@@ -119,13 +120,20 @@ SUBROUTINE getm_settings(self)
    call get_command_argument(1,self%bathymetry%depth%f)
    self%bathymetry%depth%v = 'bathymetry'
 
+! defines to support different box_* simulations
+!#define OPEN_BDY
+#define WITH_SURFACE_FORCING
+
    self%runtype = 4
    self%info_frequency = 10
    self%mode_split = 100000
    self%mode_split = 20
    self%timestep = 10._real64
-   self%sim_stop = strptime("2020-01-02 00:00:00", time_format)
-   self%sim_stop = strptime("2020-01-01 01:00:00", time_format)
+   self%sim_start = strptime("2020-01-01 00:00:00", time_format)
+   self%sim_stop  = strptime("2020-01-02 00:00:00", time_format)
+   self%sim_stop  = strptime("2020-01-02 01:00:00", time_format)
+   self%sim_stop  = strptime("2020-01-01 01:00:00", time_format)
+   self%sim_stop  = strptime("2020-01-01 00:10:00", time_format)
 
    self%imin = 1
    self%imax = 100
@@ -134,7 +142,7 @@ SUBROUTINE getm_settings(self)
    self%kmin = 1
    self%kmax = 20
 
-   self%domain%domain_type = 2
+   self%domain%domain_type = 1
    self%domain%method_vertical_coordinates = 1
    self%domain%Dmin = 0.5_real64
    self%domain%Dcrit = 2.0_real64
@@ -145,20 +153,28 @@ SUBROUTINE getm_settings(self)
    self%domain%lat0 = 45._real64
    self%domain%lat0 = 0._real64
 
-   self%airsea%taux0 = 0.01_real64
+#ifdef WITH_SURFACE_FORCING
+   self%airsea%taux0 = 0.00_real64
    self%airsea%tauy0 = 0.01_real64
-   self%airsea%tauy0 = 0.0_real64
    self%airsea%swr0 =  25._real64
    self%airsea%shf0 = -25._real64
+#else
+   self%airsea%taux0 = 0.0_real64
+   self%airsea%tauy0 = 0.0_real64
+#endif
 
-   self%physics%mixing%method_mixing = 1 !KB constant
+adv_scheme=0
+   self%physics%mixing%method_mixing = 2 !KB constant
    self%physics%mixing%num0 = 1.e-4_real64
    self%physics%mixing%nuh0 = 1.e-4_real64
-   self%physics%temperature%advection_scheme = 1
+   self%physics%temperature%advection_scheme = adv_scheme
+   self%physics%salinity%advection_scheme = adv_scheme
 
    self%dynamics%pressure%method_internal_pressure = 1
    self%dynamics%momentum%Am0 = 1.e-4_real64
-   self%dynamics%momentum%advection_scheme = 1
+self%dynamics%momentum%apply_bottom_friction = .false.
+   self%dynamics%momentum%advection_scheme = adv_scheme
+self%dynamics%momentum%apply_diffusion = .false.
    self%dynamics%momentum%store_advection = .true.
    self%dynamics%momentum%store_diffusion = .true.
    self%dynamics%momentum%store_damping = .true.
@@ -183,7 +199,7 @@ SUBROUTINE getm_configure(self)
    integer :: length
 !-----------------------------------------------------------------------------
   self%logs%prepend = ''
-  call self%logs%info('getm_configure()',level=1)
+  call self%logs%info('getm_configure()',level=0)
 
 #ifdef _STATIC_
    call self%logs%debug('_STATIC_ compilation')
@@ -191,11 +207,42 @@ SUBROUTINE getm_configure(self)
    call self%logs%debug('_DYNAMIC_ compilation')
 #endif
 
-   call self%domain%configure(self%imin,self%imax,self%jmin,self%jmax,self%kmin,self%kmax,logs=self%logs,fm=self%fm)
+#ifdef OPEN_BDY
+!KB   call self%domain%configure(self%imin,self%imax,self%jmin,self%jmax,self%kmin,self%kmax,nwb=1,nnb=0,neb=1,nsb=0,logs=self%logs,fm=self%fm)
+   call self%domain%configure(self%imin,self%imax,self%jmin,self%jmax,self%kmin,self%kmax,nwb=1,nnb=0,neb=1,nsb=0,logs=self%logs,fm=self%fm)
+#else
+   call self%domain%configure(self%imin,self%imax,self%jmin,self%jmax,self%kmin,self%kmax,nwb=0,nnb=0,neb=0,nsb=0,logs=self%logs,fm=self%fm)
+#endif
 
 !KB   call self%parallel%configure(self%domain%T)
 
    call self%bathymetry%initialize(self%logs,self%domain%T,self%domain%domain_type)
+#ifdef OPEN_BDY
+   boundaries: block
+   integer :: n=0
+   integer :: bdytype=3
+   if (self%domain%nwb > 0) then
+      self%domain%wi(1)=3;  self%domain%wfj(1)=3; self%domain%wlj(1)=28
+      n=n+1
+      self%domain%bdy_2d_type(n)=bdytype
+   end if
+   if (self%domain%nnb > 0) then
+      self%domain%nj(1)=28;  self%domain%nfi(1)=3; self%domain%nli(1)=98
+      n=n+1
+      self%domain%bdy_2d_type(n)=bdytype
+   end if
+   if (self%domain%neb > 0) then
+      self%domain%ei(1)=98; self%domain%efj(1)=3; self%domain%elj(1)=28
+      n=n+1
+      self%domain%bdy_2d_type(n)=bdytype
+   end if
+   if (self%domain%nsb > 0) then
+      self%domain%sj(1)=3;  self%domain%sfi(1)=3; self%domain%sli(1)=98
+      n=n+1
+      self%domain%bdy_2d_type(n)=bdytype
+   end if
+   end block boundaries
+#endif
 
    ! now we can configure the field_manager
    !
@@ -299,6 +346,7 @@ SUBROUTINE getm_integrate(self)
 
    dte=self%timestep
    dti = self%mode_split*self%timestep
+   call self%output%do_output(self%sim_start)
    do while (remain%total_seconds() .gt. 0._real64)
       n = n+1
       sim_time = sim_time + dt
@@ -314,6 +362,10 @@ SUBROUTINE getm_integrate(self)
       call pressure%surface(domain%T%z,airsea%sp)
       call momentum%uv_momentum_2d(self%runtype,dte,airsea%taux,airsea%tauy,pressure%dpdx,pressure%dpdy)
       call momentum%velocities_2d()
+#ifdef OPEN_BDY
+      sealevel%zbdy=0.001
+#endif
+      call sealevel%boundaries(dte,momentum%U,momentum%V,momentum%bdyu,momentum%bdyv)
       call sealevel%update(dte,momentum%U,momentum%V)
       call domain%depth_update()
 
@@ -328,7 +380,9 @@ SUBROUTINE getm_integrate(self)
          if (self%runtype > 3) call pressure%internal(density%buoy,momentum%SxB,momentum%SyB)
          call momentum%uvw_momentum_3d(dti,airsea%taux,airsea%tauy,pressure%dpdx,pressure%dpdy, &
                                        pressure%idpdx,pressure%idpdy,mixing%num)
-         call momentum%stresses()
+         call momentum%stresses(airsea%taux,airsea%tauy)
+
+         call mixing%calculate(dti,momentum%taus,momentum%taub,momentum%SS,density%NN)
 
          ! 3D baroclinic
          if (self%runtype > 3) then
@@ -338,6 +392,7 @@ SUBROUTINE getm_integrate(self)
             temperature%sst=gsw_pt_from_CT(salinity%S(:,:,domain%T%kmax),temperature%T(:,:,domain%T%kmax))
             call density%density(salinity%S,temperature%T)
             call density%buoyancy()
+            call density%brunt_vaisala(salinity%S,temperature%T)
          end if
 
          ! MUST be the last routines to call in the 3D loop

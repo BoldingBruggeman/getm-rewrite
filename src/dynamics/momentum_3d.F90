@@ -49,11 +49,11 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('taub',self%taub,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
-   call mm_s('SS',self%SS,TG%l,TG%u,def=0._real64,stat=stat)
-!KB if (self%advection_scheme > 0) then
-   call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
-   call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
-!KBend if
+   call mm_s('SS',self%SS,TG%l+(/0,0,-1/),TG%u,def=0._real64,stat=stat)
+   if (self%advection_scheme > 0) then
+      call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+      call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+   end if
    call mm_s('num',self%num,self%pk,def=0._real64,stat=stat)
    call mm_s('ea2',self%ea2,self%pk,def=0._real64,stat=stat)
    call mm_s('ea4',self%ea4,self%pk,def=0._real64,stat=stat)
@@ -98,7 +98,7 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    logical, save :: ufirst=.false. !KB should likely not have save
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_momentum_3d()',level=2)
-   call self%bottom_friction_3d()
+   if (self%apply_bottom_friction) call self%bottom_friction_3d()
    if(ufirst) then
       call pk_3d(self,dt,tausx,dpdx,idpdy,viscosity)
       call self%coriolis_fpk()
@@ -117,6 +117,8 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    call self%uv_advection_3d(dt)
 #if 0
    call self%uv_diffusion_3d(dt) !KB - makes model go wrong
+#else
+if (associated(self%logs)) call self%logs%info('*** missing uv_diffusion_3d() ***',level=0)
 #endif
    call self%shear_frequency(viscosity)
    call self%stresses(tausx,tausy)
@@ -200,8 +202,7 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn, &
-             self%molecular,self%num,self%pk,ea2=self%ea2,ea4=self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,self%num,self%pk,ea2=self%ea2,ea4=self%ea4)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
@@ -219,6 +220,7 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(UG,self%pk)
    end associate UGrid
 END SUBROUTINE pk_3d
 
@@ -300,8 +302,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn, &
-            self%molecular,self%num,self%qk,ea2=self%ea2,ea4=self%ea4)
+   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,self%num,self%qk,ea2=self%ea2,ea4=self%ea4)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
@@ -319,6 +320,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(VG,self%qk)
    end associate VGrid
 END SUBROUTINE qk_3d
 
@@ -351,7 +353,7 @@ MODULE SUBROUTINE w_momentum_3d(self,dt)
                   self%ww(i,j,k) = self%ww(i,j,k-1)-(TG%hn(i,j,k)-TG%ho(i,j,k))*dtm1 &
                               -(self%pk(i,j,k)*UG%dy(i,j)-self%pk(i-1,j  ,k)*UG%dy(i-1,j) &
                                +self%qk(i,j,k)*VG%dx(i,j)-self%qk(i  ,j-1,k)*VG%dx(i,j-1)) &
-                               *TG%inv_area(i,j)
+                               *TG%iarea(i,j)
             end if
          end do
       end do

@@ -67,10 +67,12 @@ MODULE SUBROUTINE do_sigma(self)
 
    !! why not ho=hn as zio=zin
    TGrid: associate( TG => self%T )
+!KB
+   TG%ho=TG%hn
    do j=TG%l(2),TG%u(2)
       do i=TG%l(1),TG%u(1)
          if (TG%mask(i,j) > 0) then
-            TG%ho(i,j,:)=(TG%zio(i,j)+TG%H(i,j))*dga(:)
+!KB            TG%ho(i,j,:)=(TG%zio(i,j)+TG%H(i,j))*dga(:)
             TG%hn(i,j,:)=(TG%zin(i,j)+TG%H(i,j))*dga(:)
          end if
       end do
@@ -81,10 +83,12 @@ MODULE SUBROUTINE do_sigma(self)
    !! if zin and H are updated in halo zones - extend to all domain
    !! what about mask
    UGrid: associate( UG => self%U )
+!KB
+   UG%ho=UG%hn
    do j=UG%l(2),UG%u(2)
-      do i=UG%l(1),UG%u(1)-1
+      do i=UG%l(1),UG%u(1) ! requires zin is HALO-updated (-1)
          if (UG%mask(i,j) > 0) then
-            UG%ho(i,j,:)=(UG%zio(i,j)+UG%H(i,j))*dga(:)
+!KB            UG%ho(i,j,:)=(UG%zio(i,j)+UG%H(i,j))*dga(:)
             UG%hn(i,j,:)=(UG%zin(i,j)+UG%H(i,j))*dga(:)
          end if
       end do
@@ -93,10 +97,12 @@ MODULE SUBROUTINE do_sigma(self)
 
    !! if zin and H are updated in halo zones - extend to all domain
    VGrid: associate( VG => self%V )
-   do j=VG%l(2),VG%u(2)-1
+!KB
+   VG%ho=VG%hn
+   do j=VG%l(2),VG%u(2)  ! requires zin is HALO-updated (-1)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
-            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
+!KB            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
             VG%hn(i,j,:)=(VG%zin(i,j)+VG%H(i,j))*dga(:)
          end if
       end do

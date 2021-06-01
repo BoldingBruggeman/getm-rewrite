@@ -211,7 +211,7 @@ MODULE SUBROUTINE momentum_register(self,runtype)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('tauby', self%tauby(VG%imin:VG%imax,VG%jmin:VG%jmax))
 
-   call self%fm%register('SS', 's-1', 'shear stress', &
+   call self%fm%register('SS', 's-2', 'shear stress', &
                          standard_name='', &
                          dimensions=(self%domain%V%dim_3d_ids), &
                          part_of_state=.true., &

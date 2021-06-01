@@ -150,7 +150,7 @@ CONTAINS
       where(domain%T%H .gt. 0._real64) domain%T%mask = 1
       domain%domain_type=1
 !      call domain%configure(fm=fm)
-      call domain%initialize()
+      call domain%initialize(1)
       call domain%report()
    end subroutine domain_setup
 

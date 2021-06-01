@@ -35,8 +35,6 @@ MODULE getm_momentum
 !  Module constants
    real(real64), parameter :: rho0 = 1025._real64
       !! Reference density
-   real(real64), parameter :: g = 9.81_real64
-      !! Gravity
    real(real64), parameter :: kappa = 0.4_real64
       !! constant
    real(real64), parameter :: avmmol = 0.001_real64 !KB
@@ -82,11 +80,14 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: taus,taub
       real(real64), dimension(:,:), allocatable :: taubx,tauby
       real(real64), dimension(:,:,:), allocatable :: SS
+      real(real64), dimension(:), allocatable :: bdyu,bdyv
       ! help variables
       real(real64), dimension(:,:,:), allocatable :: num,ea2,ea4
       real(real64), dimension(:,:), allocatable :: work2d
       type(type_getm_grid) :: uadvgrid,vadvgrid
+      logical :: apply_bottom_friction=.true.
       integer :: advection_scheme=1
+      logical :: apply_diffusion=.true.
       integer :: coriolis_scheme=1
       real(real64) :: molecular=0._real64
       real(real64) :: cnpar=1._real64
@@ -350,6 +351,12 @@ SUBROUTINE momentum_initialize(self,runtype,domain,advection,vertical_diffusion)
 #endif
    if (associated(self%fm)) then
       call self%register(runtype)
+   end if
+   if (self%domain%nbdyp > 0) then
+      allocate(self%bdyu(self%domain%nbdyp),stat=stat)
+      allocate(self%bdyv(self%domain%nbdyp),stat=stat)
+      self%bdyu=0._real64
+      self%bdyv=0._real64
    end if
    end associate VGrid
    end associate UGrid

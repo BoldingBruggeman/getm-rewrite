@@ -2,6 +2,10 @@
 
 !KB!!{!./pages/momentum_3d.md!}
 
+!> @bug
+!> check indices in work2d array calculations
+!> @endbug
+
 SUBMODULE (getm_momentum) coriolis_smod
 
 CONTAINS
@@ -46,8 +50,8 @@ MODULE SUBROUTINE coriolis_fu(self)
                self%work2d(i,j)=0._real64
                if(VG%mask(i,j) > 0) then
                   self%work2d(i,j)=0.25_real64*sqrt(VG%D(i,j)) &
-                                  *(self%U(i,j  )/sqrt(UG%D(i,j  ))+ self%U(i-1,j  )/sqrt(UG%D(i-1,j  ))  &
-                                   +self%U(i,j+1)/sqrt(UG%D(i,j+1))+ self%U(i-1,j+1)/sqrt(UG%D(i-1,j+1)))
+                                  *(self%U(i-1,j  )/sqrt(UG%D(i-1,j  ))+self%U(i,j  )/sqrt(UG%D(i,j  ))  &
+                                   +self%U(i-1,j+1)/sqrt(UG%D(i-1,j+1))+self%U(i,j+1)/sqrt(UG%D(i,j+1)))
                end if
             end do
          end do
@@ -58,9 +62,11 @@ MODULE SUBROUTINE coriolis_fu(self)
          if(VG%mask(i,j) > 0) then
             if (self%domain%domain_type /= 1) then
                cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j)) &
-                         -self%work2d(i,j)*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%inv_area(i,j)
+                         -self%work2d(i,j)*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%iarea(i,j)
             end if
             self%fU(i,j)=(cord_curv+VG%cor(i,j))*self%work2d(i,j)
+         else
+            self%fU(i,j)=0._real64
          end if
       end do
    end do
@@ -100,7 +106,7 @@ MODULE SUBROUTINE coriolis_fv(self)
             do i=UG%imin,UG%imax
                self%work2d(i,j)=0._real64
                if(UG%mask(i,j) .ge. 1) then
-                  self%work2d(i,j)=0.25_real64*( self%V(i-1,j)+self%V(i,j)+self%V(i-1,j+1)+self%V(i,j+1))
+                  self%work2d(i,j)=0.25_real64*( self%V(i,j-1)+self%V(i+1,j-1)+self%V(i,j)+self%V(i+1,j))
                end if
             end do
          end do
@@ -110,8 +116,8 @@ MODULE SUBROUTINE coriolis_fv(self)
                self%work2d(i,j)=0._real64
                if(UG%mask(i,j) > 0) then
                   self%work2d(i,j)=0.25_real64*sqrt(UG%D(i,j)) &
-                                  *(self%V(i,j  )/sqrt(VG%D(i,j  ))+ self%V(i-1,j  )/sqrt(VG%D(i-1,j  ))  &
-                                   +self%V(i,j+1)/sqrt(VG%D(i,j+1))+ self%V(i-1,j+1)/sqrt(VG%D(i-1,j+1)))
+                                  *(self%V(i,j-1)/sqrt(VG%D(i,j-1))+ self%V(i+1,j-1)/sqrt(VG%D(i+1,j-1))  &
+                                   +self%V(i,j  )/sqrt(VG%D(i,j  ))+ self%V(i+1,j  )/sqrt(VG%D(i+1,j  )))
                end if
             end do
          end do
@@ -122,9 +128,11 @@ MODULE SUBROUTINE coriolis_fv(self)
          if(VG%mask(i,j) > 0) then
             if (self%domain%domain_type /= 1) then
                cord_curv=(self%work2d(i,j)*(TG%dy(i+1,j)-TG%dy(i,j))) &
-                         +self%U(i,j)*(XG%dx(i,j)-XG%dx(i,j-1))/UG%D(i,j)*UG%inv_area(i,j)
+                         +self%U(i,j)*(XG%dx(i,j)-XG%dx(i,j-1))/UG%D(i,j)*UG%iarea(i,j)
             end if
             self%fV(i,j)=(cord_curv+UG%cor(i,j))*self%work2d(i,j)
+         else
+            self%fV(i,j)=0._real64
          end if
       end do
    end do
@@ -190,7 +198,7 @@ MODULE SUBROUTINE coriolis_fpk(self)
                if (self%domain%domain_type /= 1) then
                   cord_curv=(self%qk(i,j,k)*(XG%dy(i,j)-XG%dy(i-1,j)) &
                             -self%work2d(i,j)*(TG%dx(i,j+1)-TG%dx(i,j))) &
-                            /VG%ho(i,j,k)*VG%inv_area(i,j)
+                            /VG%ho(i,j,k)*VG%iarea(i,j)
                end if
                self%fpk(i,j,k)=(cord_curv-VG%cor(i,j))*self%work2d(i,j)
             end if
@@ -258,7 +266,7 @@ MODULE SUBROUTINE coriolis_fqk(self)
                if (self%domain%domain_type /= 1) then
                   cord_curv=(self%work2d(i,j)*(TG%dy(i+1,j)-TG%dy(i,j)) &
                             -self%pk(i,j,k)*(XG%dx(i,j)-XG%dx(i,j-1))) &
-                            /UG%ho(i,j,k)*UG%inv_area(i,j)
+                            /UG%ho(i,j,k)*UG%iarea(i,j)
                end if
                self%fqk(i,j,k)=(cord_curv+UG%cor(i,j))*self%work2d(i,j)
             end if
@@ -307,7 +315,7 @@ domain,u,v,fu - height
          if(VG%mask(i,j) > 0) then
             if (self%domain%domain_type /= 1) then
                cord_curv=(self%V(i,j)*(XG%dy(i,j)-XG%dy(i-1,j)) &
-                         -self%work2d(i,j)*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%inv_area(i,j)
+                         -self%work2d(i,j)*(TG%dx(i,j+1)-TG%dx(i,j)))/VG%D(i,j)*VG%iarea(i,j)
             end if
             self%fU(i,j)=(cord_curv+VG%cor(i,j))*self%work2d(i,j)
          end if

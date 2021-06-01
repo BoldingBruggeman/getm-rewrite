@@ -148,6 +148,7 @@ MODULE SUBROUTINE register(self,runtype)
          stop 'register()'
    end select
 
+   ! Un-disturb water depth at T, U, V and X points
    call self%fm%register('bathymetry', 'm', 'bathymetry', &
                       standard_name='depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_y/), &
@@ -157,7 +158,6 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('bathymetry', TG%H(TG%imin:TG%imax,TG%jmin:TG%jmax))
-
    call self%fm%register('hu', 'm', 'bathymetry at u-points', &
                       standard_name='depth', &
                       dimensions=(/self%id_dim_xi, self%id_dim_y/), &
@@ -176,6 +176,17 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('hv', self%V%H(VG%imin:VG%imax,VG%jmin:VG%jmax))
+   call self%fm%register('hx', 'm', 'bathymetry at x-points', &
+                      standard_name='depth', &
+                      dimensions=(/self%id_dim_xx, self%id_dim_yx/), &
+                      fill_value=-10._real64, &
+                      no_default_dimensions=.true., &
+                      output_level=output_level_required, &
+                      category='domain',field=f)
+   call f%attributes%set('axis', 'X Y')
+   call self%fm%send_data('hx', self%X%H(XG%imin:XG%imax,XG%jmin:XG%jmax))
+
+   ! Time varying water depth at T, U, V and X points
    call self%fm%register('D', 'm', 'waterdepth', &
                       standard_name='total depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_y, id_dim_time/), &
@@ -205,13 +216,15 @@ MODULE SUBROUTINE register(self,runtype)
    call self%fm%send_data('DV', self%V%D(VG%imin:VG%imax,VG%jmin:VG%jmax))
    call self%fm%register('DX', 'm', 'waterdepth', &
                       standard_name='total depth', &
-                      dimensions=(/self%id_dim_xi, self%id_dim_yi, id_dim_time/), &
+                      dimensions=(/self%id_dim_xx, self%id_dim_yx, id_dim_time/), &
                       fill_value=-9999._real64, &
                       no_default_dimensions=.true., &
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('DX', self%X%D(XG%imin+1:XG%imax,XG%jmin+1:XG%jmax))
+   call self%fm%send_data('DX', self%X%D(XG%imin:XG%imax,XG%jmin:XG%jmax))
+
+   ! Time varying sea surface elevation at T, U, V and X points
    call self%fm%register('elev', 'm', 'sea surface elevation', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
@@ -220,6 +233,7 @@ MODULE SUBROUTINE register(self,runtype)
                          category='domain', field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('elev', TG%z(TG%imin:TG%imax,TG%jmin:TG%jmax))
+
    call self%fm%register('zo', 'm', 'sea surface eleveation - previous timestep', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
@@ -238,21 +252,23 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
    call self%fm%send_data('zin', self%T%zin(TG%imin:TG%imax,TG%jmin:TG%jmax))
-   call self%fm%register('ssun', 'm', 'sea surface elevation', &
+   call self%fm%register('ziun', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%U%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssun', self%U%zin(UG%imin:UG%imax,UG%jmin:UG%jmax))
-   call self%fm%register('ssvn', 'm', 'sea surface elevation', &
+   call self%fm%send_data('ziun', self%U%zin(UG%imin:UG%imax,UG%jmin:UG%jmax))
+   call self%fm%register('zivn', 'm', 'sea surface elevation', &
                       standard_name='', &
                       dimensions=(self%V%dim_2d_ids), &
                       fill_value=-9999._real64, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y T')
-   call self%fm%send_data('ssvn', self%V%zin(VG%imin:VG%imax,VG%jmin:VG%jmax))
-   call self%fm%register('hn', 'm', 'layer thickness', &
+   call self%fm%send_data('zivn', self%V%zin(VG%imin:VG%imax,VG%jmin:VG%jmax))
+
+   ! Time varying layer thickness at T, U and V
+   call self%fm%register('hn', 'm', 'layer thickness - T-points', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
                       fill_value=-9999._real64, &
@@ -260,7 +276,7 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hn', self%T%hn(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
-   call self%fm%register('hun', 'm', 'layer thickness', &
+   call self%fm%register('hun', 'm', 'layer thickness - U-points', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
                       fill_value=-9999._real64, &
@@ -268,7 +284,7 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hun', self%U%hn(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
-   call self%fm%register('hvn', 'm', 'layer thickness', &
+   call self%fm%register('hvn', 'm', 'layer thickness - V-points', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &
                       fill_value=-9999._real64, &
@@ -277,31 +293,33 @@ MODULE SUBROUTINE register(self,runtype)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('hvn', self%V%hn(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
 
+   ! Time varying depth to cell faces at T, U and V
    call self%fm%register('zf', 'm', 'depth to upper cell face - T-points', &
                       standard_name='cell thickness', &
-                      dimensions=(self%T%dim_3d_ids), &
+                      dimensions=(/ self%id_dim_x, self%id_dim_y, self%id_dim_zi /), &
                       fill_value=-9999._real64, &
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('zf', self%T%zf(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+   call self%fm%send_data('zf', self%T%zf(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin-1:TG%kmax))
    call self%fm%register('zfu', 'm', 'depth to upper cell face - U-points', &
                       standard_name='cell thickness', &
-                      dimensions=(self%T%dim_3d_ids), &
+                      dimensions=(/ self%id_dim_x, self%id_dim_y, self%id_dim_zi /), &
                       fill_value=-9999._real64, &
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('zfu', self%U%zf(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
+   call self%fm%send_data('zfu', self%U%zf(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin-1:UG%kmax))
    call self%fm%register('zfv', 'm', 'depth to upper cell face - V-points', &
                       standard_name='depth to cell center', &
-                      dimensions=(self%T%dim_3d_ids), &
+                      dimensions=(/ self%id_dim_x, self%id_dim_y, self%id_dim_zi /), &
                       fill_value=-9999._real64, &
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y Z T')
-   call self%fm%send_data('zfv', self%V%zf(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
+   call self%fm%send_data('zfv', self%V%zf(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin-1:VG%kmax))
 
+   ! Time varying depth to cell centers at T, U and V
    call self%fm%register('zc', 'm', 'depth to cell center - T-points', &
                       standard_name='cell thickness', &
                       dimensions=(self%T%dim_3d_ids), &

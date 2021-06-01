@@ -1,12 +1,14 @@
 add_library( getm_domain
     domain.F90
     grids.F90
-    metrics.F90
+    imetrics.F90
     register.F90
     uvx_depths.F90
+    mirror_bdys.F90
     cfl_check.F90
     depth_update.F90
     vertical_coordinates.F90
+    vertical_adaptive.F90
     vertical_gvc.F90
     vertical_sigma.F90
 )
