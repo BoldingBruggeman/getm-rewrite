@@ -28,10 +28,10 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
-         self%uadvgrid%D(i,j)  = TG%D(i+1,j)
-         self%vadvgrid%D(i,j)  = XG%D(i,j)
+   do j=UG%l(2),UG%u(2)
+      do i=UG%l(1),UG%u(1)-1
+         self%uuadvgrid%D(i,j)  = TG%D(i+1,j)
+         self%uvadvgrid%D(i,j)  = XG%D(i,j)
          self%Ua(i,j) = 0.5_real64*(self%U(i,j) + self%U(i+1,j))
          self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i+1,j))
       end do
@@ -40,17 +40,17 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    self%advU=self%U
 #endif
    where(UG%mask > 0) self%u1 = self%U/UG%D
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%u1)
+   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%Ua,self%uvadvgrid,self%Va,dt,UG,self%u1)
 #ifdef _APPLY_ADV_DIFF_
    where(UG%mask > 0) self%U = self%u1*UG%D
 #else
    where(UG%mask > 0) self%advU=(self%u1*UG%D-self%advU)/dt
 #endif
 
-   do j=VG%jmin,VG%jmax
-      do i=VG%imin,VG%imax
-         self%uadvgrid%D(i,j)  = XG%D(i,j)
-         self%vadvgrid%D(i,j)  = TG%D(i,j+1)
+   do j=VG%l(2),VG%u(2)-1
+      do i=VG%l(1),VG%u(1)
+         self%vuadvgrid%D(i,j)  = XG%D(i,j)
+         self%vvadvgrid%D(i,j)  = TG%D(i,j+1)
          self%Ua(i,j) = 0.5_real64*(self%U(i,j) + self%U(i,j+1))
          self%Va(i,j) = 0.5_real64*(self%V(i,j) + self%V(i,j+1))
       end do
@@ -59,7 +59,7 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    self%advV=self%V
 #endif
    where(VG%mask > 0) self%v1 = self%V/VG%D
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%v1)
+   call self%advection%calculate(self%advection_scheme,self%vuadvgrid,self%Ua,self%vvadvgrid,self%Va,dt,VG,self%v1)
 #ifdef _APPLY_ADV_DIFF_
    where(VG%mask > 0) self%V = self%v1*VG%D
 #else
@@ -96,25 +96,25 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
    VGrid: associate( VG => self%domain%V )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         self%uadvgrid%hn(i,j,:) = TG%hn(i+1,j,:)
-         self%vadvgrid%hn(i,j,:) = XG%hn(i,j,:)
+         self%uuadvgrid%hn(i,j,:) = TG%hn(i+1,j,:)
+         self%uvadvgrid%hn(i,j,:) = XG%hn(i,j,:)
          self%pka(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i+1,j,:))
          self%qka(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i+1,j,:))
       end do
    end do
    self%advpk=self%pk
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pka,self%vadvgrid,self%qka,dt,UG,self%pk)
+   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%pka,self%uvadvgrid,self%qka,dt,UG,self%pk)
    self%advpk=(self%pk-self%advpk)/dt
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         self%uadvgrid%hn(i,j,:) = XG%hn(i,j,:)
-         self%vadvgrid%hn(i,j,:) = TG%hn(i,j+1,:)
+         self%vuadvgrid%hn(i,j,:) = XG%hn(i,j,:)
+         self%vvadvgrid%hn(i,j,:) = TG%hn(i,j+1,:)
          self%pka(i,j,:) = 0.5_real64*(self%pk(i,j,:) + self%pk(i,j+1,:))
          self%qka(i,j,:) = 0.5_real64*(self%qk(i,j,:) + self%qk(i,j+1,:))
       end do
    end do
    self%advqk=self%qk
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%pka,self%vadvgrid,self%qka,dt,VG,self%qk)
+   call self%advection%calculate(self%advection_scheme,self%vuadvgrid,self%pka,self%vvadvgrid,self%qka,dt,VG,self%qk)
    self%advqk=(self%qk-self%advqk)/dt
    end associate VGrid
    end associate UGrid
@@ -148,14 +148,14 @@ MODULE SUBROUTINE slow_advection(self,dt)
    VGrid: associate( VG => self%domain%V )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         self%uadvgrid%D(i,j)  = TG%H(i+1,j)+TG%zin(i+1,j) !KB TG%D(i+1,j)
-         self%vadvgrid%D(i,j)  = XG%D(i,j) ! Knut
+         self%uuadvgrid%D(i,j)  = TG%H(i+1,j)+TG%zin(i+1,j) !KB TG%D(i+1,j)
+         self%uvadvgrid%D(i,j)  = XG%D(i,j) ! Knut
          self%Ua(i,j) = 0.5_real64*(self%Ui(i,j) + self%Ui(i+1,j))
          self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i+1,j))
       end do
    end do
    self%SxA=self%Ui
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,UG,self%Ui)
+   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%Ua,self%uvadvgrid,self%Va,dt,UG,self%Ui)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
@@ -166,14 +166,14 @@ MODULE SUBROUTINE slow_advection(self,dt)
 
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
-         self%uadvgrid%D(i,j)  = XG%D(i,j) ! Knut
-         self%vadvgrid%D(i,j)  = TG%H(i,j+1)+TG%zin(i,j+1) !KB TG%D(i,j+1)
+         self%vuadvgrid%D(i,j)  = XG%D(i,j) ! Knut
+         self%vvadvgrid%D(i,j)  = TG%H(i,j+1)+TG%zin(i,j+1) !KB TG%D(i,j+1)
          self%Ua(i,j) = 0.5_real64*(self%Ui(i,j) + self%Ui(i,j+1))
          self%Va(i,j) = 0.5_real64*(self%Vi(i,j) + self%Vi(i,j+1))
       end do
    end do
    self%SyA=self%Vi
-   call self%advection%calculate(self%advection_scheme,self%uadvgrid,self%Ua,self%vadvgrid,self%Va,dt,VG,self%Vi)
+   call self%advection%calculate(self%advection_scheme,self%vuadvgrid,self%Ua,self%vvadvgrid,self%Va,dt,VG,self%Vi)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then

@@ -7,7 +7,7 @@
 !> penetrating short-wave radiation as source term (see {\tt do\_temperature}).
 
 !> @note
-!> loop boundaries in uadvgrid and vadvgrid
+!> loop boundaries in uuadvgrid, uvadvgrid, vvadvgrid and vvadvgrid
 !> @nednote
 
 MODULE getm_momentum
@@ -84,7 +84,7 @@ MODULE getm_momentum
       ! help variables
       real(real64), dimension(:,:,:), allocatable :: num,ea2,ea4
       real(real64), dimension(:,:), allocatable :: work2d
-      type(type_getm_grid) :: uadvgrid,vadvgrid
+      type(type_getm_grid) :: uuadvgrid,uvadvgrid,vuadvgrid,vvadvgrid
       logical :: apply_bottom_friction=.true.
       integer :: advection_scheme=1
       logical :: apply_diffusion=.true.
