@@ -67,35 +67,47 @@ MODULE SUBROUTINE uv_initialize_2d(self)
       TGrid: associate( TG => self%domain%T )
       XGrid: associate( XG => self%domain%X )
       ! Grids for U and V advection - updates of time varying fields in advection calling routine
-      call mm_s('uadvmask',self%uadvgrid%mask,TG%mask,def=0,stat=stat)
-      call mm_s('uadvdx',self%uadvgrid%dx,TG%dx,def=0._real64,stat=stat)
-      call mm_s('uadvdy',self%uadvgrid%dy,TG%dy,def=0._real64,stat=stat)
-      call mm_s('uadvD',self%uadvgrid%D,TG%D,def=0._real64,stat=stat)
+      call mm_s('uuadvmask',self%uuadvgrid%mask,TG%mask,def=0,stat=stat)
+      call mm_s('uuadvdx',self%uuadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+      call mm_s('uuadvdy',self%uuadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+      call mm_s('uuadvD',self%uuadvgrid%D,TG%D,def=0._real64,stat=stat)
 
-      call mm_s('vadvmask',self%vadvgrid%mask,TG%mask,def=0,stat=stat)
-      call mm_s('vadvdx',self%vadvgrid%dx,TG%dx,def=0._real64,stat=stat)
-      call mm_s('vadvdy',self%vadvgrid%dy,TG%dy,def=0._real64,stat=stat)
-      call mm_s('vadvD',self%vadvgrid%D,TG%D,def=0._real64,stat=stat)
+      call mm_s('uvadvmask',self%uvadvgrid%mask,TG%mask,def=0,stat=stat)
+      call mm_s('uvadvdx',self%uvadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+      call mm_s('uvadvdy',self%uvadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+      call mm_s('uvadvD',self%uvadvgrid%D,TG%D,def=0._real64,stat=stat)
+
+      call mm_s('vuadvmask',self%vuadvgrid%mask,TG%mask,def=0,stat=stat)
+      call mm_s('vuadvdx',self%vuadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+      call mm_s('vuadvdy',self%vuadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+      call mm_s('vuadvD',self%vuadvgrid%D,TG%D,def=0._real64,stat=stat)
+
+      call mm_s('vvadvmask',self%vvadvgrid%mask,TG%mask,def=0,stat=stat)
+      call mm_s('vvadvdx',self%vvadvgrid%dx,TG%dx,def=0._real64,stat=stat)
+      call mm_s('vvadvdy',self%vvadvgrid%dy,TG%dy,def=0._real64,stat=stat)
+      call mm_s('vvadvD',self%vvadvgrid%D,TG%D,def=0._real64,stat=stat)
 
       call mm_s('Ua',self%Ua,self%U,def=0._real64,stat=stat)
       call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
 
-      do j=UG%jmin,UG%jmax
-         do i=UG%imin-1,UG%imax
-            self%uadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
-            self%uadvgrid%dx(i,j) = TG%dx(i+1,j)
-            self%uadvgrid%dy(i,j) = TG%dy(i+1,j)
-            self%vadvgrid%dx(i,j) = XG%dx(i,j)
-            self%vadvgrid%dy(i,j) = XG%dy(i,j)
+      do j=UG%l(2),UG%u(2)
+         do i=UG%l(1),UG%u(1)-1
+            self%uuadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
+            self%uuadvgrid%dx(i,j) = TG%dx(i+1,j)
+            self%uuadvgrid%dy(i,j) = TG%dy(i+1,j)
+            self%uvadvgrid%mask(i,j) = XG%mask(i,j) ! check this
+            self%uvadvgrid%dx(i,j) = XG%dx(i,j)
+            self%uvadvgrid%dy(i,j) = XG%dy(i,j)
          end do
       end do
-      do j=UG%jmin-1,UG%jmax
-         do i=UG%imin,UG%imax
-            self%uadvgrid%dx(i,j) = XG%dx(i,j)
-            self%uadvgrid%dy(i,j) = XG%dy(i,j)
-            self%vadvgrid%mask(i,j) = TG%mask(i,j+1) !KB check this
-            self%vadvgrid%dx(i,j) = TG%dx(i,j+1)
-            self%vadvgrid%dy(i,j) = TG%dy(i,j+1)
+      do j=UG%l(2),UG%u(2)-1
+         do i=UG%l(1),UG%u(1)
+            self%vuadvgrid%mask(i,j) = XG%mask(i,j) ! check this
+            self%vuadvgrid%dx(i,j) = XG%dx(i,j)
+            self%vuadvgrid%dy(i,j) = XG%dy(i,j)
+            self%vvadvgrid%mask(i,j) = TG%mask(i,j+1) !KB check this
+            self%vvadvgrid%dx(i,j) = TG%dx(i,j+1)
+            self%vvadvgrid%dy(i,j) = TG%dy(i,j+1)
          end do
       end do
       end associate XGrid

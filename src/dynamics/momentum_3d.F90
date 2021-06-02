@@ -51,8 +51,10 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
    call mm_s('SS',self%SS,TG%l+(/0,0,-1/),TG%u,def=0._real64,stat=stat)
    if (self%advection_scheme > 0) then
-      call mm_s('uadvhn',self%uadvgrid%hn,TG%hn,def=0._real64,stat=stat)
-      call mm_s('vadvhn',self%vadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+      call mm_s('uuadvhn',self%uuadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+      call mm_s('uvadvhn',self%uvadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+      call mm_s('vuadvhn',self%vuadvgrid%hn,TG%hn,def=0._real64,stat=stat)
+      call mm_s('vvadvhn',self%vvadvgrid%hn,TG%hn,def=0._real64,stat=stat)
    end if
    call mm_s('num',self%num,self%pk,def=0._real64,stat=stat)
    call mm_s('ea2',self%ea2,self%pk,def=0._real64,stat=stat)
