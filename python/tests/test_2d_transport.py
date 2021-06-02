@@ -20,7 +20,7 @@ def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=
 
     # Set up rectangular domain with outer points masked
     domain = pygetm.domain.Domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
-    sim = pygetm.Simulation(domain, runtype=1, advection_scheme=1)
+    sim = pygetm.Simulation(domain, runtype=1, advection_scheme=1, apply_bottom_friction=False)
 
     # Idealized surface forcing
     tausx, tausx_ = domain.T.array(fill=tau_x)

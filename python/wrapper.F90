@@ -135,11 +135,12 @@ contains
      call advection%advection_calculate_2d(scheme, domain%U, u, domain%V, v, timestep, domain%T,var)
    end subroutine
 
-   function momentum_create(runtype, pdomain, padvection) result(pmomentum) bind(c)
+   function momentum_create(runtype, pdomain, padvection, apply_bottom_friction) result(pmomentum) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: momentum_create
       integer(c_int), intent(in), value :: runtype
       type(c_ptr),    intent(in), value :: pdomain
       type(c_ptr),    intent(in), value :: padvection
+      integer(c_int), intent(in), value :: apply_bottom_friction
       type(c_ptr) :: pmomentum
 
       type (type_getm_domain),   pointer :: domain
@@ -150,6 +151,7 @@ contains
       call c_f_pointer(padvection, advection)
       allocate(momentum)
       call momentum%configure()
+      momentum%apply_bottom_friction = (apply_bottom_friction == 1)
       call momentum%initialize(runtype, domain, advection)
       pmomentum = c_loc(momentum)
    end function
