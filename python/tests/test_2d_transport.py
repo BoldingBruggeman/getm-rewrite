@@ -38,7 +38,7 @@ def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=
         dist_U.update_halos()
         dist_V.update_halos()
         sim.sealevel.update(timestep, sim.momentum.U_, sim.momentum.V_)
-        sim.depth_update()
+        sim.update_depth()
 
     success = check_range('U', sim.momentum.U)
     success = check_range('V', sim.momentum.V) and success

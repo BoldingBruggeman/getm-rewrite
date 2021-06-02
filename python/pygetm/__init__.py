@@ -128,9 +128,9 @@ class Simulation:
             self.dist_zU = self.domain.distribute(self.domain.U.z_)
             self.dist_zV = self.domain.distribute(self.domain.V.z_)
             self.dist_zX = self.domain.distribute(self.domain.X.z_)
-            self.depth_update()
+            self.update_depth()
 
-    def depth_update(self):
+    def update_depth(self):
         # Halo exchange for sea level z on T grid
         if self.dist_zT:
             self.dist_zT.update_halos()
