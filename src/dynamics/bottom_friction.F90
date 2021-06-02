@@ -83,7 +83,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
-            self%rv(i,j)=self%rrv(i,j)*sqrt(self%u1(i,j)**2+self%work2d(i,j)**2)
+            self%rv(i,j)=self%rrv(i,j)*sqrt(self%work2d(i,j)**2+self%v1(i,j)**2)
          end if
       end do
    end do
