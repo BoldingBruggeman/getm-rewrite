@@ -87,6 +87,9 @@ _pygetm.sealevel_create.restype = ctypes.c_void_p
 _pygetm.sealevel_update.argtypes = [ctypes.c_void_p, ctypes.c_double, arrtype2D, arrtype2D]
 _pygetm.sealevel_update.restype = None
 
+_pygetm.sealevel_update_uvx.argtypes = [ctypes.c_void_p]
+_pygetm.sealevel_update_uvx.restype = None
+
 class FortranObject:
     def get_arrays(self, get_function=None, names=(), default_shape=None, default_dtype=ctypes.c_double, shapes={}, dtypes={}, halo=None):
         for name in names:
@@ -118,6 +121,31 @@ class Simulation:
         self.pressure = Pressure(self.runtype, self.domain)
         self.momentum = Momentum(self.runtype, self.domain, self.advection)
         self.sealevel = Sealevel(self.domain)
+
+        self.dist_zT = None
+        if domain.tiling:
+            self.dist_zT = self.domain.distribute(self.domain.T.z_)
+            self.dist_UD = self.domain.distribute(self.domain.U.D_)
+            self.dist_VD = self.domain.distribute(self.domain.V.D_)
+            self.dist_XD = self.domain.distribute(self.domain.X.D_)
+            self.depth_update()
+
+    def depth_update(self):
+        # Halo exchange for sea level z on T grid
+        if self.dist_zT:
+            self.dist_zT.update_halos()
+
+        # Compute sea level z on U, V, X grids (do they need a halo exchange?...)
+        self.sealevel.update_uvx()
+
+        # Update total water depth D on T, U, V, X grids
+        _pygetm.domain_depth_update(self.domain.p)
+
+        if self.dist_zT:
+            # Halo exchange for total water depth D on U, V, X grids (do we need all those? and then why not on T grid?)
+            self.dist_UD.update_halos()
+            self.dist_VD.update_halos()
+            self.dist_XD.update_halos()
 
 class Advection:
     def __init__(self, domain, scheme):
@@ -151,4 +179,7 @@ class Sealevel:
 
     def update(self, timestep, U, V):
         _pygetm.sealevel_update(self.p, timestep, U, V)
+
+    def update_uvx(self):
+        _pygetm.sealevel_update_uvx(self.p)
 

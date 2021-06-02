@@ -220,7 +220,7 @@ class Domain:
         data[:, :superhalo] = data_ext[1:-1, :superhalo]
         data[:, -superhalo:] = data_ext[1:-1, -superhalo:]
 
-    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=None, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, **kwargs):
+    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, **kwargs):
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
@@ -338,6 +338,7 @@ class Domain:
         mask_[1::2, 2:-2:2][numpy.logical_or(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
         mask_[2:-2:2, 2:-2:2][numpy.logical_or(numpy.logical_or(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_or(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
         self.exchange_metric(mask_)
+        self.mask_[...] = mask_
 
         for grid in (self.T, self.U, self.V, self.X):
             grid.initialize()
@@ -347,10 +348,6 @@ class Domain:
         # Temporary: undo the grid assignments that were done from Fortran
         for grid in (self.T, self.U, self.V, self.X):
             grid.fill()
-
-        if self.tiling:
-            self.dist_z = self.distribute(self.T.z_)
-            self.depth_update()
 
         self.initialized = True
 
@@ -366,15 +363,6 @@ class Domain:
             self.H *= scale_factor
         if minimum_depth is not None:
             self.H = numpy.ma.masked_less(self.H, minimum_depth)
-
-    def depth_update(self):
-        if self.tiling:
-            self.dist_z.update_halos()
-        _pygetm.domain_depth_update(self.p)
-        if self.tiling:
-            self.distribute(self.U.D_).update_halos()
-            self.distribute(self.V.D_).update_halos()
-            self.distribute(self.X.D_).update_halos()
 
     def distribute(self, field):
         return self.tiling.wrap(field, halo=self.halo)

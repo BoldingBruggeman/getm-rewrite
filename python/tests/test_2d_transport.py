@@ -20,9 +20,6 @@ def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=
 
     # Set up rectangular domain with outer points masked
     domain = pygetm.domain.Domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
-    xslice = slice(None) if periodic_x else slice(3, -3)
-    yslice = slice(None) if periodic_y else slice(3, -3)
-    domain.mask[yslice, xslice] = 1
     sim = pygetm.Simulation(domain, runtype=1, advection_scheme=1)
 
     # Idealized surface forcing
@@ -40,13 +37,11 @@ def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=
         dist_U.update_halos()
         dist_V.update_halos()
         sim.sealevel.update(timestep, sim.momentum.U_, sim.momentum.V_)
-        domain.depth_update()
+        sim.depth_update()
 
-    xslice = slice(None) if periodic_x else slice(1, -1)
-    yslice = slice(None) if periodic_y else slice(1, -1)
-    success = check_range('U', sim.momentum.U[yslice, xslice])
-    success = check_range('V', sim.momentum.V[yslice, xslice]) and success
-    success = check_range('z', domain.T.z[yslice, xslice]) and success
+    success = check_range('U', sim.momentum.U)
+    success = check_range('V', sim.momentum.V) and success
+    success = check_range('z', domain.T.z) and success
     return success
 
 if __name__ == '__main__':

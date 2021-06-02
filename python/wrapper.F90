@@ -271,4 +271,14 @@ contains
       call sealevel%uvx()
    end subroutine
 
+   subroutine sealevel_update_uvx(psealevel) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: sealevel_update_uvx
+      type(c_ptr), intent(in),    value :: psealevel
+
+      type (type_getm_sealevel), pointer :: sealevel
+
+      call c_f_pointer(psealevel, sealevel)
+      call sealevel%uvx()
+   end subroutine
+
 end module
