@@ -125,9 +125,9 @@ class Simulation:
         self.dist_zT = None
         if domain.tiling:
             self.dist_zT = self.domain.distribute(self.domain.T.z_)
-            self.dist_UD = self.domain.distribute(self.domain.U.D_)
-            self.dist_VD = self.domain.distribute(self.domain.V.D_)
-            self.dist_XD = self.domain.distribute(self.domain.X.D_)
+            self.dist_zU = self.domain.distribute(self.domain.U.z_)
+            self.dist_zV = self.domain.distribute(self.domain.V.z_)
+            self.dist_zX = self.domain.distribute(self.domain.X.z_)
             self.depth_update()
 
     def depth_update(self):
@@ -138,14 +138,14 @@ class Simulation:
         # Compute sea level z on U, V, X grids (do they need a halo exchange?...)
         self.sealevel.update_uvx()
 
-        # Update total water depth D on T, U, V, X grids
-        _pygetm.domain_depth_update(self.domain.p)
-
         if self.dist_zT:
             # Halo exchange for total water depth D on U, V, X grids (do we need all those? and then why not on T grid?)
-            self.dist_UD.update_halos()
-            self.dist_VD.update_halos()
-            self.dist_XD.update_halos()
+            self.dist_zU.update_halos()
+            self.dist_zV.update_halos()
+            self.dist_zX.update_halos()
+
+        # Update total water depth D on T, U, V, X grids
+        _pygetm.domain_depth_update(self.domain.p)
 
 class Advection:
     def __init__(self, domain, scheme):
