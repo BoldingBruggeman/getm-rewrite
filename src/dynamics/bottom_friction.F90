@@ -74,7 +74,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
             if (VG%mask(i,j) > 0) then
                ustar=sqrt(self%rrv(i,j)*(self%work2d(i,j)**2+self%v1(i,j)**2))
                hh=max(self%domain%Dmin,VG%D(i,j))
-               self%zvb(i,j)=min(hh,self%zvb(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
+               self%zvb(i,j)=min(hh,self%zvb0(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
                self%rrv(i,j)=(kappa/log((self%zvb(i,j)+0.5_real64*hh)/self%zvb(i,j)))**2
             end if
          end do
