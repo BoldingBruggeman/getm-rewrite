@@ -51,8 +51,8 @@ _pygetm.grid_get_array.restype = ctypes.c_void_p
 _pygetm.domain_initialize.argtypes = [ctypes.c_void_p, ctypes.c_int]
 _pygetm.domain_initialize.restype = None
 
-_pygetm.domain_depth_update.argtypes = [ctypes.c_void_p]
-_pygetm.domain_depth_update.restype = None
+_pygetm.domain_update_depths.argtypes = [ctypes.c_void_p]
+_pygetm.domain_update_depths.restype = None
 
 _pygetm.advection_create.argtypes = []
 _pygetm.advection_create.restype = ctypes.c_void_p
@@ -145,7 +145,7 @@ class Simulation:
             self.dist_zX.update_halos()
 
         # Update total water depth D on T, U, V, X grids
-        _pygetm.domain_depth_update(self.domain.p)
+        _pygetm.domain_update_depths(self.domain.p)
 
 class Advection:
     def __init__(self, domain, scheme):

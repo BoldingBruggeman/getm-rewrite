@@ -6,7 +6,7 @@ add_library( getm_domain
     uvx_depths.F90
     mirror_bdys.F90
     cfl_check.F90
-    depth_update.F90
+    update_depths.F90
     vertical_coordinates.F90
     vertical_adaptive.F90
     vertical_gvc.F90

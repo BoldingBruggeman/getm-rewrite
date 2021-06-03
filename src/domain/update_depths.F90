@@ -17,7 +17,7 @@
    !! note loop boundaries when using [UVX]G%z directly
    !! @endnote
 
-SUBMODULE (getm_domain) depth_update_smod
+SUBMODULE (getm_domain) update_depths_smod
 
 !-----------------------------------------------------------------------------
 
@@ -25,7 +25,7 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE depth_update(self)
+module SUBROUTINE update_depths(self)
 
    IMPLICIT NONE
 
@@ -38,7 +38,7 @@ module SUBROUTINE depth_update(self)
    real(real64) :: x
    integer :: i,j
 !---------------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('depth_update()',level=2)
+   if (associated(self%logs)) call self%logs%info('update_depths()',level=2)
 
 #define USE_MASK
    TGrid: associate( TG => self%T )
@@ -104,8 +104,8 @@ module SUBROUTINE depth_update(self)
 !KB - not sure if necessary (or correct)   call self%mirror_bdys(XG,XG%D)
    end associate XGrid
    end associate TGrid
-END SUBROUTINE depth_update
+END SUBROUTINE update_depths
 
 !-----------------------------------------------------------------------------
 
-END SUBMODULE depth_update_smod
+END SUBMODULE update_depths_smod

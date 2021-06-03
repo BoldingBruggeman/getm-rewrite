@@ -97,14 +97,14 @@ contains
       call domain%initialize(runtype)
    end subroutine
 
-   subroutine domain_depth_update(pdomain) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: domain_depth_update
+   subroutine domain_update_depths(pdomain) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: domain_update_depths
       type(c_ptr), intent(in), value :: pdomain
 
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
-      call domain%depth_update()
+      call domain%update_depths()
    end subroutine
 
    function advection_create() result(padvection) bind(c)

@@ -208,7 +208,7 @@ MODULE getm_domain
       procedure :: mirror_bdy_3d => mirror_bdy_3d
       generic   :: mirror_bdys => mirror_bdy_2d, mirror_bdy_3d
       procedure :: cfl_check => cfl_check
-      procedure :: depth_update => depth_update
+      procedure :: update_depths => update_depths
       procedure :: start_3d => start_3d
       procedure :: init_vertical => init_vertical
       procedure :: do_vertical => do_vertical
@@ -234,9 +234,9 @@ MODULE getm_domain
          class(type_getm_domain), intent(inout) :: self
       end subroutine cfl_check
 
-      module subroutine depth_update(self)
+      module subroutine update_depths(self)
          class(type_getm_domain), intent(inout) :: self
-      end subroutine depth_update
+      end subroutine update_depths
 
       module subroutine mirror_bdy_2d(self,grid,f)
          class(type_getm_domain), intent(inout) :: self
