@@ -55,6 +55,7 @@ class Grid(FortranObject):
                     setattr(self, name + 'i_', values_i)
                     setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
         self.iarea_[:, :] = 1. / self.area_[:, :]
+        self.z_[:, :] = numpy.where(self.mask_ != 0, 0., numpy.nan)
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)
