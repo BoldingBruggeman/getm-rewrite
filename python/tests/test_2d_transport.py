@@ -10,7 +10,7 @@ def check_range(name, values, rtol=1e-12, atol=1e-12):
     print('  %s... ' % name, end='', flush=True)
     absrange = values.max() - values.min()
     mean = values.mean()
-    crit = rtol * mean + atol
+    crit = rtol * abs(mean) + atol
     valid = absrange < crit
     relrange = 0 if absrange == 0 else absrange / abs(mean)
     print('%s (mean %.6g, spread %.6g, relative spread %.6g)' % ('OK' if valid else 'FAILED', mean, absrange, relrange))
