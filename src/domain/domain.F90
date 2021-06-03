@@ -200,6 +200,7 @@ MODULE getm_domain
 
       procedure :: configure => domain_configure
       procedure :: initialize => domain_initialize
+      procedure :: initialize_open_boundaries => domain_initialize_open_boundaries
       procedure :: report => domain_report
       procedure :: imetrics => imetrics
       procedure :: register => register
@@ -309,7 +310,7 @@ CONTAINS
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,nwb,nnb,neb,nsb,logs,fm)
+SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,logs,fm)
 
    !! Configure the type_grid
 
@@ -318,14 +319,12 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,nwb,nnb,neb,nsb,l
 !  Subroutine arguments
    class(type_getm_domain), intent(inout) :: self
    integer, intent(in) :: imin,imax,jmin,jmax,kmin,kmax
-   integer, intent(in), optional :: nwb,nnb,neb,nsb
    class(type_logging), intent(in), target, optional :: logs
    TYPE(type_field_manager), intent(inout), target, optional :: fm
 
 !  Local constants
 
 !  Local variables
-   integer :: stat
 !-----------------------------------------------------------------------
    if (present(logs)) then
       self%logs => logs
@@ -340,6 +339,78 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,nwb,nnb,neb,nsb,l
    call self%U%configure(logs,grid_type=UGRID,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%V%configure(logs,grid_type=VGRID,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%X%configure(logs,grid_type=XGRID,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+
+!  set local and global grid extend
+!KB   self%T%ill=self%T%l(1); self%T%ihl=self%T%u(1)
+!KB   self%T%jll=self%T%l(2); self%T%jhl=self%T%u(2)
+
+   self%domain_ready = self%T%grid_ready .and. self%U%grid_ready .and. &
+                       self%V%grid_ready .and. self%X%grid_ready
+END SUBROUTINE domain_configure
+
+!-----------------------------------------------------------------------------
+
+SUBROUTINE domain_initialize(self,runtype)
+
+   !! Configure the type_grid
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+   integer, intent(in) :: runtype
+
+!  Local constants
+
+!  Local variables
+!-----------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
+
+   call self%imetrics()
+
+   if (.not. self%have_metrics) then
+      call self%uvx_depths()
+   end if
+
+   call self%register(runtype)
+   call self%cfl_check()
+
+   if (self%T%kmax > 1) then
+      call self%init_vertical()
+      call self%do_vertical(1._real64) ! KB
+   end if
+
+   self%domain_ready = .true.
+
+!>  @todo
+!>  various modifications - boundaries, mask and bathymetry
+!>  part_domain
+!>  @endtodo
+
+END SUBROUTINE domain_initialize
+
+!-----------------------------------------------------------------------
+
+SUBROUTINE domain_initialize_open_boundaries(self,nbdyp,nwb,nnb,neb,nsb)
+
+   !! Configure the type_grid
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_getm_domain), intent(inout) :: self
+   integer, intent(in) :: nbdyp
+   integer, intent(in), optional :: nwb,nnb,neb,nsb
+
+!  Local constants
+
+!  Local variables
+   integer :: stat
+!-----------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('domain_bdy_initialize()',level=1)
+
+   self%nbdyp=nbdyp
+   if (nbdyp == 0) return
 
    if (present(nwb)) then
       self%nwb=nwb
@@ -377,72 +448,7 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,nwb,nnb,neb,nsb,l
       allocate(self%bdy_2d_type(self%nbdy),stat=stat)
       allocate(self%bdy_3d_type(self%nbdy),stat=stat)
    end if
-
-!  set local and global grid extend
-!KB   self%T%ill=self%T%l(1); self%T%ihl=self%T%u(1)
-!KB   self%T%jll=self%T%l(2); self%T%jhl=self%T%u(2)
-
-   self%domain_ready = self%T%grid_ready .and. self%U%grid_ready .and. &
-                       self%V%grid_ready .and. self%X%grid_ready
-END SUBROUTINE domain_configure
-
-!-----------------------------------------------------------------------------
-
-SUBROUTINE domain_initialize(self,runtype)
-
-   !! Configure the type_grid
-
-   IMPLICIT NONE
-
-!  Subroutine arguments
-   class(type_getm_domain), intent(inout) :: self
-   integer, intent(in) :: runtype
-
-!  Local constants
-
-!  Local variables
-!-----------------------------------------------------------------------
-   if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
-
-   call boundary_bookkeeping(self)
-   call self%mirror_bdys(self%T,self%T%H)
-   call self%imetrics()
-   if (.not. self%have_metrics) then
-      call self%uvx_depths()
-   end if
-   call self%register(runtype)
-   where (self%T%mask > 0)
-      self%T%z = 0._real64
-      self%T%zo = 0._real64
-      self%T%zin = 0._real64
-      self%T%zio = 0._real64
-   end where
-   where (self%U%mask > 0)
-      self%U%z = 0._real64
-      self%U%zo = 0._real64
-      self%U%zin = 0._real64
-      self%U%zio = 0._real64
-   end where
-   where (self%V%mask > 0)
-      self%V%z = 0._real64
-      self%V%zo = 0._real64
-      self%V%zin = 0._real64
-      self%V%zio = 0._real64
-   end where
-   call self%cfl_check()
-   if (self%T%kmax > 1) then
-      call self%init_vertical()
-      call self%do_vertical(1._real64) ! KB
-   end if
-
-   self%domain_ready = .true.
-
-!>  @todo
-!>  various modifications - boundaries, mask and bathymetry
-!>  part_domain
-!>  @endtodo
-
-END SUBROUTINE domain_initialize
+END SUBROUTINE domain_initialize_open_boundaries
 
 !---------------------------------------------------------------------------
 
