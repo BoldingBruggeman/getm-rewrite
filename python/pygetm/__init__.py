@@ -112,7 +112,7 @@ class FortranObject:
             setattr(self, name, data_[tuple([slice(halo, -halo)] * len(shape))])
 
 class Simulation:
-    def __init__(self, domain, runtype, advection_scheme=4, apply_bottom_friction=True):
+    def __init__(self, domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True):
         assert not domain.initialized
         self.runtype = runtype
         self.domain = domain

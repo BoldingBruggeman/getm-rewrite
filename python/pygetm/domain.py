@@ -316,8 +316,12 @@ class Domain:
         self.mask_[2:-2:2, 2:-2:2][numpy.logical_and(numpy.logical_and(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_and(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
         self.exchange_metric(self.mask_)
 
-        for side, bounds in self.open_boundaries.items():
+        nbdyp = 0
+        bdy_i, bdy_j = [], []
+        for side in (WEST, NORTH, EAST, SOUTH):
+            bounds = self.open_boundaries.get(side, [])
             for l, mstart, mstop, type_2d, type_3d in bounds:
+                nbdyp += mstop - mstart + 1
                 if side == WEST:
                     self.mask[-1 + 2 * mstart:2 * mstop:2, l * 2 - 1] = 2
                     self.mask[2 * mstart:2 * mstop:2, l * 2 - 1] = 3
@@ -330,6 +334,15 @@ class Domain:
                 elif side == NORTH:
                     self.mask[l * 2 - 1, -1 + 2 * mstart:2 * mstop:2] = 2
                     self.mask[l * 2 - 1, 2 * mstart:2 * mstop:2] = 3
+
+                if side in (WEST, EAST):
+                    bdy_i.append(numpy.repeat(l - 1, mstop - mstart + 1))
+                    bdy_j.append(numpy.arange(mstart - 1, mstop))
+                else:
+                    bdy_i.append(numpy.arange(mstart - 1, mstop))
+                    bdy_j.append(numpy.repeat(l - 1, mstop - mstart + 1))
+        self.bdy_i = [] if nbdyp == 0 else numpy.concatenate(bdy_i)
+        self.bdy_j = [] if nbdyp == 0 else numpy.concatenate(bdy_j)
 
         # Mask U,V,X points unless all their T neighbors are valid - this mask will be sent to Fortran and determine which points are computed
         mask_ = numpy.array(self.mask_, copy=True)

@@ -44,9 +44,11 @@ class GETMAccessor:
     def _interpret_coordinates(self) -> Mapping[str, xarray.DataArray]:
         if self._coordinates is None:
             self._coordinates = {}
+            #print(self._obj)
             for name, coord in self._obj.coords.items():
                 units = coord.attrs.get('units')
                 standard_name = coord.attrs.get('standard_name')
+                #print(name, units, standard_name)
                 if units in ('degrees_north', 'degree_north', 'degree_N', 'degrees_N', 'degreeN', 'degreesN') or standard_name == 'latitude':
                     self._coordinates['latitude'] = coord
                 elif units in ('degrees_east', 'degree_east', 'degree_E', 'degrees_E', 'degreeE', 'degreesE') or standard_name == 'longitude':
@@ -106,22 +108,29 @@ class GETMAccessor:
         self._numtime = numtime
         return self._current
 
-    def interp(self, lon: xarray.DataArray, lat: xarray.DataArray) -> xarray.DataArray:
+    def interp(self, lon: xarray.DataArray, lat: xarray.DataArray, transpose: Optional[bool]=None) -> xarray.DataArray:
         assert self.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % self._obj.name
         assert self.latitude is not None, 'Variable %s does not have a valid latitude coordinate.' % self._obj.name
         lon, lat = numpy.broadcast_arrays(lon, lat)
-        dimensions = () if lon.ndim == 0 else (self.latitude.name,  self.longitude.name)
-        lon = xarray.DataArray(lon, dims=dimensions, name=self.longitude.name + '2d')
-        lat = xarray.DataArray(lat, dims=dimensions, name=self.latitude.name + '2d')
-        data = InterpolatedData(self._obj, self.longitude.values, self.latitude.values, lon.values, lat.values)
+        dimensions = {0: (), 1: (self.longitude.dims[0],), 2: (self.latitude.dims[0],  self.longitude.dims[-1])}[lon.ndim]
+        lon_name, lat_name = self.longitude.name, self.latitude.name
+        if lon_name in dimensions:
+            lon_name = lon_name + '_'
+        if lat_name in dimensions:
+            lat_name = lat_name + '_'
+        lon = xarray.DataArray(lon, dims=dimensions, name=lon_name)
+        lat = xarray.DataArray(lat, dims=dimensions, name=lat_name)
+        data = InterpolatedData(self._obj, self.longitude.values, self.latitude.values, lon.values, lat.values, transpose=transpose)
         return xarray.DataArray(data, dims=dimensions, coords={lon.name: lon, lat.name: lat})
 
 class InterpolatedData:
-    def __init__(self, xarray_obj: xarray.DataArray, source_lon, source_lat, target_lon, target_lat):
+    def __init__(self, xarray_obj: xarray.DataArray, source_lon, source_lat, target_lon, target_lat, transpose: Optional[bool]=None):
         self._obj = xarray_obj
         assert target_lon.shape == target_lat.shape
         assert source_lon.ndim == 1, 'Longitude of source grid must be one-dimensional, but has shape %s' % (source_lon.shape,)
         assert source_lat.ndim == 1, 'Latitude of source grid must be one-dimensional, but has shape %s' % (source_lat.shape,)
+        if transpose is None:
+            transpose = xarray_obj.shape == (source_lon.size, source_lat.size)
         minlon, maxlon = target_lon.min(), target_lon.max()
         minlat, maxlat = target_lat.min(), target_lat.max()
         assert source_lon[0] <= minlon and source_lon[-1] >= maxlon, 'Requested longitude range (%s - %s) does not fall completely within the source grid (%s - %s).' % (minlon, maxlon, source_lon[0], source_lon[-1])
@@ -136,18 +145,22 @@ class InterpolatedData:
         self.target_lat = target_lat
         self.shape = target_lon.shape
         self.dtype = self._obj.dtype
+        self.transpose = transpose
 
     def __array_function__(self, func, types, args, kwargs):
-        print('__array_function__', func)
+        #print('__array_function__', func)
         return func(self.__array__(), *args, **kwargs)
 
     def __array__(self):
-        print('__array__')
-        source_data = self._obj[self.jmin:self.jmax, self.imin:self.imax].values
-        print(source_data)
+        #print('__array__')
+        if self.transpose:
+            source_data = self._obj[self.imin:self.imax, self.jmin:self.jmax].values.T
+        else:
+            source_data = self._obj[self.jmin:self.jmax, self.imin:self.imax].values
+        #print(source_data)
         ip = scipy.interpolate.RectBivariateSpline(self.source_lat, self.source_lon, source_data, kx=1, ky=1)
         data = ip(self.target_lat, self.target_lon, grid=False)
-        print(data)
+        #print(data)
         data.shape = self.target_lat.shape
         return data
 

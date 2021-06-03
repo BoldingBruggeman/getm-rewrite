@@ -32,6 +32,17 @@ contains
       haloz = 0
    end function
 
+   subroutine domain_initialize_open_boundaries(pdomain, nwb, nnb, neb, nsb, nbdyp)
+      !DIR$ ATTRIBUTES DLLEXPORT :: domain_initialize_open_boundaries
+      type(c_ptr),    intent(in), value :: pdomain
+      integer(c_int), intent(in), value :: nwb, nnb, neb, nsb, nbdyp
+
+      type (type_getm_domain), pointer :: domain
+
+      call c_f_pointer(pdomain, domain)
+      call domain%initialize_open_boundaries(nwb=nwb, nnb=nnb, neb=neb, nsb=nsb, nbdyp=nbdyp)
+   end subroutine
+
    function domain_get_grid(pdomain, grid_type) result(pgrid) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: domain_get_grid
       type(c_ptr),            intent(in), value :: pdomain

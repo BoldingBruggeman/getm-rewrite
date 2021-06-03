@@ -14,6 +14,8 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/modules")
 
 add_subdirectory(../extern/flom/extern/flexout/src flexout EXCLUDE_FROM_ALL)
 
+add_subdirectory(../extern/python-otps2 python-otps2)
+
 add_library( flom 
 	../extern/flom/src/grid.F90
 	../extern/flom/src/logging.F90
