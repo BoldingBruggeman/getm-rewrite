@@ -157,7 +157,7 @@ SUBROUTINE initialize_bathymetry(self,logs,domain,domain_type)
    call self%areau%get()
    if (verbose) call self%areau%print_info()
 
-   self%coru%v = 'cor'
+   self%coru%v = 'coru'
    call self%coru%initialize(ncid)
    self%coru%p2dreal64 => UG%cor(UG%imin:UG%imax,UG%jmin:UG%jmax)
    call self%coru%get()
@@ -196,7 +196,7 @@ SUBROUTINE initialize_bathymetry(self,logs,domain,domain_type)
    call self%areav%get()
    if (verbose) call self%areav%print_info()
 
-   self%corv%v = 'cor'
+   self%corv%v = 'coru'
    call self%corv%initialize(ncid)
    self%corv%p2dreal64 => VG%cor(VG%imin:VG%imax,VG%jmin:VG%jmax)
    call self%corv%get()
@@ -235,7 +235,7 @@ SUBROUTINE initialize_bathymetry(self,logs,domain,domain_type)
    call self%areax%get()
    if (verbose) call self%areax%print_info()
 
-   self%corx%v = 'cor'
+   self%corx%v = 'coru'
    call self%corx%initialize(ncid)
    self%corx%p2dreal64 => XG%cor(XG%imin:XG%imax,XG%jmin:XG%jmax)
    call self%corx%get()
