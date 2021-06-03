@@ -76,11 +76,15 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    class(type_getm_momentum), intent(inout) :: self
    real(real64), intent(in) :: dt
       !! timestep [s]
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: tausx(_U2_)
+      !! surface stress in local x-direction
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: tausy(_V2_)
+      !! surface stress in local y-direction
+#undef _V2_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: tausx(_T2_)
-     !! surface stress - x
-   real(real64), intent(in) :: tausy(_T2_)
-     !! surface stress - y
    real(real64), intent(in) :: dpdx(_T2_)
      !! surface pressure (including air pressure) - x-gradient
    real(real64), intent(in) :: dpdy(_T2_)
@@ -129,7 +133,7 @@ END SUBROUTINE uvw_momentum_3d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
+SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
    !! solve the 3D momentum equation in the local x-direction
 
    IMPLICIT NONE
@@ -139,9 +143,11 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: tausx(_U2_)
+      !! surface stress in local x-direction
+#undef _U2_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: taus(_T2_)
-      !! surface stress in X-direction
    real(real64), intent(in) :: dpdx(_T2_)
       !! surface pressure gradient - including air pressure
 #undef _T2_
@@ -187,7 +193,7 @@ SUBROUTINE pk_3d(self,dt,taus,dpdx,idpdx,viscosity)
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             ! surface stress
             k=UG%kmax
-            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*UG%alpha(i,j)*0.5_real64*(taus(i,j)+taus(i+1,j))/rho0
+            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*UG%alpha(i,j)*tausx(i,j)/rho0
             ! external pressure
             self%ea4(i,j,1:)=self%ea4(i,j,1:)-dt*0.5_real64*(UG%ho(i,j,1:)+UG%hn(i,j,1:))*g*dpdx(i,j)
             ! bottom friction
@@ -230,7 +236,7 @@ END SUBROUTINE pk_3d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
+SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
    !! solve the 3D momentum equation in the local y-direction
 
    IMPLICIT NONE
@@ -240,9 +246,11 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: tausy(_V2_)
+      !! surface stress in local y-direction
+#undef _V2_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: taus(_T2_)
-      !! surface stress in X-direction
    real(real64), intent(in) :: dpdy(_T2_)
       !! surface pressure gradient - including air pressure
 #undef _T2_
@@ -288,7 +296,7 @@ SUBROUTINE qk_3d(self,dt,taus,dpdy,idpdy,viscosity)
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             ! surface stress
             k=VG%kmax
-            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*VG%alpha(i,j)*0.5_real64*(taus(i,j)+taus(i,j+1))/rho0
+            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*VG%alpha(i,j)*tausy(i,j)/rho0
             ! external pressure
             self%ea4(i,j,1:)=self%ea4(i,j,1:)-dt*0.5_real64*(VG%ho(i,j,1:)+VG%hn(i,j,1:))*g*dpdy(i,j)
             ! bottom friction

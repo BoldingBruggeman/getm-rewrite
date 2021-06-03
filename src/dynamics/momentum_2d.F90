@@ -131,10 +131,16 @@ MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
       !! model runtype
    real(real64), intent(in) :: dt
       !! timestep [s]
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: tausx(_U2_)
+      !! surface stress in local x-direction
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: tausy(_V2_)
+      !! surface stress in local y-direction
+#undef _V2_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: tausx(_T2_),tausy(_T2_)
-      !! surface stresses
-   real(real64), intent(in) :: dpdx(_T2_), dpdy(_T2_)
+   real(real64), intent(in) :: dpdx(_T2_), dpdy(_T2_) !KB Should they be on U and V grid as well
       !! surface pressure gradient - including air pressure
 #undef _T2_
 
@@ -164,7 +170,7 @@ END SUBROUTINE uv_momentum_2d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE u_2d(self,dt,taus,dpdx)
+SUBROUTINE u_2d(self,dt,tausx,dpdx)
 
    IMPLICIT NONE
 
@@ -173,9 +179,11 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: tausx(_U2_)
+      !! surface stress in local x-direction
+#undef _U2_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: taus(_T2_)
-      !! surface stress in X-direction
    real(real64), intent(in) :: dpdx(_T2_)
       !! surface pressure gradient - including air pressure
 #undef _T2_
@@ -183,7 +191,6 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
 !  Local constants
 
 !  Local variables
-   real(real64) :: tausu
    real(real64) :: Slr
    integer :: i,j
 !---------------------------------------------------------------------------
@@ -192,7 +199,6 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            tausu = 0.5_real64 * ( taus(i,j) + taus(i+1,j) )
             if (self%U(i,j) .gt. 0._real64) then
                Slr = max( self%SxF(i,j) , 0._real64 )
             else
@@ -200,7 +206,7 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
             end if
             ! [GETM Scientific Report: eqs. 2.14, 2.16]
             self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! note SxF is multiplied by alpha
-                        +UG%alpha(i,j)*(-tausu/rho0-self%fV(i,j) &
+                        +UG%alpha(i,j)*(-tausx(i,j)/rho0-self%fV(i,j) &
 #ifndef _APPLY_ADV_DIFF_
                         +self%advU(i,j)-self%diffu1(i,j)-self%dampU(i,j) &
 #endif
@@ -216,7 +222,7 @@ END SUBROUTINE u_2d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE v_2d(self,dt,taus,dpdy)
+SUBROUTINE v_2d(self,dt,tausy,dpdy)
 
    IMPLICIT NONE
 
@@ -225,9 +231,11 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
       !! GETM momentum type
    real(real64), intent(in) :: dt
       !! timestep [s]
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: tausy(_V2_)
+      !! surface stress in local y-direction
+#undef _V2_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: taus(_T2_)
-      !! surface stress in Y-direction
    real(real64), intent(in) :: dpdy(_T2_)
       !! surface pressure gradient - including air pressure
 #undef _T2_
@@ -235,7 +243,6 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
 !  Local constants
 
 !  Local variables
-   real(real64) :: tausv
    real(real64) :: Slr
    integer :: i,j
 !---------------------------------------------------------------------------
@@ -244,7 +251,6 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            tausv = 0.5_real64 * ( taus(i,j) + taus(i,j+1) )
             if (self%V(i,j) .gt. 0._real64) then
                Slr = max( self%SyF(i,j) , 0._real64 )
             else
@@ -252,7 +258,7 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
             end if
             ! [GETM Scientific Report: eqs. 2.15, 2.17]
             self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! note SyF is multiplied by alpha
-                        +VG%alpha(i,j)*(-tausv/rho0+self%fU(i,j) &
+                        +VG%alpha(i,j)*(-tausy(i,j)/rho0+self%fU(i,j) &
 #ifndef _APPLY_ADV_DIFF_
                         +self%advV(i,j)-self%diffv1(i,j)-self%dampV(i,j) &
 #endif
