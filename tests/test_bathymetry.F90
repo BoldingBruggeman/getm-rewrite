@@ -1,15 +1,14 @@
 ! Copyright (C) 2020 Bolding & Bruggeman
 
-!> @note
-!> maybe put all grid tests in one big program - test_bathymetry
-!> @endnote
-
 PROGRAM test_bathymetry
-   !! Testing calculation of time varying depths at S, U and V points
+   !! Test reading the toppo.nc file created by the Python domain generator
+   !! 1) get the size of the bathymetry field.
+   !! 2) configure the Arakawa C-grid calculation domain - i.e. allocate all grid related variables
+   !! 3) initialize fields for all 4 grids by reading them from the file
+   !! 4) print info on the domain as well as the mask for T-points
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
    use logging
-   use memory_manager
    use getm_domain
    use getm_bathymetry
    IMPLICIT NONE
@@ -18,13 +17,13 @@ PROGRAM test_bathymetry
 
 !  Local variables
    TYPE(type_logging) :: logs
-   TYPE(type_getm_grid), target :: grid
+   TYPE(type_getm_domain) :: domain
    TYPE(type_bathymetry) :: bathymetry
 
    character(len=256) :: varname
    integer :: ndims, dimlens
    integer :: domain_type
-!   integer, dimension(:), allocatable :: dimlens
+   integer :: imin=1,imax,jmin=1,jmax,kmin=-1,kmax=-1
 
 !-----------------------------------------------------------------------
 
@@ -33,17 +32,19 @@ PROGRAM test_bathymetry
       STOP ' test_bathymetry <name of bathymetry file>'
    end if
 
-   call get_command_argument(1,bathymetry%depth%f)
-   bathymetry%depth%v = 'bathymetry'
-   !call self%domain%T%configure(self%logs,kmin=kmin,kmax=kmax,halo=(/2, 2, 0/))
-   call bathymetry%initialize(logs,grid,domain_type)
-   call grid%print(OUTPUT_UNIT)
-   call grid%print_info(logs)
-   call grid%print_mask(OUTPUT_UNIT)
+   getdimensions: block
+   call get_command_argument(1,bathymetry%H%f)
+   call bathymetry%H%open()
+   call bathymetry%H%dimlen('x',imax)
+   call bathymetry%H%dimlen('y',jmax)
+   call bathymetry%H%close()
+   end block getdimensions
 
-!-----------------------------------------------------------------------
-
-!CONTAINS 
+   call domain%configure(imin,imax,jmin,jmax,kmin,kmax,logs=logs)
+   call bathymetry%initialize(logs,domain,domain%domain_type)
+   call domain%T%print(OUTPUT_UNIT)
+   call domain%T%print_info(logs)
+   call domain%T%print_mask(OUTPUT_UNIT)
 
 !-----------------------------------------------------------------------
 
