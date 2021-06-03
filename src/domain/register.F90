@@ -149,7 +149,7 @@ MODULE SUBROUTINE register(self,runtype)
    end select
 
    ! Un-disturb water depth at T, U, V and X points
-   call self%fm%register('bathymetry', 'm', 'bathymetry', &
+   call self%fm%register('ht', 'm', 'bathymetry at T-points', &
                       standard_name='depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_y/), &
                       fill_value=-10._real64, &
@@ -157,8 +157,8 @@ MODULE SUBROUTINE register(self,runtype)
                       output_level=output_level_required, &
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('bathymetry', TG%H(TG%imin:TG%imax,TG%jmin:TG%jmax))
-   call self%fm%register('hu', 'm', 'bathymetry at u-points', &
+   call self%fm%send_data('ht', TG%H(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%register('hu', 'm', 'bathymetry at U-points', &
                       standard_name='depth', &
                       dimensions=(/self%id_dim_xi, self%id_dim_y/), &
                       fill_value=-10._real64, &
@@ -167,7 +167,7 @@ MODULE SUBROUTINE register(self,runtype)
                       category='domain',field=f)
    call f%attributes%set('axis', 'X Y')
    call self%fm%send_data('hu', UG%H(UG%imin:UG%imax,UG%jmin:UG%jmax))
-   call self%fm%register('hv', 'm', 'bathymetry at v-points', &
+   call self%fm%register('hv', 'm', 'bathymetry at V-points', &
                       standard_name='depth', &
                       dimensions=(/self%id_dim_x, self%id_dim_yi/), &
                       fill_value=-10._real64, &
@@ -225,14 +225,14 @@ MODULE SUBROUTINE register(self,runtype)
    call self%fm%send_data('DX', self%X%D(XG%imin:XG%imax,XG%jmin:XG%jmax))
 
    ! Time varying sea surface elevation at T, U, V and X points
-   call self%fm%register('elev', 'm', 'sea surface elevation', &
+   call self%fm%register('z', 'm', 'sea surface elevation', &
                          standard_name='', &
                          dimensions=(self%T%dim_2d_ids), &
                          fill_value=-9999._real64, &
                          part_of_state=.true., &
                          category='domain', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('elev', TG%z(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%send_data('z', TG%z(TG%imin:TG%imax,TG%jmin:TG%jmax))
 
    call self%fm%register('zo', 'm', 'sea surface eleveation - previous timestep', &
                          standard_name='', &
