@@ -25,9 +25,15 @@ MODULE SUBROUTINE slow_momentum_terms(self,dt)
 !  Local variables
 !---------------------------------------------------------------------------
    if(associated(self%logs)) call self%logs%info('slow_momentum_terms()',level=2)
+   ! [GETM Scientific Report: eqs. 2.21, 2.22]
    call self%slow_advection(dt)
+
+   ! [GETM Scientific Report: eqs. 2.18, 2.19]
    if (self%apply_diffusion) call self%slow_diffusion()
+
+   ! [GETM Scientific Report: eqs. 2.22, 2.23]
    if (self%apply_bottom_friction) call self%slow_bottom_friction()
+
    self%Uio=self%Ui; self%Ui=0._real64
    self%Vio=self%Vi; self%Vi=0._real64
 END SUBROUTINE slow_momentum_terms

@@ -146,6 +146,8 @@ MODULE SUBROUTINE slow_advection(self,dt)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
+
+   ! [GETM Scientific Report: eq. 2.20]
    do j=UG%jmin-1,UG%jmax
       do i=UG%imin-1,UG%imax
          self%uuadvgrid%D(i,j)  = TG%H(i+1,j)+TG%zin(i+1,j) !KB TG%D(i+1,j)
@@ -164,6 +166,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
       end do
    end do
 
+   ! [GETM Scientific Report: eq. 2.21]
    do j=VG%jmin-1,VG%jmax
       do i=VG%imin-1,VG%imax
          self%vuadvgrid%D(i,j)  = XG%D(i,j) ! Knut

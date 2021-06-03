@@ -120,9 +120,11 @@ module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax
          if (UG%mask(i,j) > 0) then
+            ! [GETM Scientific Report: eqs. 2.24]
             SxB(i,j)=-SUM(self%idpdx(i,j,1:))
          end if
          if (VG%mask(i,j) > 0) then
+            ! [GETM Scientific Report: eqs. 2.25]
             SyB(i,j)=-SUM(self%idpdy(i,j,1:))
          end if
       end do

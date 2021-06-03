@@ -117,6 +117,7 @@ MODULE SUBROUTINE slow_diffusion(self)
       self%dampV=0._real64
    end if
 
+   ! [GETM Scientific Report: eqs. 2.22]
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
@@ -124,6 +125,8 @@ MODULE SUBROUTINE slow_diffusion(self)
          end if
       end do
    end do
+
+   ! [GETM Scientific Report: eqs. 2.23]
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then

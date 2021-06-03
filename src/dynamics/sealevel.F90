@@ -112,7 +112,7 @@ END SUBROUTINE sealevel_initialize
 
 SUBROUTINE sealevel_t(self,dt,U,V,fwf)
 
-   !! Sealevel calculation based on equation
+   !! Sealevel calculation based on equation {GETM:4.28}
    !! Here, the sea surface elevation is iterated according to the vertically
    !! integrated continuity equation given in (\ref{Elevation}) on page
    !! \pageref{Elevation}.
@@ -160,7 +160,7 @@ SUBROUTINE sealevel_t(self,dt,U,V,fwf)
       do i=TG%imin,TG%imax
 #endif
          if (TG%mask(i,j) == 1) then
-            TG%z(i,j)=TG%z(i,j) &
+            TG%z(i,j)=TG%z(i,j) & ! [GETM Scientific Report: eq. 4.28]
                      -dt*((U(i,j)*UG%dy(i,j)-U(i-1,j  )*UG%dy(i-1,j)) &
                          +(V(i,j)*VG%dx(i,j)-V(i  ,j-1)*VG%dx(i,j-1))) &
                          *TG%iarea(i,j)

@@ -120,6 +120,8 @@ END SUBROUTINE uv_initialize_2d
 !---------------------------------------------------------------------------
 
 MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
+   !! Solve the horizontal 2D momemtum equations - U, V
+   !! [GETM Scientific Report: eqs. 2.16, 2.17]
 
    IMPLICIT NONE
 
@@ -196,7 +198,8 @@ SUBROUTINE u_2d(self,dt,taus,dpdx)
             else
                Slr = min( self%SxF(i,j) , 0._real64 )
             end if
-            self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! (2.16) - note SxF is multiplied by alpha
+            ! [GETM Scientific Report: eqs. 2.14, 2.16]
+            self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! note SxF is multiplied by alpha
                         +UG%alpha(i,j)*(-tausu/rho0-self%fV(i,j) &
 #ifndef _APPLY_ADV_DIFF_
                         +self%advU(i,j)-self%diffu1(i,j)-self%dampU(i,j) &
@@ -247,7 +250,8 @@ SUBROUTINE v_2d(self,dt,taus,dpdy)
             else
                Slr = min( self%SyF(i,j) , 0._real64 )
             end if
-            self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! (2.17) - note SxF is multiplied by alpha
+            ! [GETM Scientific Report: eqs. 2.15, 2.17]
+            self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! note SyF is multiplied by alpha
                         +VG%alpha(i,j)*(-tausv/rho0+self%fU(i,j) &
 #ifndef _APPLY_ADV_DIFF_
                         +self%advV(i,j)-self%diffv1(i,j)-self%dampV(i,j) &

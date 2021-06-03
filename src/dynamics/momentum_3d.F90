@@ -69,6 +69,7 @@ END SUBROUTINE uv_initialize_3d
 
 MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,viscosity)
    !! Solve the horizontal 3D momemtum equations - pk and qk
+   !! [GETM Scientific Report: eqs. 3.15, 3.16]
 
    IMPLICIT NONE
 
