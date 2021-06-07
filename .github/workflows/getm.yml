@@ -26,6 +26,6 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake ../python
+          cmake ../getm/python
           make install
           python3 ./tests/test_2d_transport.py
