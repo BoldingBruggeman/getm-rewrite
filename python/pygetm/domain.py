@@ -38,16 +38,19 @@ class Grid(FortranObject):
         default_shape = self.domain.shape[1:]
         if self.type == 'X':
             default_shape = [n + 1 for n in default_shape]
-        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'area', 'iarea', 'cor'), default_shape=default_shape, shapes={'c1': (default_shape[-1],), 'c2': (default_shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=self.halo)
+        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'), default_shape=default_shape, shapes={'c1': (default_shape[-1],), 'c2': (default_shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=self.halo)
         self.fill()
 
     def fill(self):
+        read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area')
         nj, ni = self.H_.shape
         has_bounds = self.ioffset > 0 and self.joffset > 0 and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
-        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area'):
+        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo'):
             source = getattr(self.domain, name + '_')
             if source is not None:
-                getattr(self, name + '_')[:, :] = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
+                target = getattr(self, name + '_')
+                target[:, :] = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
+                target.flags.writeable = name not in read_only
                 if has_bounds:
                     # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
                     # The interface coordinates are slices that point to the supergrid data; they thus do not consume additional memory.
@@ -55,7 +58,6 @@ class Grid(FortranObject):
                     setattr(self, name + 'i_', values_i)
                     setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
         self.iarea_[:, :] = 1. / self.area_[:, :]
-        self.z_[:, :] = numpy.where(self.mask_ != 0, 0., numpy.nan)
 
     def array(self, fill=None, dtype=float):
         data = numpy.empty(self.H_.shape, dtype=dtype)
@@ -221,7 +223,7 @@ class Domain:
         data[:, :superhalo] = data_ext[1:-1, :superhalo]
         data[:, -superhalo:] = data_ext[1:-1, -superhalo:]
 
-    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, **kwargs):
+    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
@@ -238,7 +240,7 @@ class Domain:
             tiling = parallel.Tiling(1, 1, **kwargs)
         self.tiling = tiling
 
-        def setup_metric(source: Optional[numpy.ndarray]=None, optional: bool=False, fill_value=numpy.nan, relative_in_x: bool=False, relative_in_y: bool=False, dtype: numpy.typing.DTypeLike=float) -> Tuple[Optional[numpy.ndarray], Optional[numpy.ndarray]]:
+        def setup_metric(source: Optional[numpy.ndarray]=None, optional: bool=False, fill_value=numpy.nan, relative_in_x: bool=False, relative_in_y: bool=False, dtype: numpy.typing.DTypeLike=float, writeable: bool=True) -> Tuple[Optional[numpy.ndarray], Optional[numpy.ndarray]]:
             if optional and source is None:
                 return None, None
             data = numpy.full(shape_, fill_value, dtype)
@@ -246,19 +248,22 @@ class Domain:
             if source is not None:
                 data_int[...] = source
                 self.exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
+            data.flags.writeable = data_int.flags.writeable = writeable
             return data_int, data
 
         # Supergrid metrics (without underscore=interior only, with underscore=including halos)
-        self.x, self.x_ = setup_metric(x, optional=True, relative_in_x=True)
-        self.y, self.y_ = setup_metric(y, optional=True, relative_in_y=True)
-        self.lon, self.lon_ = setup_metric(lon, optional=True, relative_in_x=True)
-        self.lat, self.lat_ = setup_metric(lat, optional=True, relative_in_y=True)
+        self.x, self.x_ = setup_metric(x, optional=True, relative_in_x=True, writeable=False)
+        self.y, self.y_ = setup_metric(y, optional=True, relative_in_y=True, writeable=False)
+        self.lon, self.lon_ = setup_metric(lon, optional=True, relative_in_x=True, writeable=False)
+        self.lat, self.lat_ = setup_metric(lat, optional=True, relative_in_y=True, writeable=False)
         self.H, self.H_ = setup_metric(H)
+        self.z, self.z_ = setup_metric(z)       # elevation
+        self.zo, self.zo_ = setup_metric(zo)    # elevaton on previous time step
         self.z0, self.z0_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=int, fill_value=0)
 
         cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * lat)
-        self.cor, self.cor_ = setup_metric(cor)
+        self.cor, self.cor_ = setup_metric(cor, writeable=False)
 
         # Compute dx, dy from Cartesian or spherical coordinates
         # These have had their halo exchanges as part of setup_metric and are therefore defined inside the halos too.
@@ -278,7 +283,10 @@ class Domain:
         self.exchange_metric(self.dx_)
         self.exchange_metric(self.dy_)
 
-        self.area, self.area_ = setup_metric(self.dx * self.dy)
+        self.dx_.flags.writeable = self.dx.flags.writeable = False
+        self.dy_.flags.writeable = self.dy.flags.writeable = False
+
+        self.area, self.area_ = setup_metric(self.dx * self.dy, writeable=False)
 
         self.spherical = spherical
 
@@ -357,11 +365,13 @@ class Domain:
         for grid in (self.T, self.U, self.V, self.X):
             grid.initialize()
 
-        _pygetm.domain_initialize(self.p, runtype)
+        self.H_.flags.writeable = self.H.flags.writeable = False
+        self.z0_.flags.writeable = self.z0.flags.writeable = False
+        self.mask_.flags.writeable = self.mask.flags.writeable = False
+        self.z_.flags.writeable = self.z.flags.writeable = False
+        self.zo_.flags.writeable = self.zo.flags.writeable = False
 
-        # Temporary: undo the grid assignments that were done from Fortran
-        for grid in (self.T, self.U, self.V, self.X):
-            grid.fill()
+        _pygetm.domain_initialize(self.p, runtype)
 
         self.initialized = True
 

@@ -24,6 +24,7 @@ contains
       integer                          :: stat 
 
       allocate(domain)
+      domain%have_metrics = .true.
       call domain%configure(imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax)
       pdomain = c_loc(domain)
       domain%domain_type = 1
@@ -92,6 +93,7 @@ contains
       case ('D'); p = c_loc(grid%D)
       case ('mask'); p = c_loc(grid%mask)
       case ('z'); p = c_loc(grid%z)
+      case ('zo'); p = c_loc(grid%zo)
       case ('cor'); p = c_loc(grid%cor)
       case default; p = C_NULL_PTR
       end select
@@ -197,8 +199,8 @@ contains
       real(real64), contiguous, pointer, dimension(:,:) :: tausx, tausy, dpdx, dpdy
 
       call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(ptausx, tausx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
-      call c_f_pointer(ptausy, tausy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
+      call c_f_pointer(ptausx, tausx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
+      call c_f_pointer(ptausy, tausy, momentum%domain%V%u(1:2) - momentum%domain%V%l(1:2) + 1)
       call c_f_pointer(pdpdx, dpdx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
       call c_f_pointer(pdpdy, dpdy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
       call momentum%uv_momentum_2d(runtype, timestep, tausx, tausy, dpdx, dpdy)
