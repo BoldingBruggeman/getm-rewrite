@@ -63,7 +63,7 @@ arrtype2D = numpy.ctypeslib.ndpointer(dtype=ctypes.c_double, ndim=2, flags=CONTI
 _pygetm.advection_calculate.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, arrtype2D, arrtype2D, ctypes.c_double, arrtype2D]
 _pygetm.advection_calculate.restype = None
 
-_pygetm.momentum_create.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
+_pygetm.momentum_create.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
 _pygetm.momentum_create.restype = ctypes.c_void_p
 
 _pygetm.momentum_get_array.argtypes = [ctypes.c_void_p,  ctypes.c_char_p]
@@ -119,7 +119,7 @@ class Simulation:
         self.domain.initialize(self.runtype)
         self.advection = Advection(self.domain, advection_scheme)
         self.pressure = Pressure(self.runtype, self.domain)
-        self.momentum = Momentum(self.runtype, self.domain, self.advection, apply_bottom_friction=apply_bottom_friction)
+        self.momentum = Momentum(self.runtype, self.domain, self.advection, advection_scheme=advection_scheme, apply_bottom_friction=apply_bottom_friction)
         self.sealevel = Sealevel(self.domain)
 
         self.dist_zT = None
@@ -148,7 +148,7 @@ class Simulation:
         _pygetm.domain_update_depths(self.domain.p)
 
 class Advection:
-    def __init__(self, domain, scheme):
+    def __init__(self, domain, scheme: int):
         self.p = _pygetm.advection_create()
         self.pdomain = domain.p
         self.scheme = scheme
@@ -157,9 +157,9 @@ class Advection:
         _pygetm.advection_calculate(self.p, self.scheme, self.pdomain, u, v, timestep, var)
 
 class Momentum(FortranObject):
-    def __init__(self, runtype, domain, advection, apply_bottom_friction=True):
+    def __init__(self, runtype, domain, advection, advection_scheme: int=4, apply_bottom_friction: bool=True):
         self.runtype = runtype
-        self.p = _pygetm.momentum_create(self.runtype, domain.p, advection.p, 1 if apply_bottom_friction else 0)
+        self.p = _pygetm.momentum_create(self.runtype, domain.p, advection.p, advection_scheme, 1 if apply_bottom_friction else 0)
         self.get_arrays(_pygetm.momentum_get_array, ('U', 'V'), default_shape=domain.shape[1:], halo=domain.halo)
 
     def uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy):
