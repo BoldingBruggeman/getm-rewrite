@@ -21,6 +21,7 @@ jobs:
         with:
            path: getm
            submodules: recursive
+           ssh-key: ${{ secrets.BB_TESTING_SSH }}
       - name: Build and run all test cases
         run: |
           mkdir build
