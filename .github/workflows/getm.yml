@@ -15,7 +15,17 @@ jobs:
       runs-on: ${{ matrix.os }}
       steps:
       - name: Install compiler
-        run: sudo apt-get install python3-numpy python3-wheel python3-netcdf4 python3-mpi4py python3-matplotlib gfortran-${{ matrix.version }}
+        #run: sudo apt-get install python3-numpy python3-wheel python3-netcdf4 python3-mpi4py python3-matplotlib gfortran-${{ matrix.version }}
+        run: sudo apt-get install gfortran-${{ matrix.version }}
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy wheel netcdf4 mpi4py matplotlib xarray
+          #if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Clone
         uses: actions/checkout@v2
         with:
