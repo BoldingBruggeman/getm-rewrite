@@ -15,7 +15,7 @@ jobs:
       runs-on: ${{ matrix.os }}
       steps:
       - name: Install compiler
-        run: sudo apt-get install python3-numpy python3-wheel python3-netcdf python3-mpi4py python3-matplotlib gfortran-${{ matrix.version }}
+        run: sudo apt-get install python3-numpy python3-wheel python3-netcdf4 python3-mpi4py python3-matplotlib gfortran-${{ matrix.version }}
       - name: Clone
         uses: actions/checkout@v2
         with:
