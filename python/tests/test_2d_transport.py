@@ -31,7 +31,7 @@ def plot(name, values):
     fig.savefig(name, dpi=300)
 
 def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=10., ntime=360, apply_bottom_friction=False):
-    print('%s...' % name, flush=True)
+    print('%s, tau_x = %s, tau_y = %s...' % (name, tau_x, tau_y), flush=True)
 
     # Set up rectangular domain (all points unmasked)
     domain = pygetm.domain.Domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
@@ -66,7 +66,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     success = test('Periodic in x', periodic_x=True, tau_x=0.01, apply_bottom_friction=args.apply_bottom_friction)
+    success = test('Periodic in x', periodic_x=True, tau_x=-0.01, apply_bottom_friction=args.apply_bottom_friction) and success
     success = test('Periodic in y', periodic_y=True, tau_y=0.01, apply_bottom_friction=args.apply_bottom_friction) and success
+    success = test('Periodic in y', periodic_y=True, tau_y=-0.01, apply_bottom_friction=args.apply_bottom_friction) and success
     success = test('Periodic in x and y', periodic_x=True, periodic_y=True, tau_x=0.01, tau_y=0.01, apply_bottom_friction=args.apply_bottom_friction) and success
+    success = test('Periodic in x and y', periodic_x=True, periodic_y=True, tau_x=0.01, tau_y=-0.01, apply_bottom_friction=args.apply_bottom_friction) and success
+    success = test('Periodic in x and y', periodic_x=True, periodic_y=True, tau_x=-0.01, tau_y=0.01, apply_bottom_friction=args.apply_bottom_friction) and success
+    success = test('Periodic in x and y', periodic_x=True, periodic_y=True, tau_x=-0.01, tau_y=-0.01, apply_bottom_friction=args.apply_bottom_friction) and success
     if not success:
         sys.exit(1)
