@@ -16,12 +16,16 @@ jobs:
       steps:
       - name: Install compiler
         run: sudo apt-get install gfortran-${{ matrix.version }}
+      - name: Save SSH key
+        env:
+          BB_TESTING_SSH: ${{secrets.BB_TESTING_SSH}}
+        run: echo "$BB_TESTING_SSH" > $HOME/id_rsa && chmod 600 $HOME/id_rsa
       - name: Clone
         uses: actions/checkout@v2
         with:
            path: getm
            submodules: recursive
-           ssh-key: ${{ secrets.BB_TESTING_SSH }}
+           ssh-key: ~/id_rsa
       - name: Build and run all test cases
         run: |
           mkdir build
