@@ -28,4 +28,5 @@ jobs:
           cd build
           cmake ../getm/python
           make install
-          python3 ./tests/test_2d_transport.py
+          cd ..
+          python3 getm/python/tests/test_2d_transport.py
