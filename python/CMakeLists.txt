@@ -42,6 +42,7 @@ add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_LINKER_FILE:cgetm>" pygetm/
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:cgetm>" pygetm/
+                   COMMAND ${CMAKE_COMMAND} -E env LD_RUN_PATH=.
                    COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" build_ext --library-dirs=pygetm --libraries=$<TARGET_FILE_BASE_NAME:cgetm> bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
