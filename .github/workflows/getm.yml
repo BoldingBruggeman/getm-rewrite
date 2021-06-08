@@ -37,7 +37,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake ../getm/python
+          cmake ../getm/python -DCMAKE_Fortran_COMPILER=gfortran-${{ matrix.version }}
           make install
       - name: Run all test cases
         run: |
