@@ -5,7 +5,7 @@ import numpy.typing
 import xarray
 import netCDF4
 
-from pygetm import _pygetm, core, parallel
+from . import _pygetm, core, parallel
 
 WEST  = 1
 NORTH = 2

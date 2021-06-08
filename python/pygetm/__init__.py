@@ -1,4 +1,6 @@
-from . import _pygetm, core, domain
+from . import _pygetm
+from . import core
+from . import domain
 
 Advection = _pygetm.Advection
 
