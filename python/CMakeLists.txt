@@ -28,12 +28,11 @@ add_subdirectory(../src/airsea airsea)
 add_subdirectory(../src/operators operators)
 add_subdirectory(../src/dynamics dynamics)
 
-add_library(_pygetm SHARED
+add_library(cgetm SHARED
   wrapper.F90
   pygetm/__init__.py
 )
-target_link_libraries(_pygetm getm_domain getm_operators getm_airsea getm_dynamics)
-
+target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics)
 
 # Find target Python interpreter.
 find_package(PythonInterp)
@@ -41,8 +40,8 @@ find_package(PythonInterp)
 # Build wheel
 add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
-                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/
-                   COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:cgetm>" pygetm/
+                   COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" build_ext "--library-dirs=$<TARGET_FILE_DIR:cgetm>" "--libraries=$<TARGET_FILE_BASE_NAME:cgetm>" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
 

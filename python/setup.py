@@ -1,5 +1,6 @@
-import os.path
-from setuptools import setup
+import os
+from setuptools import setup, Extension
+import numpy
 
 try:
     import wheel.bdist_wheel
@@ -21,7 +22,10 @@ setup(
     author_email='jorn@bolding-bruggeman.com',
     license='GPL',
     packages=['pygetm', 'pygetm.input'],
-    package_data={'pygetm': ['*.so', '*.dll', '*.dylib', 'schemas/*']},
+    package_data={'pygetm': ['*.so', '*.dll', '*.dylib']},
+    ext_modules = [
+          Extension('pygetm._pygetm', ['pygetm/_pygetm.pyx'], include_dirs=[numpy.get_include()]),
+    ],
     cmdclass={'bdist_wheel': bdist_wheel},
     zip_safe=False
 )

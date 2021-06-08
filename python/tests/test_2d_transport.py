@@ -42,21 +42,21 @@ def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=
     tausy, tausy_ = domain.V.array(fill=tau_y)
     sp, sp_ = domain.T.array(fill=0.)
 
-    dist_U = domain.distribute(sim.momentum.U_)
-    dist_V = domain.distribute(sim.momentum.V_)
+    dist_U = domain.distribute(sim.U_)
+    dist_V = domain.distribute(sim.V_)
     dist_U.update_halos()
     dist_V.update_halos()
     for istep in range(ntime):
-        sim.pressure.surface(domain.T.z_, sp_)
-        sim.momentum.uv_momentum_2d(timestep, tausx_, tausy_, sim.pressure.dpdx_, sim.pressure.dpdy_)
+        sim.update_surface_pressure_gradient(domain.T.z_, sp_)
+        sim.uv_momentum_2d(timestep, tausx_, tausy_, sim.dpdx_, sim.dpdy_)
         dist_U.update_halos()
         dist_V.update_halos()
-        sim.sealevel.update(timestep, sim.momentum.U_, sim.momentum.V_)
+        sim.update_sealevel(timestep, sim.U_, sim.V_)
         sim.update_depth()
 
     rho0 = 1025.
-    success = check_range('U', sim.momentum.U, target_value=None if apply_bottom_friction else 3600 * tau_x / rho0)
-    success = check_range('V', sim.momentum.V, target_value=None if apply_bottom_friction else 3600 * tau_y / rho0) and success
+    success = check_range('U', sim.U, target_value=None if apply_bottom_friction else 3600 * tau_x / rho0)
+    success = check_range('V', sim.V, target_value=None if apply_bottom_friction else 3600 * tau_y / rho0) and success
     success = check_range('z', domain.T.z, target_value=0) and success
     return success
 

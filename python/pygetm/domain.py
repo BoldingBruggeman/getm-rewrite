@@ -5,11 +5,8 @@ import numpy
 import numpy.typing
 import xarray
 import netCDF4
-import scipy.interpolate
 
-from . import parallel
-from . import input
-from . import _pygetm, FortranObject
+from . import _pygetm, core, parallel
 
 WEST  = 1
 NORTH = 2
@@ -24,21 +21,17 @@ def find_interfaces(c: numpy.ndarray):
     c_if[-1] = c[-1] + 0.5 * d[-1]
     return c_if
 
-class Grid(FortranObject):
-    def __init__(self, domain: 'Domain', grid_type: str, ioffset: int, joffset: int):
+class Grid(_pygetm.Grid, core.FortranObject):
+    def __init__(self, domain: 'Domain', grid_type: bytes, ioffset: int, joffset: int):
+        _pygetm.Grid.__init__(self, domain, ord(grid_type))
         self.halo = domain.halo
         self.domain = domain
-        self.p = None
         self.type = grid_type
         self.ioffset = ioffset
         self.joffset = joffset
 
     def initialize(self):
-        self.p = _pygetm.domain_get_grid(self.domain.p, self.type.encode('ascii'))
-        default_shape = self.domain.shape[1:]
-        if self.type == 'X':
-            default_shape = [n + 1 for n in default_shape]
-        self.get_arrays(_pygetm.grid_get_array, ('c1', 'c2', 'x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'), default_shape=default_shape, shapes={'c1': (default_shape[-1],), 'c2': (default_shape[-2],)}, dtypes={'mask': ctypes.c_int}, halo=self.halo)
+        self.get_arrays(('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'), dtypes={'mask': int}, halo=self.halo)
         self.fill()
 
     def fill(self):
@@ -157,7 +150,7 @@ def interfaces_to_supergrid_1d(data) -> numpy.ndarray:
     data_sup[1::2] = 0.5 * (data[1:] + data[:-1])
     return data_sup
 
-class Domain:
+class Domain(_pygetm.Domain):
     @staticmethod
     def create_cartesian(x, y, nz: int, interfaces=False, **kwargs) -> 'Domain':
         assert x.ndim == 1, 'x coordinate must be one-dimensional'
@@ -300,16 +293,15 @@ class Domain:
         self.jmin, self.jmax = 1, ny
         self.kmin, self.kmax = 1, nz
 
-        halox, haloy, haloz = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
-        self.p = _pygetm.domain_create(self.imin, self.imax, self.jmin, self.jmax, self.kmin, self.kmax, halox, haloy, haloz)
-        self.halo = halox.value
+        _pygetm.Domain.__init__(self, self.imin, self.imax, self.jmin, self.jmax, self.kmin, self.kmax)
+        self.halo = self.halox
         self.shape = (nz, ny + 2 * self.halo, nx + 2 * self.halo)
 
         # Create grids
-        self.T = Grid(self, 'T', ioffset=1, joffset=1)
-        self.U = Grid(self, 'U', ioffset=2, joffset=1)
-        self.V = Grid(self, 'V', ioffset=1, joffset=2)
-        self.X = Grid(self, 'X', ioffset=0, joffset=0)
+        self.T = Grid(self, b'T', ioffset=1, joffset=1)
+        self.U = Grid(self, b'U', ioffset=2, joffset=1)
+        self.V = Grid(self, b'V', ioffset=1, joffset=2)
+        self.X = Grid(self, b'X', ioffset=0, joffset=0)
 
         self.initialized = False
         self.open_boundaries = {}
@@ -318,6 +310,7 @@ class Domain:
         self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
 
     def initialize(self, runtype):
+        assert not self.initialized, 'Domain has already been initialized'
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained by the domain to be used for e.g. plotting
         tmask = self.mask_[1::2, 1::2]
         self.mask_[2:-2:2, 1::2][numpy.logical_and(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
@@ -371,7 +364,7 @@ class Domain:
         self.z_.flags.writeable = self.z.flags.writeable = False
         self.zo_.flags.writeable = self.zo.flags.writeable = False
 
-        _pygetm.domain_initialize(self.p, runtype)
+        _pygetm.Domain.initialize(self, runtype)
 
         self.initialized = True
 
