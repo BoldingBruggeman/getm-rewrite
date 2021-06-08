@@ -1,10 +1,8 @@
-from . import _pygetm
-from .core import FortranObject
-from . import domain
+from . import _pygetm, core, domain
 
 Advection = _pygetm.Advection
 
-class Simulation(_pygetm.Simulation, FortranObject):
+class Simulation(_pygetm.Simulation, core.FortranObject):
     def __init__(self, domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True):
         assert not domain.initialized
         self.domain = domain
