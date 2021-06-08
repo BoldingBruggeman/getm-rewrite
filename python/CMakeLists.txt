@@ -48,7 +48,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
 
 Python3_add_library(_pygetm MODULE
   _pygetm.c)
-target_link_libraries(_pygetm PRIVATE cgetm Python3::Module Python3::NumPy)
+target_link_libraries(_pygetm PRIVATE cgetm Python3::NumPy)
 
 # Build wheel
 add_custom_command(OUTPUT wheel.stamp
