@@ -1,4 +1,3 @@
-import ctypes
 from typing import Optional, Tuple
 
 import numpy
@@ -6,7 +5,7 @@ import numpy.typing
 import xarray
 import netCDF4
 
-from . import _pygetm, core, parallel
+from pygetm import _pygetm, core, parallel
 
 WEST  = 1
 NORTH = 2
