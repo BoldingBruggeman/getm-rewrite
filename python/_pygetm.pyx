@@ -7,6 +7,7 @@ cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin
 cdef extern domain_initialize_open_boundaries(void* domain, int nwb, int nnb, int neb, int nsb, int nbdyp)
 cdef extern void* domain_get_grid(void* domain, char grid_type)
 cdef extern void domain_initialize(void* grid, int runtype)
+cdef extern void domain_finalize(void* domain)
 cdef extern void domain_update_depths(void* domain)
 cdef extern double* grid_get_array(void* grid, char* name)
 cdef extern void* advection_create()
@@ -48,6 +49,9 @@ cdef class Domain:
         self.p = domain_create(imin, imax, jmin, jmax, kmin, kmax, &self.halox, &self.haloy, &self.haloz)
         self.nx = imax - imin + 1 + 2 * self.halox
         self.ny = jmax - jmin + 1 + 2 * self.haloy
+
+    def __dealloc__(self):
+        domain_finalize(self.p)
 
     def get_grid(self, int grid_type):
         return Grid(self, grid_type)

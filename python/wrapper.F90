@@ -33,7 +33,17 @@ contains
       haloz = 0
    end function
 
-   subroutine domain_initialize_open_boundaries(pdomain, nwb, nnb, neb, nsb, nbdyp)
+   subroutine domain_finalize(pdomain) bind(c)
+      !DIR$ ATTRIBUTES DLLEXPORT :: domain_finalize
+      type(c_ptr), intent(in), value :: pdomain
+
+      type (type_getm_domain), pointer :: domain
+
+      call c_f_pointer(pdomain, domain)
+      deallocate(domain)
+   end subroutine
+
+   subroutine domain_initialize_open_boundaries(pdomain, nwb, nnb, neb, nsb, nbdyp) bind(c)
       !DIR$ ATTRIBUTES DLLEXPORT :: domain_initialize_open_boundaries
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: nwb, nnb, neb, nsb, nbdyp
