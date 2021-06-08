@@ -46,19 +46,14 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_library(_pygetm SHARED
+Python3_add_library(_pygetm MODULE
   _pygetm.c)
-target_include_directories(_pygetm PRIVATE ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS})
-target_link_libraries(_pygetm PRIVATE cgetm ${Python3_LIBRARIES})
-
-execute_process(
-  COMMAND ${Python3_EXECUTABLE} -c "import sysconfig;print(sysconfig.get_config_var('EXT_SUFFIX'))"
-  OUTPUT_VARIABLE EXT_SUFFIX)
+target_link_libraries(_pygetm PRIVATE cgetm Python3::Module Python3::NumPy)
 
 # Build wheel
 add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
-                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/$<TARGET_FILE_BASE_NAME:_pygetm>${EXT_SUFFIX}
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/
                    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
