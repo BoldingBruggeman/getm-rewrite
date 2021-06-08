@@ -9,6 +9,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Use solution folders in IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+if (MSVC)
+  add_compile_options(/libs:static)
+endif()
+
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/modules")
 
@@ -28,10 +32,11 @@ add_subdirectory(../src/airsea airsea)
 add_subdirectory(../src/operators operators)
 add_subdirectory(../src/dynamics dynamics)
 
-add_library(cgetm SHARED
-  wrapper.F90
-  pygetm/__init__.py
-)
+if (MSVC)
+  add_library(cgetm SHARED wrapper.F90)
+else()
+  add_library(cgetm STATIC wrapper.F90)
+endif()
 target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics)
 
 # Find target Python interpreter.
@@ -42,7 +47,7 @@ add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_LINKER_FILE:cgetm>" pygetm/
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:cgetm>" pygetm/
-                   COMMAND ${CMAKE_COMMAND} -E env LD_RUN_PATH=$ORIGIN ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" build_ext --library-dirs=pygetm --libraries=$<TARGET_FILE_BASE_NAME:cgetm> bdist_wheel
+                   COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" build_ext --library-dirs=pygetm --libraries=$<TARGET_FILE_BASE_NAME:cgetm> bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
 
