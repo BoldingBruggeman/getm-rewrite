@@ -81,12 +81,14 @@ class DistributedArray:
 
     def update_halos(self):
         recreqs = [self.comm.Irecv(cache, neigbor, tag) for neigbor, tag, _, cache in self.recvtasks]
+        sendreqs = []
         for neigbor, tag, inner, cache in self.sendtasks:
             cache[...] = inner
-            self.comm.Isend(cache, neigbor, tag)
+            sendreqs.append(self.comm.Isend(cache, neigbor, tag))
         Waitall(recreqs)
         for _, _, outer, cache in self.recvtasks:
             outer[...] = cache
+        Waitall(sendreqs)
 
     def gather(self, root: int=0, out: Optional[numpy.ndarray]=None):
         rankmap = self.tiling.map
