@@ -40,8 +40,9 @@ find_package(PythonInterp)
 # Build wheel
 add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_LINKER_FILE:cgetm>" pygetm/
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:cgetm>" pygetm/
-                   COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" build_ext "--library-dirs=$<TARGET_FILE_DIR:cgetm>" "--libraries=$<TARGET_FILE_BASE_NAME:cgetm>" bdist_wheel
+                   COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" build_ext --library-dirs=pygetm --libraries=$<TARGET_FILE_BASE_NAME:cgetm> bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
 
