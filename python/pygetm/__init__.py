@@ -1,3 +1,7 @@
+import sys
+import os.path
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
 from . import _pygetm, core, domain
 
 Advection = _pygetm.Advection
