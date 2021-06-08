@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1.3)
 
 # Create main project.
-project(pygetm VERSION 0.1.0 LANGUAGES Fortran)
+project(pygetm VERSION 0.1.0 LANGUAGES Fortran C)
 
 # Specify position-independent code since we will build a shared library.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -32,24 +32,36 @@ add_subdirectory(../src/airsea airsea)
 add_subdirectory(../src/operators operators)
 add_subdirectory(../src/dynamics dynamics)
 
-if (MSVC)
-  add_library(cgetm SHARED wrapper.F90)
-else()
-  add_library(cgetm STATIC wrapper.F90)
-endif()
+add_library(cgetm
+  wrapper.F90)
+
 target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics)
 
 # Find target Python interpreter.
-find_package(PythonInterp)
+find_package(Python3 COMPONENTS Interpreter Development NumPy)
+
+add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
+  COMMAND ${Python3_EXECUTABLE} -m cython _pygetm.pyx
+  MAIN_DEPENDENCY _pygetm.pyx
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_library(_pygetm SHARED
+  _pygetm.c)
+target_include_directories(_pygetm PRIVATE ${Python3_INCLUDE_DIRS} ${Python3_NumPy_INCLUDE_DIRS})
+target_link_libraries(_pygetm PRIVATE cgetm ${Python3_LIBRARIES})
+
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} -c "import sysconfig;print(sysconfig.get_config_var('EXT_SUFFIX'))"
+  OUTPUT_VARIABLE EXT_SUFFIX)
 
 # Build wheel
 add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
-                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_LINKER_FILE:cgetm>" pygetm/
-                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:cgetm>" pygetm/
-                   COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" build_ext --library-dirs=pygetm --libraries=$<TARGET_FILE_BASE_NAME:cgetm> bdist_wheel
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/$<TARGET_FILE_BASE_NAME:_pygetm>${EXT_SUFFIX}
+                   COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
 
 # Let pip install the wheel
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} -m pip install --no-index --find-links=${CMAKE_CURRENT_BINARY_DIR}/dist --user --force-reinstall --upgrade pygetm WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist)")
+install(CODE "execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install --no-index --find-links=${CMAKE_CURRENT_BINARY_DIR}/dist --user --force-reinstall --upgrade pygetm WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist)")
