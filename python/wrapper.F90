@@ -15,7 +15,6 @@ module pygetm
 contains
 
    function domain_create(imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz) result(pdomain) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: domain_create
       integer(c_int), intent(in), value :: imin, imax, jmin, jmax, kmin, kmax
       integer(c_int), intent(out)       :: halox, haloy, haloz
       type(c_ptr)                       :: pdomain
@@ -34,7 +33,6 @@ contains
    end function
 
    subroutine domain_finalize(pdomain) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: domain_finalize
       type(c_ptr), intent(in), value :: pdomain
 
       type (type_getm_domain), pointer :: domain
@@ -44,7 +42,6 @@ contains
    end subroutine
 
    subroutine domain_initialize_open_boundaries(pdomain, nwb, nnb, neb, nsb, nbdyp) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: domain_initialize_open_boundaries
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: nwb, nnb, neb, nsb, nbdyp
 
@@ -55,7 +52,6 @@ contains
    end subroutine
 
    function domain_get_grid(pdomain, grid_type) result(pgrid) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: domain_get_grid
       type(c_ptr),            intent(in), value :: pdomain
       character(kind=c_char), intent(in), value :: grid_type
       type(c_ptr)                               :: pgrid
@@ -75,7 +71,6 @@ contains
    end function
 
    function grid_get_array(pgrid, name) result(p) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: grid_get_array
       type(c_ptr), value,             intent(in) :: pgrid
       character(kind=c_char), target, intent(in) :: name(*)
       type(c_ptr)                                :: p
@@ -110,7 +105,6 @@ contains
    end function
 
    subroutine domain_initialize(pdomain, runtype) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: domain_initialize
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: runtype
 
@@ -121,7 +115,6 @@ contains
    end subroutine
 
    subroutine domain_update_depths(pdomain) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: domain_update_depths
       type(c_ptr), intent(in), value :: pdomain
 
       type (type_getm_domain), pointer :: domain
@@ -131,7 +124,6 @@ contains
    end subroutine
 
    function advection_create() result(padvection) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: advection_create
       type(c_ptr) :: padvection
 
       type (type_advection), pointer :: advection
@@ -141,7 +133,6 @@ contains
    end function
 
    subroutine advection_calculate(padvection, scheme, pdomain,  pu, pv, timestep, pvar) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: advection_calculate
       integer(c_int), intent(in), value :: scheme
       real(c_double), intent(in), value :: timestep
       type(c_ptr),    intent(in), value :: padvection, pdomain, pu, pv, pvar
@@ -159,7 +150,6 @@ contains
    end subroutine
 
    function momentum_create(runtype, pdomain, padvection, advection_scheme, apply_bottom_friction) result(pmomentum) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_create
       integer(c_int), intent(in), value :: runtype
       type(c_ptr),    intent(in), value :: pdomain
       type(c_ptr),    intent(in), value :: padvection
@@ -182,7 +172,6 @@ contains
    end function
 
    function momentum_get_array(pmomentum, name) result(p) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_get_array
       type(c_ptr), value,             intent(in) :: pmomentum
       character(kind=c_char), target, intent(in) :: name(*)
       type(c_ptr)                                :: p
@@ -201,7 +190,6 @@ contains
    end function
 
    subroutine momentum_uv_momentum_2d(pmomentum, runtype, timestep, ptausx, ptausy, pdpdx, pdpdy) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: momentum_uv_momentum_2d
       type(c_ptr),    intent(in), value :: pmomentum
       integer(c_int), intent(in), value :: runtype
       real(c_double), intent(in), value :: timestep
@@ -219,7 +207,6 @@ contains
    end subroutine
 
    function pressure_create(runtype, pdomain) result(ppressure) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: pressure_create
       integer(c_int), intent(in), value :: runtype
       type(c_ptr),    intent(in), value :: pdomain
       type(c_ptr) :: ppressure
@@ -235,7 +222,6 @@ contains
    end function
 
    function pressure_get_array(ppressure, name) result(p) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: pressure_get_array
       type(c_ptr), value,             intent(in) :: ppressure
       character(kind=c_char), target, intent(in) :: name(*)
       type(c_ptr)                                :: p
@@ -254,7 +240,6 @@ contains
    end function
 
    subroutine pressure_surface(ppressure, pz, psp) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: pressure_surface
       type(c_ptr), intent(in), value :: ppressure
       type(c_ptr), intent(in), value :: pz, psp
 
@@ -268,7 +253,6 @@ contains
    end subroutine
 
    function sealevel_create(pdomain) result(psealevel) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: sealevel_create
       type(c_ptr), intent(in), value :: pdomain
       type(c_ptr) :: psealevel
 
@@ -283,7 +267,6 @@ contains
    end function
 
    subroutine sealevel_update(psealevel, timestep, pU, pV) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: sealevel_update
       type(c_ptr), intent(in),    value :: psealevel
       real(c_double), intent(in), value :: timestep
       type(c_ptr), intent(in),    value :: pU, pV
@@ -299,7 +282,6 @@ contains
    end subroutine
 
    subroutine sealevel_update_uvx(psealevel) bind(c)
-      !DIR$ ATTRIBUTES DLLEXPORT :: sealevel_update_uvx
       type(c_ptr), intent(in),    value :: psealevel
 
       type (type_getm_sealevel), pointer :: sealevel
