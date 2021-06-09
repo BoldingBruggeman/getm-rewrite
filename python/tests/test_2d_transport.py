@@ -2,7 +2,6 @@ import sys
 import argparse
 
 import numpy
-import matplotlib.pyplot
 
 import pygetm
 import pygetm.domain
@@ -25,6 +24,7 @@ def check_range(name, values, rtol=1e-12, atol=1e-12, target_value=None):
     return valid
 
 def plot(name, values):
+    import matplotlib.pyplot
     fig, ax = matplotlib.pyplot.subplots()
     pc = ax.pcolormesh(values)
     fig.colorbar(pc)
@@ -55,8 +55,8 @@ def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=
         sim.update_depth()
 
     rho0 = 1025.
-    success = check_range('U', sim.U, target_value=None if apply_bottom_friction else 3600 * tau_x / rho0)
-    success = check_range('V', sim.V, target_value=None if apply_bottom_friction else 3600 * tau_y / rho0) and success
+    success = check_range('U', sim.U, target_value=None if apply_bottom_friction else ntime * timestep * tau_x / rho0)
+    success = check_range('V', sim.V, target_value=None if apply_bottom_friction else ntime * timestep * tau_y / rho0) and success
     success = check_range('z', domain.T.z, target_value=0) and success
     return success
 
