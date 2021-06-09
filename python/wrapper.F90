@@ -104,14 +104,16 @@ contains
       end select
    end function
 
-   subroutine domain_initialize(pdomain, runtype) bind(c)
+   subroutine domain_initialize(pdomain, runtype, maxdt) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: runtype
+      real(c_double), intent(out)       :: maxdt
 
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
       call domain%initialize(runtype)
+      maxdt = domain%maxdt
    end subroutine
 
    subroutine domain_update_depths(pdomain) bind(c)
@@ -183,8 +185,10 @@ contains
       call c_f_pointer(c_loc(name), pname)
 
       select case (pname(:index(pname, C_NULL_CHAR) - 1))
-      case ('U'); p = c_loc(momentum%U)
-      case ('V'); p = c_loc(momentum%V)
+      case ('U');   p = c_loc(momentum%U)
+      case ('V');   p = c_loc(momentum%V)
+      case ('fU');  p = c_loc(momentum%fU)
+      case ('fV');  p = c_loc(momentum%fV)
       case default; p = C_NULL_PTR
       end select
    end function

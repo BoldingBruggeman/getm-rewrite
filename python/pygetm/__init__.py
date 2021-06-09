@@ -16,7 +16,7 @@ class Simulation(_pygetm.Simulation, core.FortranObject):
             self.dist_zX = self.domain.distribute(self.domain.X.z_)
             self.update_depth()
 
-        self.get_arrays(('U', 'V'), source=0, halo=self.domain.halo)
+        self.get_arrays(('U', 'V', 'fU', 'fV'), source=0, halo=self.domain.halo)
         self.get_arrays(('dpdx', 'dpdy'), source=1, halo=self.domain.halo)
 
     def update_depth(self):

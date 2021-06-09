@@ -6,7 +6,7 @@ import numpy
 cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin, int kmax, int* halox, int* haloy, int* haloz)
 cdef extern domain_initialize_open_boundaries(void* domain, int nwb, int nnb, int neb, int nsb, int nbdyp)
 cdef extern void* domain_get_grid(void* domain, char grid_type)
-cdef extern void domain_initialize(void* grid, int runtype)
+cdef extern void domain_initialize(void* grid, int runtype, double* maxdt)
 cdef extern void domain_finalize(void* domain)
 cdef extern void domain_update_depths(void* domain)
 cdef extern double* grid_get_array(void* grid, char* name)
@@ -43,6 +43,7 @@ cdef class Grid:
 cdef class Domain:
     cdef void* p
     cdef readonly int halox, haloy, haloz
+    cdef readonly double maxdt
     cdef int nx, ny
 
     def __init__(self, int imin, int imax, int jmin, int jmax, int kmin, int kmax):
@@ -60,7 +61,7 @@ cdef class Domain:
         domain_update_depths(self.p)
 
     def initialize(self, int runtype):
-        domain_initialize(self.p, runtype)
+        domain_initialize(self.p, runtype, &self.maxdt)
 
 cdef class Advection:
     cdef void* p
