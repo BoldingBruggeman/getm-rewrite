@@ -83,6 +83,18 @@ class Grid(_pygetm.Grid, core.FortranObject):
         save('area', 'm2')
         save('cor', 's-1', 'Coriolis parameter')
 
+    def map(self, source, source_grid: 'Grid'):
+        assert isinstance(source_grid, Grid)
+        target = None
+        if self.type == b'T':
+            if source_grid.type == b'U':
+                target = numpy.ma.masked_all(source.shape)
+                target[:, 1:] = 0.5 * (source[:, :-1] + source[:, 1:])
+            elif source_grid.type == b'V':
+                target = numpy.ma.masked_all(source.shape)
+                target[1:, :] = 0.5 * (source[:-1, :] + source[1:, :])
+        return target
+
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
     if dtype is None:
         dtype = ncvar.dtype
