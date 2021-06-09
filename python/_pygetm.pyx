@@ -42,7 +42,7 @@ cdef class Grid:
 
 cdef class Domain:
     cdef void* p
-    cdef public int halox, haloy, haloz
+    cdef readonly int halox, haloy, haloz
     cdef int nx, ny
 
     def __init__(self, int imin, int imax, int jmin, int jmax, int kmin, int kmax):
@@ -76,7 +76,7 @@ cdef class Advection:
         advection_calculate(self.p, self.scheme, self.pdomain, &pu[0,0], &pv[0,0], timestep, &pvar[0,0])
 
 cdef class Simulation:
-    cdef public int runtype
+    cdef readonly int runtype
     cdef void* pmomentum
     cdef void* ppressure
     cdef void* psealevel
