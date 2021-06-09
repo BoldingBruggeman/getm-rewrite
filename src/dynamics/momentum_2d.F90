@@ -90,22 +90,21 @@ MODULE SUBROUTINE uv_initialize_2d(self)
       call mm_s('Ua',self%Ua,self%U,def=0._real64,stat=stat)
       call mm_s('Va',self%Va,self%V,def=0._real64,stat=stat)
 
-      do j=UG%l(2),UG%u(2)
+      do j=UG%l(2),UG%u(2)-1
          do i=UG%l(1),UG%u(1)-1
-            self%uuadvgrid%mask(i,j) = TG%mask(i+1,j) ! check this
+            if (UG%mask(i,j) /= 0 .and. UG%mask(i+1,j) /= 0) self%uuadvgrid%mask(i,j) = 1
             self%uuadvgrid%dx(i,j) = TG%dx(i+1,j)
             self%uuadvgrid%dy(i,j) = TG%dy(i+1,j)
-            self%uvadvgrid%mask(i,j) = XG%mask(i,j) ! check this
+
+            if (UG%mask(i,j) /= 0 .and. UG%mask(i,j+1) /= 0) self%uvadvgrid%mask(i,j) = 1
             self%uvadvgrid%dx(i,j) = XG%dx(i,j)
             self%uvadvgrid%dy(i,j) = XG%dy(i,j)
-         end do
-      end do
-      do j=UG%l(2),UG%u(2)-1
-         do i=UG%l(1),UG%u(1)
-            self%vuadvgrid%mask(i,j) = XG%mask(i,j) ! check this
+
+            if (VG%mask(i,j) /= 0 .and. VG%mask(i+1,j) /= 0) self%vuadvgrid%mask(i,j) = 1
             self%vuadvgrid%dx(i,j) = XG%dx(i,j)
             self%vuadvgrid%dy(i,j) = XG%dy(i,j)
-            self%vvadvgrid%mask(i,j) = TG%mask(i,j+1) !KB check this
+
+            if (VG%mask(i,j) /= 0 .and. VG%mask(i,j+1) /= 0) self%vvadvgrid%mask(i,j) = 1
             self%vvadvgrid%dx(i,j) = TG%dx(i,j+1)
             self%vvadvgrid%dy(i,j) = TG%dy(i,j+1)
          end do
