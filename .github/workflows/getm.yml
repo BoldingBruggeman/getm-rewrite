@@ -42,3 +42,4 @@ jobs:
       - name: Run all test cases
         run: |
           python getm/python/tests/test_2d_transport.py
+          python getm/python/tests/test_2d_flow_symmetry.py
