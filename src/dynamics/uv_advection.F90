@@ -47,8 +47,8 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    where(UG%mask > 0) self%advU=(self%u1*UG%D-self%advU)/dt
 #endif
 
-   do j=VG%jmin-1,UG%jmax
-      do i=VG%imin-1,UG%imax
+   do j=VG%jmin-1,VG%jmax
+      do i=VG%imin-1,VG%imax
          self%vuadvgrid%D(i,j)  = XG%D(i,j)
          self%vvadvgrid%D(i,j)  = TG%D(i,j+1)
          self%Ua(i,j) = 0.5_real64*(self%U(i,j) + self%U(i,j+1))
