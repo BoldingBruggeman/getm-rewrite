@@ -40,7 +40,8 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    self%advU=self%U
 #endif
    where(UG%mask > 0) self%u1 = self%U/UG%D
-   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%ua,self%uvadvgrid,self%v
+   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%ua,self%uvadvgrid,self%va,dt,UG,self%u1)
+#ifdef _APPLY_ADV_DIFF_
    where(UG%mask > 0) self%U = self%u1*UG%D
 #else
    where(UG%mask > 0) self%advU=(self%u1*UG%D-self%advU)/dt
