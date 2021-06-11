@@ -52,57 +52,85 @@ contains
    end subroutine
 
    function domain_get_grid(pdomain, grid_type) result(pgrid) bind(c)
-      type(c_ptr),            intent(in), value :: pdomain
-      character(kind=c_char), intent(in), value :: grid_type
-      type(c_ptr)                               :: pgrid
+      type(c_ptr),         intent(in), value :: pdomain
+      integer(kind=c_int), intent(in), value :: grid_type
+      type(c_ptr)                            :: pgrid
 
-      type (type_getm_domain), pointer :: domain
-      type (type_getm_grid),   pointer :: grid
+      type (type_getm_domain),   pointer :: domain
+      type (type_getm_grid),     pointer :: grid
+      type (type_getm_pressure), pointer :: pressure
 
       call c_f_pointer(pdomain, domain)
       select case (grid_type)
-      case ('T'); grid => domain%T
-      case ('U'); grid => domain%U
-      case ('V'); grid => domain%V
-      case ('X'); grid => domain%X
+      case (1); grid => domain%T
+      case (2); grid => domain%U
+      case (3); grid => domain%V
+      case (4); grid => domain%X
       case default; grid => null()
       end select
       pgrid = c_loc(grid)
    end function
 
-   function grid_get_array(pgrid, name) result(p) bind(c)
-      type(c_ptr), value,             intent(in) :: pgrid
-      character(kind=c_char), target, intent(in) :: name(*)
-      type(c_ptr)                                :: p
+   subroutine get_array(source_type, obj, name, grid_type, data_type, p) bind(c)
+      integer(c_int),  value,         intent(in)  :: source_type
+      type(c_ptr), value,             intent(in)  :: obj
+      character(kind=c_char), target, intent(in)  :: name(*)
+      integer(c_int),                 intent(out) :: grid_type, data_type
+      type(c_ptr),                    intent(out) :: p
 
-      type (type_getm_grid), pointer :: grid
-      character(len=10),     pointer :: pname
+      type (type_getm_grid),     pointer :: grid
+      type (type_getm_momentum), pointer :: momentum
+      type (type_getm_pressure), pointer :: pressure
+      character(len=10),         pointer :: pname
 
-      call c_f_pointer(pgrid, grid)
       call c_f_pointer(c_loc(name), pname)
 
-      select case (pname(:index(pname, C_NULL_CHAR) - 1))
-      case ('c1'); p = c_loc(grid%c1)
-      case ('c2'); p = c_loc(grid%c2)
-      case ('x'); p = c_loc(grid%x)
-      case ('y'); p = c_loc(grid%y)
-      case ('dx'); p = c_loc(grid%dx)
-      case ('dy'); p = c_loc(grid%dy)
-      case ('lon'); p = c_loc(grid%lon)
-      case ('lat'); p = c_loc(grid%lat)
-      case ('dlon'); p = c_loc(grid%dlon)
-      case ('dlat'); p = c_loc(grid%dlat)
-      case ('area'); p = c_loc(grid%area)
-      case ('iarea'); p = c_loc(grid%iarea)
-      case ('H'); p = c_loc(grid%H)
-      case ('D'); p = c_loc(grid%D)
-      case ('mask'); p = c_loc(grid%mask)
-      case ('z'); p = c_loc(grid%z)
-      case ('zo'); p = c_loc(grid%zo)
-      case ('cor'); p = c_loc(grid%cor)
-      case default; p = C_NULL_PTR
+      p = C_NULL_PTR
+      grid_type = 1   ! TGRID (1: TGRID, 2: UGRID, 3: VGRID, 4: XGRID)
+      data_type = 0   ! double (use 1 for integer)
+      select case (source_type)
+      case (0)
+         call c_f_pointer(obj, grid)
+         grid_type = grid%grid_type
+         select case (pname(:index(pname, C_NULL_CHAR) - 1))
+         case ('c1'); p = c_loc(grid%c1)
+         case ('c2'); p = c_loc(grid%c2)
+         case ('x'); p = c_loc(grid%x)
+         case ('y'); p = c_loc(grid%y)
+         case ('dx'); p = c_loc(grid%dx)
+         case ('dy'); p = c_loc(grid%dy)
+         case ('lon'); p = c_loc(grid%lon)
+         case ('lat'); p = c_loc(grid%lat)
+         case ('dlon'); p = c_loc(grid%dlon)
+         case ('dlat'); p = c_loc(grid%dlat)
+         case ('area'); p = c_loc(grid%area)
+         case ('iarea'); p = c_loc(grid%iarea)
+         case ('H'); p = c_loc(grid%H)
+         case ('D'); p = c_loc(grid%D)
+         case ('mask'); p = c_loc(grid%mask); data_type = 1
+         case ('z'); p = c_loc(grid%z)
+         case ('zo'); p = c_loc(grid%zo)
+         case ('cor'); p = c_loc(grid%cor)
+         end select
+      case (1)
+         call c_f_pointer(obj, momentum)
+         select case (pname(:index(pname, C_NULL_CHAR) - 1))
+         case ('U');   p = c_loc(momentum%U); grid_type = 1
+         case ('V');   p = c_loc(momentum%V); grid_type = 2
+         case ('fU');  p = c_loc(momentum%fU); grid_type = 1
+         case ('fV');  p = c_loc(momentum%fV); grid_type = 2
+         case ('advU');  p = c_loc(momentum%advU); grid_type = 1
+         case ('advV');  p = c_loc(momentum%advV); grid_type = 2
+         end select
+      case (2)
+         call c_f_pointer(obj, pressure)
+         select case (pname(:index(pname, C_NULL_CHAR) - 1))
+         case ('dpdx'); p = c_loc(pressure%dpdx); grid_type = 1
+         case ('dpdy'); p = c_loc(pressure%dpdy); grid_type = 2
+         case default; p = C_NULL_PTR
+         end select
       end select
-   end function
+   end subroutine
 
    subroutine domain_initialize(pdomain, runtype, maxdt) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
@@ -173,28 +201,6 @@ contains
       pmomentum = c_loc(momentum)
    end function
 
-   function momentum_get_array(pmomentum, name) result(p) bind(c)
-      type(c_ptr), value,             intent(in) :: pmomentum
-      character(kind=c_char), target, intent(in) :: name(*)
-      type(c_ptr)                                :: p
-
-      type (type_getm_momentum), pointer :: momentum
-      character(len=8),          pointer :: pname
-
-      call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(c_loc(name), pname)
-
-      select case (pname(:index(pname, C_NULL_CHAR) - 1))
-      case ('U');   p = c_loc(momentum%U)
-      case ('V');   p = c_loc(momentum%V)
-      case ('fU');  p = c_loc(momentum%fU)
-      case ('fV');  p = c_loc(momentum%fV)
-      case ('advU');  p = c_loc(momentum%advU)
-      case ('advV');  p = c_loc(momentum%advV)
-      case default; p = C_NULL_PTR
-      end select
-   end function
-
    subroutine momentum_uv_momentum_2d(pmomentum, runtype, timestep, ptausx, ptausy, pdpdx, pdpdy) bind(c)
       type(c_ptr),    intent(in), value :: pmomentum
       integer(c_int), intent(in), value :: runtype
@@ -225,24 +231,6 @@ contains
       call pressure%configure()
       call pressure%initialize(runtype, domain)
       ppressure = c_loc(pressure)
-   end function
-
-   function pressure_get_array(ppressure, name) result(p) bind(c)
-      type(c_ptr), value,             intent(in) :: ppressure
-      character(kind=c_char), target, intent(in) :: name(*)
-      type(c_ptr)                                :: p
-
-      type (type_getm_pressure), pointer :: pressure
-      character(len=8),          pointer :: pname
-
-      call c_f_pointer(ppressure, pressure)
-      call c_f_pointer(c_loc(name), pname)
-
-      select case (pname(:index(pname, C_NULL_CHAR) - 1))
-      case ('dpdx'); p = c_loc(pressure%dpdx)
-      case ('dpdy'); p = c_loc(pressure%dpdy)
-      case default; p = C_NULL_PTR
-      end select
    end function
 
    subroutine pressure_surface(ppressure, pz, psp) bind(c)

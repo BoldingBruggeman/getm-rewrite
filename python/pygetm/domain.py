@@ -21,16 +21,15 @@ def find_interfaces(c: numpy.ndarray):
     return c_if
 
 class Grid(_pygetm.Grid, core.FortranObject):
-    def __init__(self, domain: 'Domain', grid_type: bytes, ioffset: int, joffset: int):
-        _pygetm.Grid.__init__(self, domain, ord(grid_type))
+    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int):
+        _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
-        self.domain = domain
         self.type = grid_type
         self.ioffset = ioffset
         self.joffset = joffset
 
     def initialize(self):
-        self.get_arrays(('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'), dtypes={'mask': int}, halo=self.halo)
+        self.get_arrays(('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'), halo=self.halo)
         self.fill()
 
     def fill(self):
@@ -86,13 +85,15 @@ class Grid(_pygetm.Grid, core.FortranObject):
     def map(self, source, source_grid: 'Grid'):
         assert isinstance(source_grid, Grid)
         target = None
-        if self.type == b'T':
-            if source_grid.type == b'U':
+        if self.type == _pygetm.TGRID:
+            if source_grid.type == _pygetm.UGRID:
                 target = numpy.ma.masked_all(source.shape)
                 target[:, 1:] = 0.5 * (source[:, :-1] + source[:, 1:])
-            elif source_grid.type == b'V':
+            elif source_grid.type == _pygetm.VGRID:
                 target = numpy.ma.masked_all(source.shape)
                 target[1:, :] = 0.5 * (source[:-1, :] + source[1:, :])
+        if target is None:
+            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (source_grid.type, self.type))
         return target
 
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
@@ -309,10 +310,10 @@ class Domain(_pygetm.Domain):
         self.shape = (nz, ny + 2 * self.halo, nx + 2 * self.halo)
 
         # Create grids
-        self.T = Grid(self, b'T', ioffset=1, joffset=1)
-        self.U = Grid(self, b'U', ioffset=2, joffset=1)
-        self.V = Grid(self, b'V', ioffset=1, joffset=2)
-        self.X = Grid(self, b'X', ioffset=0, joffset=0)
+        self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1)
+        self.U = Grid(self, _pygetm.UGRID, ioffset=2, joffset=1)
+        self.V = Grid(self, _pygetm.VGRID, ioffset=1, joffset=2)
+        self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0)
 
         self.initialized = False
         self.open_boundaries = {}
