@@ -98,6 +98,7 @@ MODULE getm_momentum
       logical :: store_diffusion=.true.
       logical :: store_damping=.true.
       logical :: store_slowterms=.false.
+      logical :: ufirst = .false.
 #endif
 
       contains
