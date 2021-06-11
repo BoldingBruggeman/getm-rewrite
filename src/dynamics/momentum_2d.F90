@@ -146,24 +146,23 @@ MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
 !  Local constants
 
 !  Local variables
-   logical :: ufirst=.false.
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_momentum_2d()',level=2)
    if (self%apply_bottom_friction) call self%bottom_friction_2d(runtype)
    if (self%advection_scheme > 0) call self%uv_advection_2d(dt)
    if (self%apply_diffusion) call self%uv_diffusion_2d(dt)
-   if(ufirst) then
+   if(self%ufirst) then
       call u_2d(self,dt,tausx,dpdx)
       call self%coriolis_fu()
       call v_2d(self,dt,tausy,dpdy)
       call self%coriolis_fv()
-      ufirst = .false.
+      self%ufirst = .false.
    else
       call v_2d(self,dt,tausy,dpdy)
       call self%coriolis_fv()
       call u_2d(self,dt,tausx,dpdx)
       call self%coriolis_fu()
-      ufirst = .true.
+      self%ufirst = .true.
    end if
 END SUBROUTINE uv_momentum_2d
 
