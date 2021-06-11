@@ -189,6 +189,8 @@ contains
       case ('V');   p = c_loc(momentum%V)
       case ('fU');  p = c_loc(momentum%fU)
       case ('fV');  p = c_loc(momentum%fV)
+      case ('advU');  p = c_loc(momentum%advU)
+      case ('advV');  p = c_loc(momentum%advV)
       case default; p = C_NULL_PTR
       end select
    end function
