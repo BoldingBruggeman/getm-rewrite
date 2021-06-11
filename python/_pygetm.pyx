@@ -9,14 +9,14 @@ cdef extern void* domain_get_grid(void* domain, char grid_type)
 cdef extern void domain_initialize(void* grid, int runtype, double* maxdt)
 cdef extern void domain_finalize(void* domain)
 cdef extern void domain_update_depths(void* domain)
-cdef extern double* grid_get_array(void* grid, char* name)
+cdef extern double* grid_get_array(void* grid, const char* name)
 cdef extern void* advection_create()
 cdef extern void advection_calculate(void* advection, int scheme, void* domain, double* pu, double* pv, double timestep, double* pvar)
 cdef extern void* momentum_create(int runtype, void* pdomain, void* padvection, int advection_scheme, int apply_bottom_friction)
-cdef extern double* momentum_get_array(void* momentum, char* name)
+cdef extern double* momentum_get_array(void* momentum, const char* name)
 cdef extern void momentum_uv_momentum_2d(void* momentum, int runtype, double timestep, double* ptausx, double* ptausy, double* pdpdx, double* pdpdy)
 cdef extern void* pressure_create(int runtype, void* pdomain)
-cdef extern double* pressure_get_array(void* pressure, char* name)
+cdef extern double* pressure_get_array(void* pressure, const char* name)
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp)
 cdef extern void* sealevel_create(void* pdomain)
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV)
@@ -33,7 +33,7 @@ cdef class Grid:
             self.nx += 1
             self.ny += 1
 
-    def get_array(self, bytes name, dtype):
+    def get_array(self, bytes name, int dtype):
         cdef void* p = grid_get_array(self.p, name)
         if dtype == 0:
             return numpy.asarray(<double[:self.ny, :self.nx:1]> p)
