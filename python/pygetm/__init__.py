@@ -7,7 +7,6 @@ Advection = _pygetm.Advection
 class Simulation(_pygetm.Simulation, core.FortranObject):
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True):
         assert not dom.initialized
-        self.domain = dom
         _pygetm.Simulation.__init__(self, dom, runtype, advection_scheme, apply_bottom_friction)
 
         self.dist_zT = None
@@ -18,8 +17,8 @@ class Simulation(_pygetm.Simulation, core.FortranObject):
             self.dist_zX = self.domain.distribute(self.domain.X.z_)
             self.update_depth()
 
-        self.get_arrays(('U', 'V', 'fU', 'fV', 'advU', 'advV'), source=0, halo=self.domain.halo)
-        self.get_arrays(('dpdx', 'dpdy'), source=1, halo=self.domain.halo)
+        self.get_arrays(('U', 'V', 'fU', 'fV', 'advU', 'advV'), source=1, halo=self.domain.halo)
+        self.get_arrays(('dpdx', 'dpdy'), source=2, halo=self.domain.halo)
 
     def update_depth(self):
         # Halo exchange for sea level on T grid

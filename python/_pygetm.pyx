@@ -9,36 +9,49 @@ cdef extern void* domain_get_grid(void* domain, char grid_type)
 cdef extern void domain_initialize(void* grid, int runtype, double* maxdt)
 cdef extern void domain_finalize(void* domain)
 cdef extern void domain_update_depths(void* domain)
-cdef extern double* grid_get_array(void* grid, const char* name)
+cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* data_type, void** p)
 cdef extern void* advection_create()
 cdef extern void advection_calculate(void* advection, int scheme, void* domain, double* pu, double* pv, double timestep, double* pvar)
 cdef extern void* momentum_create(int runtype, void* pdomain, void* padvection, int advection_scheme, int apply_bottom_friction)
-cdef extern double* momentum_get_array(void* momentum, const char* name)
 cdef extern void momentum_uv_momentum_2d(void* momentum, int runtype, double timestep, double* ptausx, double* ptausy, double* pdpdx, double* pdpdy)
 cdef extern void* pressure_create(int runtype, void* pdomain)
-cdef extern double* pressure_get_array(void* pressure, const char* name)
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp)
 cdef extern void* sealevel_create(void* pdomain)
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV)
 cdef extern void sealevel_update_uvx(void* sealevel)
 
+cpdef enum:
+    TGRID = 1
+    UGRID = 2
+    VGRID = 3
+    XGRID = 4
+
+cdef wrap_array(Domain domain, int source, void* obj, bytes name):
+    cdef int grid_type, data_type
+    cdef void* p
+    get_array(source, obj, name, &grid_type, &data_type, &p)
+    cdef Grid grid = domain.grids[grid_type]
+    if data_type == 0:
+        return numpy.asarray(<double[:grid.ny, :grid.nx:1]> p)
+    else:
+        return numpy.asarray(<int[:grid.ny, :grid.nx:1]> p)
+
 cdef class Grid:
     cdef void* p
     cdef int nx, ny
+    cdef readonly Domain domain
 
     def __init__(self, Domain domain, int grid_type):
+        self.domain = domain
         self.p = domain_get_grid(domain.p, grid_type)
         self.nx, self.ny = domain.nx, domain.ny
-        if grid_type == ord('X'):
+        if grid_type == XGRID:
             self.nx += 1
             self.ny += 1
+        domain.grids[grid_type] = self
 
-    def get_array(self, bytes name, int dtype):
-        cdef void* p = grid_get_array(self.p, name)
-        if dtype == 0:
-            return numpy.asarray(<double[:self.ny, :self.nx:1]> p)
-        else:
-            return numpy.asarray(<int[:self.ny, :self.nx:1]> p)
+    def get_array(self, bytes name):
+        return wrap_array(self.domain, 0, self.p, name)
 
 cdef class Domain:
     cdef void* p
@@ -50,6 +63,7 @@ cdef class Domain:
         self.p = domain_create(imin, imax, jmin, jmax, kmin, kmax, &self.halox, &self.haloy, &self.haloz)
         self.nx = imax - imin + 1 + 2 * self.halox
         self.ny = jmax - jmin + 1 + 2 * self.haloy
+        self.grids = {}
 
     def __dealloc__(self):
         domain_finalize(self.p)
@@ -77,6 +91,7 @@ cdef class Advection:
         advection_calculate(self.p, self.scheme, self.pdomain, &pu[0,0], &pv[0,0], timestep, &pvar[0,0])
 
 cdef class Simulation:
+    cdef readonly Domain domain
     cdef readonly int runtype
     cdef void* pmomentum
     cdef void* ppressure
@@ -84,6 +99,7 @@ cdef class Simulation:
     cdef int nx, ny
 
     def __init__(self, Domain domain, int runtype, int advection_scheme, int apply_bottom_friction):
+        self.domain = domain
         domain.initialize(runtype)
         padvection = advection_create()
         self.runtype = runtype
@@ -104,10 +120,7 @@ cdef class Simulation:
     def update_sealevel_uvx(self):
         sealevel_update_uvx(self.psealevel)
 
-    def get_array(self, bytes name, int source, int dtype=0):
-        cdef double* p
-        if source == 0:
-            p = momentum_get_array(self.pmomentum, name)
-        else:
-            p = pressure_get_array(self.ppressure, name)
-        return numpy.asarray(<double[:self.ny, :self.nx:1]> p)
+    def get_array(self, bytes name, int source):
+        cdef void* obj = self.pmomentum
+        if (source == 2): obj = self.ppressure
+        return wrap_array(self.domain, source, obj, name)
