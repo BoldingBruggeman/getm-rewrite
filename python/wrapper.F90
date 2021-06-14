@@ -115,18 +115,18 @@ contains
       case (1)
          call c_f_pointer(obj, momentum)
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
-         case ('U');   p = c_loc(momentum%U); grid_type = 1
-         case ('V');   p = c_loc(momentum%V); grid_type = 2
-         case ('fU');  p = c_loc(momentum%fU); grid_type = 1
-         case ('fV');  p = c_loc(momentum%fV); grid_type = 2
-         case ('advU');  p = c_loc(momentum%advU); grid_type = 1
-         case ('advV');  p = c_loc(momentum%advV); grid_type = 2
+         case ('U');   p = c_loc(momentum%U); grid_type = 2
+         case ('V');   p = c_loc(momentum%V); grid_type = 3
+         case ('fU');  p = c_loc(momentum%fU); grid_type = 2
+         case ('fV');  p = c_loc(momentum%fV); grid_type = 3
+         case ('advU');  p = c_loc(momentum%advU); grid_type = 2
+         case ('advV');  p = c_loc(momentum%advV); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
-         case ('dpdx'); p = c_loc(pressure%dpdx); grid_type = 1
-         case ('dpdy'); p = c_loc(pressure%dpdy); grid_type = 2
+         case ('dpdx'); p = c_loc(pressure%dpdx); grid_type = 2
+         case ('dpdy'); p = c_loc(pressure%dpdy); grid_type = 3
          case default; p = C_NULL_PTR
          end select
       end select

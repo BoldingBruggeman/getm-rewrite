@@ -7,6 +7,7 @@ import pygetm
 import pygetm.domain
 
 def check_range(name, values, rtol=1e-12, atol=1e-12, target_value=None):
+    values = numpy.asarray(values)
     print('  %s... ' % name, end='', flush=True)
     absrange = values.max() - values.min()
     mean = values.mean()
@@ -30,7 +31,7 @@ def plot(name, values):
     fig.colorbar(pc)
     fig.savefig(name, dpi=300)
 
-def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=10., ntime=360, apply_bottom_friction=False):
+def test(name, periodic_x: bool=False, periodic_y: bool=False, tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, apply_bottom_friction: bool=False):
     print('%s, tau_x = %s, tau_y = %s...' % (name, tau_x, tau_y), flush=True)
 
     # Set up rectangular domain (all points unmasked)
@@ -38,20 +39,18 @@ def test(name, periodic_x=False, periodic_y=False, tau_x=0., tau_y=0., timestep=
     sim = pygetm.Simulation(domain, runtype=1, advection_scheme=1, apply_bottom_friction=apply_bottom_friction)
 
     # Idealized surface forcing
-    tausx, tausx_ = domain.U.array(fill=tau_x)
-    tausy, tausy_ = domain.V.array(fill=tau_y)
-    sp, sp_ = domain.T.array(fill=0.)
+    tausx = domain.U.array(fill=tau_x)
+    tausy = domain.V.array(fill=tau_y)
+    sp = domain.T.array(fill=0.)
 
-    dist_U = domain.distribute(sim.U_)
-    dist_V = domain.distribute(sim.V_)
-    dist_U.update_halos()
-    dist_V.update_halos()
+    sim.U.update_halos()
+    sim.V.update_halos()
     for istep in range(ntime):
-        sim.update_surface_pressure_gradient(domain.T.z_, sp_)
-        sim.uv_momentum_2d(timestep, tausx_, tausy_, sim.dpdx_, sim.dpdy_)
-        dist_U.update_halos()
-        dist_V.update_halos()
-        sim.update_sealevel(timestep, sim.U_, sim.V_)
+        sim.update_surface_pressure_gradient(domain.T.z, sp)
+        sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
+        sim.U.update_halos()
+        sim.V.update_halos()
+        sim.update_sealevel(timestep, sim.U, sim.V)
         sim.update_depth()
 
     rho0 = 1025.
@@ -75,3 +74,4 @@ if __name__ == '__main__':
     success = test('Periodic in x and y', periodic_x=True, periodic_y=True, tau_x=-0.01, tau_y=-0.01, apply_bottom_friction=args.apply_bottom_friction) and success
     if not success:
         sys.exit(1)
+
