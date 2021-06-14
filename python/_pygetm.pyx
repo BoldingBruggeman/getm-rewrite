@@ -26,15 +26,27 @@ cpdef enum:
     VGRID = 3
     XGRID = 4
 
-cdef wrap_array(Domain domain, int source, void* obj, bytes name):
-    cdef int grid_type, data_type
+cdef class Array:
     cdef void* p
-    get_array(source, obj, name, &grid_type, &data_type, &p)
-    cdef Grid grid = domain.grids[grid_type]
-    if data_type == 0:
-        return numpy.asarray(<double[:grid.ny, :grid.nx:1]> p)
-    else:
-        return numpy.asarray(<int[:grid.ny, :grid.nx:1]> p)
+    cdef readonly numpy.ndarray all_values
+    cdef readonly Grid grid
+
+    cdef wrap(self, Domain domain, int source, void* obj, bytes name):
+        cdef int data_type
+        cdef int grid_type
+        get_array(source, obj, name, &grid_type, &data_type, &self.p)
+        self.grid = domain.grids[grid_type]
+        if data_type == 0:
+            self.all_values = numpy.asarray(<double[:self.grid.ny, :self.grid.nx:1]> self.p)
+        else:
+            self.all_values = numpy.asarray(<int[:self.grid.ny, :self.grid.nx:1]> self.p)
+        self.finish_initialization()
+
+    def empty(self, Grid grid, dtype):
+        self.grid = grid
+        self.all_values = numpy.empty((self.grid.ny, self.grid.nx), dtype=dtype)
+        self.p = self.all_values.data
+        self.finish_initialization()
 
 cdef class Grid:
     cdef void* p
@@ -50,8 +62,9 @@ cdef class Grid:
             self.ny += 1
         domain.grids[grid_type] = self
 
-    def get_array(self, bytes name):
-        return wrap_array(self.domain, 0, self.p, name)
+    def wrap(self, Array ar, bytes name):
+        ar.wrap(self.domain, 0, self.p, name)
+        return ar
 
 cdef class Domain:
     cdef void* p
@@ -87,8 +100,8 @@ cdef class Advection:
         self.scheme = scheme
         self.pdomain = domain.p
 
-    def calculate(self, double [:, ::1] pu not None, double [:, ::1] pv not None, double timestep, double [:, ::1] pvar):
-        advection_calculate(self.p, self.scheme, self.pdomain, &pu[0,0], &pv[0,0], timestep, &pvar[0,0])
+    def calculate(self, Array u not None, Array v not None, double timestep, Array var not None):
+        advection_calculate(self.p, self.scheme, self.pdomain, <double *>u.p, <double *>v.p, timestep, <double *>var.p)
 
 cdef class Simulation:
     cdef readonly Domain domain
@@ -108,19 +121,20 @@ cdef class Simulation:
         self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
 
-    def uv_momentum_2d(self, double timestep, double [:, ::1] tausx not None, double [:, ::1] tausy not None, double [:, ::1] dpdx not None, double [:, ::1] dpdy not None):
-        momentum_uv_momentum_2d(self.pmomentum, self.runtype, timestep, &tausx[0,0], &tausy[0,0], &dpdx[0,0], &dpdy[0,0])
+    def uv_momentum_2d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None):
+        momentum_uv_momentum_2d(self.pmomentum, self.runtype, timestep, <double *>tausx.p, <double *>tausy.p, <double *>dpdx.p, <double *>dpdy.p)
 
-    def update_surface_pressure_gradient(self, double [:, ::1] pz not None, double [:, ::1] psp not None):
-        pressure_surface(self.ppressure, &pz[0,0], &psp[0,0])
+    def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
+        pressure_surface(self.ppressure, <double *>z.p, <double *>sp.p)
 
-    def update_sealevel(self, double timestep, double [:, ::1] pU not None, double [:, ::1] pV not None):
-        sealevel_update(self.psealevel, timestep, &pU[0,0], &pV[0,0])
+    def update_sealevel(self, double timestep, Array U not None, Array V not None):
+        sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p)
 
     def update_sealevel_uvx(self):
         sealevel_update_uvx(self.psealevel)
 
-    def get_array(self, bytes name, int source):
+    def wrap(self, Array ar, bytes name, int source):
         cdef void* obj = self.pmomentum
         if (source == 2): obj = self.ppressure
-        return wrap_array(self.domain, source, obj, name)
+        ar.wrap(self.domain, source, obj, name)
+        return ar

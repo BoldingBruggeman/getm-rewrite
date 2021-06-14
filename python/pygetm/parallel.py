@@ -1,4 +1,6 @@
 from typing import Optional
+import functools
+
 from mpi4py import MPI
 import numpy
 
@@ -67,8 +69,10 @@ class DistributedArray:
         def add_task(neighbor, sendtag, recvtag, inner, outer):
             assert inner.shape == outer.shape
             if neighbor is not None:
-                self.sendtasks.append((neighbor, sendtag, inner, numpy.empty_like(inner)))
-                self.recvtasks.append((neighbor, recvtag, outer, numpy.empty_like(outer)))
+                inner_cache = numpy.empty_like(inner)
+                outer_cache = numpy.empty_like(outer)
+                self.sendtasks.append((functools.partial(self.comm.Isend, inner_cache, neighbor, sendtag), inner, inner_cache))
+                self.recvtasks.append((functools.partial(self.comm.Irecv, outer_cache, neighbor, recvtag), outer, outer_cache))
 
         add_task(tiling.left, 0, 1, field[..., halo:-halo, halo:halo*2], field[..., halo:-halo, :halo])
         add_task(tiling.right, 1, 0, field[..., halo:-halo, -halo*2:-halo], field[..., halo:-halo, -halo:])
@@ -80,13 +84,13 @@ class DistributedArray:
         add_task(tiling.bottomright, 7, 4, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
 
     def update_halos(self):
-        recreqs = [self.comm.Irecv(cache, neigbor, tag) for neigbor, tag, _, cache in self.recvtasks]
+        recreqs = [fn() for fn, _, _ in self.recvtasks]
         sendreqs = []
-        for neigbor, tag, inner, cache in self.sendtasks:
+        for fn, inner, cache in self.sendtasks:
             cache[...] = inner
-            sendreqs.append(self.comm.Isend(cache, neigbor, tag))
+            sendreqs.append(fn())
         Waitall(recreqs)
-        for _, _, outer, cache in self.recvtasks:
+        for _, outer, cache in self.recvtasks:
             outer[...] = cache
         Waitall(sendreqs)
 

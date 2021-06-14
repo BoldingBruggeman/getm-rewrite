@@ -20,7 +20,7 @@ def find_interfaces(c: numpy.ndarray):
     c_if[-1] = c[-1] + 0.5 * d[-1]
     return c_if
 
-class Grid(_pygetm.Grid, core.FortranObject):
+class Grid(_pygetm.Grid):
     def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int):
         _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
@@ -29,17 +29,18 @@ class Grid(_pygetm.Grid, core.FortranObject):
         self.joffset = joffset
 
     def initialize(self):
-        self.get_arrays(('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'), halo=self.halo)
+        for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
+            setattr(self, name, self.wrap(core.Array(), name.encode('ascii')))
         self.fill()
 
     def fill(self):
         read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area')
-        nj, ni = self.H_.shape
+        nj, ni = self.H.all_values.shape
         has_bounds = self.ioffset > 0 and self.joffset > 0 and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
         for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo'):
             source = getattr(self.domain, name + '_')
             if source is not None:
-                target = getattr(self, name + '_')
+                target = getattr(self, name).all_values
                 target[:, :] = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
                 target.flags.writeable = name not in read_only
                 if has_bounds:
@@ -48,13 +49,10 @@ class Grid(_pygetm.Grid, core.FortranObject):
                     values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
                     setattr(self, name + 'i_', values_i)
                     setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
-        self.iarea_[:, :] = 1. / self.area_[:, :]
+        self.iarea.all_values[:, :] = 1. / self.area.all_values[:, :]
 
-    def array(self, fill=None, dtype=float):
-        data = numpy.empty(self.H_.shape, dtype=dtype)
-        if fill is not None:
-            data[...] = fill
-        return data[self.halo:-self.halo, self.halo:-self.halo], data
+    def array(self, fill=None, dtype=float) -> core.Array:
+        return core.Array.create(self, fill, dtype)
 
     def as_xarray(self, data):
         assert data.shape == self.x.shape
@@ -328,7 +326,7 @@ class Domain(_pygetm.Domain):
         self.mask_[2:-2:2, 1::2][numpy.logical_and(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
         self.mask_[1::2, 2:-2:2][numpy.logical_and(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
         self.mask_[2:-2:2, 2:-2:2][numpy.logical_and(numpy.logical_and(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_and(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
-        self.exchange_metric(self.mask_)
+        self.exchange_metric(self.mask_, fill_value=0)
 
         nbdyp = 0
         bdy_i, bdy_j = [], []
@@ -364,7 +362,7 @@ class Domain(_pygetm.Domain):
         mask_[2:-2:2, 1::2][numpy.logical_or(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
         mask_[1::2, 2:-2:2][numpy.logical_or(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
         mask_[2:-2:2, 2:-2:2][numpy.logical_or(numpy.logical_or(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_or(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
-        self.exchange_metric(mask_)
+        self.exchange_metric(mask_, fill_value=0)
         self.mask_[...] = mask_
 
         for grid in (self.T, self.U, self.V, self.X):
