@@ -16,7 +16,9 @@ jobs:
       steps:
       - name: Install compiler and MPI
         #run: sudo apt-get install python3-numpy python3-wheel python3-netcdf4 python3-mpi4py python3-matplotlib gfortran-${{ matrix.version }}
-        run: sudo apt-get install gfortran-${{ matrix.version }} libopenmpi-dev
+        run: |
+           sudo apt-get update
+           sudo apt-get install gfortran-${{ matrix.version }} libopenmpi-dev
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
