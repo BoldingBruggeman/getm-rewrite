@@ -30,7 +30,7 @@ if rank == 0:
     # Set up global domain and initial tracer field
     global_domain = pygetm.domain.Domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0.)
     global_domain.initialize(runtype=1)
-    f_glob = global_domain.T.array()
+    f_glob = global_domain.T.array(fill=0.)
     f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
 
 # Set up local subdomain (this also calls subdomain.initialize)
