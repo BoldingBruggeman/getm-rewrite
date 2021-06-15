@@ -50,7 +50,7 @@ cdef class Array:
 
 cdef class Grid:
     cdef void* p
-    cdef int nx, ny
+    cdef readonly int nx, ny
     cdef readonly Domain domain
 
     def __init__(self, Domain domain, int grid_type):

@@ -104,7 +104,7 @@ class Gather:
         if self.comm.Get_rank() == self.root:
             self.recvbuf = numpy.empty((self.rankmap.size,) + self.field.shape, dtype=self.field.dtype)
 
-    def __call__(self, out: Optional[numpy.ndarray]=None) -> numpy.ndarray:
+    def __call__(self, out: Optional[numpy.ndarray]=None, slice_spec=()) -> numpy.ndarray:
         sendbuf = numpy.ascontiguousarray(self.field)
         self.comm.Gather(sendbuf, self.recvbuf, root=self.root)
         if self.recvbuf is not None:
@@ -114,7 +114,8 @@ class Gather:
                 out = numpy.empty(self.recvbuf.shape[1:-2] + (nrow * ny, ncol * nx), dtype=self.recvbuf.dtype)
             for row in range(nrow):
                 for col in range(ncol):
-                    out[..., row * ny:(row + 1) * ny, col * nx:(col + 1) * nx] = self.recvbuf[self.rankmap[row, col], ...]
+                    s = slice_spec + (Ellipsis, slice(row * ny, (row + 1) * ny), slice(col * nx, (col + 1) * nx))
+                    out[s] = self.recvbuf[self.rankmap[row, col], ...]
             return out
 
 class Scatter:

@@ -1,11 +1,17 @@
 import numpy
 
-from . import _pygetm, core, domain
+from . import _pygetm
+from . import core
+from . import domain
+from . import output
 
 Advection = _pygetm.Advection
 
 class Simulation(_pygetm.Simulation):
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True):
+        self.output_manager = output.OutputManager()
+        dom.field_manager = self.output_manager
+
         assert not dom.initialized
         _pygetm.Simulation.__init__(self, dom, runtype, advection_scheme, apply_bottom_friction)
 

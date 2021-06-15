@@ -8,10 +8,13 @@ from . import _pygetm
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self):
+    def __init__(self, name=None, units=None, long_name=None):
         self._x = None
         self._scatter = None
         self._gather = None
+        self._name = name
+        self._units = units
+        self._long_name = long_name
 
     def update_halos(self):
         pass
@@ -21,10 +24,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self._scatter = parallel.Scatter(self.grid.domain.tiling, self.all_values, halo=self.grid.halo)
         self._scatter(None if global_data is None else global_data.all_values)
 
-    def gather(self, out: Optional['Array']=None, domain=None):
+    def gather(self, out: Optional['Array']=None, domain=None, slice_spec=()):
         if self._gather is None:
             self._gather = parallel.Gather(self.grid.domain.tiling, self.values)
-        result = self._gather(None if out is None else out.values)
+        result = self._gather(out.values if isinstance(out, Array) else out, slice_spec=slice_spec)
         if result is not None and out is None:
             out = domain.grids[self.grid.type].array(dtype=self.dtype)
             out[...] = result
@@ -32,6 +35,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def finish_initialization(self):
         assert self.grid is not None
+        if self.name is not None:
+            self.grid.domain.field_manager.register(self)
         tiling = self.grid.domain.tiling
         if tiling is not None:
             dist = parallel.DistributedArray(tiling, self.all_values, self.grid.halo)
@@ -40,12 +45,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.values = self.all_values[halo:-halo, halo:-halo]
 
     @staticmethod
-    def create(grid, fill=None, dtype=None) -> 'Array':
+    def create(grid, fill=None, dtype=None, **kwargs) -> 'Array':
         if fill is not None:
             fill = numpy.asarray(fill)
         if dtype is None:
             dtype = float if fill is None else fill.dtype
-        ar = Array()
+        ar = Array(**kwargs)
         ar.empty(grid, dtype)
         if fill is not None:
             ar.all_values[...] = fill
@@ -93,6 +98,18 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def dtype(self):
         return self.values.dtype
+
+    @property
+    def name(self) -> Optional[str]:
+        return self._name
+
+    @property
+    def units(self) -> Optional[str]:
+        return self._units
+
+    @property
+    def long_name(self) -> Optional[str]:
+        return self._long_name
 
     # Below based on https://numpy.org/devdocs/reference/generated/numpy.lib.mixins.NDArrayOperatorsMixin.html#numpy.lib.mixins.NDArrayOperatorsMixin
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):

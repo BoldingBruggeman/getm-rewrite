@@ -34,7 +34,8 @@ if rank == 0:
     f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
 
 # Set up local subdomain (this also calls subdomain.initialize)
-subdomain = pygetm.domain.Domain.partition(tiling, nx, ny, nlev, global_domain, runtype=1)
+outman = pygetm.output.OutputManager()
+subdomain = pygetm.domain.Domain.partition(tiling, nx, ny, nlev, global_domain, runtype=1, field_manager=outman)
 halo = subdomain.halo
 
 # Set up velocities
@@ -57,7 +58,7 @@ if args.nmax:
     Nmax = args.nmax
 
 # Set up tracer field for subdomain, wrap it for halo updates and MPI-scatter it from root node
-f = subdomain.T.array(fill=0.)
+f = subdomain.T.array(fill=0., name='tracer')
 f.scatter(f_glob)
 
 # Gather and plot global velocities
@@ -86,6 +87,9 @@ if f_glob is not None and args.plot:
     fig, ax = matplotlib.pyplot.subplots()
     pc = ax.pcolormesh(global_domain.T.xi, global_domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
+
+ncf = outman.add_netcdf_file('res.nc', is_root=rank == 0, interval=10)
+ncf.request('tracer')
 
 def main():
     adv = pygetm.Advection(subdomain, scheme=1)
@@ -119,6 +123,8 @@ def main():
 
         # Update halos
         f.update_halos()
+
+        outman.save()
 
     print('%.4f s per iteration' % ((timeit.default_timer() - start) / Nmax,))
 
