@@ -5,7 +5,10 @@ import numpy.typing
 import xarray
 import netCDF4
 
-from . import _pygetm, core, parallel
+from . import _pygetm
+from . import core
+from . import parallel
+from . import output
 
 WEST  = 1
 NORTH = 2
@@ -30,7 +33,7 @@ class Grid(_pygetm.Grid):
 
     def initialize(self):
         for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
-            setattr(self, name, self.wrap(core.Array(), name.encode('ascii')))
+            setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii')))
         self.fill()
 
     def fill(self):
@@ -51,8 +54,8 @@ class Grid(_pygetm.Grid):
                     setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
         self.iarea.all_values[:, :] = 1. / self.area.all_values[:, :]
 
-    def array(self, fill=None, dtype=float) -> core.Array:
-        return core.Array.create(self, fill, dtype)
+    def array(self, fill=None, dtype=float, **kwargs) -> core.Array:
+        return core.Array.create(self, fill, dtype, **kwargs)
 
     def as_xarray(self, data):
         assert data.shape == self.x.shape
@@ -176,24 +179,28 @@ class Domain(_pygetm.Domain):
         return domain
 
     @staticmethod
-    def partition(tiling, nx: int, ny: int, nlev: int, global_domain, runtype):
+    def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, **kwargs):
         assert nx % tiling.ncol == 0
         assert ny % tiling.nrow == 0
         assert global_domain is None or global_domain.initialized
 
-        domain = Domain(1, nlev, 1, ny // tiling.nrow, 1, nx // tiling.ncol, tiling=tiling)
+        halo = 0
+        share = 1
+        nx_loc, ny_loc = nx // tiling.ncol, ny // tiling.nrow
+        x = numpy.empty((2 * (ny_loc + halo) + 1, 2 * (nx_loc + halo) + 1))
+        y = numpy.empty_like(x)
+        parallel.Scatter(tiling, x, halo=halo, share=share)(None if global_domain is None else global_domain.x)
+        parallel.Scatter(tiling, y, halo=halo, share=share)(None if global_domain is None else global_domain.y)
+        domain = Domain(nx_loc, ny_loc, nz, x=x, y=y, tiling=tiling, f=0.)
 
-        # Scatter coordinates, bathymetry and mask to subdomains
-        domain.distribute(domain.T.x_).scatter(None if global_domain is None else global_domain.T.x)
-        domain.distribute(domain.T.y_).scatter(None if global_domain is None else global_domain.T.y)
-        domain.distribute(domain.T.H_).scatter(None if global_domain is None else global_domain.T.H)
-        domain.distribute(domain.T.mask_).scatter(None if global_domain is None else global_domain.T.mask)
+        halo = 4
+        parallel.Scatter(tiling, domain.mask_, halo=halo, share=share)(None if global_domain is None else global_domain.mask_)
+        parallel.Scatter(tiling, domain.H_, halo=halo, share=share)(None if global_domain is None else global_domain.H_)
+        parallel.Scatter(tiling, domain.z0_, halo=halo, share=share)(None if global_domain is None else global_domain.z0_)
+        parallel.Scatter(tiling, domain.z_, halo=halo, share=share)(None if global_domain is None else global_domain.z_)
+        parallel.Scatter(tiling, domain.zo_, halo=halo, share=share)(None if global_domain is None else global_domain.zo_)
 
-        # Extract 1D coordinate vectors per subdomain
-        domain.T.c1_[:] = domain.T.x_[domain.halo, :]
-        domain.T.c2_[:] = domain.T.y_[:, domain.halo]
-
-        domain.initialize(runtype)
+        domain.initialize(**kwargs)
 
         return domain
 
@@ -231,6 +238,8 @@ class Domain(_pygetm.Domain):
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
         assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
+
+        self.field_manager: Optional[output.FieldManager] = None
 
         halo = 2
 
@@ -319,7 +328,7 @@ class Domain(_pygetm.Domain):
     def add_open_boundary(self, side: int, l: int, mstart: int, mstop: int, type_2d: int, type_3d: int):
         self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
 
-    def initialize(self, runtype):
+    def initialize(self, runtype, field_manager: Optional[output.FieldManager]=None):
         assert not self.initialized, 'Domain has already been initialized'
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained by the domain to be used for e.g. plotting
         tmask = self.mask_[1::2, 1::2]
@@ -327,6 +336,10 @@ class Domain(_pygetm.Domain):
         self.mask_[1::2, 2:-2:2][numpy.logical_and(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
         self.mask_[2:-2:2, 2:-2:2][numpy.logical_and(numpy.logical_and(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_and(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
         self.exchange_metric(self.mask_, fill_value=0)
+
+        if field_manager is not None:
+            self.field_manager = field_manager
+        self.field_manager = self.field_manager or output.FieldManager()
 
         nbdyp = 0
         bdy_i, bdy_j = [], []

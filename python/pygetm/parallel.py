@@ -94,42 +94,52 @@ class DistributedArray:
             outer[...] = cache
         Waitall(sendreqs)
 
-    def gather(self, root: int=0, out: Optional[numpy.ndarray]=None):
-        rankmap = self.tiling.map
-        rank = self.comm.Get_rank()
-        sendbuf = numpy.ascontiguousarray(self.f)
-        recvbuf = None
-        if rank == root:
-            recvbuf = numpy.empty((rankmap.size,) + self.f.shape, dtype=self.f.dtype)
-        self.comm.Gather(sendbuf, recvbuf, root=root)
-        if rank == root:
-            nrow, ncol = rankmap.shape
-            ny, nx = recvbuf.shape[-2:]
+class Gather:
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, root: int=0):
+        self.rankmap = tiling.map
+        self.comm = tiling.comm
+        self.root = root
+        self.field = field
+        self.recvbuf = None
+        if self.comm.Get_rank() == self.root:
+            self.recvbuf = numpy.empty((self.rankmap.size,) + self.field.shape, dtype=self.field.dtype)
+
+    def __call__(self, out: Optional[numpy.ndarray]=None, slice_spec=()) -> numpy.ndarray:
+        sendbuf = numpy.ascontiguousarray(self.field)
+        self.comm.Gather(sendbuf, self.recvbuf, root=self.root)
+        if self.recvbuf is not None:
+            nrow, ncol = self.rankmap.shape
+            ny, nx = self.recvbuf.shape[-2:]
             if out is None:
-                out = numpy.empty(recvbuf.shape[1:-2] + (nrow * ny, ncol * nx), dtype=recvbuf.dtype)
-            for i in range(nrow):
-                for j in range(ncol):
-                    out[..., i * ny:(i + 1) * ny, j * nx:(j + 1) * nx] = recvbuf[rankmap[i, j], ...]
+                out = numpy.empty(self.recvbuf.shape[1:-2] + (nrow * ny, ncol * nx), dtype=self.recvbuf.dtype)
+            for row in range(nrow):
+                for col in range(ncol):
+                    s = slice_spec + (Ellipsis, slice(row * ny, (row + 1) * ny), slice(col * nx, (col + 1) * nx))
+                    out[s] = self.recvbuf[self.rankmap[row, col], ...]
             return out
 
-    def scatter(self, data: numpy.ndarray, root: int=0):
-        rankmap = self.tiling.map
-        rank = self.comm.Get_rank()
-        recvbuf = numpy.empty_like(self.f_)
-        sendbuf = None
-        if rank == root:
-            sendbuf = numpy.zeros((rankmap.size,) + recvbuf.shape, dtype=recvbuf.dtype)
-            ny, nx = self.f.shape[-2:]
-            nrow, ncol = rankmap.shape
-            halo = self.halo
-            assert nrow * ny == data.shape[-2] and ncol * nx == data.shape[-1], '%s, %i, %i' % (data.shape, nrow * ny, ncol * nx)
-            for i in range(nrow):
-                for j in range(ncol):
-                    imin_off = 0 if i == 0 else halo
-                    imax_off = 0 if i == nrow - 1 else halo
-                    jmin_off = 0 if j == 0 else halo
-                    jmax_off = 0 if j == ncol - 1 else halo
-                    sendbuf[rankmap[i, j], ..., halo - imin_off:halo + ny + imax_off, halo - jmin_off:halo + nx + jmax_off] = data[..., i * ny - imin_off:(i + 1) * ny + imax_off, j * nx - jmin_off:(j + 1) * nx + jmax_off]
-        self.comm.Scatter(sendbuf, recvbuf, root=root)
-        self.f_[...] = recvbuf
+class Scatter:
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, share: int=0, root: int=0):
+        self.field = field
+        self.recvbuf = numpy.ascontiguousarray(field)
+        self.rankmap = tiling.map
+        self.halo = halo
+        self.share = share
+        self.sendbuf = None
+        if tiling.comm.Get_rank() == root:
+            self.sendbuf = numpy.zeros((self.rankmap.size,) + self.recvbuf.shape, dtype=self.recvbuf.dtype)
+        self.mpi_scatter = functools.partial(tiling.comm.Scatter, self.sendbuf, self.recvbuf, root=root)
+
+    def __call__(self, global_data: Optional[numpy.ndarray]):
+        if self.sendbuf is not None:
+            ny, nx = self.field.shape[-2:]
+            xspacing, yspacing = nx - 2 * self.halo - self.share, ny - 2 * self.halo - self.share
+            nrow, ncol = self.rankmap.shape
+            assert nrow * yspacing + 2 * self.halo + self.share == global_data.shape[-2] and ncol * xspacing + 2 * self.halo + self.share == global_data.shape[-1], '%s, %i, %i' % (global_data.shape, nrow * yspacing + 2 * self.halo + self.share, ncol * xspacing + 2 * self.halo + self.share)
+            for row in range(nrow):
+                for col in range(ncol):
+                    self.sendbuf[self.rankmap[row, col], ...] = global_data[..., row * yspacing:row * yspacing + ny, col * xspacing:col * xspacing + nx]
+        self.mpi_scatter()
+        if self.recvbuf is not self.field:
+            self.field[...] = self.recvbuf
 
