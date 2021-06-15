@@ -5,7 +5,6 @@ import cProfile
 import numpy
 import pygetm
 import pygetm.parallel
-from mpi4py import MPI
 
 import matplotlib.pyplot
 
@@ -15,7 +14,7 @@ parser.add_argument('-i', '--interval', type=int, help='number of timesteps betw
 parser.add_argument('--nmax', type=int, help='total number of timesteps', default=None)
 parser.add_argument('--nrow', type=int, help='number of rows in subdomain division', default=2)
 parser.add_argument('--ncol', type=int, help='number of columns in subdomain division', default=2)
-parser.add_argument('--noplot', action='store_true', help='skip plotting (useful for performance testing)')
+parser.add_argument('--noplot', action='store_false', dest='plot', help='skip plotting (useful for performance testing)')
 parser.add_argument('--profile', action='store_true', help='use profiler to time function calls')
 args = parser.parse_args()
 
@@ -23,7 +22,8 @@ halo = 2
 Lx, Ly = 100., 100.
 nx, ny, nlev = 612, 600, 1
 
-rank = MPI.COMM_WORLD.Get_rank()
+tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
+rank = tiling.rank
 
 global_domain, f_glob = None, None
 if rank == 0:
@@ -32,8 +32,6 @@ if rank == 0:
     global_domain.initialize(runtype=1)
     f_glob = global_domain.T.array()
     f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
-
-tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
 
 # Set up local subdomain (this also calls subdomain.initialize)
 subdomain = pygetm.domain.Domain.partition(tiling, nx, ny, nlev, global_domain, runtype=1)
@@ -65,7 +63,7 @@ f.scatter(f_glob)
 # Gather and plot global velocities
 u_glob = u.gather(domain=global_domain)
 v_glob = v.gather(domain=global_domain)
-if u_glob is not None and not args.noplot:
+if u_glob is not None and args.plot:
     fig, ax = matplotlib.pyplot.subplots()
     u_destag, v_destag = u_glob.interp(global_domain.T), v_glob.interp(global_domain.T)
     ax.quiver(u_destag[::10, ::10], v_destag[::10, ::10], angles='xy')
@@ -84,7 +82,7 @@ if args.debug:
     cb_sub = fig_sub.colorbar(pc_sub)
 
 # Set up figure for plotting global tracer field
-if f_glob is not None and not args.noplot:
+if f_glob is not None and args.plot:
     fig, ax = matplotlib.pyplot.subplots()
     pc = ax.pcolormesh(global_domain.T.xi, global_domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
@@ -99,16 +97,16 @@ def main():
                 print('time step %i of %i' % (i, Nmax), flush=True)
 
             if args.debug:
-                # Print tracer max along boundaries, inside and outsde halo 
+                # Print tracer max along boundaries, inside and outside halo 
                 print(i, rank, 'inside', f[0, :].max(), f[-1, :].max(), f[:, 0].max(), f[:, -1].max(), flush=True)
-                print(i, rank, 'outside', rank, f[halo-1, :].max(), f[-halo, :].max(), f[:, halo-1].max(), f[:, -halo].max(), flush=True)
+                print(i, rank, 'outside', rank, f.all_values[halo-1, :].max(), f.all_values[-halo, :].max(), f.all_values[:, halo-1].max(), f.all_values[:, -halo].max(), flush=True)
 
                 # Plot local tracer field
                 pc_sub.set_array(f[...].ravel())
                 fig_sub.savefig('subadv_%i_%04i.png' % (rank, ifig))
 
             # Gather and plot global tracer field
-            if not args.noplot:
+            if args.plot:
                 f.gather(out=f_glob)
                 if f_glob is not None:
                     pc.set_array(f_glob[...].ravel())
