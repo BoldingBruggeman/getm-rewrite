@@ -51,8 +51,8 @@ timestep = tmax / Nmax
 
 u = -omega * subdomain.U.y
 v = omega * subdomain.V.x
-u[(2 * subdomain.U.x / Lx)**2 + (2 * subdomain.U.y / Ly)**2 > 1] = 0.
-v[(2 * subdomain.V.x / Lx)**2 + (2 * subdomain.V.y / Ly)**2 > 1] = 0.
+u[(2 * subdomain.U.x / Lx)**2 + (2 * subdomain.U.y / Ly)**2 >= 1] = 0.
+v[(2 * subdomain.V.x / Lx)**2 + (2 * subdomain.V.y / Ly)**2 >= 1] = 0.
 
 if args.nmax:
     Nmax = args.nmax
@@ -88,7 +88,7 @@ if f_glob is not None and args.plot:
     pc = ax.pcolormesh(global_domain.T.xi, global_domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
 
-ncf = outman.add_netcdf_file('res.nc', is_root=rank == 0, interval=10)
+ncf = outman.add_netcdf_file('res.nc', rank=rank, interval=10)
 ncf.request('tracer')
 
 def main():
