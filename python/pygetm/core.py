@@ -10,9 +10,25 @@ from . import parallel
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self):
         self._x = None
+        self._scatter = None
+        self._gather = None
 
     def update_halos(self):
         pass
+
+    def scatter(self, global_data: Optional['Array']):
+        if self._scatter is None:
+            self._scatter = parallel.Scatter(self.grid.domain.tiling, self.all_values, halo=self.grid.halo)
+        self._scatter(None if global_data is None else global_data.all_values)
+
+    def gather(self, out: Optional['Array']=None, domain=None):
+        if self._gather is None:
+            self._gather = parallel.Gather(self.grid.domain.tiling, self.values)
+        result = self._gather(None if out is None else out.values)
+        if result is not None and out is None:
+            out = domain.grids[self.grid.type].array(dtype=self.dtype)
+            out[...] = result
+        return out
 
     def finish_initialization(self):
         assert self.grid is not None
@@ -73,6 +89,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def size(self):
         return self.values.size
+
+    @property
+    def dtype(self):
+        return self.values.dtype
 
     # Below based on https://numpy.org/devdocs/reference/generated/numpy.lib.mixins.NDArrayOperatorsMixin.html#numpy.lib.mixins.NDArrayOperatorsMixin
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):

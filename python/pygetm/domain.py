@@ -176,22 +176,26 @@ class Domain(_pygetm.Domain):
         return domain
 
     @staticmethod
-    def partition(tiling, nx: int, ny: int, nlev: int, global_domain, runtype):
+    def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], runtype: int, halo: int=2):
         assert nx % tiling.ncol == 0
         assert ny % tiling.nrow == 0
         assert global_domain is None or global_domain.initialized
 
-        domain = Domain(1, nlev, 1, ny // tiling.nrow, 1, nx // tiling.ncol, tiling=tiling)
+        halo = 0
+        share = 1
+        nx_loc, ny_loc = nx // tiling.ncol, ny // tiling.nrow
+        x = numpy.empty((2 * (ny_loc + halo) + 1, 2 * (nx_loc + halo) + 1))
+        y = numpy.empty_like(x)
+        parallel.Scatter(tiling, x, halo=halo, share=share)(None if global_domain is None else global_domain.x)
+        parallel.Scatter(tiling, y, halo=halo, share=share)(None if global_domain is None else global_domain.y)
+        domain = Domain(nx_loc, ny_loc, nz, x=x, y=y, tiling=tiling, f=0.)
 
-        # Scatter coordinates, bathymetry and mask to subdomains
-        domain.distribute(domain.T.x_).scatter(None if global_domain is None else global_domain.T.x)
-        domain.distribute(domain.T.y_).scatter(None if global_domain is None else global_domain.T.y)
-        domain.distribute(domain.T.H_).scatter(None if global_domain is None else global_domain.T.H)
-        domain.distribute(domain.T.mask_).scatter(None if global_domain is None else global_domain.T.mask)
-
-        # Extract 1D coordinate vectors per subdomain
-        domain.T.c1_[:] = domain.T.x_[domain.halo, :]
-        domain.T.c2_[:] = domain.T.y_[:, domain.halo]
+        halo = 4
+        parallel.Scatter(tiling, domain.mask_, halo=halo, share=share)(None if global_domain is None else global_domain.mask_)
+        parallel.Scatter(tiling, domain.H_, halo=halo, share=share)(None if global_domain is None else global_domain.H_)
+        parallel.Scatter(tiling, domain.z0_, halo=halo, share=share)(None if global_domain is None else global_domain.z0_)
+        parallel.Scatter(tiling, domain.z_, halo=halo, share=share)(None if global_domain is None else global_domain.z_)
+        parallel.Scatter(tiling, domain.zo_, halo=halo, share=share)(None if global_domain is None else global_domain.zo_)
 
         domain.initialize(runtype)
 
