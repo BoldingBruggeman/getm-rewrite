@@ -92,7 +92,7 @@ ncf = outman.add_netcdf_file('res.nc', rank=rank, interval=10)
 ncf.request('tracer')
 
 def main():
-    adv = pygetm.Advection(subdomain, scheme=1)
+    adv = pygetm.Advection(1, subdomain.T, subdomain.U, subdomain.V)
     ifig = 0
     start = timeit.default_timer()
     for i in range(Nmax):

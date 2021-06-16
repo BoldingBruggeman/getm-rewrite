@@ -18,6 +18,7 @@ MODULE getm_operators
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
    USE getm_domain
+   use advection_base
 
    IMPLICIT NONE
 
@@ -31,7 +32,9 @@ MODULE getm_operators
       !! version: v0.1
       !!
 
+      class (type_advection_base), allocatable :: op
       real(real64), allocatable, private :: flux(:,:), QU(:,:)
+      real(real64), allocatable :: D(:,:)
 
       real(real64) :: flux_time
       real(real64) :: adv_time
@@ -41,20 +44,22 @@ MODULE getm_operators
       procedure :: initialize => advection_initialize
 
       procedure :: advection_calculate_2d
+      procedure :: advection_calculate_u2d
+      procedure :: advection_calculate_v2d
       procedure :: advection_calculate_3d
       generic   :: calculate => advection_calculate_2d, advection_calculate_3d
 
    end type type_advection
 
    INTERFACE
-      module subroutine advection_initialize(self,scheme)
+      module subroutine advection_initialize(self, scheme, tgrid)
          class(type_advection), intent(inout) :: self
          integer, intent(in) :: scheme
+         type(type_getm_grid), intent(in) :: tgrid
       end subroutine advection_initialize
 
-      module subroutine advection_calculate_2d(self, scheme, ugrid, u, vgrid, v, dt, tgrid, f)
+      module subroutine advection_calculate_2d(self, ugrid, u, vgrid, v, dt, tgrid, f)
          class(type_advection), intent(inout) :: self
-         integer, intent(in) :: scheme
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:), v(:,:)
          real(real64), intent(in) :: dt
@@ -62,9 +67,26 @@ MODULE getm_operators
          real(real64), intent(inout) :: f(:,:)
       end subroutine advection_calculate_2d
 
-      module subroutine advection_calculate_3d(self, scheme, ugrid, u, vgrid, v, dt, tgrid, f)
+      module subroutine advection_calculate_u2d(self, ugrid, u,dt, tgrid, f)
          class(type_advection), intent(inout) :: self
-         integer, intent(in) :: scheme
+         type(type_getm_grid), intent(in) :: ugrid
+         real(real64), intent(in) :: u(:,:)
+         real(real64), intent(in) :: dt
+         type(type_getm_grid), intent(inout) :: tgrid
+         real(real64), intent(inout) :: f(:,:)
+      end subroutine advection_calculate_u2d
+
+      module subroutine advection_calculate_v2d(self, vgrid, v, dt, tgrid, f)
+         class(type_advection), intent(inout) :: self
+         type(type_getm_grid), intent(in) :: vgrid
+         real(real64), intent(in) :: v(:,:)
+         real(real64), intent(in) :: dt
+         type(type_getm_grid), intent(inout) :: tgrid
+         real(real64), intent(inout) :: f(:,:)
+      end subroutine advection_calculate_v2d
+
+      module subroutine advection_calculate_3d(self, ugrid, u, vgrid, v, dt, tgrid, f)
+         class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:,:), v(:,:,:)
          real(real64), intent(in) :: dt

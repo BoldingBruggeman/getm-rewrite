@@ -153,30 +153,51 @@ contains
       call domain%update_depths()
    end subroutine
 
-   function advection_create() result(padvection) bind(c)
+   function advection_create(scheme, ptgrid) result(padvection) bind(c)
+      integer(c_int), intent(in), value :: scheme
+      type(c_ptr),    intent(in), value :: ptgrid
       type(c_ptr) :: padvection
 
+      type (type_getm_grid), pointer :: tgrid
       type (type_advection), pointer :: advection
 
+      call c_f_pointer(ptgrid, tgrid)
       allocate(advection)
+      call advection%initialize(scheme, tgrid)
       padvection = c_loc(advection)
    end function
 
-   subroutine advection_calculate(padvection, scheme, pdomain,  pu, pv, timestep, pvar) bind(c)
-      integer(c_int), intent(in), value :: scheme
-      real(c_double), intent(in), value :: timestep
-      type(c_ptr),    intent(in), value :: padvection, pdomain, pu, pv, pvar
+   subroutine advection_2d_start(padvection, ptgrid) bind(c)
+      type(c_ptr),    intent(in), value :: padvection, ptgrid
 
-      type (type_advection),    pointer                 :: advection
-      type (type_getm_domain),  pointer                 :: domain
-      real(real64), contiguous, pointer, dimension(:,:) :: u, v, var
+      type (type_advection), pointer :: advection
+      type (type_getm_grid), pointer :: tgrid
 
       call c_f_pointer(padvection, advection)
-      call c_f_pointer(pdomain, domain)
-      call c_f_pointer(pu, u, domain%T%u(1:2) - domain%T%l(1:2) + 1)
-      call c_f_pointer(pv, v, domain%T%u(1:2) - domain%T%l(1:2) + 1)
-      call c_f_pointer(pvar, var, domain%T%u(1:2) - domain%T%l(1:2) + 1)
-     call advection%advection_calculate_2d(scheme, domain%U, u, domain%V, v, timestep, domain%T,var)
+      call c_f_pointer(ptgrid, tgrid)
+      advection%D(:,:) = tgrid%D
+   end subroutine
+
+   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid,  pu, timestep, pvar) bind(c)
+      integer(c_int), intent(in), value :: direction
+      real(c_double), intent(in), value :: timestep
+      type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, pvar
+
+      type (type_advection),    pointer                 :: advection
+      type (type_getm_grid),  pointer                   :: tgrid, ugrid
+      real(real64), contiguous, pointer, dimension(:,:) :: u, var
+
+      call c_f_pointer(padvection, advection)
+      call c_f_pointer(ptgrid, tgrid)
+      call c_f_pointer(pugrid, ugrid)
+      call c_f_pointer(pu, u, tgrid%u(1:2) - tgrid%l(1:2) + 1)
+      call c_f_pointer(pvar, var, tgrid%u(1:2) - tgrid%l(1:2) + 1)
+      select case (direction)
+         case (1)
+            call advection%advection_calculate_u2d(ugrid, u, timestep, tgrid, var)
+         case (2)
+            call advection%advection_calculate_v2d(ugrid, u, timestep, tgrid, var)
+      end select
    end subroutine
 
    function momentum_create(runtype, pdomain, padvection, advection_scheme, apply_bottom_friction) result(pmomentum) bind(c)

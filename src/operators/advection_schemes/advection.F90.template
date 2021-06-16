@@ -2,15 +2,27 @@
 
 !#define _AUTOMATIC_
 
-!---------------------------------------------------------------------------
-
-SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
-
    USE, INTRINSIC :: ISO_FORTRAN_ENV
+   USE advection_base
 
    IMPLICIT NONE
 
+   private
+
+   type, extends(type_advection_base), public :: _TYPE_NAME_
+   contains
+       procedure :: u2d
+       procedure :: v2d
+       procedure :: w3d
+   end type
+
+contains
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE u2d(self,imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
    ! Subroutine arguments
+   class (_TYPE_NAME_), intent(inout) :: self
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
@@ -99,14 +111,11 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,
 !#ifndef _AUTOMATIC_
 !   deallocate(flux, QU)
 !#endif
-END SUBROUTINE _U_SUB_NAME_
+END SUBROUTINE u2d
 
-SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
-   USE, INTRINSIC :: ISO_FORTRAN_ENV
-
-   IMPLICIT NONE
-
+SUBROUTINE v2d(self,imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    ! Subroutine arguments
+   class (_TYPE_NAME_), intent(inout) :: self
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
@@ -195,15 +204,11 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,
 !#ifndef _AUTOMATIC_
 !   deallocate(flux, QV)
 !#endif
-END SUBROUTINE _V_SUB_NAME_
+END SUBROUTINE v2d
 
-SUBROUTINE _W_SUB_NAME_(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
-
-   USE, INTRINSIC :: ISO_FORTRAN_ENV
-
-   IMPLICIT NONE
-
+SUBROUTINE w3d(self, imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
    ! Subroutine arguments
+   class (_TYPE_NAME_), intent(inout) :: self
    integer, intent(in) :: imin, imax, jmin, jmax, kmax
    real(real64), intent(in) :: w(imin-1:imax+1,jmin-1:jmax+1,0:kmax)
    integer, intent(in) :: tmask(imin-1:imax+1,jmin-1:jmax+1)
@@ -346,7 +351,5 @@ SUBROUTINE _W_SUB_NAME_(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
 
       end do
    end do
-END SUBROUTINE _W_SUB_NAME_
-
-!KB END MODULE _MODULE_NAME_
+END SUBROUTINE w3d
 

@@ -1,6 +1,7 @@
 add_library( getm_operators
     operators.F90
     advection.F90
+    advection_schemes/advection_base.F90
     advection_schemes/advection_superbee.F90
     advection_schemes/advection_p2_pdm.F90
     advection_schemes/advection_splmax13.F90

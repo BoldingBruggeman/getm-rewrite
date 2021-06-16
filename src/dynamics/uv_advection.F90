@@ -40,7 +40,7 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    self%advU=self%U
 #endif
    where(UG%mask > 0) self%u1 = self%U/UG%D
-   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%ua,self%uvadvgrid,self%va,dt,UG,self%u1)
+   call self%advection%calculate(self%uuadvgrid,self%ua,self%uvadvgrid,self%va,dt,UG,self%u1)
 #ifdef _APPLY_ADV_DIFF_
    where(UG%mask > 0) self%U = self%u1*UG%D
 #else
@@ -59,7 +59,7 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    self%advV=self%V
 #endif
    where(VG%mask > 0) self%v1 = self%V/VG%D
-   call self%advection%calculate(self%advection_scheme,self%vuadvgrid,self%ua,self%vvadvgrid,self%va,dt,VG,self%v1)
+   call self%advection%calculate(self%vuadvgrid,self%ua,self%vvadvgrid,self%va,dt,VG,self%v1)
 #ifdef _APPLY_ADV_DIFF_
    where(VG%mask > 0) self%V = self%v1*VG%D
 #else
@@ -103,7 +103,7 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
       end do
    end do
    self%advpk=self%pk
-   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%pka,self%uvadvgrid,self%qka,dt,UG,self%pk)
+   call self%advection%calculate(self%uuadvgrid,self%pka,self%uvadvgrid,self%qka,dt,UG,self%pk)
    self%advpk=(self%pk-self%advpk)/dt
    do j=VG%jmin-1,UG%jmax
       do i=VG%imin-1,UG%imax
@@ -114,7 +114,7 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
       end do
    end do
    self%advqk=self%qk
-   call self%advection%calculate(self%advection_scheme,self%vuadvgrid,self%pka,self%vvadvgrid,self%qka,dt,VG,self%qk)
+   call self%advection%calculate(self%vuadvgrid,self%pka,self%vvadvgrid,self%qka,dt,VG,self%qk)
    self%advqk=(self%qk-self%advqk)/dt
    end associate VGrid
    end associate UGrid
@@ -157,7 +157,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
       end do
    end do
    self%SxA=self%Ui
-   call self%advection%calculate(self%advection_scheme,self%uuadvgrid,self%Ua,self%uvadvgrid,self%Va,dt,UG,self%Ui)
+   call self%advection%calculate(self%uuadvgrid,self%Ua,self%uvadvgrid,self%Va,dt,UG,self%Ui)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
@@ -176,7 +176,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
       end do
    end do
    self%SyA=self%Vi
-   call self%advection%calculate(self%advection_scheme,self%vuadvgrid,self%Ua,self%vvadvgrid,self%Va,dt,VG,self%Vi)
+   call self%advection%calculate(self%vuadvgrid,self%Ua,self%vvadvgrid,self%Va,dt,VG,self%Vi)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then
