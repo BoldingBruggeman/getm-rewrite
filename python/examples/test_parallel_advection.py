@@ -30,7 +30,7 @@ if rank == 0:
     # Set up global domain and initial tracer field
     global_domain = pygetm.domain.Domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0.)
     global_domain.initialize(runtype=1)
-    f_glob = global_domain.T.array()
+    f_glob = global_domain.T.array(fill=0.)
     f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
 
 # Set up local subdomain (this also calls subdomain.initialize)
@@ -51,8 +51,8 @@ timestep = tmax / Nmax
 
 u = -omega * subdomain.U.y
 v = omega * subdomain.V.x
-u[(2 * subdomain.U.x / Lx)**2 + (2 * subdomain.U.y / Ly)**2 > 1] = 0.
-v[(2 * subdomain.V.x / Lx)**2 + (2 * subdomain.V.y / Ly)**2 > 1] = 0.
+u[(2 * subdomain.U.x / Lx)**2 + (2 * subdomain.U.y / Ly)**2 >= 1] = 0.
+v[(2 * subdomain.V.x / Lx)**2 + (2 * subdomain.V.y / Ly)**2 >= 1] = 0.
 
 if args.nmax:
     Nmax = args.nmax
@@ -88,7 +88,7 @@ if f_glob is not None and args.plot:
     pc = ax.pcolormesh(global_domain.T.xi, global_domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
 
-ncf = outman.add_netcdf_file('res.nc', is_root=rank == 0, interval=10)
+ncf = outman.add_netcdf_file('res.nc', rank=rank, interval=10)
 ncf.request('tracer')
 
 def main():

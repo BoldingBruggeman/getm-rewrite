@@ -1,4 +1,5 @@
 from typing import  MutableSequence, Optional
+import os.path
 
 import numpy.typing
 import netCDF4
@@ -8,33 +9,40 @@ from . import FieldManager, File
 from .. import _pygetm
 
 class NetCDFFile(File):
-    def __init__(self, field_manager: FieldManager, path: str, is_root: bool, interval: int=1):
+    def __init__(self, field_manager: FieldManager, path: str, rank: bool, interval: int=1, sub: bool=False):
         File.__init__(self, field_manager)
-        self.path = path
+        name, ext = os.path.splitext(path)
+        if sub:
+            name += '_%05i' % rank
+        self.path = name + ext
         self.nc = None
         self.ncvars: MutableSequence[Optional[netCDF4.Variable]] = []
         self.itime = 0
-        self.is_root = is_root
+        self.is_root = rank == 0
         self.interval = interval
         self.wait = 0
+        self.sub = sub
+        self.created = False
 
     def request(self, name: str, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None):
         File.request(self, name, output_name, dtype)
         self.ncvars.append(None)
 
     def _create(self):
+        self.created = True
+        if not (self.is_root or self.sub):
+            return
         self.nc = netCDF4.Dataset(self.path, 'w')
-        postfixes = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x'}
         for grid in frozenset(array.grid for array in self.fields):
-            nx, ny = (grid.nx - 2 * grid.halo) * grid.domain.tiling.ncol, (grid.ny - 2 * grid.halo) * grid.domain.tiling.nrow
-            postfix = postfixes[grid.type]
-            self.nc.createDimension('x%s' % postfix, nx)
-            self.nc.createDimension('y%s' % postfix, ny)
-            self.nc.createDimension('time',)
+            nx, ny = grid.nx, grid.ny
+            if not self.sub:
+                nx, ny = (nx - 2 * grid.halo) * grid.domain.tiling.ncol, (ny - 2 * grid.halo) * grid.domain.tiling.nrow
+            self.nc.createDimension('x%s' % grid.postfix, nx)
+            self.nc.createDimension('y%s' % grid.postfix, ny)
+        self.nc.createDimension('time',)
         self.ncvars = []
         for output_name, array in zip(self.order, self.fields):
-            postfix = postfixes[array.grid.type]
-            dims = ('y%s' % postfix, 'x%s' % postfix)
+            dims = ('y%s' % array.grid.postfix, 'x%s' % array.grid.postfix)
             if array.ndim == 3: dims = ('z',) + dims
             dims = ('time',) + dims
             ncvar = self.nc.createVariable(output_name, array.dtype, dims)
@@ -49,10 +57,13 @@ class NetCDFFile(File):
 
     def save(self):
         if self.wait == 0:
-            if self.is_root and self.nc is None:
+            if not self.created:
                 self._create()
             for array, ncvar in zip(self.fields, self.ncvars):
-                array.gather(ncvar, slice_spec=(self.itime,))
+                if self.sub:
+                    ncvar[self.itime, ...] = array.all_values
+                else:
+                    array.gather(ncvar, slice_spec=(self.itime,))
             if self.nc is not None:
                 self.nc.sync()
             self.itime += 1

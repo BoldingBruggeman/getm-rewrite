@@ -9,7 +9,8 @@ class FieldManager:
         self.fields: MutableMapping[str, core.Array] = {}
 
     def register(self, array: core.Array):
-        assert array.name is not None, 'Cannot register field without name'
+        assert array.name is not None, 'Cannot register field without name.'
+        assert array.name not in self.fields, 'A field with name %s has already been registered.' % array.name
         self.fields[array.name] = array
 
 class File:
@@ -22,7 +23,7 @@ class File:
         assert name in self.field_manager.fields, 'Unknown field "%s" requested. Available: %s' % (name, ', '.join(self.field_manager.fields))
         if output_name is None:
             output_name = name
-        assert output_name not in self.fields, 'A variable with name "%s" has already been added to %s.' % (output_name, self)
+        assert output_name not in self.order, 'A variable with name "%s" has already been added to %s.' % (output_name, self)
         array = self.field_manager.fields[name]
         dtype = dtype or array.dtype
         self.order.append(output_name)

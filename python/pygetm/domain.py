@@ -30,10 +30,11 @@ class Grid(_pygetm.Grid):
         self.type = grid_type
         self.ioffset = ioffset
         self.joffset = joffset
+        self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x'}[grid_type]
 
     def initialize(self):
         for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
-            setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii')))
+            setattr(self, name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
         self.fill()
 
     def fill(self):
