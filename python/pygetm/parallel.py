@@ -55,42 +55,45 @@ class Tiling:
             for j in range(self.ncol):
                 ax.text(0.5 * (x[j] + x[j + 1]), 0.5 * (y[i] + y[i + 1]), '%i' % self.map[i, j], horizontalalignment='center', verticalalignment='center')
 
-class DistributedArray:
-    __slots__ = ['tiling', 'comm', 'sendtasks', 'recvtasks', 'f_', 'f', 'halo']
-    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int):
-        self.tiling = tiling
-        self.comm = tiling.comm
-        self.f_ = field
-        self.f = field[..., halo:-halo, halo:-halo]
-        self.halo = halo
+ALL = 0
+TOP_BOTTOM = 1
+LEFT_RIGHT = 2
 
-        self.sendtasks = []
-        self.recvtasks = []
-        def add_task(neighbor, sendtag, recvtag, inner, outer):
+class DistributedArray:
+    __slots__ = ['group2task']
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int):
+        self.group2task = {ALL: ([], []), TOP_BOTTOM: ([], []), LEFT_RIGHT: ([], [])}
+
+        def add_task(neighbor, sendtag, recvtag, inner, outer, groups):
             assert inner.shape == outer.shape
             if neighbor is not None:
                 inner_cache = numpy.empty_like(inner)
                 outer_cache = numpy.empty_like(outer)
-                self.sendtasks.append((functools.partial(self.comm.Isend, inner_cache, neighbor, sendtag), inner, inner_cache))
-                self.recvtasks.append((functools.partial(self.comm.Irecv, outer_cache, neighbor, recvtag), outer, outer_cache))
+                sendtask = (functools.partial(tiling.comm.Isend, inner_cache, neighbor, sendtag), inner, inner_cache)
+                recvtask = (functools.partial(tiling.comm.Irecv, outer_cache, neighbor, recvtag), outer, outer_cache)
+                for group in groups:
+                    sendtasks, recvtasks = self.group2task[group]
+                    sendtasks.append(sendtask)
+                    recvtasks.append(recvtask)
 
-        add_task(tiling.left, 0, 1, field[..., halo:-halo, halo:halo*2], field[..., halo:-halo, :halo])
-        add_task(tiling.right, 1, 0, field[..., halo:-halo, -halo*2:-halo], field[..., halo:-halo, -halo:])
-        add_task(tiling.top, 2, 3, field[..., -halo*2:-halo, halo:-halo], field[..., -halo:, halo:-halo])
-        add_task(tiling.bottom, 3, 2, field[..., halo:halo*2, halo:-halo], field[..., :halo, halo:-halo])
-        add_task(tiling.topleft, 4, 7, field[..., -halo*2:-halo, halo:halo*2], field[..., -halo:, :halo])
-        add_task(tiling.topright, 5, 6, field[..., -halo*2:-halo, -halo*2:-halo], field[..., -halo:, -halo:])
-        add_task(tiling.bottomleft, 6, 5, field[..., halo:halo*2, halo:halo*2], field[..., :halo, :halo])
-        add_task(tiling.bottomright, 7, 4, field[..., halo:halo*2, -halo*2:-halo], field[..., :halo, -halo:])
+        add_task(tiling.bottomleft,  6, 5, field[...,  halo  :halo*2,  halo  :halo*2], field[...,      :halo,       :halo ], groups=(ALL,))
+        add_task(tiling.bottom,      3, 2, field[...,  halo  :halo*2,  halo  :-halo],  field[...,      :halo,   halo:-halo], groups=(ALL, TOP_BOTTOM))
+        add_task(tiling.bottomright, 7, 4, field[...,  halo  :halo*2, -halo*2:-halo],  field[...,      :halo,  -halo:     ], groups=(ALL,))
+        add_task(tiling.left,        0, 1, field[...,  halo  :-halo,   halo  :halo*2], field[...,  halo:-halo,      :halo ], groups=(ALL, LEFT_RIGHT))
+        add_task(tiling.right,       1, 0, field[...,  halo  :-halo,  -halo*2:-halo],  field[...,  halo:-halo, -halo:     ], groups=(ALL, LEFT_RIGHT))
+        add_task(tiling.topleft,     4, 7, field[..., -halo*2:-halo,   halo  :halo*2], field[..., -halo:,           :halo ], groups=(ALL,))
+        add_task(tiling.top,         2, 3, field[..., -halo*2:-halo,   halo  :-halo],  field[..., -halo:,       halo:-halo], groups=(ALL, TOP_BOTTOM))
+        add_task(tiling.topright,    5, 6, field[..., -halo*2:-halo,  -halo*2:-halo],  field[..., -halo:,      -halo:     ], groups=(ALL,))
 
-    def update_halos(self):
-        recreqs = [fn() for fn, _, _ in self.recvtasks]
+    def update_halos(self, group=ALL):
+        sendtasks, recvtasks = self.group2task[group]
+        recreqs = [fn() for fn, _, _ in recvtasks]
         sendreqs = []
-        for fn, inner, cache in self.sendtasks:
+        for fn, inner, cache in sendtasks:
             cache[...] = inner
             sendreqs.append(fn())
         Waitall(recreqs)
-        for _, outer, cache in self.recvtasks:
+        for _, outer, cache in recvtasks:
             outer[...] = cache
         Waitall(sendreqs)
 

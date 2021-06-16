@@ -103,9 +103,9 @@ cdef class Advection:
     def calculate(self, Array u not None, Array v not None, double timestep, Array var not None):
         advection_2d_start(self.p, self.tgrid.p)
         advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, 0.5 * timestep, <double *>var.p)
-        var.update_halos()
+        var.update_halos(1)
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, timestep, <double *>var.p)
-        var.update_halos()
+        var.update_halos(2)
         advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, 0.5 * timestep, <double *>var.p)
 
 cdef class Simulation:
