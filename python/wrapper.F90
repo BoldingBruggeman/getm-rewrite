@@ -153,9 +153,10 @@ contains
       call domain%update_depths()
    end subroutine
 
-   function advection_create(scheme, ptgrid) result(padvection) bind(c)
+   function advection_create(scheme, ptgrid, pD) result(padvection) bind(c)
       integer(c_int), intent(in), value :: scheme
       type(c_ptr),    intent(in), value :: ptgrid
+      type(c_ptr),    intent(out)       :: pD
       type(c_ptr) :: padvection
 
       type (type_getm_grid), pointer :: tgrid
@@ -165,18 +166,8 @@ contains
       allocate(advection)
       call advection%initialize(scheme, tgrid)
       padvection = c_loc(advection)
+      pD = c_loc(advection%D)
    end function
-
-   subroutine advection_2d_start(padvection, ptgrid) bind(c)
-      type(c_ptr),    intent(in), value :: padvection, ptgrid
-
-      type (type_advection), pointer :: advection
-      type (type_getm_grid), pointer :: tgrid
-
-      call c_f_pointer(padvection, advection)
-      call c_f_pointer(ptgrid, tgrid)
-      advection%D(:,:) = tgrid%D
-   end subroutine
 
    subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid,  pu, timestep, pvar) bind(c)
       integer(c_int), intent(in), value :: direction

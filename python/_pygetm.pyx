@@ -10,8 +10,7 @@ cdef extern void domain_initialize(void* grid, int runtype, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* data_type, void** p) nogil
-cdef extern void* advection_create(int scheme, void* tgrid) nogil
-cdef extern void advection_2d_start(void* advection, void* tgrid) nogil
+cdef extern void* advection_create(int scheme, void* tgrid, void** p) nogil
 cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pvar) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, void* padvection, int advection_scheme, int apply_bottom_friction) nogil
 cdef extern void momentum_uv_momentum_2d(void* momentum, int runtype, double timestep, double* ptausx, double* ptausy, double* pdpdx, double* pdpdy) nogil
@@ -93,15 +92,18 @@ cdef class Advection:
     cdef Grid tgrid
     cdef Grid ugrid
     cdef Grid vgrid
+    cdef readonly numpy.ndarray D
 
     def __init__(self, int scheme, Grid tgrid, Grid ugrid, Grid vgrid):
+        cdef void* pD
         self.tgrid = tgrid
         self.ugrid = ugrid
         self.vgrid = vgrid
-        self.p = advection_create(scheme, self.tgrid.p)
+        self.p = advection_create(scheme, self.tgrid.p, &pD)
+        self.D = numpy.asarray(<double[:self.tgrid.ny, :self.tgrid.nx:1]> pD)
 
     def calculate(self, Array u not None, Array v not None, double timestep, Array var not None):
-        advection_2d_start(self.p, self.tgrid.p)
+        self.D[...] = self.tgrid.D.all_values
         advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, 0.5 * timestep, <double *>var.p)
         var.update_halos(1)
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, timestep, <double *>var.p)
