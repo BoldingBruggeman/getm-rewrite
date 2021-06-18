@@ -24,13 +24,15 @@ def find_interfaces(c: numpy.ndarray):
     return c_if
 
 class Grid(_pygetm.Grid):
-    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int):
+    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
         self.type = grid_type
         self.ioffset = ioffset
         self.joffset = joffset
-        self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x'}[grid_type]
+        self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
+        self.ugrid = ugrid
+        self.vgrid = vgrid
 
     def initialize(self):
         for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
@@ -45,7 +47,9 @@ class Grid(_pygetm.Grid):
             source = getattr(self.domain, name + '_')
             if source is not None:
                 target = getattr(self, name).all_values
-                target[:, :] = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
+                values = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
+                target.fill(numpy.nan)
+                target[:values.shape[0], :values.shape[1]] = values
                 target.flags.writeable = name not in read_only
                 if has_bounds:
                     # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
@@ -83,20 +87,6 @@ class Grid(_pygetm.Grid):
         save('mask')
         save('area', 'm2')
         save('cor', 's-1', 'Coriolis parameter')
-
-    def map(self, source, source_grid: 'Grid'):
-        assert isinstance(source_grid, Grid)
-        target = None
-        if self.type == _pygetm.TGRID:
-            if source_grid.type == _pygetm.UGRID:
-                target = numpy.ma.masked_all(source.shape)
-                target[:, 1:] = 0.5 * (source[:, :-1] + source[:, 1:])
-            elif source_grid.type == _pygetm.VGRID:
-                target = numpy.ma.masked_all(source.shape)
-                target[1:, :] = 0.5 * (source[:-1, :] + source[1:, :])
-        if target is None:
-            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (source_grid.type, self.type))
-        return target
 
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
     if dtype is None:
@@ -321,10 +311,16 @@ class Domain(_pygetm.Domain):
         self.halo = self.halox
         self.shape = (nz, ny + 2 * self.halo, nx + 2 * self.halo)
 
+        # Advection grids (two letters: first for advected quantity, second for advection direction)
+        self.UU = Grid(self, _pygetm.UUGRID, ioffset=3, joffset=1)
+        self.VV = Grid(self, _pygetm.VVGRID, ioffset=1, joffset=3)
+        self.UV = Grid(self, _pygetm.UVGRID, ioffset=2, joffset=2)
+        self.VU = Grid(self, _pygetm.VUGRID, ioffset=2, joffset=2)
+
         # Create grids
-        self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1)
-        self.U = Grid(self, _pygetm.UGRID, ioffset=2, joffset=1)
-        self.V = Grid(self, _pygetm.VGRID, ioffset=1, joffset=2)
+        self.U = Grid(self, _pygetm.UGRID, ioffset=2, joffset=1, ugrid=self.UU, vgrid=self.UV)
+        self.V = Grid(self, _pygetm.VGRID, ioffset=1, joffset=2, ugrid=self.VU, vgrid=self.VV)
+        self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1, ugrid=self.U, vgrid=self.V)
         self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0)
 
         self.initialized = False
@@ -383,8 +379,16 @@ class Domain(_pygetm.Domain):
         self.exchange_metric(mask_, fill_value=0)
         self.mask_[...] = mask_
 
-        for grid in (self.T, self.U, self.V, self.X):
+        for grid in self.grids.values():
             grid.initialize()
+        self.UU.mask.all_values[...] = 0
+        self.UV.mask.all_values[...] = 0
+        self.VU.mask.all_values[...] = 0
+        self.VV.mask.all_values[...] = 0
+        self.UU.mask.all_values[:, :-1][numpy.logical_and(self.U.mask.all_values[:, :-1], self.U.mask.all_values[:,1:])] = 1
+        self.UV.mask.all_values[:-1, :][numpy.logical_and(self.U.mask.all_values[:-1, :], self.U.mask.all_values[1:,:])] = 1
+        self.VU.mask.all_values[:, :-1][numpy.logical_and(self.V.mask.all_values[:, :-1], self.V.mask.all_values[:,1:])] = 1
+        self.VV.mask.all_values[:-1, :][numpy.logical_and(self.V.mask.all_values[:-1, :], self.V.mask.all_values[1:,:])] = 1
 
         self.H_.flags.writeable = self.H.flags.writeable = False
         self.z0_.flags.writeable = self.z0.flags.writeable = False

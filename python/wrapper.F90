@@ -66,7 +66,9 @@ contains
       case (2); grid => domain%U
       case (3); grid => domain%V
       case (4); grid => domain%X
-      case default; grid => null()
+      case default
+         allocate(grid)
+         call grid%configure(grid_type=grid_type, imin=domain%T%imin, imax=domain%T%imax, jmin=domain%T%jmin, jmax=domain%T%jmax, kmin=domain%T%kmin, kmax=domain%T%kmax, halo=domain%T%halo)
       end select
       pgrid = c_loc(grid)
    end function
@@ -121,6 +123,8 @@ contains
          case ('fV');  p = c_loc(momentum%fV); grid_type = 3
          case ('advU');  p = c_loc(momentum%advU); grid_type = 2
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
+         case ('u1');   p = c_loc(momentum%u1); grid_type = 2
+         case ('v1');   p = c_loc(momentum%v1); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -130,6 +134,42 @@ contains
          case default; p = C_NULL_PTR
          end select
       end select
+   end subroutine
+
+   subroutine grid_interp_x(pgrid, psource, ptarget, ioffset) bind(c)
+      type(c_ptr),    intent(in), value :: pgrid, psource, ptarget
+      integer(c_int), intent(in), value :: ioffset
+
+      type (type_getm_grid),    pointer :: grid
+      real(real64), contiguous, pointer :: source(:,:), target(:,:)
+      integer :: i, j
+
+      call c_f_pointer(pgrid, grid)
+      call c_f_pointer(psource, source, grid%u(1:2) - grid%l(1:2) + 1)
+      call c_f_pointer(ptarget, target, grid%u(1:2) - grid%l(1:2) + 1)
+      do j = 1, size(source, 2)
+         do i = 1, size(source, 1) - 1
+            target(i + ioffset, j) = 0.5_real64 * (source(i, j) + source(i + 1, j))
+         end do
+      end do
+   end subroutine
+
+   subroutine grid_interp_y(pgrid, psource, ptarget, joffset) bind(c)
+      type(c_ptr),    intent(in), value :: pgrid, psource, ptarget
+      integer(c_int), intent(in), value :: joffset
+
+      type (type_getm_grid),    pointer :: grid
+      real(real64), contiguous, pointer :: source(:,:), target(:,:)
+      integer :: i, j
+
+      call c_f_pointer(pgrid, grid)
+      call c_f_pointer(psource, source, grid%u(1:2) - grid%l(1:2) + 1)
+      call c_f_pointer(ptarget, target, grid%u(1:2) - grid%l(1:2) + 1)
+      do j = 1, size(source, 2) - 1
+         do i = 1, size(source, 1)
+            target(i, j + joffset) = 0.5_real64 * (source(i, j) + source(i, j + 1))
+         end do
+      end do
    end subroutine
 
    subroutine domain_initialize(pdomain, runtype, maxdt) bind(c)
@@ -191,25 +231,21 @@ contains
       end select
    end subroutine
 
-   function momentum_create(runtype, pdomain, padvection, advection_scheme, apply_bottom_friction) result(pmomentum) bind(c)
+   function momentum_create(runtype, pdomain, apply_bottom_friction) result(pmomentum) bind(c)
       integer(c_int), intent(in), value :: runtype
       type(c_ptr),    intent(in), value :: pdomain
-      type(c_ptr),    intent(in), value :: padvection
-      integer(c_int), intent(in), value :: advection_scheme
       integer(c_int), intent(in), value :: apply_bottom_friction
       type(c_ptr) :: pmomentum
 
       type (type_getm_domain),   pointer :: domain
-      type (type_advection),     pointer :: advection
       type (type_getm_momentum), pointer :: momentum
 
       call c_f_pointer(pdomain, domain)
-      call c_f_pointer(padvection, advection)
       allocate(momentum)
       call momentum%configure()
-      momentum%advection_scheme = advection_scheme
+      momentum%advection_scheme = 0
       momentum%apply_bottom_friction = (apply_bottom_friction == 1)
-      call momentum%initialize(runtype, domain, advection)
+      call momentum%initialize(runtype, domain)
       pmomentum = c_loc(momentum)
    end function
 
