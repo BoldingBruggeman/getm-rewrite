@@ -93,7 +93,7 @@ if f_glob is not None and args.plot:
     pc = ax.pcolormesh(global_domain.T.xi, global_domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
 
-ncf = outman.add_netcdf_file('res.nc', rank=rank, interval=10)
+ncf = outman.add_netcdf_file('res.nc', interval=10)
 ncf.request('tracer')
 
 adv = pygetm.Advection(subdomain.T, scheme=4)
