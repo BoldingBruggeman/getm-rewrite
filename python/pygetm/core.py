@@ -16,6 +16,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._units = units
         self._long_name = long_name
 
+    def __repr__(self) -> str:
+        return super().__repr__() + self.grid.postfix
+
     def update_halos(self, *args, **kwargs):
         pass
 
@@ -23,25 +26,41 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return True
 
     def scatter(self, global_data: Optional['Array']):
+        if self.grid.domain.tiling.n == 1:
+            return
         if self._scatter is None:
             self._scatter = parallel.Scatter(self.grid.domain.tiling, self.all_values, halo=self.grid.halo)
         self._scatter(None if global_data is None else global_data.all_values)
 
-    def gather(self, out: Optional['Array']=None, domain=None, slice_spec=()):
+    def gather(self, out: Optional['Array']=None, slice_spec=()):
+        if self.grid.domain.tiling.n == 1:
+            if out is not None:
+                out[slice_spec + (Ellipsis,)] = self
+            return self
         if self._gather is None:
             self._gather = parallel.Gather(self.grid.domain.tiling, self.values)
         result = self._gather(out.values if isinstance(out, Array) else out, slice_spec=slice_spec)
         if result is not None and out is None:
-            out = domain.grids[self.grid.type].array(dtype=self.dtype)
+            out = self.grid.domain.glob.grids[self.grid.type].array(dtype=self.dtype)
             out[...] = result
         return out
+
+    def global_sum(self):
+        local_sum = self.ma.sum()
+        return parallel.Sum(self.grid.domain.tiling, local_sum)()
+
+    def global_mean(self):
+        sum = parallel.Sum(self.grid.domain.tiling, self.ma.sum())()
+        count = parallel.Sum(self.grid.domain.tiling, (self.grid.mask.values != 0).sum())()
+        if sum is not None:
+            return sum / count
 
     def finish_initialization(self):
         assert self.grid is not None
         if self.name is not None:
             self.grid.domain.field_manager.register(self)
         tiling = self.grid.domain.tiling
-        if tiling is not None:
+        if tiling:
             dist = parallel.DistributedArray(tiling, self.all_values, self.grid.halo)
             self.update_halos = dist.update_halos
             self.compare_halos = dist.compare_halos
@@ -49,15 +68,20 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.values = self.all_values[halo:-halo, halo:-halo]
 
     @staticmethod
-    def create(grid, fill=None, dtype=None, **kwargs) -> 'Array':
+    def create(grid, fill=None, dtype=None, copy=True, **kwargs) -> 'Array':
+        ar = Array(**kwargs)
         if fill is not None:
             fill = numpy.asarray(fill)
         if dtype is None:
             dtype = float if fill is None else fill.dtype
-        ar = Array(**kwargs)
-        ar.empty(grid, dtype)
-        if fill is not None:
-            ar.all_values[...] = fill
+        shape = (grid.ny, grid.nx)
+        if copy or fill is None:
+            data = numpy.empty(shape, dtype=dtype)
+            if fill is not None:
+                data[...] = fill
+        else:
+            data = numpy.broadcast_to(fill, shape)
+        ar.wrap_ndarray(grid, data)
         return ar
 
     @property

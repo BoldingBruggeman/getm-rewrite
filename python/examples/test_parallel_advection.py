@@ -18,25 +18,22 @@ parser.add_argument('--noplot', action='store_false', dest='plot', help='skip pl
 parser.add_argument('--profile', action='store_true', help='use profiler to time function calls')
 args = parser.parse_args()
 
-halo = 2
 Lx, Ly = 100., 100.
 nx, ny, nlev = 612, 600, 1
 
 tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
 rank = tiling.rank
 
-global_domain, f_glob = None, None
-if rank == 0:
-    # Set up global domain and initial tracer field
-    global_domain = pygetm.domain.Domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0.)
-    global_domain.initialize(runtype=1)
-    f_glob = global_domain.T.array(fill=0.)
-    f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
-
-# Set up local subdomain (this also calls subdomain.initialize)
 outman = pygetm.output.OutputManager()
-subdomain = pygetm.domain.Domain.partition(tiling, nx, ny, nlev, global_domain, runtype=1, field_manager=outman)
+subdomain = pygetm.domain.Domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0., tiling=tiling)
 halo = subdomain.halo
+subdomain.initialize(runtype=1, field_manager=outman)
+
+f_glob = None
+if subdomain.glob:
+    # Set up global domain and initial tracer field
+    f_glob = subdomain.glob.T.array(fill=0.)
+    f_glob[int(0.2 * ny):int(0.4 * ny), int(0.2 * nx):int(0.4 * nx)] = 5.
 
 # Set up velocities
 period = 600
@@ -67,11 +64,11 @@ f = subdomain.T.array(fill=0., name='tracer')
 f.scatter(f_glob)
 
 # Gather and plot global velocities
-u_glob = u.gather(domain=global_domain)
-v_glob = v.gather(domain=global_domain)
+u_glob = u.gather()
+v_glob = v.gather()
 if u_glob is not None and args.plot:
     fig, ax = matplotlib.pyplot.subplots()
-    u_destag, v_destag = u_glob.interp(global_domain.T), v_glob.interp(global_domain.T)
+    u_destag, v_destag = u_glob.interp(u_glob.grid.domain.T), v_glob.interp(u_glob.grid.domain.T)
     ax.quiver(u_destag[::10, ::10], v_destag[::10, ::10], angles='xy')
     fig.savefig('vel.png')
 
@@ -90,7 +87,7 @@ if args.debug:
 # Set up figure for plotting global tracer field
 if f_glob is not None and args.plot:
     fig, ax = matplotlib.pyplot.subplots()
-    pc = ax.pcolormesh(global_domain.T.xi, global_domain.T.yi, f_glob)
+    pc = ax.pcolormesh(f_glob.grid.domain.T.xi, f_glob.grid.domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
 
 ncf = outman.add_netcdf_file('res.nc', interval=10)
