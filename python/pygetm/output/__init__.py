@@ -5,7 +5,8 @@ import numpy.typing
 from .. import core
 
 class FieldManager:
-    def __init__(self):
+    def __init__(self, rank: int=0):
+        self.rank = rank
         self.fields: MutableMapping[str, core.Array] = {}
 
     def register(self, array: core.Array):
@@ -19,6 +20,9 @@ class File:
         self.order: MutableSequence[str] = []
         self.fields: MutableSequence[core.Array] = []
 
+    def close(self):
+        pass
+
     def request(self, name: str, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None):
         assert name in self.field_manager.fields, 'Unknown field "%s" requested. Available: %s' % (name, ', '.join(self.field_manager.fields))
         if output_name is None:
@@ -30,16 +34,20 @@ class File:
         self.fields.append(array)
 
 class OutputManager(FieldManager):
-    def __init__(self):
-        FieldManager.__init__(self)
+    def __init__(self, **kwargs):
+        FieldManager.__init__(self, **kwargs)
         self.files = []
 
     def add_netcdf_file(self, path: str, **kwargs):
         from . import netcdf
-        file = netcdf.NetCDFFile(self, path, **kwargs)
+        file = netcdf.NetCDFFile(self, path, rank=self.rank, **kwargs)
         self.files.append(file)
         return file
 
     def save(self):
         for file in self.files:
             file.save()
+
+    def close(self):
+        for file in self.files:
+            file.close()

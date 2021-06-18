@@ -16,8 +16,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._units = units
         self._long_name = long_name
 
-    def update_halos(self):
+    def update_halos(self, *args, **kwargs):
         pass
+
+    def compare_halos(self, *args, **kwargs):
+        return True
 
     def scatter(self, global_data: Optional['Array']):
         if self._scatter is None:
@@ -41,6 +44,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if tiling is not None:
             dist = parallel.DistributedArray(tiling, self.all_values, self.grid.halo)
             self.update_halos = dist.update_halos
+            self.compare_halos = dist.compare_halos
         halo = self.grid.halo
         self.values = self.all_values[halo:-halo, halo:-halo]
 
@@ -70,9 +74,21 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def plot(self):
         return self.x.plot
 
-    def interp(self, target_grid):
-        data = target_grid.map(self.all_values, self.grid)
-        return Array.create(target_grid, fill=data)
+    def interp(self, target_grid, out: Optional['Array'] = None):
+        if out is None:
+            out = Array.create(target_grid, dtype=self.dtype)
+        key = (self.grid.type, target_grid.type)
+        if key == (_pygetm.UGRID, _pygetm.TGRID):
+            self.grid.interp_x(self, out, offset=1)
+        elif key == (_pygetm.VGRID, _pygetm.TGRID):
+            self.grid.interp_y(self, out, offset=1)
+        elif key in ((_pygetm.UGRID, _pygetm.UUGRID), (_pygetm.VGRID, _pygetm.UVGRID)):
+            self.grid.interp_x(self, out, offset=0)
+        elif key in ((_pygetm.UGRID, _pygetm.VUGRID), (_pygetm.VGRID, _pygetm.VVGRID)):
+            self.grid.interp_y(self, out, offset=0)
+        else:
+            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (self.grid.type, target_grid.type))
+        return out
 
     def __array__(self, dtype=None):
         return numpy.asarray(self.values, dtype=dtype)

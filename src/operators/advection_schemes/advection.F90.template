@@ -2,14 +2,25 @@
 
 !#define _AUTOMATIC_
 
-!---------------------------------------------------------------------------
-
-SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
-
    USE, INTRINSIC :: ISO_FORTRAN_ENV
+   USE advection_base
 
    IMPLICIT NONE
 
+   private
+
+   type, extends(type_advection_base), public :: _TYPE_NAME_
+   contains
+       procedure, nopass :: u2d
+       procedure, nopass :: v2d
+       procedure, nopass :: w3d
+   end type
+
+contains
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
@@ -99,13 +110,9 @@ SUBROUTINE _U_SUB_NAME_(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,
 !#ifndef _AUTOMATIC_
 !   deallocate(flux, QU)
 !#endif
-END SUBROUTINE _U_SUB_NAME_
+END SUBROUTINE u2d
 
-SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
-   USE, INTRINSIC :: ISO_FORTRAN_ENV
-
-   IMPLICIT NONE
-
+SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
@@ -195,14 +202,9 @@ SUBROUTINE _V_SUB_NAME_(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,
 !#ifndef _AUTOMATIC_
 !   deallocate(flux, QV)
 !#endif
-END SUBROUTINE _V_SUB_NAME_
+END SUBROUTINE v2d
 
-SUBROUTINE _W_SUB_NAME_(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
-
-   USE, INTRINSIC :: ISO_FORTRAN_ENV
-
-   IMPLICIT NONE
-
+SUBROUTINE w3d(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
    ! Subroutine arguments
    integer, intent(in) :: imin, imax, jmin, jmax, kmax
    real(real64), intent(in) :: w(imin-1:imax+1,jmin-1:jmax+1,0:kmax)
@@ -346,7 +348,5 @@ SUBROUTINE _W_SUB_NAME_(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
 
       end do
    end do
-END SUBROUTINE _W_SUB_NAME_
-
-!KB END MODULE _MODULE_NAME_
+END SUBROUTINE w3d
 
