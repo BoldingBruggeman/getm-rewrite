@@ -49,10 +49,15 @@ Nmax = no_of_revolutions * round(2 * numpy.pi / omega / dt_cfl)
 tmax = no_of_revolutions * 2 * numpy.pi / omega
 timestep = tmax / Nmax
 
+# Calculate u and v
+# Note that this only sets values in the interior of the domain.
+# Therefore, a halo exchange is needed to ensure u and v are also valid in the innermost halo strip (needed for advection scheme)
 u = -omega * subdomain.U.y
 v = omega * subdomain.V.x
 u[(2 * subdomain.U.x / Lx)**2 + (2 * subdomain.U.y / Ly)**2 >= 1] = 0.
 v[(2 * subdomain.V.x / Lx)**2 + (2 * subdomain.V.y / Ly)**2 >= 1] = 0.
+u.update_halos()
+v.update_halos()
 
 if args.nmax:
     Nmax = args.nmax
@@ -91,8 +96,9 @@ if f_glob is not None and args.plot:
 ncf = outman.add_netcdf_file('res.nc', rank=rank, interval=10)
 ncf.request('tracer')
 
+adv = pygetm.Advection(subdomain.T, scheme=4)
+
 def main():
-    adv = pygetm.Advection(1, subdomain.T, subdomain.U, subdomain.V)
     ifig = 0
     start = timeit.default_timer()
     for i in range(Nmax):
@@ -124,9 +130,11 @@ def main():
         # Update halos
         f.update_halos()
 
-        outman.save()
+    outman.save()
 
-    print('%.4f s per iteration' % ((timeit.default_timer() - start) / Nmax,))
+    duration = timeit.default_timer() - start
+    print('Time spent in loop: %.4f s' % duration)
+    print('%.4f ms per iteration' % (1000 * duration / Nmax,))
 
 if args.profile:
     cProfile.run('main()', sort='tottime')
