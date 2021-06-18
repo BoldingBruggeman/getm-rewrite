@@ -9,7 +9,7 @@ Advection = _pygetm.Advection
 
 class Simulation(_pygetm.Simulation):
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True):
-        self.output_manager = output.OutputManager()
+        self.output_manager = output.OutputManager(rank=None if not dom.tiling else dom.tiling.rank)
         dom.field_manager = self.output_manager
 
         assert not dom.initialized

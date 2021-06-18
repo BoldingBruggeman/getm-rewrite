@@ -9,7 +9,7 @@ from . import FieldManager, File
 from .. import _pygetm
 
 class NetCDFFile(File):
-    def __init__(self, field_manager: FieldManager, path: str, rank: bool, interval: int=1, sub: bool=False):
+    def __init__(self, field_manager: FieldManager, path: str, rank: int, interval: int=1, sub: bool=False):
         File.__init__(self, field_manager)
         name, ext = os.path.splitext(path)
         if sub:
@@ -69,3 +69,6 @@ class NetCDFFile(File):
             self.itime += 1
             self.wait = self.interval
         self.wait -= 1
+
+    def close(self):
+        self.nc.close()
