@@ -166,13 +166,12 @@ class Domain(_pygetm.Domain):
         else:
             nx, ny = x.size, y.size
             x, y = center_to_supergrid_1d(x), center_to_supergrid_1d(y)
-        domain = Domain(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
-        return domain
+        return Domain.create(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
 
     @staticmethod
     def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, **kwargs):
-        assert nx % tiling.ncol == 0
-        assert ny % tiling.nrow == 0
+        assert nx % tiling.ncol == 0, 'Cannot divide number of x points (%i) by number of subdomain columns (%i)' % (nx, tiling.ncol)
+        assert ny % tiling.nrow == 0, 'Cannot divide number of y points (%i) by number of subdomain rows (%i)' % (ny, tiling.nrow)
         assert global_domain is None or global_domain.initialized
 
         halo = 0
@@ -190,8 +189,6 @@ class Domain(_pygetm.Domain):
         parallel.Scatter(tiling, domain.z0_, halo=halo, share=share)(None if global_domain is None else global_domain.z0_)
         parallel.Scatter(tiling, domain.z_, halo=halo, share=share)(None if global_domain is None else global_domain.z_)
         parallel.Scatter(tiling, domain.zo_, halo=halo, share=share)(None if global_domain is None else global_domain.zo_)
-
-        domain.initialize(**kwargs)
 
         return domain
 
@@ -228,6 +225,22 @@ class Domain(_pygetm.Domain):
         data[-superhalo:,  superhalo  :-superhalo] = data_ext[-superhalo:,                   superhalo + 1:-superhalo - 1]
         data[-superhalo:, -superhalo  :          ] = data_ext[-superhalo:,                      -superhalo:              ]
 
+    @staticmethod
+    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
+        global_domain = None
+        global_tiling = tiling = parallel.Tiling(**kwargs)
+        if tiling.n > 1:
+            global_tiling = parallel.Tiling(nrow=1, ncol=1, **kwargs)
+        if tiling.n == 1 or tiling.rank == 0:
+            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo)
+        if tiling.n == 1:
+            return global_domain
+        if global_domain is not None:
+            global_domain.initialize(runtype=runtype)
+        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype)
+        subdomain.glob = global_domain
+        return subdomain
+
     def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
@@ -243,8 +256,8 @@ class Domain(_pygetm.Domain):
         shape_ = (shape[0] + 2 * superhalo, shape[1] + 2 * superhalo)
 
         # Set up subdomain partition information to enable halo exchanges
-        if tiling is None and kwargs:
-            tiling = parallel.Tiling(1, 1, **kwargs)
+        if tiling is None:
+            tiling = parallel.Tiling(**kwargs)
         self.tiling = tiling
 
         def setup_metric(source: Optional[numpy.ndarray]=None, optional: bool=False, fill_value=numpy.nan, relative_in_x: bool=False, relative_in_y: bool=False, dtype: numpy.typing.DTypeLike=float, writeable: bool=True) -> Tuple[Optional[numpy.ndarray], Optional[numpy.ndarray]]:

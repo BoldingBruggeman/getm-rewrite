@@ -37,7 +37,7 @@ cdef class Array:
     cdef readonly numpy.ndarray all_values
     cdef readonly Grid grid
 
-    cdef wrap(self, Domain domain, int source, void* obj, bytes name):
+    cdef wrap_c_array(self, Domain domain, int source, void* obj, bytes name):
         cdef int data_type
         cdef int grid_type
         get_array(source, obj, name, &grid_type, &data_type, &self.p)
@@ -48,9 +48,9 @@ cdef class Array:
             self.all_values = numpy.asarray(<int[:self.grid.ny, :self.grid.nx:1]> self.p)
         self.finish_initialization()
 
-    def empty(self, Grid grid, dtype):
+    def wrap_ndarray(self, Grid grid, numpy.ndarray data):
         self.grid = grid
-        self.all_values = numpy.empty((self.grid.ny, self.grid.nx), dtype=dtype)
+        self.all_values = numpy.ascontiguousarray(data)
         self.p = self.all_values.data
         self.finish_initialization()
 
@@ -69,7 +69,7 @@ cdef class Grid:
         domain.grids[grid_type] = self
 
     def wrap(self, Array ar, bytes name):
-        ar.wrap(self.domain, 0, self.p, name)
+        ar.wrap_c_array(self.domain, 0, self.p, name)
         return ar
 
     def interp_x(self, Array source, Array target, int offset):
@@ -154,5 +154,5 @@ cdef class Simulation:
     def wrap(self, Array ar not None, bytes name, int source):
         cdef void* obj = self.pmomentum
         if (source == 2): obj = self.ppressure
-        ar.wrap(self.domain, source, obj, name)
+        ar.wrap_c_array(self.domain, source, obj, name)
         return ar

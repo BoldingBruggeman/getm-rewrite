@@ -7,18 +7,33 @@ import numpy
 Waitall = MPI.Request.Waitall
 
 class Tiling:
-    def __init__(self, nrow: int, ncol: int, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False):
+    def __init__(self, nrow: Optional[int]=None, ncol: Optional[int]=None, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False):
+        self.n_neigbors = 0
         def find_neighbor(i, j):
             if periodic_x:
                 j = j % ncol
             if periodic_y:
                 i = i % nrow
             if i >= 0 and i < nrow and j >= 0 and j < ncol:
+                self.n_neigbors += 1
                 return self.map[i, j]
 
         self.comm = comm
-        assert self.comm.Get_size() == nrow * ncol, 'number of subdomains (%i rows * %i columns = %i) does not match group size of MPI communicator (%i)' % (nrow, ncol, nrow * ncol, self.comm.Get_size())
         self.rank = self.comm.Get_rank()
+        self.n: int = self.comm.Get_size()
+        if nrow is None and ncol is None:
+            # Temporary algorithm for determining subdomain decomposition
+            best = None
+            for nrow in range(1, self.n + 1):
+                if self.n % nrow == 0:
+                    ncol = self.n // nrow
+                    n_exchange = nrow * ncol * 8 - nrow * 2 - ncol * 2 - 4
+                    if best is None or n_exchange < best[0]:
+                        best = (n_exchange, nrow, ncol)
+            nrow, ncol = best[1:]
+            if self.n > 1 and self.rank == 0:
+                print('Using subdomain decomposition %i x %i' % (nrow, ncol))
+        assert nrow * ncol in (1, self.n), 'number of subdomains (%i rows * %i columns = %i) does not match group size of MPI communicator (%i)' % (nrow, ncol, nrow * ncol, self.n)
         self.map = numpy.arange(nrow * ncol).reshape(nrow, ncol)
 
         self.irow, self.icol = divmod(self.rank, ncol)
@@ -34,6 +49,9 @@ class Tiling:
         self.bottomright = find_neighbor(self.irow - 1, self.icol + 1)
 
         self.caches = {}
+
+    def __bool__(self) -> bool:
+        return self.n_neigbors > 0
 
     def wrap(self, field: numpy.ndarray, halo: int):
         return DistributedArray(self, field, halo)
@@ -129,6 +147,17 @@ class DistributedArray:
         Waitall(sendreqs)
         return match
 
+class Sum:
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, root: int=0):
+        self.comm = tiling.comm
+        self.root = root
+        self.field = field
+        self.result = None if tiling.rank != self.root else numpy.empty_like(field)
+
+    def __call__(self):
+        self.comm.Reduce(self.field, self.result, op=MPI.SUM, root=self.root)
+        return self.result
+
 class Gather:
     def __init__(self, tiling: Tiling, field: numpy.ndarray, root: int=0):
         self.rankmap = tiling.map
@@ -136,7 +165,7 @@ class Gather:
         self.root = root
         self.field = field
         self.recvbuf = None
-        if self.comm.Get_rank() == self.root:
+        if tiling.rank == self.root:
             self.recvbuf = numpy.empty((self.rankmap.size,) + self.field.shape, dtype=self.field.dtype)
 
     def __call__(self, out: Optional[numpy.ndarray]=None, slice_spec=()) -> numpy.ndarray:
