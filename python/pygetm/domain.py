@@ -229,10 +229,14 @@ class Domain(_pygetm.Domain):
 
         # Since subdomains share the outer boundary, that boundary will be replicated in the outermost interior point and in the innermost halo point
         # We move the outer part of the halos (all but their innermost point) one point inwards to eliminate that overlapping point
-        data[:superhalo, :] = data_ext[:superhalo, 1:-1]
-        data[-superhalo:, :] = data_ext[-superhalo:, 1:-1]
-        data[:, :superhalo] = data_ext[1:-1, :superhalo]
-        data[:, -superhalo:] = data_ext[1:-1, -superhalo:]
+        data[:superhalo,              : superhalo] = data_ext[             :superhalo,                    : superhalo    ]
+        data[:superhalo,   superhalo  :-superhalo] = data_ext[             :superhalo,       superhalo + 1:-superhalo - 1]
+        data[:superhalo,  -superhalo  :          ] = data_ext[             :superhalo,      -superhalo    :              ]
+        data[ superhalo:  -superhalo, :superhalo]  = data_ext[superhalo + 1:-superhalo - 1,               : superhalo    ]
+        data[ superhalo:  -superhalo, -superhalo:] = data_ext[superhalo + 1:-superhalo - 1, -superhalo    :              ]
+        data[-superhalo:,             : superhalo] = data_ext[-superhalo:,                                : superhalo    ]
+        data[-superhalo:,  superhalo  :-superhalo] = data_ext[-superhalo:,                   superhalo + 1:-superhalo - 1]
+        data[-superhalo:, -superhalo  :          ] = data_ext[-superhalo:,                      -superhalo:              ]
 
     def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
