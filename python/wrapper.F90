@@ -68,7 +68,8 @@ contains
       case (4); grid => domain%X
       case default
          allocate(grid)
-         call grid%configure(grid_type=grid_type, imin=domain%T%imin, imax=domain%T%imax, jmin=domain%T%jmin, jmax=domain%T%jmax, kmin=domain%T%kmin, kmax=domain%T%kmax, halo=domain%T%halo)
+         call grid%configure(grid_type=grid_type, imin=domain%T%imin, imax=domain%T%imax, &
+            jmin=domain%T%jmin, jmax=domain%T%jmax, kmin=domain%T%kmin, kmax=domain%T%kmax, halo=domain%T%halo)
       end select
       pgrid = c_loc(grid)
    end function
