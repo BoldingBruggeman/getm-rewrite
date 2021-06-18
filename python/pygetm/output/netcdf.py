@@ -71,4 +71,5 @@ class NetCDFFile(File):
         self.wait -= 1
 
     def close(self):
-        self.nc.close()
+        if self.nc is not None:
+            self.nc.close()
