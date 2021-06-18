@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 import functools
 
 from mpi4py import MPI
@@ -33,7 +33,9 @@ class Tiling:
         self.bottomleft = find_neighbor(self.irow - 1, self.icol - 1)
         self.bottomright = find_neighbor(self.irow - 1, self.icol + 1)
 
-    def wrap(self, field, halo: int):
+        self.caches = {}
+
+    def wrap(self, field: numpy.ndarray, halo: int):
         return DistributedArray(self, field, halo)
 
     def describe(self):
@@ -60,32 +62,45 @@ TOP_BOTTOM = 1
 LEFT_RIGHT = 2
 
 class DistributedArray:
-    __slots__ = ['group2task']
+    __slots__ = ['rank', 'group2task', 'neighbor2name']
     def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int):
+        self.rank = tiling.rank
         self.group2task = {ALL: ([], []), TOP_BOTTOM: ([], []), LEFT_RIGHT: ([], [])}
+        self.neighbor2name = {}
 
-        def add_task(neighbor, sendtag, recvtag, inner, outer, groups):
+        key = (field.shape, halo, field.dtype)
+        caches = tiling.caches.get(key)
+        owncaches = []
+
+        def add_task(name: str, sendtag: int, recvtag: int, inner: numpy.ndarray, outer: numpy.ndarray, groups: Tuple[int, ...]):
+            neighbor = getattr(tiling, name)
             assert inner.shape == outer.shape
             if neighbor is not None:
-                inner_cache = numpy.empty_like(inner)
-                outer_cache = numpy.empty_like(outer)
+                if caches:
+                    inner_cache, outer_cache = caches[len(owncaches)]
+                else:
+                    inner_cache, outer_cache = numpy.empty_like(inner), numpy.empty_like(outer)
+                owncaches.append((inner_cache, outer_cache))
                 sendtask = (functools.partial(tiling.comm.Isend, inner_cache, neighbor, sendtag), inner, inner_cache)
                 recvtask = (functools.partial(tiling.comm.Irecv, outer_cache, neighbor, recvtag), outer, outer_cache)
+                self.neighbor2name[neighbor] = name
                 for group in groups:
                     sendtasks, recvtasks = self.group2task[group]
                     sendtasks.append(sendtask)
                     recvtasks.append(recvtask)
 
-        add_task(tiling.bottomleft,  6, 5, field[...,  halo  :halo*2,  halo  :halo*2], field[...,      :halo,       :halo ], groups=(ALL,))
-        add_task(tiling.bottom,      3, 2, field[...,  halo  :halo*2,  halo  :-halo],  field[...,      :halo,   halo:-halo], groups=(ALL, TOP_BOTTOM))
-        add_task(tiling.bottomright, 7, 4, field[...,  halo  :halo*2, -halo*2:-halo],  field[...,      :halo,  -halo:     ], groups=(ALL,))
-        add_task(tiling.left,        0, 1, field[...,  halo  :-halo,   halo  :halo*2], field[...,  halo:-halo,      :halo ], groups=(ALL, LEFT_RIGHT))
-        add_task(tiling.right,       1, 0, field[...,  halo  :-halo,  -halo*2:-halo],  field[...,  halo:-halo, -halo:     ], groups=(ALL, LEFT_RIGHT))
-        add_task(tiling.topleft,     4, 7, field[..., -halo*2:-halo,   halo  :halo*2], field[..., -halo:,           :halo ], groups=(ALL,))
-        add_task(tiling.top,         2, 3, field[..., -halo*2:-halo,   halo  :-halo],  field[..., -halo:,       halo:-halo], groups=(ALL, TOP_BOTTOM))
-        add_task(tiling.topright,    5, 6, field[..., -halo*2:-halo,  -halo*2:-halo],  field[..., -halo:,      -halo:     ], groups=(ALL,))
+        add_task('bottomleft',  6, 5, field[...,  halo  :halo*2,  halo  :halo*2], field[...,      :halo,       :halo ], groups=(ALL,))
+        add_task('bottom',      3, 2, field[...,  halo  :halo*2,  halo  :-halo],  field[...,      :halo,   halo:-halo], groups=(ALL, TOP_BOTTOM))
+        add_task('bottomright', 7, 4, field[...,  halo  :halo*2, -halo*2:-halo],  field[...,      :halo,  -halo:     ], groups=(ALL,))
+        add_task('left',        0, 1, field[...,  halo  :-halo,   halo  :halo*2], field[...,  halo:-halo,      :halo ], groups=(ALL, LEFT_RIGHT))
+        add_task('right',       1, 0, field[...,  halo  :-halo,  -halo*2:-halo],  field[...,  halo:-halo, -halo:     ], groups=(ALL, LEFT_RIGHT))
+        add_task('topleft',     4, 7, field[..., -halo*2:-halo,   halo  :halo*2], field[..., -halo:,           :halo ], groups=(ALL,))
+        add_task('top',         2, 3, field[..., -halo*2:-halo,   halo  :-halo],  field[..., -halo:,       halo:-halo], groups=(ALL, TOP_BOTTOM))
+        add_task('topright',    5, 6, field[..., -halo*2:-halo,  -halo*2:-halo],  field[..., -halo:,      -halo:     ], groups=(ALL,))
+        if caches is None:
+            tiling.caches[key] = owncaches
 
-    def update_halos(self, group=ALL):
+    def update_halos(self, group: int=ALL):
         sendtasks, recvtasks = self.group2task[group]
         recreqs = [fn() for fn, _, _ in recvtasks]
         sendreqs = []
@@ -96,6 +111,23 @@ class DistributedArray:
         for _, outer, cache in recvtasks:
             outer[...] = cache
         Waitall(sendreqs)
+
+    def compare_halos(self, group: int=ALL) -> bool:
+        sendtasks, recvtasks = self.group2task[group]
+        recreqs = [fn() for fn, _, _ in recvtasks]
+        sendreqs = []
+        for fn, inner, cache in sendtasks:
+            cache[...] = inner
+            sendreqs.append(fn())
+        Waitall(recreqs)
+        match = True
+        for fn, outer, cache in recvtasks:
+            if not (outer == cache).all():
+                delta = outer - cache
+                print('Rank %i: mismatch in %s halo! Maximum absolute difference: %s. Values: %s' % (self.rank, self.neighbor2name[fn.args[1]], numpy.abs(delta).max(), delta))
+                match = False
+        Waitall(sendreqs)
+        return match
 
 class Gather:
     def __init__(self, tiling: Tiling, field: numpy.ndarray, root: int=0):
