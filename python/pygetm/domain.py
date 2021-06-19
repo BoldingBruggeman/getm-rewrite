@@ -248,7 +248,7 @@ class Domain(_pygetm.Domain):
         assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
         self.field_manager: Optional[output.FieldManager] = None
-        self.glob: Optional['Domain'] = None
+        self.glob: Optional['Domain'] = self
 
         halo = 2
 
