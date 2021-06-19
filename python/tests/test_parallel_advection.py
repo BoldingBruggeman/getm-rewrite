@@ -17,6 +17,7 @@ parser.add_argument('--ncol', type=int, help='number of columns in subdomain div
 parser.add_argument('-n', type=int, help='number of revolutions', default=5)
 parser.add_argument('--noplot', action='store_false', dest='plot', help='skip plotting (useful for performance testing)')
 parser.add_argument('--profile', action='store_true', help='use profiler to time function calls')
+parser.add_argument('-o', '--output', help='NetCDF file to save result to')
 args = parser.parse_args()
 
 Lx, Ly = 100., 100.
@@ -90,8 +91,9 @@ if f_glob is not None and args.plot:
     pc = ax.pcolormesh(f_glob.grid.domain.T.xi, f_glob.grid.domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
 
-ncf = outman.add_netcdf_file('res.nc', interval=10)
-ncf.request('tracer')
+if args.output:
+    ncf = outman.add_netcdf_file(args.output, interval=10)
+    ncf.request('tracer')
 
 adv = pygetm.Advection(subdomain.T, scheme=4)
 
@@ -137,3 +139,5 @@ if args.profile:
     cProfile.run('main()', sort='tottime')
 else:
     main()
+
+outman.close()

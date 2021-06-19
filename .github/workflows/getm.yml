@@ -45,4 +45,8 @@ jobs:
         run: |
           python getm/python/tests/test_2d_transport.py
           python getm/python/tests/test_2d_flow_symmetry.py
-          python getm/python/tests/test_parallel_advection.py --nrow 1 --ncol 1 --noplot -n 1
+          python getm/python/tests/test_parallel_advection.py --nrow 1 --ncol 1 --noplot -n 1 -o par_adv_1x1.nc
+          mpiexec -n 2 python getm/python/tests/test_parallel_advection.py --nrow 2 --ncol 1 --noplot -n 1 -o par_adv_2x1.nc
+          mpiexec -n 2 python getm/python/tests/test_parallel_advection.py --nrow 1 --ncol 2 --noplot -n 1 -o par_adv_1x2.nc
+          cmp par_adv_1x1.nc par_adv_2x1.nc
+          cmp par_adv_1x1.nc par_adv_1x2.nc
