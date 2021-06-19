@@ -23,6 +23,7 @@ class NetCDFFile(File):
         self.wait = 0
         self.sub = sub
         self.created = False
+        print(rank, self.is_root, os.path.abspath(path))
 
     def request(self, name: str, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None):
         File.request(self, name, output_name, dtype)
