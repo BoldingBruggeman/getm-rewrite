@@ -45,4 +45,4 @@ jobs:
         run: |
           python getm/python/tests/test_2d_transport.py
           python getm/python/tests/test_2d_flow_symmetry.py
-          python getm/python/tests/test_parallel_advection.py --nrow 1 --ncol 1
+          python getm/python/tests/test_parallel_advection.py --nrow 1 --ncol 1 --noplot
