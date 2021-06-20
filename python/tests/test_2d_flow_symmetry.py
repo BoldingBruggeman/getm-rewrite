@@ -104,7 +104,7 @@ def test(name: str, periodic_x: bool=False, periodic_y: bool=False, tau_x: float
     success = deb.check_symmetry(V, name='transport', axis=symmetry_axis) and success
     if E_input is not None:
         success = deb.compare('  Kinetic energy in domain vs. input by wind: %.4e J vs %.4e J' % (ke, E_input), ke, E_input, rtol=0.01) and success
-    meanz = domain.T.z.global_mean()
+    meanz = domain.T.z.global_mean(reproducible=True, where=domain.T.mask == 1)
     if meanz is not None:
         success = deb.compare('  Mean sea level: %s m' % (meanz,), meanz, 0.)
 

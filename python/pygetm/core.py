@@ -27,6 +27,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def scatter(self, global_data: Optional['Array']):
         if self.grid.domain.tiling.n == 1:
+            self.values[...] = global_data
             return
         if self._scatter is None:
             self._scatter = parallel.Scatter(self.grid.domain.tiling, self.all_values, halo=self.grid.halo)
@@ -35,7 +36,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def gather(self, out: Optional['Array']=None, slice_spec=()):
         if self.grid.domain.tiling.n == 1:
             if out is not None:
-                out[slice_spec + (Ellipsis,)] = self
+                out[slice_spec + (Ellipsis,)] = self.values
             return self
         if self._gather is None:
             self._gather = parallel.Gather(self.grid.domain.tiling, self.values)
@@ -45,13 +46,23 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             out[...] = result
         return out
 
-    def global_sum(self):
-        local_sum = self.ma.sum()
-        return parallel.Sum(self.grid.domain.tiling, local_sum)()
+    def global_sum(self, reproducible: bool=False, where=None):
+        if reproducible:
+            all = self.gather()
+            if where is not None:
+                where = where.gather()
+            if all is not None:
+                return all.values.sum(where=numpy._NoValue if where is None else where.values)
+        else:
+            local_sum = self.values.sum(where=numpy._NoValue if where is None else where.values)
+            return parallel.Sum(self.grid.domain.tiling, local_sum)()
 
-    def global_mean(self):
-        sum = parallel.Sum(self.grid.domain.tiling, self.ma.sum())()
-        count = parallel.Sum(self.grid.domain.tiling, (self.grid.mask.values != 0).sum())()
+    def global_mean(self, reproducible: bool=False, where=None):
+        sum = self.global_sum(reproducible=reproducible, where=where)
+        if where is not None:
+            count = where.global_sum()
+        else:
+            count = parallel.Sum(self.grid.domain.tiling, self.values.size)()
         if sum is not None:
             return sum / count
 

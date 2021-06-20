@@ -14,8 +14,10 @@ parser.add_argument('-i', '--interval', type=int, help='number of timesteps betw
 parser.add_argument('--nmax', type=int, help='total number of timesteps', default=None)
 parser.add_argument('--nrow', type=int, help='number of rows in subdomain division', default=2)
 parser.add_argument('--ncol', type=int, help='number of columns in subdomain division', default=2)
+parser.add_argument('-n', type=int, help='number of revolutions', default=5)
 parser.add_argument('--noplot', action='store_false', dest='plot', help='skip plotting (useful for performance testing)')
 parser.add_argument('--profile', action='store_true', help='use profiler to time function calls')
+parser.add_argument('-o', '--output', help='NetCDF file to save result to')
 args = parser.parse_args()
 
 Lx, Ly = 100., 100.
@@ -24,7 +26,7 @@ nx, ny, nlev = 612, 600, 1
 tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
 rank = tiling.rank
 
-outman = pygetm.output.OutputManager()
+outman = pygetm.output.OutputManager(rank=rank)
 subdomain = pygetm.domain.Domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0., tiling=tiling)
 halo = subdomain.halo
 subdomain.initialize(runtype=1, field_manager=outman)
@@ -41,9 +43,8 @@ omega = 2 * numpy.pi / period
 cfl = 1.
 umax = omega * Lx / 2
 dt_cfl = cfl * min(Lx / nx, Ly / ny) / umax
-no_of_revolutions = 5
-Nmax = no_of_revolutions * round(2 * numpy.pi / omega / dt_cfl)
-tmax = no_of_revolutions * 2 * numpy.pi / omega
+Nmax = args.n * round(2 * numpy.pi / omega / dt_cfl)
+tmax = args.n * 2 * numpy.pi / omega
 timestep = tmax / Nmax
 
 # Calculate u and v
@@ -90,8 +91,9 @@ if f_glob is not None and args.plot:
     pc = ax.pcolormesh(f_glob.grid.domain.T.xi, f_glob.grid.domain.T.yi, f_glob)
     cb = fig.colorbar(pc)
 
-ncf = outman.add_netcdf_file('res.nc', interval=10)
-ncf.request('tracer')
+if args.output:
+    ncf = outman.add_netcdf_file(args.output, interval=10)
+    ncf.request('tracer')
 
 adv = pygetm.Advection(subdomain.T, scheme=4)
 
@@ -137,3 +139,5 @@ if args.profile:
     cProfile.run('main()', sort='tottime')
 else:
     main()
+
+outman.close()

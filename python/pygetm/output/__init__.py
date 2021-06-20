@@ -5,8 +5,7 @@ import numpy.typing
 from .. import core
 
 class FieldManager:
-    def __init__(self, rank: int=0):
-        self.rank = rank
+    def __init__(self):
         self.fields: MutableMapping[str, core.Array] = {}
 
     def register(self, array: core.Array):
@@ -34,8 +33,9 @@ class File:
         self.fields.append(array)
 
 class OutputManager(FieldManager):
-    def __init__(self, **kwargs):
-        FieldManager.__init__(self, **kwargs)
+    def __init__(self, rank: int):
+        FieldManager.__init__(self)
+        self.rank = rank
         self.files = []
 
     def add_netcdf_file(self, path: str, **kwargs):
