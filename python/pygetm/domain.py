@@ -480,6 +480,8 @@ class Domain(_pygetm.Domain):
         ax.plot(x[1::2, 1::2], y[1::2, 1::2], 'xk', markersize=2.5)
         ax.set_xlabel('longitude (degrees East)' if self.spherical else 'x (m)')
         ax.set_ylabel('latitude (degrees North)' if self.spherical else 'y (m)')
+        if not self.spherical:
+            ax.axis('equal')
 
     def save(self, path: str, full: bool=False):
         with netCDF4.Dataset(path, 'w') as nc:
