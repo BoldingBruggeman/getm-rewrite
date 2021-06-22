@@ -146,13 +146,25 @@ def center_to_supergrid_1d(data) -> numpy.ndarray:
     data_sup[-1] = 2 * data_sup[-2] - data_sup[-3]
     return data_sup
 
-def interfaces_to_supergrid_1d(data) -> numpy.ndarray:
+def interfaces_to_supergrid_1d(data, out: Optional[numpy.ndarray]=None) -> numpy.ndarray:
     assert data.ndim == 1, 'data must be one-dimensional'
     assert data.size > 1, 'data must have at least 2 elements'
-    data_sup = numpy.empty((data.size * 2 - 1,))
-    data_sup[0::2] = data
-    data_sup[1::2] = 0.5 * (data[1:] + data[:-1])
-    return data_sup
+    if out is None:
+        out = numpy.empty((data.size * 2 - 1,))
+    out[0::2] = data
+    out[1::2] = 0.5 * (data[1:] + data[:-1])
+    return out
+
+def interfaces_to_supergrid_2d(data, out: Optional[numpy.ndarray]=None) -> numpy.ndarray:
+    assert data.ndim == 2, 'data must be two-dimensional'
+    assert data.shape[0] > 1 and data.shape[1] > 1, 'data must have at least 2 elements'
+    if out is None:
+        out = numpy.empty((data.shape[1] * 2 - 1, data.shape[0] * 2 - 1))
+    out[0::2, 0::2] = data
+    out[1::2, 0::2] = 0.5 * (data[:-1, :] + data[1:, :])
+    out[0::2, 1::2] = 0.5 * (data[:,:-1] + data[:,1:])
+    out[1::2, 1::2] = 0.25 * (data[:-1,:-1] + data[:-1,1:] + data[1:,:-1] + data[1:,1:])
+    return out
 
 class Domain(_pygetm.Domain):
     @staticmethod
@@ -251,6 +263,9 @@ class Domain(_pygetm.Domain):
         self.glob: Optional['Domain'] = self
 
         halo = 2
+        self.nx = nx
+        self.ny = ny
+        self.nz = nz
 
         shape = (2 * ny + 1, 2 * nx + 1)
         superhalo = 2 * halo
@@ -267,7 +282,16 @@ class Domain(_pygetm.Domain):
             data = numpy.full(shape_, fill_value, dtype)
             data_int = data[superhalo:-superhalo, superhalo:-superhalo]
             if source is not None:
-                data_int[...] = source
+                try:
+                    # First try if data has been provided on the supergrid
+                    data_int[...] = source
+                except ValueError:
+                    try:
+                        # Now try if data has been provided on the X (corners) grid
+                        source_on_X = numpy.broadcast_to(source, (ny + 1, nx + 1))
+                        interfaces_to_supergrid_2d(source_on_X, out=data_int)
+                    except ValueError:
+                        raise Exception('Cannot array broadcast to supergrid (%i x %i) or X grid (%i x %i)' % ((ny * 2 + 1, nx * 2 + 1, ny + 1, nx + 1)))
                 self.exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
             data.flags.writeable = data_int.flags.writeable = writeable
             return data_int, data
@@ -430,15 +454,32 @@ class Domain(_pygetm.Domain):
     def distribute(self, field):
         return self.tiling.wrap(field, halo=self.halo)
 
-    def plot(self):
-        from matplotlib import pyplot
-        fig, ax = pyplot.subplots(figsize=(12,12))
-        c = ax.contourf(self.lon, self.lat, self.H, 20)
-        ax.pcolormesh(self.lon[::2, ::2], self.lat[::2, ::2], numpy.ma.array(self.lon[::2, ::2], mask=True), edgecolors='k', linestyles='-', linewidth=.2)
-        pc = ax.pcolormesh(self.lon[1::2, 1::2], self.lat[1::2, 1::2],  numpy.ma.array(self.lon[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
-        cb = fig.colorbar(c)
-        cb.set_label('undisturbed water depth (m)')
-        fig.savefig('H.png', dpi=300)
+    def plot(self, fig=None, show_H: bool=True):
+        import matplotlib.pyplot
+        import matplotlib.collections
+        if fig is None:
+            fig, ax = matplotlib.pyplot.subplots(figsize=(0.15 * self.nx, 0.15 * self.ny))
+        else:
+            ax = fig.gca()
+        x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
+        if show_H:
+            c = ax.contourf(x, y, self.H, 20, alpha=0.5)
+            cb = fig.colorbar(c)
+            cb.set_label('undisturbed water depth (m)')
+
+        def plot_mesh(ax, x, y, **kwargs):
+            segs1 = numpy.stack((x, y), axis=2)
+            segs2 = segs1.transpose(1, 0, 2)
+            ax.add_collection(matplotlib.collections.LineCollection(segs1, **kwargs))
+            ax.add_collection(matplotlib.collections.LineCollection(segs2, **kwargs))
+
+        plot_mesh(ax, x[::2, ::2], y[::2, ::2], colors='k', linestyle='-', linewidth=.3)
+        #ax.pcolor(x[1::2, 1::2], y[1::2, 1::2], numpy.ma.array(x[1::2, 1::2], mask=True), edgecolors='k', linestyles='--', linewidth=.2)
+        #pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  numpy.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
+        ax.plot(x[::2, ::2], y[::2, ::2], '.k', markersize=3.)
+        ax.plot(x[1::2, 1::2], y[1::2, 1::2], 'xk', markersize=2.5)
+        ax.set_xlabel('longitude (degrees East)' if self.spherical else 'x (m)')
+        ax.set_ylabel('latitude (degrees North)' if self.spherical else 'y (m)')
 
     def save(self, path: str, full: bool=False):
         with netCDF4.Dataset(path, 'w') as nc:
