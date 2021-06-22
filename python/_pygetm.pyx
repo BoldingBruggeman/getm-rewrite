@@ -91,7 +91,8 @@ cdef class Domain:
         self.grids = {}
 
     def __dealloc__(self):
-        domain_finalize(self.p)
+        if self.p != NULL:
+            domain_finalize(self.p)
 
     def update_depths(self):
         domain_update_depths(self.p)
