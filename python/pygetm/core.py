@@ -9,9 +9,9 @@ from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None):
-        self._x = None
-        self._scatter = None
-        self._gather = None
+        self._xarray: Optional[xarray.DataArray] = None
+        self._scatter: Optional[parallel.Scatter] = None
+        self._gather: Optional[parallel.Gather] = None
         self._name = name
         self._units = units
         self._long_name = long_name
@@ -100,14 +100,32 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return numpy.ma.array(self.values, mask=self.grid.mask.values==0)
 
     @property
-    def x(self) -> xarray.DataArray:
-        if self._x is None:
-            self._x = xarray.DataArray(self.values)
-        return self._x
+    def xarray(self) -> xarray.DataArray:
+        if self._xarray is None:
+            attrs = {}
+            for key in ('units', 'long_name'):
+                value = getattr(self, key)
+                if value is not None:
+                    attrs[key] = value
+            dom = self.grid.domain
+            coords = {}
+            if self.name not in ('x' + self.grid.postfix, 'y' + self.grid.postfix, 'lon' + self.grid.postfix, 'lat' + self.grid.postfix):
+                if dom.x_is_1d:
+                    coords['x%s' % self.grid.postfix] = self.grid.x.xarray[0, :]
+                if dom.y_is_1d:
+                    coords['y%s' % self.grid.postfix] = self.grid.y.xarray[:, 0]
+                coords['x%s2' % self.grid.postfix] = self.grid.x.xarray
+                coords['y%s2' % self.grid.postfix] = self.grid.y.xarray
+                if dom.lon is not None:
+                    coords['lon%s' % self.grid.postfix] = self.grid.lon.xarray
+                if dom.lat is not None:
+                    coords['lat%s' % self.grid.postfix] = self.grid.lat.xarray
+            self._xarray = xarray.DataArray(self.values, coords=coords, dims=('y' + self.grid.postfix, 'x' + self.grid.postfix), attrs=attrs, name=self.name)
+        return self._xarray
 
     @property
     def plot(self):
-        return self.x.plot
+        return self.xarray.plot
 
     def interp(self, target_grid, out: Optional['Array'] = None):
         if out is None:
