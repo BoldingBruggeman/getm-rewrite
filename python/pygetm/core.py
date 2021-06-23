@@ -1,14 +1,14 @@
 import numbers
 from typing import Optional
 
-import numpy, numpy.lib.mixins
+import numpy, numpy.lib.mixins, numpy.typing
 import xarray
 
 from . import _pygetm
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self, name=None, units=None, long_name=None):
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None):
         self._x = None
         self._scatter = None
         self._gather = None
@@ -46,7 +46,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             out[...] = result
         return out
 
-    def global_sum(self, reproducible: bool=False, where=None):
+    def global_sum(self, reproducible: bool=False, where: Optional['Array']=None) -> Optional[numpy.ndarray]:
         if reproducible:
             all = self.gather()
             if where is not None:
@@ -57,7 +57,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             local_sum = self.values.sum(where=numpy._NoValue if where is None else where.values)
             return parallel.Sum(self.grid.domain.tiling, local_sum)()
 
-    def global_mean(self, reproducible: bool=False, where=None):
+    def global_mean(self, reproducible: bool=False, where: Optional['Array']=None) -> Optional[numpy.ndarray]:
         sum = self.global_sum(reproducible=reproducible, where=where)
         if where is not None:
             count = where.global_sum()
@@ -79,7 +79,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.values = self.all_values[halo:-halo, halo:-halo]
 
     @staticmethod
-    def create(grid, fill=None, dtype=None, copy=True, **kwargs) -> 'Array':
+    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
         ar = Array(**kwargs)
         if fill is not None:
             fill = numpy.asarray(fill)

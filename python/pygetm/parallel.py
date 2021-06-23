@@ -154,7 +154,7 @@ class Sum:
         self.field = field
         self.result = None if tiling.rank != self.root else numpy.empty_like(field)
 
-    def __call__(self):
+    def __call__(self) -> Optional[numpy.ndarray]:
         self.comm.Reduce(self.field, self.result, op=MPI.SUM, root=self.root)
         return self.result
 
@@ -168,7 +168,7 @@ class Gather:
         if tiling.rank == self.root:
             self.recvbuf = numpy.empty((self.rankmap.size,) + self.field.shape, dtype=self.field.dtype)
 
-    def __call__(self, out: Optional[numpy.ndarray]=None, slice_spec=()) -> numpy.ndarray:
+    def __call__(self, out: Optional[numpy.ndarray]=None, slice_spec=()) -> Optional[numpy.ndarray]:
         sendbuf = numpy.ascontiguousarray(self.field)
         self.comm.Gather(sendbuf, self.recvbuf, root=self.root)
         if self.recvbuf is not None:
