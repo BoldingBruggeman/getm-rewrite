@@ -31,19 +31,22 @@ class Grid(_pygetm.Grid):
         self.ioffset = ioffset
         self.joffset = joffset
         self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
-        self.ugrid = ugrid
-        self.vgrid = vgrid
+        self.ugrid: Optional[Grid] = ugrid
+        self.vgrid: Optional[Grid] = vgrid
+        self._sin_rot: Optional[numpy.ndarray] = None
+        self._cos_rot: Optional[numpy.ndarray] = None
 
     def initialize(self):
         for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
             setattr(self, name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
+        self.rotation = core.Array.create(grid=self, dtype=self.x.dtype)
         self.fill()
 
     def fill(self):
         read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area')
         nj, ni = self.H.all_values.shape
         has_bounds = self.ioffset > 0 and self.joffset > 0 and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
-        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo'):
+        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo', 'rotation'):
             source = getattr(self.domain, name + '_')
             if source is not None:
                 target = getattr(self, name).all_values
@@ -57,7 +60,15 @@ class Grid(_pygetm.Grid):
                     values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
                     setattr(self, name + 'i_', values_i)
                     setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
-        self.iarea.all_values[:, :] = 1. / self.area.all_values[:, :]
+
+    def rotate(self, u: numpy.typing.ArrayLike, v: numpy.typing.ArrayLike, to_grid: bool= True) -> Tuple[numpy.typing.ArrayLike, numpy.typing.ArrayLike]:
+        if self._sin_rot is None:
+            self._sin_rot = numpy.sin(self.rotation.all_values)
+            self._cos_rot = numpy.cos(self.rotation.all_values)
+        sin_rot = -self._sin_rot if to_grid else self._sin_rot
+        u_new = u * self._cos_rot - v * sin_rot
+        v_new = u * sin_rot + v * self._cos_rot
+        return u_new, v_new
 
     def array(self, fill=None, dtype=float, **kwargs) -> core.Array:
         return core.Array.create(self, fill, dtype, **kwargs)
@@ -330,6 +341,17 @@ class Domain(_pygetm.Domain):
 
         self.dx_.flags.writeable = self.dx.flags.writeable = False
         self.dy_.flags.writeable = self.dy.flags.writeable = False
+
+        self.rotation, self.rotation_ = setup_metric()
+        rotation_left = numpy.arctan2(self.y_[:, 1:-1] - self.y_[:, :-2], self.x_[:, 1:-1] - self.x_[:, :-2])
+        rotation_right = numpy.arctan2(self.y_[:, 2:] - self.y_[:, 1:-1], self.x_[:, 2:] - self.x_[:, 1:-1])
+        rotation_bot = numpy.arctan2(self.y_[1:-1, :] - self.y_[:-2, :], self.x_[1:-1, :] - self.x_[:-2, :]) - 0.5 * numpy.pi
+        rotation_top = numpy.arctan2(self.y_[2:, :] - self.y_[1:-1, :], self.x_[2:, :] - self.x_[1:-1, :]) - 0.5 * numpy.pi
+        x_dum = numpy.cos(rotation_left[1:-1,:]) + numpy.cos(rotation_right[1:-1,:]) + numpy.cos(rotation_bot[:,1:-1]) + numpy.cos(rotation_top[:,1:-1])
+        y_dum = numpy.sin(rotation_left[1:-1,:]) + numpy.sin(rotation_right[1:-1,:]) + numpy.sin(rotation_bot[:,1:-1]) + numpy.sin(rotation_top[:,1:-1])
+        self.rotation_[1:-1,1:-1] = numpy.arctan2(y_dum, x_dum)
+        self.exchange_metric(self.rotation)
+        self.rotation.flags.writeable = False
 
         self.area, self.area_ = setup_metric(self.dx * self.dy, writeable=False)
 
