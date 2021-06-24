@@ -39,7 +39,7 @@ class Grid(_pygetm.Grid):
     def initialize(self):
         for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
             setattr(self, name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
-        self.rotation = core.Array.create(grid=self, dtype=self.x.dtype)
+        self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
         self.fill()
 
     def fill(self):
@@ -72,14 +72,6 @@ class Grid(_pygetm.Grid):
 
     def array(self, fill=None, dtype=float, **kwargs) -> core.Array:
         return core.Array.create(self, fill, dtype, **kwargs)
-
-    def as_xarray(self, data):
-        assert data.shape == self.x.shape
-        x = xarray.DataArray(self.c1, dims=['x',])
-        y = xarray.DataArray(self.c2, dims=['y',])
-        x.attrs['units'] = 'm'
-        y.attrs['units'] = 'm'
-        return xarray.DataArray(data, coords={'x': x, 'y': y}, dims=['y', 'x'])
 
     def add_to_netcdf(self, nc: netCDF4.Dataset, postfix: str=''):
         xdim, ydim = 'x' + postfix, 'y' + postfix

@@ -10,7 +10,7 @@ class FieldManager:
 
     def register(self, array: core.Array):
         assert array.name is not None, 'Cannot register field without name.'
-        assert array.name not in self.fields, 'A field with name %s has already been registered.' % array.name
+        assert array.name not in self.fields, 'A field with name "%s" has already been registered.' % array.name
         self.fields[array.name] = array
 
 class File:
