@@ -1,5 +1,9 @@
 # cython: language_level=3
 
+cimport cython
+
+from libc.math cimport ceil
+
 cimport numpy
 import numpy
 
@@ -157,3 +161,71 @@ cdef class Simulation:
         if (source == 2): obj = self.ppressure
         ar.wrap_c_array(self.domain, source, obj, name)
         return ar
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int ioffset, int joffset, int ncpus):
+    cdef int nrow = <int>ceil((mask.shape[0] - joffset) / float(ny))
+    cdef int ncol = <int>ceil((mask.shape[1] - ioffset) / float(nx))
+    cdef int[:, ::1] map
+    cdef int current_ncpus = 0
+    cdef int row, col, i, j, n
+    if ncpus != -1 and nrow * ncol < ncpus:
+        return None
+    map = numpy.empty((nrow, ncol), dtype=int)
+    for row in range(nrow):
+        for col in range(ncol):
+            n = 0
+            for j in range(max(0, joffset + row * ny), min(mask.shape[0], joffset + (row + 1) * ny)):
+                for i in range(max(0, ioffset + col * nx), min(mask.shape[1], ioffset + (col + 1) * nx)):
+                    if mask[j, i] != 0: n += 1
+            if n > 0:
+                current_ncpus += 1
+                if ncpus != -1 and current_ncpus > ncpus:
+                    return None
+            map[row, col] = n
+    if ncpus == -1 or current_ncpus == ncpus:
+        return map
+    return None
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef int get_from_map(const int[:, ::1] map, int row, int col):
+    if row < 0 or col < 0 or row >= map.shape[0] or col >= map.shape[1]:
+        return 0
+    return map[row, col]
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef int get_cost(const int[:, ::1] map, int nx, int ny):
+    cdef int row, col, nint, nout, max_cost
+    cdef int halo = 2
+    max_cost = 0
+    for row in range(map.shape[0]):
+        for col in range(map.shape[1]):
+            nint = map[row, col]
+            nout = 0
+            if get_from_map(map, row - 1, col - 1) > 0: nout += halo * halo
+            if get_from_map(map, row + 1, col - 1) > 0: nout += halo * halo
+            if get_from_map(map, row - 1, col + 1) > 0: nout += halo * halo
+            if get_from_map(map, row + 1, col + 1) > 0: nout += halo * halo
+            if get_from_map(map, row - 1, col) > 0: nout += halo * ny
+            if get_from_map(map, row + 1, col) > 0: nout += halo * ny
+            if get_from_map(map, row, col - 1) > 0: nout += halo * nx
+            if get_from_map(map, row, col + 1) > 0: nout += halo * nx
+            max_cost = max(max_cost, nint + 10 * nout)  # for now assume halo cells are 10x as expensive as interior cells
+    return max_cost
+
+def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus):
+    cdef int[:, ::1] map
+    cost = -1
+    solution = None
+    for ioffset in range(1 - nx, 1):
+        for joffset in range(1 - ny, 1):
+            map = get_map(mask, nx, ny, ioffset, joffset, ncpus)
+            if map is not None:
+                current_cost = get_cost(map, nx, ny)
+                if cost == -1 or current_cost < cost:
+                    cost = current_cost
+                    solution = (ioffset, joffset, cost, numpy.asarray(map))
+    return solution

@@ -1,8 +1,11 @@
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple, Union
 import functools
 
 from mpi4py import MPI
 import numpy
+import numpy.typing
+
+from . import _pygetm
 
 Waitall = MPI.Request.Waitall
 
@@ -207,3 +210,25 @@ class Scatter:
         if self.recvbuf is not self.field:
             self.field[...] = self.recvbuf
 
+def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2):
+    if ncpus is None:
+        ncpus = MPI.COMM_WORLD.Get_size()
+    cost, solution = None, None
+    mask = numpy.ascontiguousarray(mask)
+    for ny_sub in range(4, mask.shape[0] + 1):
+        for nx_sub in range(max(4, ny_sub // max_aspect_ratio), min(max_aspect_ratio * ny_sub, mask.shape[1] + 1)):
+            current_solution = _pygetm.find_subdiv_solutions(mask, nx_sub, ny_sub, ncpus)
+            if current_solution:
+                ioffset, joffset, current_cost, submap = current_solution
+                if cost is None or current_cost < cost:
+                    solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'ioffset': ioffset, 'joffset': joffset, 'cost': current_cost, 'map': submap}
+                    cost = current_cost
+    return solution
+
+def find_all_optimal_divisons(mask: numpy.typing.ArrayLike, max_ncpus: Union[int, Iterable[int]], max_aspect_ratio: int=2):
+    if isinstance(max_ncpus, int):
+        max_ncpus = numpy.arange(1, max_ncpus + 1)
+    for ncpus in max_ncpus:
+        solution = find_optimal_divison(mask, ncpus, max_aspect_ratio=max_aspect_ratio)
+        if solution:
+            print('{ncpus} cores, optimal subdomain size: {nx} x {ny}, {0} land-only subdomains were dropped, max cost per core: {cost}'.format((solution['map'] == 0).sum(), **solution))
