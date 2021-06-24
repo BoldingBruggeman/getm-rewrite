@@ -12,6 +12,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
         self._gather: Optional[parallel.Gather] = None
+        self._dist: Optional[parallel.DistributedArray] = None
         self._name = name
         self._units = units
         self._long_name = long_name
@@ -20,10 +21,18 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return super().__repr__() + self.grid.postfix
 
     def update_halos(self, *args, **kwargs):
-        pass
+        if not self.grid.domain.tiling:
+            return
+        if self._dist is None:
+            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo)
+        return self._dist.update_halos(*args, **kwargs)
 
     def compare_halos(self, *args, **kwargs):
-        return True
+        if not self.grid.domain.tiling:
+            return True
+        if self._dist is None:
+            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo)
+        return self._dist.compare_halos(*args, **kwargs)
 
     def scatter(self, global_data: Optional['Array']):
         if self.grid.domain.tiling.n == 1:
@@ -70,11 +79,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         assert self.grid is not None
         if self.name is not None:
             self.grid.domain.field_manager.register(self)
-        tiling = self.grid.domain.tiling
-        if tiling:
-            dist = parallel.DistributedArray(tiling, self.all_values, self.grid.halo)
-            self.update_halos = dist.update_halos
-            self.compare_halos = dist.compare_halos
         halo = self.grid.halo
         self.values = self.all_values[halo:-halo, halo:-halo]
 
