@@ -43,7 +43,7 @@ target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics
 
 add_library(cgotm
   pygotm_wrapper.F90)
-target_link_libraries(cgotm turbulence util)
+target_link_libraries(cgotm turbulence util yaml)
 
 # Find target Python interpreter.
 find_package(Python3 COMPONENTS Interpreter Development NumPy)
