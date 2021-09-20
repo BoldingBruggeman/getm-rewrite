@@ -16,9 +16,13 @@ endif()
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/modules")
 
-add_subdirectory(../extern/flom/extern/flexout/src flexout EXCLUDE_FROM_ALL)
-
 add_subdirectory(../extern/python-otps2 python-otps2)
+
+add_subdirectory(../extern/pygsw pygsw)
+
+set(GOTM_BUILD_LIBRARIES_ONLY ON)
+set(GOTM_USE_FABM OFF CACHE BOOL "Use FABM" FORCE)
+add_subdirectory(../extern/gotm gotm EXCLUDE_FROM_ALL)
 
 add_library( flom 
 	../extern/flom/src/grid.F90
@@ -37,6 +41,10 @@ add_library(cgetm
 
 target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics)
 
+add_library(cgotm
+  pygotm_wrapper.F90)
+target_link_libraries(cgotm turbulence util)
+
 # Find target Python interpreter.
 find_package(Python3 COMPONENTS Interpreter Development NumPy)
 
@@ -46,14 +54,26 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygotm.c
+  COMMAND ${Python3_EXECUTABLE} -m cython _pygotm.pyx
+  MAIN_DEPENDENCY _pygotm.pyx
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 Python3_add_library(_pygetm MODULE
   _pygetm.c)
 target_link_libraries(_pygetm PRIVATE cgetm Python3::NumPy)
+
+
+Python3_add_library(_pygotm MODULE
+  _pygotm.c)
+target_link_libraries(_pygotm PRIVATE cgotm Python3::NumPy)
 
 # Build wheel
 add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygotm>" pygetm/
                    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
