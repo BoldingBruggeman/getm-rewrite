@@ -22,6 +22,7 @@ add_subdirectory(../extern/pygsw pygsw)
 
 set(GOTM_BUILD_LIBRARIES_ONLY ON)
 set(GOTM_USE_FABM OFF CACHE BOOL "Use FABM" FORCE)
+set(GOTM_USE_NetCDF OFF CACHE BOOL "Use NetCDF" FORCE)
 add_subdirectory(../extern/gotm gotm EXCLUDE_FROM_ALL)
 
 add_library( flom 
