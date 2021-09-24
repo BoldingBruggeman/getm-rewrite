@@ -54,6 +54,8 @@ def load_bdyinfo(dom: domain.Domain, path: str):
             n = int(get_line())
             for _ in range(n):
                 # Note: for Western and Eastern boundaries, l and m are indices in x and y dimensions, respectively, 
-                # but that is the other way around (y and , respectively) for Northern and Southern boundaries.
+                # but that is the other way around (y and x, respectively) for Northern and Southern boundaries.
+                # Note that indices are 1-based as in Fortran. We convert to the Python convention: 0-based indices,
+                # with the upper bound being the first index that is EXcluded.
                 l, mstart, mstop, type_2d, type_3d = map(int, get_line().split())
-                dom.add_open_boundary(side, l, mstart, mstop, type_2d, type_3d)
+                dom.add_open_boundary(side, l - 1, mstart - 1, mstop, type_2d, type_3d)

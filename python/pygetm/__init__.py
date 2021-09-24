@@ -25,10 +25,12 @@ class Simulation(_pygetm.Simulation):
         self.vua = dom.VU.array(fill=numpy.nan)
         self.vva = dom.VV.array(fill=numpy.nan)
 
-        for name in ('U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1'):
+        for name in ('U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv'):
             setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii'), source=1))
         for name in ('dpdx', 'dpdy'):
             setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii'), source=2))
+        for name in ('zbdy',):
+            setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii'), source=3))
 
     def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values

@@ -8,14 +8,14 @@ cimport numpy
 import numpy
 
 cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin, int kmax, int* halox, int* haloy, int* haloz) nogil
-cdef extern domain_initialize_open_boundaries(void* domain, int nwb, int nnb, int neb, int nsb, int nbdyp) nogil
+cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int nwb, int nnb, int neb, int nsb, int* bdy_info, int* bdy_i, int* bdy_j) nogil
 cdef extern void* domain_get_grid(void* domain, int grid_type) nogil
 cdef extern void domain_initialize(void* grid, int runtype, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void grid_interp_x(void* grid, double* source, double* target, int ioffset) nogil
 cdef extern void grid_interp_y(void* grid, double* source, double* target, int joffset) nogil
-cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* data_type, void** p) nogil
+cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid, void** p) nogil
 cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pvar) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_friction) nogil
@@ -25,6 +25,7 @@ cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV) nogil
 cdef extern void sealevel_update_uvx(void* sealevel) nogil
+cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
 
 cpdef enum:
     TGRID = 1
@@ -42,15 +43,26 @@ cdef class Array:
     cdef readonly Grid grid
 
     cdef wrap_c_array(self, Domain domain, int source, void* obj, bytes name):
-        cdef int data_type
         cdef int grid_type
-        get_array(source, obj, name, &grid_type, &data_type, &self.p)
+        cdef int sub_type
+        cdef int data_type
+        get_array(source, obj, name, &grid_type, &sub_type, &data_type, &self.p)
+        if self.p == NULL:
+            return
         self.grid = domain.grids[grid_type]
-        if data_type == 0:
-            self.all_values = numpy.asarray(<double[:self.grid.ny, :self.grid.nx:1]> self.p)
+        if sub_type == 1:
+            if data_type == 0:
+                self.all_values = numpy.asarray(<double[:self.grid.nbdyp:1]> self.p)
+            else:
+                self.all_values = numpy.asarray(<int[:self.grid.nbdyp:1]> self.p)
+            return self.all_values
         else:
-            self.all_values = numpy.asarray(<int[:self.grid.ny, :self.grid.nx:1]> self.p)
+            if data_type == 0:
+                self.all_values = numpy.asarray(<double[:self.grid.ny, :self.grid.nx:1]> self.p)
+            else:
+                self.all_values = numpy.asarray(<int[:self.grid.ny, :self.grid.nx:1]> self.p)
         self.finish_initialization()
+        return self
 
     def wrap_ndarray(self, Grid grid, numpy.ndarray data):
         self.grid = grid
@@ -73,8 +85,7 @@ cdef class Grid:
         domain.grids[grid_type] = self
 
     def wrap(self, Array ar, bytes name):
-        ar.wrap_c_array(self.domain, 0, self.p, name)
-        return ar
+        return ar.wrap_c_array(self.domain, 0, self.p, name)
 
     def interp_x(self, Array source, Array target, int offset):
         grid_interp_x(self.p, <double *>source.p, <double *>target.p, offset)
@@ -103,6 +114,9 @@ cdef class Domain:
 
     def initialize(self, int runtype):
         domain_initialize(self.p, runtype, &self.maxdt)
+
+    def initialize_open_boundaries(self, int nwb, int nnb, int neb, int nsb, int nbdyp, int[:,::1] bdy_info, int[::1] bdy_i, int[::1] bdy_j):
+        domain_initialize_open_boundaries(self.p, nbdyp, nwb, nnb, neb, nsb, &bdy_info[0,0], &bdy_i[0], &bdy_j[0])
 
 cdef class Advection:
     cdef void* p
@@ -156,11 +170,16 @@ cdef class Simulation:
     def update_sealevel_uvx(self):
         sealevel_update_uvx(self.psealevel)
 
+    def update_sealevel_boundaries(self, double timestep):
+        sealevel_boundaries(self.psealevel, self.pmomentum, timestep)
+
     def wrap(self, Array ar not None, bytes name, int source):
         cdef void* obj = self.pmomentum
-        if (source == 2): obj = self.ppressure
-        ar.wrap_c_array(self.domain, source, obj, name)
-        return ar
+        if (source == 2):
+            obj = self.ppressure
+        elif (source == 3):
+            obj = self.psealevel
+        return ar.wrap_c_array(self.domain, source, obj, name)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

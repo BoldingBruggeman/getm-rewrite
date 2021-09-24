@@ -77,7 +77,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def finish_initialization(self):
         assert self.grid is not None
-        if self.name is not None:
+        if self._name is not None:
             self.grid.domain.field_manager.register(self)
         halo = self.grid.halo
         self.values = self.all_values[halo:-halo, halo:-halo]
