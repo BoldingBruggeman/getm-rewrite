@@ -409,7 +409,7 @@ class Domain(_pygetm.Domain):
         for side in (WEST, NORTH, EAST, SOUTH):
             bounds = self.open_boundaries.setdefault(side, [])
             for l, mstart, mstop, type_2d, type_3d in bounds:
-                bdyinfo.append(numpy.array((l, mstart, mstop, type_2d, type_3d, nbdyp), dtype=int))
+                bdyinfo.append(numpy.array((l, mstart, mstop, type_2d, type_3d, nbdyp), dtype=numpy.intc))
                 nbdyp += mstop - mstart
                 if side == WEST:
                     self.mask[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
@@ -430,10 +430,10 @@ class Domain(_pygetm.Domain):
                 else:
                     bdy_i.append(numpy.arange(mstart, mstop))
                     bdy_j.append(numpy.repeat(l, mstop - mstart))
-        self.bdy_i = numpy.empty((0,), dtype=int) if nbdyp == 0 else numpy.concatenate(bdy_i, dtype=int)
-        self.bdy_j = numpy.empty((0,), dtype=int) if nbdyp == 0 else numpy.concatenate(bdy_j, dtype=int)
+        self.bdy_i = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_i, dtype=numpy.intc)
+        self.bdy_j = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_j, dtype=numpy.intc)
         if nbdyp > 0:
-            bdyinfo = numpy.empty((6,0), dtype=int) if nbdyp == 0 else numpy.stack(bdyinfo, axis=-1)
+            bdyinfo = numpy.stack(bdyinfo, axis=-1)
             self.initialize_open_boundaries(nwb=len(self.open_boundaries[WEST]), nnb=len(self.open_boundaries[NORTH]), neb=len(self.open_boundaries[EAST]), nsb=len(self.open_boundaries[SOUTH]), nbdyp=nbdyp, bdy_i=self.bdy_i, bdy_j=self.bdy_j, bdy_info=bdyinfo)
 
         # Mask U,V,X points unless all their T neighbors are valid - this mask will be sent to Fortran and determine which points are computed
