@@ -16,7 +16,6 @@ class NetCDFFile(File):
             name += '_%05i' % rank
         self.path = name + ext
         self.nc = None
-        self.ncvars: MutableSequence[Optional[netCDF4.Variable]] = []
         self.itime = 0
         self.is_root = rank == 0
         self.interval = interval
@@ -24,16 +23,12 @@ class NetCDFFile(File):
         self.sub = sub
         self.created = False
 
-    def request(self, name: str, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None):
-        File.request(self, name, output_name, dtype)
-        self.ncvars.append(None)
-
     def _create(self):
         self.created = True
         if not (self.is_root or self.sub):
             return
         self.nc = netCDF4.Dataset(self.path, 'w')
-        for grid in frozenset(array.grid for array in self.fields):
+        for grid in frozenset(field.grid for field in self.fields.values()):
             nx, ny = grid.nx, grid.ny
             if not self.sub:
                 nx, ny = (nx - 2 * grid.halo) * grid.domain.tiling.ncol, (ny - 2 * grid.halo) * grid.domain.tiling.nrow
@@ -41,29 +36,21 @@ class NetCDFFile(File):
             self.nc.createDimension('y%s' % grid.postfix, ny)
         self.nc.createDimension('time',)
         self.ncvars = []
-        for output_name, array in zip(self.order, self.fields):
-            dims = ('y%s' % array.grid.postfix, 'x%s' % array.grid.postfix)
-            if array.ndim == 3: dims = ('z',) + dims
+        for output_name, field in self.fields.items():
+            dims = ('y%s' % field.grid.postfix, 'x%s' % field.grid.postfix)
+            if field.ndim == 3: dims = ('z',) + dims
             dims = ('time',) + dims
-            ncvar = self.nc.createVariable(output_name, array.dtype, dims)
-            atts = {}
-            if array.units is not None:
-                atts['units'] = array.units
-            if array.long_name is not None:
-                atts['long_name'] = array.long_name
-            for att, value in atts.items():
+            ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)
+            for att, value in field.atts.items():
                 setattr(ncvar, att, value)
-            self.ncvars.append(ncvar)
+            field.ncvar = ncvar
 
     def save(self):
         if self.wait == 0:
             if not self.created:
                 self._create()
-            for array, ncvar in zip(self.fields, self.ncvars):
-                if self.sub:
-                    ncvar[self.itime, ...] = array.all_values
-                else:
-                    array.gather(ncvar, slice_spec=(self.itime,))
+            for field in self.fields.values():
+                field.get(field.ncvar, slice_spec=(self.itime,), sub=self.sub)
             if self.nc is not None:
                 self.nc.sync()
             self.itime += 1

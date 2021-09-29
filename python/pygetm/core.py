@@ -1,5 +1,5 @@
 import numbers
-from typing import Optional
+from typing import Optional, Union
 
 import numpy, numpy.lib.mixins, numpy.typing
 import xarray
@@ -8,14 +8,16 @@ from . import _pygetm
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None):
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None):
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
         self._gather: Optional[parallel.Gather] = None
         self._dist: Optional[parallel.DistributedArray] = None
+        assert fill_value is None or numpy.ndim(fill_value) == 0, 'fill_value must be a scalar value'
         self._name = name
         self._units = units
         self._long_name = long_name
+        self._fill_value = fill_value
 
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
@@ -76,11 +78,15 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return sum / count
 
     def finish_initialization(self):
+        """This is called by the underlying cython implementation after the array receives a value (self.all_values is valid)"""
         assert self.grid is not None
         if self._name is not None:
             self.grid.domain.field_manager.register(self)
         halo = self.grid.halo
         self.values = self.all_values[halo:-halo, halo:-halo]
+        if self._fill_value is not None:
+            # Cast fill value to dtype of the array
+            self._fill_value = numpy.array(self._fill_value, dtype=self.all_values.dtype)
 
     @staticmethod
     def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
@@ -183,6 +189,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def long_name(self) -> Optional[str]:
         return self._long_name
+
+    @property
+    def fill_value(self) -> Optional[Union[int, float]]:
+        return self._fill_value
 
     # Below based on https://numpy.org/devdocs/reference/generated/numpy.lib.mixins.NDArrayOperatorsMixin.html#numpy.lib.mixins.NDArrayOperatorsMixin
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
