@@ -50,7 +50,7 @@ class NetCDFFile(File):
             if not self.created:
                 self._create()
             for field in self.fields.values():
-                field.get(field.ncvar, slice_spec=(self.itime,), sub=self.sub)
+                field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
             if self.nc is not None:
                 self.nc.sync()
             self.itime += 1
