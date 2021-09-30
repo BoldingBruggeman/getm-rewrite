@@ -49,5 +49,5 @@ jobs:
           python test_parallel_advection.py --nrow 1 --ncol 1 --noplot -n 1 -o par_adv_1x1.nc
           mpiexec -n 2 python test_parallel_advection.py --nrow 2 --ncol 1 --noplot -n 1 -o par_adv_2x1.nc
           mpiexec -n 2 python test_parallel_advection.py --nrow 1 --ncol 2 --noplot -n 1 -o par_adv_1x2.nc
-          cmp par_adv_1x1.nc par_adv_2x1.nc
-          cmp par_adv_1x1.nc par_adv_1x2.nc
+          diff -s par_adv_1x1.nc par_adv_2x1.nc
+          diff -s par_adv_1x1.nc par_adv_1x2.nc
