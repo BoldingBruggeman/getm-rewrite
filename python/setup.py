@@ -1,5 +1,5 @@
 import os
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 
 try:
     import wheel.bdist_wheel
@@ -20,7 +20,7 @@ setup(
     author='Bolding-Bruggeman ApS',
     author_email='jorn@bolding-bruggeman.com',
     license='GPL',
-    packages=['pygetm', 'pygetm.input', 'pygetm.output', 'pygetm.output.operators'],
+    packages=find_packages(include=['pygetm*']),
     package_data={'pygetm': ['*.so', '*.dll', '*.dylib', '*.pyd']},
     cmdclass={'bdist_wheel': bdist_wheel},
     zip_safe=False
