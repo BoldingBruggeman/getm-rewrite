@@ -1,4 +1,5 @@
-from typing import List, Mapping, Union, Optional, Mapping, Tuple
+from typing import List, Mapping, Union, Optional, Mapping, Sequence
+import glob
 
 import cftime
 import xarray
@@ -77,8 +78,14 @@ class Variable:
 
 class NetCDFVariable(Variable):
     @classmethod
-    def get(cls, path: str, name: str) -> 'NetCDFVariable':
-        ds = xarray.open_dataset(path, decode_times=False)
+    def get(cls, paths: Union[str, Sequence[str]], name: str, **kwargs) -> 'NetCDFVariable':
+        kwargs['decode_times'] = False
+        if isinstance(paths, str):
+            paths = glob.glob(paths)
+        if len(paths) == 1:
+            ds = xarray.open_dataset(paths[0], **kwargs)
+        else:
+            ds = xarray.open_mfdataset(paths, **kwargs)
         return NetCDFVariable(ds[name])
 
 class UnaryOperator(Variable):
@@ -160,10 +167,10 @@ class LimitRegion(UnaryOperator):
 
     def apply(self):
         if self._left_target:
-            self._data[self._left_target] = self.source.x.values[self._left_source]
-        self._data[self._center_target] = self.source.x.values[self._center_source]
+            self._data[self._left_target] = self.source.x.data[self._left_source]
+        self._data[self._center_target] = self.source.x.data[self._center_source]
         if self._right_target:
-            self._data[self._right_target] = self.source.x.values[self._right_source]
+            self._data[self._right_target] = self.source.x.data[self._right_source]
 
 class SpatialInterpolation(UnaryOperator):
     def __init__(self, source: Variable, lon: xarray.DataArray, lat: xarray.DataArray, transpose: Optional[bool]=None):
@@ -250,7 +257,7 @@ class TemporalInterpolation(UnaryOperator):
             old, numold = self._next, self._numnext
             slices: List[Union[int, slice]] = [slice(None) for _ in self._current.shape]
             slices.insert(self._itimedim, self._inext)
-            self._next = self.source.x.values[tuple(slices)]
+            self._next = self.source.x.data[tuple(slices)]
             self._numnext = self._numtimes[self._inext]
             self._slope = (self._next - old) / (self._numnext - numold)
 
