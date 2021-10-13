@@ -4,6 +4,7 @@ import glob
 import cftime
 import xarray
 import numpy
+import numpy.typing
 import scipy.interpolate
 from xarray.core.dataarray import DataArray
 
@@ -78,14 +79,16 @@ class Variable:
 
 class NetCDFVariable(Variable):
     @classmethod
-    def get(cls, paths: Union[str, Sequence[str]], name: str, **kwargs) -> 'NetCDFVariable':
+    def get(cls, paths: Union[str, Sequence[str]], name: str, preprocess=None, **kwargs) -> 'NetCDFVariable':
         kwargs['decode_times'] = False
         if isinstance(paths, str):
             paths = glob.glob(paths)
         if len(paths) == 1:
             ds = xarray.open_dataset(paths[0], **kwargs)
+            if preprocess:
+                ds = preprocess(ds)
         else:
-            ds = xarray.open_mfdataset(paths, **kwargs)
+            ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
         return NetCDFVariable(ds[name])
 
 class UnaryOperator(Variable):
@@ -104,7 +107,7 @@ class UnaryOperator(Variable):
         pass
 
 class LimitRegion(UnaryOperator):
-    def __init__(self, source: Variable, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False):
+    def __init__(self, source: Variable, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False):
         assert minlon <= maxlon, 'Minimum longitude %s must be smaller than, or equal to, maximum longitude %s.' % (minlon, maxlon)
         assert minlat <= maxlat, 'Minimum latitude %s must be smaller than, or equal to, maximum latitude %s.' % (minlat, maxlat)
         source_lon, source_lat = source.x.getm.longitude, source.x.getm.latitude
@@ -118,15 +121,16 @@ class LimitRegion(UnaryOperator):
         else:
             jmin = source_lat.values.searchsorted(minlat, side='right') - 1
             jmax = source_lat.values.searchsorted(maxlat, side='left') + 1
-        #print(imin, imax, source_lon.values.size, jmin, jmax, source_lat.values.size)
+        if verbose:
+            print(imin, imax, source_lon.values.size, jmin, jmax, source_lat.values.size)
         assert (imin >= 0 and imax <= source_lon.values.size) or periodic_lon, 'Requested longitude section %s - %s is not fully covered by available range %s - %s' % (minlon, maxlon, source_lon.values[0], source_lon.values[-1])
         assert jmin >= 0 and jmax <= source_lat.values.size, 'Requested latitude section %s - %s is not fully covered by available range %s - %s' % (minlat, maxlat, source_lat.values[0], source_lat.values[-1])
         add_left = imin < 0
         add_right = imax >= source_lon.values.size
         imin = max(imin, 0)
         imax = min(imax, source_lon.values.size)
-        ilondim = source.x.dims.index(source_lon.name)
-        ilatdim = source.x.dims.index(source_lat.name)
+        ilondim = source.x.dims.index(source_lon.dims[0])
+        ilatdim = source.x.dims.index(source_lat.dims[0])
         shape = list(source.x.shape)
         shape[ilondim] = imax - imin
         shape[ilatdim] = jmax - jmin
@@ -135,6 +139,8 @@ class LimitRegion(UnaryOperator):
         target_lon = source_lon[self._center_source[ilondim]]
         target_lat = source_lat[self._center_source[ilatdim]]
         overlap = abs(source_lon.values[-1] - source_lon.values[0] - 360.) < 1e-5
+        if verbose:
+            print('periodic longitude? %s Overlap? %s = %s' % (periodic_lon, abs(source_lon.values[-1] - source_lon.values[0] - 360.), overlap))
         self._left_target = None
         self._right_target = None
         if add_left:
@@ -142,22 +148,25 @@ class LimitRegion(UnaryOperator):
             imin_left = source_lon.values.searchsorted(minlon + 360., side='right') - 1
             self._left_source = tuple([{ilondim: slice(imin_left, -1 if overlap else None)}.get(i, s) for i, s in enumerate(self._center_source)])
             nleft = source_lon.values.size - imin_left + (-1 if overlap else 0)
-            #print('adding %i values on the left' % nleft)
+            if verbose:
+                print('adding %i values on the left' % (nleft,))
             shape[ilondim] += nleft
             self._left_target = tuple([{ilondim: slice(0, nleft)}.get(i, s) for i, s in enumerate(self._center_target)])
             self._center_target[ilondim] = slice(nleft, nleft + imax - imin)
-            target_lon = xarray.concat((source_lon[self._left_source[ilondim]] - 360., target_lon), source_lon.name, combine_attrs='no_conflicts')
+            target_lon = xarray.concat((source_lon[self._left_source[ilondim]] - 360., target_lon), source_lon.dims[0], combine_attrs='no_conflicts')
         if add_right:
             # Periodic domain and we need to read beyond right boundary
             imax_right = source_lon.values.searchsorted(maxlon - 360., side='left') + 1
             self._right_source = tuple([{ilondim: slice(1 if overlap else 0, imax_right)}.get(i, s) for i, s in enumerate(self._center_source)])
+            if verbose:
+                print('adding %i values on the right' % (imax_right + (-1 if overlap else 0),))
             shape[ilondim] += imax_right + (-1 if overlap else 0)
             self._right_target = tuple([{ilondim: slice(s.stop, None)}.get(i, s) for i, s in enumerate(self._center_target)])
-            target_lon = xarray.concat((target_lon, source_lon[self._right_source[ilondim]] + 360.), source_lon.name, combine_attrs='no_conflicts')
-            #print('adding %i values on the left' % imax_right + (-1 if overlap else 0))
+            target_lon = xarray.concat((target_lon, source_lon[self._right_source[ilondim]] + 360.), source_lon.dims[0], combine_attrs='no_conflicts')
         self._center_target = tuple(self._center_target)
         shape = tuple(shape)
-        #print('final shape: %s' % (shape,))
+        if verbose:
+            print('final shape: %s' % (shape,))
         self._data = numpy.empty(shape, dtype=source.x.dtype)
         coords = dict(source.x.coords.items())
         coords[source_lon.name] = target_lon
@@ -173,7 +182,7 @@ class LimitRegion(UnaryOperator):
             self._data[self._right_target] = self.source.x.data[self._right_source]
 
 class SpatialInterpolation(UnaryOperator):
-    def __init__(self, source: Variable, lon: xarray.DataArray, lat: xarray.DataArray, transpose: Optional[bool]=None):
+    def __init__(self, source: Variable, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float):
         assert source.x.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.x.name
         assert source.x.getm.latitude is not None, 'Variable %s does not have a valid latitude coordinate.' % source.x.name
         source_lon, source_lat = source.x.getm.longitude, source.x.getm.latitude
@@ -181,6 +190,13 @@ class SpatialInterpolation(UnaryOperator):
         assert source_lat.ndim == 1
         lon, lat = numpy.broadcast_arrays(lon, lat)
         dimensions = {0: (), 1: (source_lon.dims[0],), 2: (source_lat.dims[0],  source_lon.dims[-1])}[lon.ndim]
+        if source.x.dims.index(source_lon.dims[0]) > source.x.dims.index(source_lat.dims[0]):
+            # Dimension order: latitude first, then longitude
+            self._ip = pygetm.util.interpolate.Linear2DGridInterpolator(lat, lon, source_lat, source_lon)
+        else:
+            # Dimension order: longitude first, then latitude
+            dimensions = dimensions[::-1]
+            self._ip = pygetm.util.interpolate.Linear2DGridInterpolator(lon, lat, source_lon, source_lat)
         lon_name, lat_name = source_lon.name, source_lat.name
         if lon_name in dimensions and lon.ndim > 1:
             lon_name = lon_name + '_'
@@ -188,8 +204,7 @@ class SpatialInterpolation(UnaryOperator):
             lat_name = lat_name + '_'
         lon = xarray.DataArray(lon, dims=dimensions, name=lon_name, attrs=source_lon.attrs)
         lat = xarray.DataArray(lat, dims=dimensions, name=lat_name, attrs=source_lat.attrs)
-        self._data = numpy.empty(lon.shape, source.x.dtype)
-        self._ip = pygetm.util.interpolate.Linear2DGridInterpolator(lat, lon, source_lat, source_lon)
+        self._data = numpy.empty(lon.shape, dtype=dtype)
         coords = dict([(k, v) for k, v in source.x.coords.items() if k not in {source_lon.name, source_lat.name}])
         coords[lon.name] = lon
         coords[lat.name] = lat
