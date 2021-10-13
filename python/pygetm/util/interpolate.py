@@ -2,7 +2,7 @@ import sys
 import numpy
 
 class Linear2DGridInterpolator:
-    def __init__(self, x, y, xp, yp):
+    def __init__(self, x, y, xp, yp, preslice=(Ellipsis,), ndim_trailing=0):
         xp = numpy.array(xp)
         yp = numpy.array(yp)
         x = numpy.array(x)
@@ -23,29 +23,39 @@ class Linear2DGridInterpolator:
             yp = yp[::-1]
         assert (x >= xp[0]).all() and (x <= xp[-1]).all(), 'One or more target x coordinates (%s - %s) fall outside of source range (%s - %s)' % (x.min(), x.max(), xp[0], xp[-1])
         assert (y >= yp[0]).all() and (y <= yp[-1]).all(), 'One or more target y coordinates (%s - %s) fall outside of source range (%s - %s)' % (y.min(), y.max(), yp[0], yp[-1])
-        self.ix_right = numpy.minimum(xp.searchsorted(x, side='right'), xp.size - 1)
-        self.ix_left = self.ix_right - 1
-        self.iy_right = numpy.minimum(yp.searchsorted(y, side='right'), yp.size - 1)
-        self.iy_left = self.iy_right - 1
-        wx_left = (xp[self.ix_right] - x) / (xp[self.ix_right] - xp[self.ix_left])
-        wy_left = (yp[self.iy_right] - y) / (yp[self.iy_right] - yp[self.iy_left])
+        ix_right = numpy.minimum(xp.searchsorted(x, side='right'), xp.size - 1)
+        ix_left = ix_right - 1
+        iy_right = numpy.minimum(yp.searchsorted(y, side='right'), yp.size - 1)
+        iy_left = iy_right - 1
+        wx_left = (xp[ix_right] - x) / (xp[ix_right] - xp[ix_left])
+        wy_left = (yp[iy_right] - y) / (yp[iy_right] - yp[iy_left])
         self.w11 = wx_left * wy_left
         self.w12 = wx_left * (1. - wy_left)
         self.w21 = (1. - wx_left) * wy_left
         self.w22 = (1. - wx_left) * (1. - wy_left)
         if dxp[0] < 0:
-            self.ix_left, self.ix_right = xp.size - self.ix_left - 1, xp.size - self.ix_right - 1
+            ix_left, ix_right = xp.size - ix_left - 1, xp.size - ix_right - 1
         if dyp[0] < 0:
-            self.iy_left, self.iy_right = yp.size - self.iy_left - 1, yp.size - self.iy_right - 1
+            iy_left, iy_right = yp.size - iy_left - 1, yp.size - iy_right - 1
+        wshape = x.shape + (1,) * ndim_trailing
+        self.w11.shape = wshape
+        self.w12.shape = wshape
+        self.w21.shape = wshape
+        self.w22.shape = wshape
+        self.slice11 = (Ellipsis, ix_left, iy_left) + tuple([slice(None)] * ndim_trailing)
+        self.slice12 = (Ellipsis, ix_left, iy_right) + tuple([slice(None)] * ndim_trailing)
+        self.slice21 = (Ellipsis, ix_right, iy_left) + tuple([slice(None)] * ndim_trailing)
+        self.slice22 = (Ellipsis, ix_right, iy_right) + tuple([slice(None)] * ndim_trailing)
+        self.idim1 = -2 - ndim_trailing
+        self.idim2 = -1 - ndim_trailing
 
     def __call__(self, fp):
-        assert fp.ndim == 2
-        assert fp.shape[0] == self.nxp
-        assert fp.shape[1] == self.nyp
-        f11 = fp[self.ix_left, self.iy_left]
-        f12 = fp[self.ix_left, self.iy_right]
-        f21 = fp[self.ix_right, self.iy_left]
-        f22 = fp[self.ix_right, self.iy_right]
+        assert fp.shape[self.idim1] == self.nxp
+        assert fp.shape[self.idim2] == self.nyp
+        f11 = fp[self.slice11]
+        f12 = fp[self.slice12]
+        f21 = fp[self.slice21]
+        f22 = fp[self.slice22]
         return self.w11 * f11 + self.w12 * f12 + self.w21 * f21 + self.w22 * f22
 
 def test():

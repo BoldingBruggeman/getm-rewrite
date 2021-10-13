@@ -172,10 +172,14 @@ class SpatialInterpolation(UnaryOperator):
         assert source_lon.ndim == 1
         assert source_lat.ndim == 1
         lon, lat = numpy.broadcast_arrays(lon, lat)
+        ilondim = source.x.dims.index(source_lon.dims[0])
+        ilatdim = source.x.dims.index(source_lat.dims[0])
+        assert abs(ilondim - ilatdim) == 1, 'Longitude and latitude dimensions must be distinct and adjacent'
         dimensions = {0: (), 1: (source_lon.dims[0],), 2: (source_lat.dims[0],  source_lon.dims[-1])}[lon.ndim]
-        if source.x.dims.index(source_lon.dims[0]) > source.x.dims.index(source_lat.dims[0]):
+        shape = source.x.shape[:min(ilondim, ilatdim)] + lon.shape + source.x.shape[max(ilondim, ilatdim) + 1:]
+        if ilondim > ilatdim:
             # Dimension order: latitude first, then longitude
-            self._ip = pygetm.util.interpolate.Linear2DGridInterpolator(lat, lon, source_lat, source_lon)
+            self._ip = pygetm.util.interpolate.Linear2DGridInterpolator(lat, lon, source_lat, source_lon, ndim_trailing=len(shape) - max(ilondim, ilatdim) - 1)
         else:
             # Dimension order: longitude first, then latitude
             dimensions = dimensions[::-1]
@@ -187,11 +191,12 @@ class SpatialInterpolation(UnaryOperator):
             lat_name = lat_name + '_'
         lon = xarray.DataArray(lon, dims=dimensions, name=lon_name, attrs=source_lon.attrs)
         lat = xarray.DataArray(lat, dims=dimensions, name=lat_name, attrs=source_lat.attrs)
-        self._data = numpy.empty(lon.shape, dtype=dtype)
+        self._data = numpy.empty(shape, dtype=dtype)
         coords = dict([(k, v) for k, v in source.x.coords.items() if k not in {source_lon.name, source_lat.name}])
         coords[lon.name] = lon
         coords[lat.name] = lat
-        result = xarray.DataArray(self._data, dims=dimensions, coords=coords, attrs=source.x.attrs)
+        dims = source.x.dims[:min(ilondim, ilatdim)] + dimensions + source.x.dims[max(ilondim, ilatdim) + 1:]
+        result = xarray.DataArray(self._data, dims=dims, coords=coords, attrs=source.x.attrs)
         UnaryOperator.__init__(self, source, result)
 
     def apply(self):
