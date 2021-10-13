@@ -5,8 +5,6 @@ import cftime
 import xarray
 import numpy
 import numpy.typing
-import scipy.interpolate
-from xarray.core.dataarray import DataArray
 
 import pygetm.util.interpolate
 
@@ -46,21 +44,6 @@ class GETMAccessor:
                 elif units is not None and ' since ' in units:
                     self._coordinates['time'] = coord
         return self._coordinates
-
-    def interp(self, lon: xarray.DataArray, lat: xarray.DataArray, transpose: Optional[bool]=None) -> xarray.DataArray:
-        assert self.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % self._obj.name
-        assert self.latitude is not None, 'Variable %s does not have a valid latitude coordinate.' % self._obj.name
-        lon, lat = numpy.broadcast_arrays(lon, lat)
-        dimensions = {0: (), 1: (self.longitude.dims[0],), 2: (self.latitude.dims[0],  self.longitude.dims[-1])}[lon.ndim]
-        lon_name, lat_name = self.longitude.name, self.latitude.name
-        if lon_name in dimensions:
-            lon_name = lon_name + '_'
-        if lat_name in dimensions:
-            lat_name = lat_name + '_'
-        lon = xarray.DataArray(lon, dims=dimensions, name=lon_name)
-        lat = xarray.DataArray(lat, dims=dimensions, name=lat_name)
-        data = InterpolatedData(self._obj, self.longitude.values, self.latitude.values, lon.values, lat.values, transpose=transpose)
-        return xarray.DataArray(data, dims=dimensions, coords={lon.name: lon, lat.name: lat})
 
 class Variable:
     @classmethod
@@ -283,48 +266,3 @@ class TemporalInterpolation(UnaryOperator):
         self._numnow = numtime
         self._timecoord.values[...] = time
         return True
-
-class InterpolatedData:
-    def __init__(self, xarray_obj: xarray.DataArray, source_lon, source_lat, target_lon, target_lat, transpose: Optional[bool]=None):
-        self._obj = xarray_obj
-        assert target_lon.shape == target_lat.shape
-        assert source_lon.ndim == 1, 'Longitude of source grid must be one-dimensional, but has shape %s' % (source_lon.shape,)
-        assert source_lat.ndim == 1, 'Latitude of source grid must be one-dimensional, but has shape %s' % (source_lat.shape,)
-        if transpose is None:
-            transpose = xarray_obj.shape == (source_lon.size, source_lat.size)
-        minlon, maxlon = target_lon.min(), target_lon.max()
-        minlat, maxlat = target_lat.min(), target_lat.max()
-        assert source_lon[0] <= minlon and source_lon[-1] >= maxlon, 'Requested longitude range (%s - %s) does not fall completely within the source grid (%s - %s).' % (minlon, maxlon, source_lon[0], source_lon[-1])
-        assert source_lat[0] <= minlat and source_lat[-1] >= maxlat, 'Requested latitude range (%s - %s) does not fall completely within the source grid (%s - %s).' % (minlat, maxlat, source_lat[0], source_lat[-1])
-        self.imin = source_lon.searchsorted(minlon, side='right') - 1
-        self.imax = source_lon.searchsorted(maxlon, side='left') + 1
-        self.jmin = source_lat.searchsorted(minlat, side='right') - 1
-        self.jmax = source_lat.searchsorted(maxlat, side='left') + 1
-        self.source_lon = source_lon[self.imin:self.imax]
-        self.source_lat = source_lat[self.jmin:self.jmax]
-        self.target_lon = target_lon
-        self.target_lat = target_lat
-        self.shape = target_lon.shape
-        self.dtype = self._obj.dtype
-        self.transpose = transpose
-
-    def __array_function__(self, func, types, args, kwargs):
-        #print('__array_function__', func)
-        return func(self.__array__(), *args, **kwargs)
-
-    def __array__(self):
-        #print('__array__')
-        if self.transpose:
-            source_data = self._obj[self.imin:self.imax, self.jmin:self.jmax].values.T
-        else:
-            source_data = self._obj[self.jmin:self.jmax, self.imin:self.imax].values
-        #print(source_data)
-        ip = scipy.interpolate.RectBivariateSpline(self.source_lat, self.source_lon, source_data, kx=1, ky=1)
-        data = ip(self.target_lat, self.target_lon, grid=False)
-        #print(data)
-        data.shape = self.target_lat.shape
-        return data
-
-def request_from_netcdf(path: str, name: str) -> xarray.DataArray:
-    ds = xarray.open_dataset(path)
-    return ds[name]

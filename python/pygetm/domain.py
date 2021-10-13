@@ -9,6 +9,7 @@ from . import _pygetm
 from . import core
 from . import parallel
 from . import output
+from . import input
 
 WEST  = 1
 NORTH = 2
@@ -473,7 +474,7 @@ class Domain(_pygetm.Domain):
         else:
             # Depth is provided as xarray object that includes coordinates (we require CF compliant longitude, latitude)
             # Interpolate to target grid.
-            self.H[...] = depth.getm.interp(self.lon, self.lat).values
+            self.H[...] = input.SpatialInterpolation(input.Variable(depth), self.lon, self.lat).x.values
         if scale_factor is not None:
             self.H *= scale_factor
         if minimum_depth is not None:
