@@ -2,7 +2,7 @@ import sys
 import numpy
 
 class Linear2DGridInterpolator:
-    def __init__(self, x, y, xp, yp, preslice=(Ellipsis,), ndim_trailing=0):
+    def __init__(self, x, y, xp, yp, preslice=(Ellipsis,), ndim_trailing: int=0, mask=None):
         xp = numpy.array(xp)
         yp = numpy.array(yp)
         x = numpy.array(x)
@@ -33,19 +33,47 @@ class Linear2DGridInterpolator:
         self.w12 = wx_left * (1. - wy_left)
         self.w21 = (1. - wx_left) * wy_left
         self.w22 = (1. - wx_left) * (1. - wy_left)
-        if dxp[0] < 0:
-            ix_left, ix_right = xp.size - ix_left - 1, xp.size - ix_right - 1
-        if dyp[0] < 0:
-            iy_left, iy_right = yp.size - iy_left - 1, yp.size - iy_right - 1
+
+        # Ensure weights are broadcastable to shape of data array
         wshape = x.shape + (1,) * ndim_trailing
         self.w11.shape = wshape
         self.w12.shape = wshape
         self.w21.shape = wshape
         self.w22.shape = wshape
+
+        # If we reversed source coordinates, compute the correct indices and swap left and right
+        if dxp[0] < 0:
+            ix_left, ix_right = xp.size - ix_left - 1, xp.size - ix_right - 1
+        if dyp[0] < 0:
+            iy_left, iy_right = yp.size - iy_left - 1, yp.size - iy_right - 1
+
+        # Store slices into data array
         self.slice11 = (Ellipsis, ix_left, iy_left) + tuple([slice(None)] * ndim_trailing)
         self.slice12 = (Ellipsis, ix_left, iy_right) + tuple([slice(None)] * ndim_trailing)
         self.slice21 = (Ellipsis, ix_right, iy_left) + tuple([slice(None)] * ndim_trailing)
         self.slice22 = (Ellipsis, ix_right, iy_right) + tuple([slice(None)] * ndim_trailing)
+
+        if mask is not None:
+            # Force weights to zero for masked points and renormalize the weights so their sum is 1
+            shape = mask.shape[:-ndim_trailing - 2] + x.shape + mask.shape[-ndim_trailing:]
+            w11_full = numpy.empty(shape, dtype=self.w11.dtype)
+            w12_full = numpy.empty(shape, dtype=self.w12.dtype)
+            w21_full = numpy.empty(shape, dtype=self.w21.dtype)
+            w22_full = numpy.empty(shape, dtype=self.w22.dtype)
+            w11_full[...] = self.w11
+            w12_full[...] = self.w12
+            w21_full[...] = self.w21
+            w22_full[...] = self.w22
+            w11_full[mask[self.slice11]] = 0.
+            w12_full[mask[self.slice12]] = 0.
+            w21_full[mask[self.slice21]] = 0.
+            w22_full[mask[self.slice22]] = 0.
+            norm = 1. / (w11_full + w12_full + w21_full + w22_full)
+            self.w11 = w11_full * norm
+            self.w12 = w12_full * norm
+            self.w21 = w21_full * norm
+            self.w22 = w22_full * norm
+
         self.idim1 = -2 - ndim_trailing
         self.idim2 = -1 - ndim_trailing
 
