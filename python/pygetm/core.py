@@ -5,6 +5,7 @@ import numpy, numpy.lib.mixins, numpy.typing
 import xarray
 
 from . import _pygetm
+from . import input
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
@@ -18,6 +19,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._units = units
         self._long_name = long_name
         self._fill_value = fill_value
+        self.mapped_field: Optional[xarray.DataArray] = None
 
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
@@ -133,9 +135,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self._xarray = xarray.DataArray(self.values, coords=coords, dims=('y' + self.grid.postfix, 'x' + self.grid.postfix), attrs=attrs, name=self.name)
         return self._xarray
 
-    @property
-    def plot(self):
-        return self.xarray.plot
+    def plot(self, **kwargs):
+        if 'x' not in kwargs and 'y' not in kwargs:
+            kwargs['x'] = ('lon' if self.grid.domain.spherical else 'x') + self.grid.postfix
+            kwargs['y'] = ('lat' if self.grid.domain.spherical else 'y') + self.grid.postfix
+        return self.xarray.plot(**kwargs)
 
     def interp(self, target_grid, out: Optional['Array'] = None):
         if out is None:
@@ -225,3 +229,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         else:
             # one return value
             return self.create(self.grid, fill=result)
+
+    def update(self, time):
+        self.mapped_field.getm.update(time)
+        self.values[...] = self.mapped_field

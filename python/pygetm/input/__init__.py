@@ -289,7 +289,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         if self._numnow is None:
             # First call to update - make sure the time series does not start after the requested time.
-            self._inext = self._numtimes.searchsorted(numtime) - 2
+            self._inext = self._numtimes.searchsorted(numtime, side='right') - 2
             if self._inext < -1:
                 raise Exception('Cannot interpolate %s to value at %s, because time series starts only after %s.' % (self._source.name, numtime, self._numtimes[0]))
         elif numtime < self._numnow:

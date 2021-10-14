@@ -75,6 +75,16 @@ class Grid(_pygetm.Grid):
     def array(self, fill=None, dtype=float, **kwargs) -> core.Array:
         return core.Array.create(self, fill, dtype, **kwargs)
 
+    def map(self, field: xarray.DataArray, periodic_lon=True):
+        lon, lat = self.lon.values, self.lat.values
+        field = input.limit_region(field, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
+        field = input.temporal_interpolation(field)
+        field = input.spatial_interpolation(field, lon, lat)
+        arr = self.array()
+        arr.mapped_field = field
+        arr.values[...] = field
+        return arr
+
     def add_to_netcdf(self, nc: netCDF4.Dataset, postfix: str=''):
         xdim, ydim = 'x' + postfix, 'y' + postfix
         def save(name, units='', long_name=None):
