@@ -18,13 +18,13 @@ class Dataset:
             path = os.path.join(root, name)
             with xarray.open_dataset(path) as ds:
                 ds = ds.set_coords(('lat_z', 'lon_z'))
-                re = pygetm.input.Variable(ds['%sRe' % variable])
-                im = pygetm.input.Variable(ds['%sIm' % variable])
-                re = pygetm.input.LimitRegion(re, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=True)
-                im = pygetm.input.LimitRegion(im, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=True)
-                re = pygetm.input.SpatialInterpolation(re, lon, lat)
-                im = pygetm.input.SpatialInterpolation(im, lon, lat)
-                self.components[component] = re.x.values, im.x.values
+                re = ds['%sRe' % variable]
+                im = ds['%sIm' % variable]
+                re = pygetm.input.limit_region(re, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=True)
+                im = pygetm.input.limit_region(im, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=True)
+                re = pygetm.input.spatial_interpolation(re, lon, lat)
+                im = pygetm.input.spatial_interpolation(im, lon, lat)
+                self.components[component] = re.values, im.values
 
     def update(self, date):
         return otps2.predict_tide_2d(self.components, self.lat, date, ntime=1, delta_time=0)[0, ...]

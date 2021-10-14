@@ -219,7 +219,7 @@ def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: 
     assert abs(ilondim - ilatdim) == 1, 'Longitude and latitude dimensions must be distinct and adjacent'
     dimensions = {0: (), 1: (source_lon.dims[0],), 2: (source_lat.dims[0],  source_lon.dims[-1])}[lon.ndim]
     shape = source.shape[:min(ilondim, ilatdim)] + lon.shape + source.shape[max(ilondim, ilatdim) + 1:]
-    kwargs = {'ndim_trailing': len(shape) - max(ilondim, ilatdim) - 1, 'mask': mask}
+    kwargs = {'ndim_trailing': source.ndim - max(ilondim, ilatdim) - 1, 'mask': mask}
     if ilondim > ilatdim:
         # Dimension order: latitude first, then longitude
         ip = pygetm.util.interpolate.Linear2DGridInterpolator(lat, lon, source_lat, source_lon, **kwargs)

@@ -3,6 +3,7 @@ import numpy
 
 class Linear2DGridInterpolator:
     def __init__(self, x, y, xp, yp, preslice=(Ellipsis,), ndim_trailing: int=0, mask=None):
+        assert ndim_trailing >= 0
         xp = numpy.array(xp)
         yp = numpy.array(yp)
         x = numpy.array(x)
