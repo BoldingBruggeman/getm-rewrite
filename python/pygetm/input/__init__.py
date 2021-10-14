@@ -1,4 +1,4 @@
-from typing import Iterable, List, Mapping, Union, Optional, Mapping, Sequence, Tuple
+from typing import Iterable, List, Mapping, Union, Optional, Mapping, Sequence
 import glob
 import numbers
 
@@ -9,8 +9,6 @@ import xarray
 import cftime
 
 import pygetm.util.interpolate
-
-register = []
 
 @xarray.register_dataarray_accessor('getm')
 class GETMAccessor:
@@ -76,7 +74,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def update(self, time: cftime.datetime) -> bool:
         return False
 
-    def astype(self, dtype, **kwargs):
+    def astype(self, dtype, **kwargs) -> numpy.ndarray:
         return self.__array__(dtype)
 
     def __array_function__(self, func, types, args, kwargs):
@@ -84,7 +82,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         kwargs = dict((k, numpy.asarray(v)) if isinstance(v, LazyArray) else (k, v) for (k, v) in kwargs.items())
         return func(*args, **kwargs)
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    def __array_ufunc__(self, ufunc, method: str, *inputs, **kwargs):
         if method != '__call__':
             return NotImplemented
 
@@ -96,35 +94,32 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         inputs = tuple(numpy.asarray(x) if isinstance(x, LazyArray) else x for x in inputs)
         return getattr(ufunc, method)(*inputs, **kwargs)
 
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None) -> numpy.ndarray:
         raise NotImplementedError
 
-    def __getitem__(self, slices):
-        return numpy.asarray(self)[slices]
+    def __getitem__(self, slices) -> numpy.ndarray:
+        return self.__array__()[slices]
 
 class UnaryOperatorResult(LazyArray):
     def __init__(self, source: xarray.DataArray, shape: Iterable[int]=(), dtype=None, passthrough=()):
         LazyArray.__init__(self, shape, dtype or source.dtype, passthrough)
         self._source = source
 
-    def __array__(self, dtype=None):
-        raise NotImplementedError
-
     def update(self, time: cftime.datetime) -> bool:
         return self._source.getm.update(time)
 
 class LimitedRegionArray(UnaryOperatorResult):
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None) -> numpy.ndarray:
         data = numpy.empty(self.shape, dtype or self.dtype)
         for src_slice, tgt_slice in self._slices:
             data[tgt_slice] = self._source[src_slice]
         return data
 
-    def __getitem__(self, slices):
+    def __getitem__(self, slices) -> numpy.ndarray:
+        assert isinstance(slices, tuple)
         if Ellipsis in slices:
             i = slices.index(Ellipsis)
             slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
-        assert isinstance(slices, tuple)
         assert len(slices) == self.ndim
         shape = [l for i, (l, s) in enumerate(zip(self.shape, slices)) if i not in self.passthrough or not isinstance(s, int)]
         data = numpy.empty(shape, self.dtype)
@@ -245,7 +240,7 @@ class SpatialInterpolation(UnaryOperatorResult):
         UnaryOperatorResult.__init__(self, source, shape)
         self._ip = ip
 
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None) -> numpy.ndarray:
         return self._ip(self._source.values)
 
 def temporal_interpolation(source: xarray.DataArray):
@@ -280,9 +275,9 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._slope = 0.
         self._inext = -1
         self._next = 0.
-        self.slices = [slice(None)] * source.ndim
+        self.slices: List[Union[int, slice]] = [slice(None)] * source.ndim
 
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None) -> numpy.ndarray:
         return self._current
 
     def update(self, time: cftime.datetime) -> bool:
@@ -294,8 +289,9 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         if self._numnow is None:
             # First call to update - make sure the time series does not start after the requested time.
-            if self._numtimes[0] > numtime:
-                raise Exception('Cannot interpolate %s to value at %s, because time series starts after (%s).' % (self._source.name, numtime, self._numtimes[0]))
+            self._inext = self._numtimes.searchsorted(numtime) - 2
+            if self._inext < -1:
+                raise Exception('Cannot interpolate %s to value at %s, because time series starts only after %s.' % (self._source.name, numtime, self._numtimes[0]))
         elif numtime < self._numnow:
             # Subsequent call to update - make sure the requested time equals or exceeds the previously requested value
             raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._numnow, numtime))
@@ -307,7 +303,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
                 raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source.name, numtime, self._numtimes[self._inext - 1]))
             old, numold = self._next, self._numnext
             self.slices[self._itimedim] = self._inext
-            self._next = self._source.data[tuple(self.slices)]
+            self._next = self._source.variable[tuple(self.slices)].values
             self._numnext = self._numtimes[self._inext]
             self._slope = (self._next - old) / (self._numnext - numold)
 
