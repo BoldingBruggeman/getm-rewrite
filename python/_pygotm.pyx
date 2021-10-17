@@ -5,7 +5,7 @@ cimport cython
 cimport numpy
 import numpy
 
-cdef extern void initialize(int nlev, const char* inputdir, double**  ptke, double**  peps, double**  pL, double**  pnum, double**  pnuh) nogil
+cdef extern void initialize(int nlev, const char* inputdir, double** ptke, double** peps, double** pL, double** pnum, double** pnuh) nogil
 cdef extern void calculate(int nlev, double dt, double* h, double D, double taus, double taub, double z0s, double z0b, double* SS, double* NN) nogil
 cdef extern void diff(int nlev, double dt, double cnpar, int posconc, double* h, int Bcup, int Bcdw, double Yup, double Ydw, double* nuY, double* Lsour, double* Qsour, double* Taur, double* Yobs, double* Y)
 
