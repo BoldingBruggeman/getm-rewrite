@@ -267,7 +267,7 @@ contains
       call c_f_pointer(padvection, advection)
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pugrid, ugrid)
-      call c_f_pointer(pu, u, tgrid%u(1:2) - tgrid%l(1:2) + 1)
+      call c_f_pointer(pu, u, ugrid%u(1:2) - ugrid%l(1:2) + 1)
       call c_f_pointer(pvar, var, tgrid%u(1:2) - tgrid%l(1:2) + 1)
       select case (direction)
          case (1)
@@ -291,6 +291,7 @@ contains
       call momentum%configure()
       momentum%advection_scheme = 0
       momentum%apply_bottom_friction = (apply_bottom_friction == 1)
+      momentum%apply_diffusion = .false.
       call momentum%initialize(runtype, domain)
       pmomentum = c_loc(momentum)
    end function
