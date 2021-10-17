@@ -80,7 +80,7 @@ class Grid(_pygetm.Grid):
         field = input.limit_region(field, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
         field = input.temporal_interpolation(field)
         field = input.spatial_interpolation(field, lon, lat)
-        arr = self.array()
+        arr = self.array(name=field.name, long_name=field.attrs.get('long_name'), units=field.attrs.get('units'))
         arr.mapped_field = field
         arr.values[...] = field
         return arr
