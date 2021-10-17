@@ -116,6 +116,10 @@ cdef class Domain:
         domain_initialize(self.p, runtype, &self.maxdt)
 
     def initialize_open_boundaries(self, int nwb, int nnb, int neb, int nsb, int nbdyp, int[:,::1] bdy_info, int[::1] bdy_i, int[::1] bdy_j):
+        assert bdy_info.shape[0] == 6, 'bdy_info should have 6 rows'
+        assert bdy_info.shape[1] == nwb + nnb + neb + nsb, 'bdy_info should have as many columns as the number of boundaries'
+        assert bdy_i.shape[0] == nbdyp, 'bdy_i should have a length equal to the number of boundary points'
+        assert bdy_j.shape[0] == nbdyp, 'bdy_j should have a length equal to the number of boundary points'
         domain_initialize_open_boundaries(self.p, nbdyp, nwb, nnb, neb, nsb, &bdy_info[0,0], &bdy_i[0], &bdy_j[0])
 
 cdef class Advection:
