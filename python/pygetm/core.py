@@ -1,11 +1,12 @@
+import datetime
 import numbers
 from typing import Optional, Union
 
 import numpy, numpy.lib.mixins, numpy.typing
+import cftime
 import xarray
 
 from . import _pygetm
-from . import input
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
@@ -230,6 +231,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # one return value
             return self.create(self.grid, fill=result)
 
-    def update(self, time):
+    def update(self, time: Union[datetime.datetime, cftime.datetime]):
+        if self.mapped_field is None:
+            return
         self.mapped_field.getm.update(time)
         self.values[...] = self.mapped_field
