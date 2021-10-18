@@ -19,6 +19,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/modules")
 add_subdirectory(../extern/python-otps2 python-otps2)
 
 add_subdirectory(../extern/pygsw pygsw)
+add_subdirectory(airsea pyairsea)
 
 set(GOTM_BUILD_LIBRARIES_ONLY ON)
 set(GOTM_USE_FABM OFF CACHE BOOL "Use FABM" FORCE)
