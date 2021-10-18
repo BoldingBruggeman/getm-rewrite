@@ -19,14 +19,16 @@ contains
       real(rk), intent(in), value                :: hh
       real(rk), intent(in),    dimension(nx, ny) :: dlon, dlat
       real(rk), intent(inout), dimension(nx, ny) :: zenith_angle
-      zenith_angle(istart:istop, jstart:jstop) = solar_zenith_angle(yday, hh, dlon(istart:istop, jstart:jstop), dlat(istart:istop, jstart:jstop))
+      zenith_angle(istart:istop, jstart:jstop) = solar_zenith_angle(yday, hh, dlon(istart:istop, jstart:jstop), &
+         dlat(istart:istop, jstart:jstop))
    end subroutine
 
    subroutine shortwave_radiation_2d(nx, ny, istart, istop, jstart, jstop, yday, zenith_angle, dlon, dlat, cloud, swr) bind(c)
       integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, yday
       real(rk), intent(in),    dimension(nx, ny) :: zenith_angle, dlon, dlat, cloud
       real(rk), intent(inout), dimension(nx, ny) :: swr
-      swr(istart:istop, jstart:jstop) = shortwave_radiation(zenith_angle(istart:istop, jstart:jstop), yday, dlon(istart:istop, jstart:jstop), dlat(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop))
+      swr(istart:istop, jstart:jstop) = shortwave_radiation(zenith_angle(istart:istop, jstart:jstop), yday, &
+         dlon(istart:istop, jstart:jstop), dlat(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop))
    end subroutine
 
    subroutine humidity_2d(nx, ny, istart, istop, jstart, jstop, method, hum, airp, tw, ta, es, ea, qs, qa, rhoa) bind(c)
@@ -47,7 +49,8 @@ contains
       select case (method)
          case (1)  ! relative humidity in % given
    !        get actual vapor pressure from saturation vapor pressure at that air temperature
-            ea(istart:istop, jstart:jstop) = 0.01_rk * hum(istart:istop, jstart:jstop) * saturation_vapor_pressure(ta(istart:istop, jstart:jstop))
+            ea(istart:istop, jstart:jstop) = 0.01_rk * hum(istart:istop, jstart:jstop) &
+               * saturation_vapor_pressure(ta(istart:istop, jstart:jstop))
    !        convert to specific humidity
             qa(istart:istop, jstart:jstop) = specific_humidity(ea(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
          case (2)  ! Specific humidity from wet bulb temperature
@@ -57,7 +60,9 @@ contains
    !        Make sure this is in degC
    !        saturation vapor pressure at wet bulb temperature
    !        actual vapor pressure
-            ea(istart:istop, jstart:jstop) = saturation_vapor_pressure(hum(istart:istop, jstart:jstop)) - 6.6e-4_rk * (1._rk + 1.15e-3_rk * hum(istart:istop, jstart:jstop)) * airp * (ta(istart:istop, jstart:jstop) - hum(istart:istop, jstart:jstop))
+            ea(istart:istop, jstart:jstop) = saturation_vapor_pressure(hum(istart:istop, jstart:jstop)) &
+               - 6.6e-4_rk * (1._rk + 1.15e-3_rk * hum(istart:istop, jstart:jstop)) * airp &
+               * (ta(istart:istop, jstart:jstop) - hum(istart:istop, jstart:jstop))
    !        specific humidity in kg/kg
             qa(istart:istop, jstart:jstop) = specific_humidity(ea(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
          case (3)  ! Specific humidity from dew point temperature
@@ -66,12 +71,14 @@ contains
          case (4)  ! specific humidity in kg/kg is given
             qa(istart:istop, jstart:jstop) = hum(istart:istop, jstart:jstop)
    !        actual water vapor pressure in Pascal
-            ea(istart:istop, jstart:jstop) = qa(istart:istop, jstart:jstop) *airp(istart:istop, jstart:jstop)/(const06 + 0.378_rk * qa(istart:istop, jstart:jstop))
+            ea(istart:istop, jstart:jstop) = qa(istart:istop, jstart:jstop) *airp(istart:istop, jstart:jstop) &
+               / (const06 + 0.378_rk * qa(istart:istop, jstart:jstop))
          case default
             stop 'humidity_2d()'
       end select
 
-      rhoa(istart:istop, jstart:jstop) = air_density(airp(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), qa(istart:istop, jstart:jstop))
+      rhoa(istart:istop, jstart:jstop) = air_density(airp(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
+         qa(istart:istop, jstart:jstop))
 
    end subroutine
 
@@ -83,17 +90,23 @@ contains
       print *, cloud
       select case (method)
          case (1)
-            call clark(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call clark(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
+               cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
          case (2)
-            call hastenrath(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), qa(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call hastenrath(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
+               cloud(istart:istop, jstart:jstop), qa(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
          case (3)
-            call bignami(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call bignami(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
+               cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
          case (4)
-            call berliand(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call berliand(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), &
+               ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
          case (5)
-            call josey1(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call josey1(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), &
+               ql(istart:istop, jstart:jstop))
          case (6)
-            call josey2(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call josey2(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), &
+               ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
          case default
             stop 'longwave_radiation_2d()'
       end select
