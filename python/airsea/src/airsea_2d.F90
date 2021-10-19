@@ -7,6 +7,7 @@ module mod_airsea_2d
    use mod_shortwave_radiation
    use mod_longwave_radiation
    use mod_albedo_water
+   use mod_kondo
 
    implicit none
 
@@ -87,7 +88,6 @@ contains
       real(rk), intent(in),    dimension(nx, ny) :: dlat, tw, ta, cloud, ea, qa
       real(rk), intent(inout), dimension(nx, ny) :: ql
 
-      print *, cloud
       select case (method)
          case (1)
             call clark(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
@@ -125,6 +125,14 @@ contains
          case default
             stop 'albedo_2d()'
       end select
+   end subroutine
+
+   subroutine transfer_coefficients_2d(nx, ny, istart, istop, jstart, jstop, method, tw, ta, w, cd_mom, cd_latent, cd_sensible) bind(c)
+      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, method
+      real(rk), intent(in),    dimension(nx, ny) :: tw, ta, w
+      real(rk), intent(inout), dimension(nx, ny) :: cd_mom, cd_latent, cd_sensible
+      call kondo(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), w(istart:istop, jstart:jstop), &
+         cd_mom(istart:istop, jstart:jstop), cd_latent(istart:istop, jstart:jstop), cd_sensible(istart:istop, jstart:jstop))
    end subroutine
 
 end module

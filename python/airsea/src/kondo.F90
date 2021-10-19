@@ -6,6 +6,8 @@ module mod_kondo
 
    private
 
+   public kondo
+
 contains
 !-----------------------------------------------------------------------
 !BOP
