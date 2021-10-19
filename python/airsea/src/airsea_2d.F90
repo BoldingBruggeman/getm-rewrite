@@ -127,7 +127,8 @@ contains
       end select
    end subroutine
 
-   subroutine transfer_coefficients_2d(nx, ny, istart, istop, jstart, jstop, method, tw, ta, w, cd_mom, cd_latent, cd_sensible) bind(c)
+   subroutine transfer_coefficients_2d(nx, ny, istart, istop, jstart, jstop, method, tw, ta, w, cd_mom, cd_latent, cd_sensible) &
+      bind(c)
       integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, method
       real(rk), intent(in),    dimension(nx, ny) :: tw, ta, w
       real(rk), intent(inout), dimension(nx, ny) :: cd_mom, cd_latent, cd_sensible
