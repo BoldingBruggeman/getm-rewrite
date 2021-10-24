@@ -25,7 +25,7 @@ cdef extern void* pressure_create(int runtype, void* pdomain) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV) nogil
-cdef extern void sealevel_update_uvx(void* sealevel) nogil
+#cdef extern void sealevel_update_uvx(void* sealevel) nogil
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
 
 cpdef enum:
@@ -155,7 +155,7 @@ cdef class Simulation:
     cdef void* pmomentum
     cdef void* ppressure
     cdef void* psealevel
-    cdef int nx, ny
+    cdef readonly int nx, ny
 
     def __init__(self, Domain domain, int runtype, int apply_bottom_friction):
         self.domain = domain
@@ -175,8 +175,8 @@ cdef class Simulation:
     def update_sealevel(self, double timestep, Array U not None, Array V not None):
         sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p)
 
-    def update_sealevel_uvx(self):
-        sealevel_update_uvx(self.psealevel)
+    #def update_sealevel_uvx(self):
+    #    sealevel_update_uvx(self.psealevel)
 
     def update_sealevel_boundaries(self, double timestep):
         sealevel_boundaries(self.psealevel, self.pmomentum, timestep)
