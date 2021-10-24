@@ -1,3 +1,4 @@
+import operator
 import numpy
 
 from . import _pygetm
@@ -8,12 +9,25 @@ from . import output
 Advection = _pygetm.Advection
 
 class Simulation(_pygetm.Simulation):
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv'
+    _pressure_arrays = 'dpdx', 'dpdy'
+    _sealevel_arrays = 'zbdy',
+    _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('output_manager', 'uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
+    __slots__ = _all_fortran_arrays
+
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True):
         self.output_manager = output.OutputManager(rank=dom.tiling.rank)
         dom.field_manager = self.output_manager
 
         assert not dom.initialized
         _pygetm.Simulation.__init__(self, dom, runtype, apply_bottom_friction)
+
+        for name in Simulation._momentum_arrays:
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name), name.encode('ascii'), source=1))
+        for name in Simulation._pressure_arrays:
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name), name.encode('ascii'), source=2))
+        for name in Simulation._sealevel_arrays:
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name), name.encode('ascii'), source=3))
 
         self.update_depth()
 
@@ -24,13 +38,6 @@ class Simulation(_pygetm.Simulation):
         self.uva = dom.UV.array(fill=numpy.nan)
         self.vua = dom.VU.array(fill=numpy.nan)
         self.vva = dom.VV.array(fill=numpy.nan)
-
-        for name in ('U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv'):
-            setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii'), source=1))
-        for name in ('dpdx', 'dpdy'):
-            setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii'), source=2))
-        for name in ('zbdy',):
-            setattr(self, name, self.wrap(core.Array(name=name), name.encode('ascii'), source=3))
 
     def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values
@@ -84,3 +91,6 @@ class Simulation(_pygetm.Simulation):
         V = self.V.interp(dom.T)
         vel2_D2 = U**2 + V**2
         return 0.5 * rho0 * dom.T.area * vel2_D2 / dom.T.D
+
+for membername in Simulation._all_fortran_arrays:
+    setattr(Simulation, membername[1:], property(operator.attrgetter(membername)))

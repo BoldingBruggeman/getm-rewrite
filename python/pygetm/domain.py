@@ -1,4 +1,5 @@
 from typing import Optional, Tuple
+import operator
 
 import numpy
 import numpy.typing
@@ -25,6 +26,11 @@ def find_interfaces(c: numpy.ndarray):
     return c_if
 
 class Grid(_pygetm.Grid):
+    _coordinate_arrays = 'x', 'y', 'lon', 'lat'
+    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor')
+    _all_fortran_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
+    __slots__ = _all_fortran_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
+
     def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
@@ -38,8 +44,8 @@ class Grid(_pygetm.Grid):
         self._cos_rot: Optional[numpy.ndarray] = None
 
     def initialize(self, nbdyp: int):
-        for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
-            setattr(self, name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
+        for name in self._fortran_arrays:
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
         self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
         self.fill()
         self.nbdyp = nbdyp
@@ -56,12 +62,12 @@ class Grid(_pygetm.Grid):
                 target.fill(numpy.nan)
                 target[:values.shape[0], :values.shape[1]] = values
                 target.flags.writeable = name not in read_only
-                if has_bounds:
+                if has_bounds and name in self._coordinate_arrays:
                     # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
                     # The interface coordinates are slices that point to the supergrid data; they thus do not consume additional memory.
                     values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
-                    setattr(self, name + 'i_', values_i)
-                    setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
+                    setattr(self, '_%si_' % name, values_i)
+                    setattr(self, '_%si' % name, values_i[self.halo:-self.halo, self.halo:-self.halo])
 
     def rotate(self, u: numpy.typing.ArrayLike, v: numpy.typing.ArrayLike, to_grid: bool= True) -> Tuple[numpy.typing.ArrayLike, numpy.typing.ArrayLike]:
         if self._sin_rot is None:
@@ -102,6 +108,9 @@ class Grid(_pygetm.Grid):
         save('mask')
         save('area', 'm2')
         save('cor', 's-1', 'Coriolis parameter')
+
+for membername in Grid._all_fortran_arrays:
+    setattr(Grid, membername[1:], property(operator.attrgetter(membername)))
 
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
     if dtype is None:
