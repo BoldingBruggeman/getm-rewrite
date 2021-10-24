@@ -285,6 +285,7 @@ contains
       real(real64), contiguous, pointer, dimension(:,:) :: u, var
 
       call c_f_pointer(padvection, advection)
+      if (.not. allocated(advection%op)) return
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pugrid, ugrid)
       call c_f_pointer(pu, u, ugrid%u(1:2) - ugrid%l(1:2) + 1)
