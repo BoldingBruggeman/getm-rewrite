@@ -145,21 +145,30 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             kwargs['y'] = ('lat' if self.grid.domain.spherical else 'y') + self.grid.postfix
         return self.xarray.plot(**kwargs)
 
-    def interp(self, target_grid, out: Optional['Array'] = None):
-        if out is None:
-            out = Array.create(target_grid, dtype=self.dtype)
-        key = (self.grid.type, target_grid.type)
+    def interp(self, target):
+        if not isinstance(target, Array):
+            # Target must be a grid
+            target = Array.create(target, dtype=self.dtype)
+        key = (self.grid.type, target.grid.type)
         if key == (_pygetm.UGRID, _pygetm.TGRID):
-            self.grid.interp_x(self, out, offset=1)
+            self.grid.interp_x(self, target, offset=1)
+        elif key == (_pygetm.TGRID, _pygetm.UGRID):
+            self.grid.interp_x(self, target, offset=0)
         elif key == (_pygetm.VGRID, _pygetm.TGRID):
-            self.grid.interp_y(self, out, offset=1)
+            self.grid.interp_y(self, target, offset=1)
+        elif key == (_pygetm.TGRID, _pygetm.VGRID):
+            self.grid.interp_y(self, target, offset=0)
+        elif key == (_pygetm.XGRID, _pygetm.TGRID):
+            self.grid.interp_xy(self, target, ioffset=0, joffset=0)
+        elif key == (_pygetm.TGRID, _pygetm.XGRID):
+            self.grid.interp_xy(self, target, ioffset=1, joffset=1)
         elif key in ((_pygetm.UGRID, _pygetm.UUGRID), (_pygetm.VGRID, _pygetm.UVGRID)):
-            self.grid.interp_x(self, out, offset=0)
+            self.grid.interp_x(self, target, offset=0)
         elif key in ((_pygetm.UGRID, _pygetm.VUGRID), (_pygetm.VGRID, _pygetm.VVGRID)):
-            self.grid.interp_y(self, out, offset=0)
+            self.grid.interp_y(self, target, offset=0)
         else:
-            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (self.grid.type, target_grid.type))
-        return out
+            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (self.grid.type, target.grid.type))
+        return target
 
     def __array__(self, dtype=None):
         return numpy.asarray(self.values, dtype=dtype)

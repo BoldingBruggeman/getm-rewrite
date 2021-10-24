@@ -15,6 +15,7 @@ cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void grid_interp_x(void* grid, double* source, double* target, int ioffset) nogil
 cdef extern void grid_interp_y(void* grid, double* source, double* target, int joffset) nogil
+cdef extern void grid_interp_xy(void* source_grid, double* source, void* target_grid, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid, void** p) nogil
 cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pvar) nogil
@@ -92,6 +93,9 @@ cdef class Grid:
 
     def interp_y(self, Array source, Array target, int offset):
         grid_interp_y(self.p, <double *>source.p, <double *>target.p, offset)
+
+    def interp_xy(self, Array source, Array target, int ioffset, int joffset):
+        grid_interp_xy(self.p, <double *>source.p, <double *>target.grid.p, <double *>target.p, ioffset, joffset)
 
 cdef class Domain:
     cdef void* p

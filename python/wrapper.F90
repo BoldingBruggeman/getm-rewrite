@@ -218,6 +218,26 @@ contains
       end do
    end subroutine
 
+   subroutine grid_interp_xy(psource_grid, psource, ptarget_grid, ptarget, ioffset, joffset) bind(c)
+      type(c_ptr),    intent(in), value :: psource_grid, psource, ptarget_grid, ptarget
+      integer(c_int), intent(in), value :: ioffset, joffset
+
+      type (type_getm_grid),    pointer :: source_grid, target_grid
+      real(real64), contiguous, pointer :: source(:,:), target(:,:)
+      integer :: i, j
+
+      call c_f_pointer(psource_grid, source_grid)
+      call c_f_pointer(ptarget_grid, target_grid)
+      call c_f_pointer(psource, source, source_grid%u(1:2) - source_grid%l(1:2) + 1)
+      call c_f_pointer(ptarget, target, target_grid%u(1:2) - target_grid%l(1:2) + 1)
+      do j = 1, size(source, 2) - 1
+         do i = 1, size(source, 1) - 1
+            target(i + ioffset, j + joffset) = 0.25_real64 * (source(i, j) + source(i + 1, j) &
+               + source(i, j + 1) + source(i + 1, j + 1))
+         end do
+      end do
+   end subroutine
+
    subroutine domain_initialize(pdomain, runtype, maxdt) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: runtype
