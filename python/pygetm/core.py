@@ -20,6 +20,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._units = units
         self._long_name = long_name
         self._fill_value = fill_value
+        self._ma = None
         self.mapped_field: Optional[xarray.DataArray] = None
 
     def __repr__(self) -> str:
@@ -110,7 +111,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def ma(self) -> numpy.ma.MaskedArray:
-        return numpy.ma.array(self.values, mask=self.grid.mask.values==0)
+        if self._ma is None:
+            self._ma = numpy.ma.array(self.values, mask=self.grid.mask.values==0)
+        return self._ma
 
     @property
     def xarray(self) -> xarray.DataArray:
