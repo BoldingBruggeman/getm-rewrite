@@ -59,7 +59,7 @@ def airsea_fluxes(grid: domain.Grid, method: int, tw: core.Array, ta: core.Array
     else:
         taux, tauy, qe, qh = out
     w = numpy.sqrt(u10.all_values**2 + v10.all_values**2)
-    L = 2.5e6 - 0.00234e6 * tw.all_values
+    L = 2.5e6 - 0.00234e6 * tw.all_values   # latent heat of vaporization (J/kg) at sea surface
     cd_mom, cd_latent, cd_sensible = numpy.empty_like(w), numpy.empty_like(w), numpy.empty_like(w)
     pyairsea.transfer_coefficients(1, tw.all_values, ta.all_values, w, cd_mom, cd_latent, cd_sensible)
     tmp = cd_mom * rhoa.all_values * w
