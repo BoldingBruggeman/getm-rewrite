@@ -31,11 +31,11 @@ bash ./install
 
 # Using the model
 
-The best place is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
+The best place to start is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
 
 ```
 cd python/examples
-jupyter lab
+python -m jupyterlab
 ```
 
 # Contributing
