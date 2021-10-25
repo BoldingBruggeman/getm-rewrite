@@ -4,6 +4,7 @@ channels:
 dependencies:
   - python=3.8
   - fortran-compiler
+  - mpi4py
   - xarray
   - jupyterlab
   - cmake
