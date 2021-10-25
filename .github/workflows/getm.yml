@@ -2,47 +2,30 @@ name: Build and test
 on: push
 jobs:
    gfortran:
-      strategy:
-         matrix:
-            version: [10]  # [7, 8, 9, 10]
-            os: [ubuntu-latest]
-            #include:
-            #   - version: 6
-            #     os: ubuntu-18.04
-            #   - version: 8
-            #     cmake_args: -DFABM_USE_CONTIGUOUS=OFF
-         fail-fast: false
-      runs-on: ${{ matrix.os }}
+      runs-on: ubuntu-latest
       steps:
-      - name: Install compiler and MPI
-        #run: sudo apt-get install python3-numpy python3-wheel python3-netcdf4 python3-mpi4py python3-matplotlib gfortran-${{ matrix.version }}
-        run: |
-           sudo apt-get update
-           sudo apt-get install gfortran-${{ matrix.version }} libopenmpi-dev
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: 3.8
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install wheel
-          pip install cython numpy netcdf4 mpi4py matplotlib xarray scipy
-          #if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Clone
         uses: actions/checkout@v2
         with:
            path: getm
            submodules: recursive
            ssh-key: ${{ secrets.BB_TESTING_SSH }}
-      - name: Make install
+      - name: Install conda environment
         run: |
-          mkdir build
-          cd build
-          cmake ../getm/python -DCMAKE_Fortran_COMPILER=gfortran-${{ matrix.version }}
-          make install
+          conda env create -f environment.yml
+          conda init bash
+      - name: Compile
+        run: |
+          source ${CONDA}/etc/profile.d/conda.sh
+          conda activate pygetm
+          source ./install
       - name: Run all test cases
         run: |
+          source ${CONDA}/etc/profile.d/conda.sh
           cd getm/python/tests
           python test_2d_transport.py
           python test_2d_flow_symmetry.py

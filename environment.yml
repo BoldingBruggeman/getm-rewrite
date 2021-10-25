@@ -1,4 +1,4 @@
-name: ssw
+name: pygetm
 channels:
   - conda-forge
 dependencies:
