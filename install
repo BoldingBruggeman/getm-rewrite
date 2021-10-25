@@ -1,0 +1,12 @@
+# This script is intended to be source'd, not executed
+
+set -e
+
+REPO_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+WORK_DIR=`mktemp -d`
+cd ${WORK_DIR}
+cmake ${REPO_DIR}/python
+make -j4 install
+cd -
+rm -rf ${WORK_DIR}
