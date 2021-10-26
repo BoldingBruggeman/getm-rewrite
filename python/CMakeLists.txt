@@ -48,6 +48,7 @@ add_library(cgotm
 target_link_libraries(cgotm turbulence util yaml)
 
 # Find target Python interpreter.
+set(Python_FIND_STRATEGY LOCATION)
 find_package(Python3 COMPONENTS Interpreter Development NumPy)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
