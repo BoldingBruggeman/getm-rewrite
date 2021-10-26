@@ -4,7 +4,7 @@ This repository contains a rewrite of the General Estuarine Transport Model (GET
 
 When the first stable version is released (quite some time away) this will be the official version of GETM.
 
-# Installing
+## Installing
 
 You will need the [Anaconda Python distribution](https://www.anaconda.com/products/individual). On many systems that is already installed: try running `conda --version`.
 If that fails, you may need to load an anaconda module first: try `module load anaconda` or `module load anaconda3`. If that still does not give you a working `conda` command,
@@ -29,7 +29,7 @@ conda activate pygetm
 source ./install
 ```
 
-# Using the model
+## Using the model
 
 The best place to start is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
 
@@ -38,7 +38,7 @@ cd python/examples
 python -m jupyterlab
 ```
 
-# Contributing
+## Contributing
 
 How to contribute to the development:
 
