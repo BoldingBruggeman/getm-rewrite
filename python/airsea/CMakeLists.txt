@@ -30,8 +30,8 @@ add_library(cairsea
 )
 target_compile_definitions(cairsea PRIVATE GUSTINESS)
 
-
 # Find target Python interpreter.
+set(Python_FIND_STRATEGY LOCATION)
 find_package(Python3 COMPONENTS Interpreter Development NumPy)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pyairsea.c
