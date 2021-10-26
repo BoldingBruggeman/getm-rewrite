@@ -26,7 +26,7 @@ git clone --recursive git@github.com:BoldingBruggeman/getm-rewrite.git
 cd getm-rewrite
 conda env create -f environment.yml
 conda activate pygetm
-bash ./install
+source ./install
 ```
 
 # Using the model
