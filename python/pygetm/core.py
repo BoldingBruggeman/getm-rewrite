@@ -143,6 +143,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if 'x' not in kwargs and 'y' not in kwargs:
             kwargs['x'] = ('lon' if self.grid.domain.spherical else 'x') + self.grid.postfix
             kwargs['y'] = ('lat' if self.grid.domain.spherical else 'y') + self.grid.postfix
+        if 'shading' not in kwargs:
+            kwargs['shading'] = 'auto'
         return self.xarray.plot(**kwargs)
 
     def interp(self, target):
