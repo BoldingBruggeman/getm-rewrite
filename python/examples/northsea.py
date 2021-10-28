@@ -1,8 +1,6 @@
 import datetime
 import os.path
 
-import numpy
-
 import pygetm
 import pygetm.domain
 import pygetm.input
@@ -17,7 +15,7 @@ sim = pygetm.Simulation(domain, runtype=1, advection_scheme=1)
 
 bdy_lon = domain.T.lon[domain.bdy_j, domain.bdy_i]
 bdy_lat = domain.T.lat[domain.bdy_j, domain.bdy_i]
-tpxo = pygetm.input.tpxo.Dataset(bdy_lon, bdy_lat, verbose=True, root='../../../igotm/data/TPXO9')
+tidal_h = pygetm.input.tpxo.get(bdy_lon, bdy_lat, verbose=True, root='../../../igotm/data/TPXO9')
 
 # No surface forcing
 tausx = domain.U.array(fill=0.0)
@@ -27,13 +25,13 @@ sp = domain.T.array(fill=0.0)
 timestep = 60.
 timedelta = datetime.timedelta(seconds=timestep)
 date = datetime.datetime(2000, 1, 1)
-for itime in range(60 *24 * 30):
+for itime in range(60 *24 * 5):
     print(date, domain.T.z.ma.min(), domain.T.z.ma.max())
     date += timedelta
 
-    sim.zbdy[:] = 0.001 * tpxo.update(date)
+    tidal_h.getm.update(date)
+    sim.zbdy[:] = tidal_h
     sim.update_sealevel_boundaries(timestep)
-
     sim.update_surface_pressure_gradient(domain.T.z, sp)
     sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
     sim.U.update_halos()

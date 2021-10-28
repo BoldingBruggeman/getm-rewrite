@@ -129,7 +129,7 @@ class LimitedRegionArray(UnaryOperatorResult):
             data[tgt_slice] = self._source.variable[src_slice]
         return data
 
-def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False):
+def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False) -> xarray.DataArray:
     assert minlon <= maxlon, 'Minimum longitude %s must be smaller than, or equal to, maximum longitude %s.' % (minlon, maxlon)
     assert minlat <= maxlat, 'Minimum latitude %s must be smaller than, or equal to, maximum latitude %s.' % (minlat, maxlat)
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
@@ -202,7 +202,7 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
     coords[source_lat.name] = target_lat
     return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs)
 
-def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None):
+def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
     assert source.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.name
     assert source.getm.latitude is not None, 'Variable %s does not have a valid latitude coordinate.' % source.name
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
@@ -243,7 +243,7 @@ class SpatialInterpolation(UnaryOperatorResult):
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self._ip(self._source.values)
 
-def temporal_interpolation(source: xarray.DataArray):
+def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     time_coord = source.getm.time
     if time_coord is None:
         return source
