@@ -264,7 +264,7 @@ class SpatialInterpolation(UnaryOperatorResult):
                 src_slice.append(s)
             else:
                 assert isinstance(s, slice) and s.start is None and s.stop is None and s.step is None, '%s' % s
-        result = self._ip(self._source.values[tuple(src_slice)])
+        result = self._ip(self._source.variable[tuple(src_slice)].values)
         return result[tuple(tgt_slice)]
 
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
