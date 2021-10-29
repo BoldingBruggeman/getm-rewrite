@@ -84,8 +84,8 @@ class Grid(_pygetm.Grid):
     def map(self, field: xarray.DataArray, periodic_lon=True):
         lon, lat = self.lon.values, self.lat.values
         field = input.limit_region(field, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
-        field = input.temporal_interpolation(field)
         field = input.spatial_interpolation(field, lon, lat)
+        field = input.temporal_interpolation(field)
         arr = self.array(name=field.name, long_name=field.attrs.get('long_name'), units=field.attrs.get('units'))
         arr.mapped_field = field
         arr.values[...] = field

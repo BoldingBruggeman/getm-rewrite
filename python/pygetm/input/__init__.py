@@ -233,15 +233,39 @@ def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: 
     coords[lon.name] = lon
     coords[lat.name] = lat
     dims = source.dims[:min(ilondim, ilatdim)] + dimensions + source.dims[max(ilondim, ilatdim) + 1:]
-    return xarray.DataArray(SpatialInterpolation(ip, source, shape), dims=dims, coords=coords, attrs=source.attrs)
+    return xarray.DataArray(SpatialInterpolation(ip, source, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1), dims=dims, coords=coords, attrs=source.attrs)
 
 class SpatialInterpolation(UnaryOperatorResult):
-    def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.DataArray, shape: Iterable[int]):
+    def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.DataArray, shape: Iterable[int], npre: int, npost: int):
         UnaryOperatorResult.__init__(self, source, shape)
         self._ip = ip
+        self.npre = npre
+        self.npost = npost
 
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self._ip(self._source.values)
+
+    def __getitem__(self, slices) -> numpy.ndarray:
+        assert isinstance(slices, tuple)
+        if Ellipsis in slices:
+            i = slices.index(Ellipsis)
+            slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
+        assert len(slices) == self.ndim
+        src_slice, tgt_slice = [Ellipsis], [Ellipsis]
+        for i, s in enumerate(slices):
+            if i < self.npre:
+                # prefixed dimension
+                src_slice.insert(i, s)
+            elif i >= self.ndim - self.npost:
+                # trailing dimension
+                if isinstance(s, int):
+                    s = slice(s, s + 1)
+                    tgt_slice.append(0)
+                src_slice.append(s)
+            else:
+                assert isinstance(s, slice) and s.start is None and s.stop is None and s.step is None, '%s' % s
+        result = self._ip(self._source.values[tuple(src_slice)])
+        return result[tuple(tgt_slice)]
 
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     time_coord = source.getm.time
