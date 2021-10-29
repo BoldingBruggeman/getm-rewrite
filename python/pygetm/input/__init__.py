@@ -121,7 +121,14 @@ class LimitedRegionArray(UnaryOperatorResult):
             i = slices.index(Ellipsis)
             slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
         assert len(slices) == self.ndim
-        shape = [l for i, (l, s) in enumerate(zip(self.shape, slices)) if i not in self.passthrough or not isinstance(s, int)]
+        shape = []
+        for i, (l, s) in enumerate(zip(self.shape, slices)):
+            if i in self.passthrough and isinstance(s, int):
+                # This dimension will be sliced out
+                continue
+            start, stop, stride = s.indices(l)
+            assert i in self.passthrough or (start == 0 and stop == l and stride == 1), 'invalid slice for dimension %i with length %i: %i:%i:%i' % (i, l, start, stop, stride)
+            shape.append((stop - start + stride - 1) // stride)
         data = numpy.empty(shape, self.dtype)
         for src_slice, tgt_slice in self._slices:
             src_slice = tuple([(cust if i in self.passthrough else ori) for i, (cust, ori) in enumerate(zip(slices, src_slice))])
@@ -264,7 +271,8 @@ class SpatialInterpolation(UnaryOperatorResult):
                 src_slice.append(s)
             else:
                 assert isinstance(s, slice) and s.start is None and s.stop is None and s.step is None, '%s' % s
-        result = self._ip(self._source.variable[tuple(src_slice)].values)
+        source = self._source.variable[tuple(src_slice)]
+        result = self._ip(source.values)
         return result[tuple(tgt_slice)]
 
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
