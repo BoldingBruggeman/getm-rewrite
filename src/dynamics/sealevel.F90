@@ -11,7 +11,7 @@
 !>  @endbug
 
 !KB Must match setting on the python side
-#define USE_TRANSPORTS
+!#define USE_TRANSPORTS
 
 
 MODULE getm_sealevel
