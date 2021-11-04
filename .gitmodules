@@ -10,3 +10,7 @@
 [submodule "extern/pygsw"]
 	path = extern/pygsw
 	url = ../pygsw.git
+[submodule "extern/fabm"]
+	path = extern/fabm
+	url = ../../fabm-model/fabm.git
+	branch = pyfabm_nd

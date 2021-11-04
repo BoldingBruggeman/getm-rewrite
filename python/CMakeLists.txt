@@ -26,11 +26,16 @@ set(GOTM_USE_FABM OFF CACHE BOOL "Use FABM" FORCE)
 set(GOTM_USE_NetCDF OFF CACHE BOOL "Use NetCDF" FORCE)
 add_subdirectory(../extern/gotm gotm EXCLUDE_FROM_ALL)
 
+set(PYFABM_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyfabm CACHE STRING "Dircotry to write pyfabm library to" FORCE)
+set(PYFABM_DIM_COUNT 3 CACHE STRING "Number of FABM dimensions" FORCE)
+add_compile_definitions(_FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_UNMASKED_VALUE_=1 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
+add_subdirectory(../extern/fabm/src/drivers/python fabm)
+
 add_library( flom 
-	../extern/flom/src/grid.F90
-	../extern/flom/src/logging.F90
-	../extern/flom/src/memory_manager.F90
-	)
+  ../extern/flom/src/grid.F90
+  ../extern/flom/src/logging.F90
+  ../extern/flom/src/memory_manager.F90
+)
 set_property( TARGET flom PROPERTY FOLDER flom )
 
 add_subdirectory(../src/domain domain)
@@ -77,6 +82,9 @@ add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygotm>" pygetm/
+                   COMMAND ${CMAKE_COMMAND} -E make_directory pygetm/pyfabm
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:fabm_c>" pygetm/pyfabm/
+                   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/../extern/fabm/src/drivers/python/pyfabm/__init__.py" pygetm/pyfabm/
                    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
