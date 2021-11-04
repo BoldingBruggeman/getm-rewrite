@@ -7,7 +7,7 @@ setup(
     author_email='jorn@bolding-bruggeman.com',
     license='GPL',
     packages=find_packages(include=['pygetm*']),
-    package_data={'pygetm': ['*.so', '*.dll', '*.dylib', '*.pyd']},
+    package_data={'pygetm': ['*.so', '*.dll', '*.dylib', '*.pyd'], 'pygetm.pyfabm': ['*.so', '*.dll', '*.dylib', '*.pyd']},
     zip_safe=False
 )
 
