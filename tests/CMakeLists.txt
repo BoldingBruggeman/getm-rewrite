@@ -9,6 +9,11 @@ add_compile_options(-pg -g)
 
 add_custom_target( test_all_getm )
 
+add_executable(test_vertical_coordinates EXCLUDE_FROM_ALL
+               ${CMAKE_CURRENT_LIST_DIR}/test_vertical_coordinates.F90
+              )
+target_link_libraries(test_vertical_coordinates PRIVATE getm_domain getm_dynamics flom )
+
 add_executable(test_getm_domain EXCLUDE_FROM_ALL
                ${CMAKE_CURRENT_LIST_DIR}/test_getm_domain.F90
               )

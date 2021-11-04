@@ -127,8 +127,10 @@ subroutine depths(domain,grid)
          end if
       end do
    end do
-   call domain%mirror_bdys(grid,grid%zf)
-   call domain%mirror_bdys(grid,grid%zc)
+   if (domain%nbdyp > 0) then
+      call domain%mirror_bdys(grid,grid%zf)
+      call domain%mirror_bdys(grid,grid%zc)
+   end if
 end subroutine depths
 
 !---------------------------------------------------------------------------
