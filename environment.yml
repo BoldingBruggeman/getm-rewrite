@@ -1,9 +1,11 @@
-name: ssw
+name: pygetm
 channels:
   - conda-forge
 dependencies:
   - python=3.8
   - fortran-compiler
+  - cython
+  - mpi4py
   - xarray
   - jupyterlab
   - cmake
@@ -13,3 +15,6 @@ dependencies:
   - ipympl
   - netcdf4
   - pyyaml
+  - dask
+  - cartopy
+  - proj

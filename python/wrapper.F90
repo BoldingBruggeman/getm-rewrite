@@ -41,14 +41,49 @@ contains
       deallocate(domain)
    end subroutine
 
-   subroutine domain_initialize_open_boundaries(pdomain, nwb, nnb, neb, nsb, nbdyp) bind(c)
+   subroutine domain_initialize_open_boundaries(pdomain, nbdyp, nwb, nnb, neb, nsb, bdy_info, bdy_i, bdy_j) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: nwb, nnb, neb, nsb, nbdyp
+      integer(c_int), intent(in)        :: bdy_info(nwb + nnb + neb + nsb, 6), bdy_i(nbdyp), bdy_j(nbdyp)
 
       type (type_getm_domain), pointer :: domain
+      integer :: nbdy
 
       call c_f_pointer(pdomain, domain)
-      call domain%initialize_open_boundaries(nwb=nwb, nnb=nnb, neb=neb, nsb=nsb, nbdyp=nbdyp)
+      call domain%initialize_open_boundaries(nbdyp=nbdyp, nwb=nwb, nnb=nnb, neb=neb, nsb=nsb)
+
+      nbdy = 0
+      if (nwb > 0) then
+         domain%wi(:)  = bdy_info(nbdy + 1:nbdy + nwb, 1) + 1
+         domain%wfj(:) = bdy_info(nbdy + 1:nbdy + nwb, 2) + 1
+         domain%wlj(:) = bdy_info(nbdy + 1:nbdy + nwb, 3)
+         nbdy = nbdy + nwb
+      end if
+      if (nnb > 0) then
+         domain%nj(:) = bdy_info(nbdy + 1:nbdy + nnb, 1) + 1
+         domain%nfi(:) = bdy_info(nbdy + 1:nbdy + nnb, 2) + 1
+         domain%nli(:) = bdy_info(nbdy + 1:nbdy + nnb, 3)
+         nbdy = nbdy + nnb
+      end if
+      if (neb > 0) then
+         domain%ei(:) = bdy_info(nbdy + 1:nbdy + neb, 1) + 1
+         domain%efj(:) = bdy_info(nbdy + 1:nbdy + neb, 2) + 1
+         domain%elj(:) = bdy_info(nbdy + 1:nbdy + neb, 3)
+         nbdy = nbdy + neb
+      end if
+      if (nsb > 0) then
+         domain%sj(:) = bdy_info(nbdy + 1:nbdy + nsb, 1) + 1
+         domain%sfi(:) = bdy_info(nbdy + 1:nbdy + nsb, 2) + 1
+         domain%sli(:) = bdy_info(nbdy + 1:nbdy + nsb, 3)
+         nbdy = nbdy + nsb
+      end if
+      if (nbdy > 0) then
+         domain%bdy_2d_type(:) = bdy_info(:, 4)
+         domain%bdy_3d_type(:) = bdy_info(:, 5)
+         domain%bdy_index(:) = bdy_info(:, 6) + 1
+         domain%bdy_map(:, 1) = bdy_i + 1
+         domain%bdy_map(:, 2) = bdy_j + 1
+      end if
    end subroutine
 
    function domain_get_grid(pdomain, grid_type) result(pgrid) bind(c)
@@ -74,22 +109,24 @@ contains
       pgrid = c_loc(grid)
    end function
 
-   subroutine get_array(source_type, obj, name, grid_type, data_type, p) bind(c)
+   subroutine get_array(source_type, obj, name, grid_type, sub_type, data_type, p) bind(c)
       integer(c_int),  value,         intent(in)  :: source_type
       type(c_ptr), value,             intent(in)  :: obj
       character(kind=c_char), target, intent(in)  :: name(*)
-      integer(c_int),                 intent(out) :: grid_type, data_type
+      integer(c_int),                 intent(out) :: grid_type, sub_type, data_type
       type(c_ptr),                    intent(out) :: p
 
       type (type_getm_grid),     pointer :: grid
       type (type_getm_momentum), pointer :: momentum
       type (type_getm_pressure), pointer :: pressure
+      type (type_getm_sealevel), pointer :: sealevel
       character(len=10),         pointer :: pname
 
       call c_f_pointer(c_loc(name), pname)
 
       p = C_NULL_PTR
       grid_type = 1   ! TGRID (1: TGRID, 2: UGRID, 3: VGRID, 4: XGRID)
+      sub_type = 0    ! on-grid: 0, on boundary points: 1
       data_type = 0   ! double (use 1 for integer)
       select case (source_type)
       case (0)
@@ -126,12 +163,20 @@ contains
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
+         case ('bdyu');   p = c_loc(momentum%bdyu); grid_type = 2; sub_type = 1
+         case ('bdyv');   p = c_loc(momentum%bdyv); grid_type = 3; sub_type = 1
          end select
       case (2)
          call c_f_pointer(obj, pressure)
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
          case ('dpdx'); p = c_loc(pressure%dpdx); grid_type = 2
          case ('dpdy'); p = c_loc(pressure%dpdy); grid_type = 3
+         case default; p = C_NULL_PTR
+         end select
+      case (3)
+         call c_f_pointer(obj, sealevel)
+         select case (pname(:index(pname, C_NULL_CHAR) - 1))
+         case ('zbdy'); p = c_loc(sealevel%zbdy); sub_type = 1
          case default; p = C_NULL_PTR
          end select
       end select
@@ -169,6 +214,26 @@ contains
       do j = 1, size(source, 2) - 1
          do i = 1, size(source, 1)
             target(i, j + joffset) = 0.5_real64 * (source(i, j) + source(i, j + 1))
+         end do
+      end do
+   end subroutine
+
+   subroutine grid_interp_xy(psource_grid, psource, ptarget_grid, ptarget, ioffset, joffset) bind(c)
+      type(c_ptr),    intent(in), value :: psource_grid, psource, ptarget_grid, ptarget
+      integer(c_int), intent(in), value :: ioffset, joffset
+
+      type (type_getm_grid),    pointer :: source_grid, target_grid
+      real(real64), contiguous, pointer :: source(:,:), target(:,:)
+      integer :: i, j
+
+      call c_f_pointer(psource_grid, source_grid)
+      call c_f_pointer(ptarget_grid, target_grid)
+      call c_f_pointer(psource, source, source_grid%u(1:2) - source_grid%l(1:2) + 1)
+      call c_f_pointer(ptarget, target, target_grid%u(1:2) - target_grid%l(1:2) + 1)
+      do j = 1, size(source, 2) - 1
+         do i = 1, size(source, 1) - 1
+            target(i + ioffset, j + joffset) = 0.25_real64 * (source(i, j) + source(i + 1, j) &
+               + source(i, j + 1) + source(i + 1, j + 1))
          end do
       end do
    end subroutine
@@ -220,9 +285,10 @@ contains
       real(real64), contiguous, pointer, dimension(:,:) :: u, var
 
       call c_f_pointer(padvection, advection)
+      if (.not. allocated(advection%op)) return
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pugrid, ugrid)
-      call c_f_pointer(pu, u, tgrid%u(1:2) - tgrid%l(1:2) + 1)
+      call c_f_pointer(pu, u, ugrid%u(1:2) - ugrid%l(1:2) + 1)
       call c_f_pointer(pvar, var, tgrid%u(1:2) - tgrid%l(1:2) + 1)
       select case (direction)
          case (1)
@@ -246,6 +312,7 @@ contains
       call momentum%configure()
       momentum%advection_scheme = 0
       momentum%apply_bottom_friction = (apply_bottom_friction == 1)
+      momentum%apply_diffusion = .false.
       call momentum%initialize(runtype, domain)
       pmomentum = c_loc(momentum)
    end function
@@ -331,6 +398,18 @@ contains
 
       call c_f_pointer(psealevel, sealevel)
       call sealevel%uvx()
+   end subroutine
+
+   subroutine sealevel_boundaries(psealevel, pmomentum, timestep) bind(c)
+      type(c_ptr), intent(in), value :: psealevel, pmomentum
+      real(c_double), intent(in), value :: timestep
+
+      type (type_getm_sealevel), pointer :: sealevel
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(psealevel, sealevel)
+      call c_f_pointer(pmomentum, momentum)
+      call sealevel%boundaries(timestep, momentum%U, momentum%V, momentum%bdyu, momentum%bdyv)
    end subroutine
 
 end module

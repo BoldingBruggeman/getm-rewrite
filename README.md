@@ -2,7 +2,43 @@
 
 This repository contains a rewrite of the General Estuarine Transport Model (GETM) to modern Fortran.
 
-When the first stable version is released (quite some time away) this will be the offical version of GETM.
+When the first stable version is released (quite some time away) this will be the official version of GETM.
+
+## Installing
+
+You will need the [Anaconda Python distribution](https://www.anaconda.com/products/individual). On many systems that is already installed: try running `conda --version`.
+If that fails, you may need to load an anaconda module first: try `module load anaconda` or `module load anaconda3`. If that still does not give you a working `conda` command,
+you may want to install [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+
+Now make sure your conda environment is initialized:
+
+```
+conda init bash
+```
+
+This needs to be done just once, as it modifies your `.bashrc` that is sourced every time you login.
+After this, restart your shell by logging out and back in.
+
+Now obtain the repository with setups and scripts:
+
+```
+git clone --recursive git@github.com:BoldingBruggeman/getm-rewrite.git
+cd getm-rewrite
+conda env create -f environment.yml
+conda activate pygetm
+source ./install
+```
+
+## Using the model
+
+The best place to start is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
+
+```
+cd python/examples
+python -m jupyterlab
+```
+
+## Contributing
 
 How to contribute to the development:
 

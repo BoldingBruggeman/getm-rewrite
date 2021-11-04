@@ -1,4 +1,5 @@
 from typing import Optional, Tuple
+import operator
 
 import numpy
 import numpy.typing
@@ -9,6 +10,7 @@ from . import _pygetm
 from . import core
 from . import parallel
 from . import output
+from . import input
 
 WEST  = 1
 NORTH = 2
@@ -24,6 +26,11 @@ def find_interfaces(c: numpy.ndarray):
     return c_if
 
 class Grid(_pygetm.Grid):
+    _coordinate_arrays = 'x', 'y', 'lon', 'lat'
+    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor')
+    _all_fortran_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
+    __slots__ = _all_fortran_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
+
     def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
@@ -36,11 +43,12 @@ class Grid(_pygetm.Grid):
         self._sin_rot: Optional[numpy.ndarray] = None
         self._cos_rot: Optional[numpy.ndarray] = None
 
-    def initialize(self):
-        for name in ('x', 'y', 'dx', 'dy', 'lon', 'lat', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor'):
-            setattr(self, name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
+    def initialize(self, nbdyp: int):
+        for name in self._fortran_arrays:
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
         self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
         self.fill()
+        self.nbdyp = nbdyp
 
     def fill(self):
         read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area')
@@ -54,12 +62,12 @@ class Grid(_pygetm.Grid):
                 target.fill(numpy.nan)
                 target[:values.shape[0], :values.shape[1]] = values
                 target.flags.writeable = name not in read_only
-                if has_bounds:
+                if has_bounds and name in self._coordinate_arrays:
                     # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
                     # The interface coordinates are slices that point to the supergrid data; they thus do not consume additional memory.
                     values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
-                    setattr(self, name + 'i_', values_i)
-                    setattr(self, name + 'i', values_i[self.halo:-self.halo, self.halo:-self.halo])
+                    setattr(self, '_%si_' % name, values_i)
+                    setattr(self, '_%si' % name, values_i[self.halo:-self.halo, self.halo:-self.halo])
 
     def rotate(self, u: numpy.typing.ArrayLike, v: numpy.typing.ArrayLike, to_grid: bool= True) -> Tuple[numpy.typing.ArrayLike, numpy.typing.ArrayLike]:
         if self._sin_rot is None:
@@ -72,6 +80,16 @@ class Grid(_pygetm.Grid):
 
     def array(self, fill=None, dtype=float, **kwargs) -> core.Array:
         return core.Array.create(self, fill, dtype, **kwargs)
+
+    def map(self, field: xarray.DataArray, periodic_lon=True):
+        lon, lat = self.lon.values, self.lat.values
+        field = input.limit_region(field, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
+        field = input.spatial_interpolation(field, lon, lat)
+        field = input.temporal_interpolation(field)
+        arr = self.array(name=field.name, long_name=field.attrs.get('long_name'), units=field.attrs.get('units'))
+        arr.mapped_field = field
+        arr.values[...] = field
+        return arr
 
     def add_to_netcdf(self, nc: netCDF4.Dataset, postfix: str=''):
         xdim, ydim = 'x' + postfix, 'y' + postfix
@@ -90,6 +108,9 @@ class Grid(_pygetm.Grid):
         save('mask')
         save('area', 'm2')
         save('cor', 's-1', 'Coriolis parameter')
+
+for membername in Grid._all_fortran_arrays:
+    setattr(Grid, membername[1:], property(operator.attrgetter(membername)))
 
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
     if dtype is None:
@@ -335,13 +356,22 @@ class Domain(_pygetm.Domain):
         self.dy_.flags.writeable = self.dy.flags.writeable = False
 
         self.rotation, self.rotation_ = setup_metric()
-        rotation_left = numpy.arctan2(self.y_[:, 1:-1] - self.y_[:, :-2], self.x_[:, 1:-1] - self.x_[:, :-2])
-        rotation_right = numpy.arctan2(self.y_[:, 2:] - self.y_[:, 1:-1], self.x_[:, 2:] - self.x_[:, 1:-1])
-        rotation_bot = numpy.arctan2(self.y_[1:-1, :] - self.y_[:-2, :], self.x_[1:-1, :] - self.x_[:-2, :]) - 0.5 * numpy.pi
-        rotation_top = numpy.arctan2(self.y_[2:, :] - self.y_[1:-1, :], self.x_[2:, :] - self.x_[1:-1, :]) - 0.5 * numpy.pi
-        x_dum = numpy.cos(rotation_left[1:-1,:]) + numpy.cos(rotation_right[1:-1,:]) + numpy.cos(rotation_bot[:,1:-1]) + numpy.cos(rotation_top[:,1:-1])
-        y_dum = numpy.sin(rotation_left[1:-1,:]) + numpy.sin(rotation_right[1:-1,:]) + numpy.sin(rotation_bot[:,1:-1]) + numpy.sin(rotation_top[:,1:-1])
-        self.rotation_[1:-1,1:-1] = numpy.arctan2(y_dum, x_dum)
+        def supergrid_rotation(x, y):
+            # For each point, draw lines to the nearest neighbor (1/2 a grid cell) on the left, right, top and bottom.
+            # Determinethe angle bey
+            rotation_left = numpy.arctan2(y[:, 1:-1] - y[:, :-2], x[:, 1:-1] - x[:, :-2])
+            rotation_right = numpy.arctan2(y[:, 2:] - y[:, 1:-1], x[:, 2:] - x[:, 1:-1])
+            rotation_bot = numpy.arctan2(y[1:-1, :] - y[:-2, :], x[1:-1, :] - x[:-2, :]) - 0.5 * numpy.pi
+            rotation_top = numpy.arctan2(y[2:, :] - y[1:-1, :], x[2:, :] - x[1:-1, :]) - 0.5 * numpy.pi
+            x_dum = numpy.cos(rotation_left[1:-1,:]) + numpy.cos(rotation_right[1:-1,:]) + numpy.cos(rotation_bot[:,1:-1]) + numpy.cos(rotation_top[:,1:-1])
+            y_dum = numpy.sin(rotation_left[1:-1,:]) + numpy.sin(rotation_right[1:-1,:]) + numpy.sin(rotation_bot[:,1:-1]) + numpy.sin(rotation_top[:,1:-1])
+            return numpy.arctan2(y_dum, x_dum)
+        if self.lon_ is not None and self.lat_ is not None:
+            # Proper rotation with respect to true North
+            self.rotation_[1:-1,1:-1] = supergrid_rotation(self.lon_, self.lat_)
+        else:
+            # Rotation with respect to y axis - assumes y axis always point to true North (can be valid on for infinitesimally small domain)
+            self.rotation_[1:-1,1:-1] = supergrid_rotation(self.x_, self.y_)
         self.exchange_metric(self.rotation)
         self.rotation.flags.writeable = False
 
@@ -395,32 +425,36 @@ class Domain(_pygetm.Domain):
         self.field_manager = self.field_manager or output.FieldManager()
 
         nbdyp = 0
-        bdy_i, bdy_j = [], []
+        bdyinfo, bdy_i, bdy_j = [], [], []
         for side in (WEST, NORTH, EAST, SOUTH):
-            bounds = self.open_boundaries.get(side, [])
+            bounds = self.open_boundaries.setdefault(side, [])
             for l, mstart, mstop, type_2d, type_3d in bounds:
-                nbdyp += mstop - mstart + 1
+                bdyinfo.append(numpy.array((l, mstart, mstop, type_2d, type_3d, nbdyp), dtype=numpy.intc))
+                nbdyp += mstop - mstart
                 if side == WEST:
-                    self.mask[-1 + 2 * mstart:2 * mstop:2, l * 2 - 1] = 2
-                    self.mask[2 * mstart:2 * mstop:2, l * 2 - 1] = 3
+                    self.mask[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
+                    self.mask[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
                 elif side == EAST:
-                    self.mask[-1 + 2 * mstart:2 * mstop:2, l * 2 - 1] = 2
-                    self.mask[2 * mstart:2 * mstop:2, l * 2 - 1] = 3
+                    self.mask[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
+                    self.mask[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
                 elif side == SOUTH:
-                    self.mask[l * 2 - 1, -1 + 2 * mstart:2 * mstop:2] = 2
-                    self.mask[l * 2 - 1, 2 * mstart:2 * mstop:2] = 3
+                    self.mask[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
+                    self.mask[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
                 elif side == NORTH:
-                    self.mask[l * 2 - 1, -1 + 2 * mstart:2 * mstop:2] = 2
-                    self.mask[l * 2 - 1, 2 * mstart:2 * mstop:2] = 3
+                    self.mask[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
+                    self.mask[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
 
                 if side in (WEST, EAST):
-                    bdy_i.append(numpy.repeat(l - 1, mstop - mstart + 1))
-                    bdy_j.append(numpy.arange(mstart - 1, mstop))
+                    bdy_i.append(numpy.repeat(l, mstop - mstart))
+                    bdy_j.append(numpy.arange(mstart, mstop))
                 else:
-                    bdy_i.append(numpy.arange(mstart - 1, mstop))
-                    bdy_j.append(numpy.repeat(l - 1, mstop - mstart + 1))
-        self.bdy_i = [] if nbdyp == 0 else numpy.concatenate(bdy_i)
-        self.bdy_j = [] if nbdyp == 0 else numpy.concatenate(bdy_j)
+                    bdy_i.append(numpy.arange(mstart, mstop))
+                    bdy_j.append(numpy.repeat(l, mstop - mstart))
+        self.bdy_i = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_i, dtype=numpy.intc)
+        self.bdy_j = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_j, dtype=numpy.intc)
+        if nbdyp > 0:
+            bdyinfo = numpy.stack(bdyinfo, axis=-1)
+            self.initialize_open_boundaries(nwb=len(self.open_boundaries[WEST]), nnb=len(self.open_boundaries[NORTH]), neb=len(self.open_boundaries[EAST]), nsb=len(self.open_boundaries[SOUTH]), nbdyp=nbdyp, bdy_i=self.bdy_i, bdy_j=self.bdy_j, bdy_info=bdyinfo)
 
         # Mask U,V,X points unless all their T neighbors are valid - this mask will be sent to Fortran and determine which points are computed
         mask_ = numpy.array(self.mask_, copy=True)
@@ -432,7 +466,7 @@ class Domain(_pygetm.Domain):
         self.mask_[...] = mask_
 
         for grid in self.grids.values():
-            grid.initialize()
+            grid.initialize(nbdyp)
         self.UU.mask.all_values[...] = 0
         self.UV.mask.all_values[...] = 0
         self.VU.mask.all_values[...] = 0
@@ -459,7 +493,7 @@ class Domain(_pygetm.Domain):
         else:
             # Depth is provided as xarray object that includes coordinates (we require CF compliant longitude, latitude)
             # Interpolate to target grid.
-            self.H[...] = depth.getm.interp(self.lon, self.lat).values
+            self.H[...] = input.SpatialInterpolation(input.Variable(depth), self.lon, self.lat).x.values
         if scale_factor is not None:
             self.H *= scale_factor
         if minimum_depth is not None:

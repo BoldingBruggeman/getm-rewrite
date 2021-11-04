@@ -1,8 +1,10 @@
-from typing import MutableMapping, MutableSequence, Optional
+from typing import MutableMapping, Optional
+import collections
 
 import numpy.typing
 
 from .. import core
+from . import operators
 
 class FieldManager:
     def __init__(self):
@@ -16,21 +18,22 @@ class FieldManager:
 class File:
     def __init__(self, field_manager: FieldManager):
         self.field_manager = field_manager
-        self.order: MutableSequence[str] = []
-        self.fields: MutableSequence[core.Array] = []
+        self.fields: MutableMapping[str, operators.Base] = collections.OrderedDict()
 
     def close(self):
         pass
 
-    def request(self, name: str, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None):
+    def request(self, name: str, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False):
         assert name in self.field_manager.fields, 'Unknown field "%s" requested. Available: %s' % (name, ', '.join(self.field_manager.fields))
         if output_name is None:
             output_name = name
-        assert output_name not in self.order, 'A variable with name "%s" has already been added to %s.' % (output_name, self)
+        assert output_name not in self.fields, 'A variable with name "%s" has already been added to %s.' % (output_name, self)
         array = self.field_manager.fields[name]
         dtype = dtype or array.dtype
-        self.order.append(output_name)
-        self.fields.append(array)
+        field = operators.Field(array)
+        if mask:
+            field = operators.Mask(field)
+        self.fields[output_name] = field
 
 class OutputManager(FieldManager):
     def __init__(self, rank: int):

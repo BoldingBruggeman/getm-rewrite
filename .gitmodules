@@ -7,3 +7,10 @@
 [submodule "extern/python-otps2"]
 	path = extern/python-otps2
 	url = ../python-otps2.git
+[submodule "extern/pygsw"]
+	path = extern/pygsw
+	url = ../pygsw.git
+[submodule "extern/fabm"]
+	path = extern/fabm
+	url = ../../fabm-model/fabm.git
+	branch = pyfabm_nd

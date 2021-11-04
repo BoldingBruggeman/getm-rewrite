@@ -1,21 +1,29 @@
+import datetime
 import numbers
-from typing import Optional
+from typing import Optional, Union
 
 import numpy, numpy.lib.mixins, numpy.typing
+import cftime
 import xarray
 
 from . import _pygetm
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None):
+    __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field')
+
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None):
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
         self._gather: Optional[parallel.Gather] = None
         self._dist: Optional[parallel.DistributedArray] = None
+        assert fill_value is None or numpy.ndim(fill_value) == 0, 'fill_value must be a scalar value'
         self._name = name
         self._units = units
         self._long_name = long_name
+        self._fill_value = fill_value
+        self._ma = None
+        self.mapped_field: Optional[xarray.DataArray] = None
 
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
@@ -76,11 +84,15 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return sum / count
 
     def finish_initialization(self):
+        """This is called by the underlying cython implementation after the array receives a value (self.all_values is valid)"""
         assert self.grid is not None
-        if self.name is not None:
+        if self._name is not None:
             self.grid.domain.field_manager.register(self)
         halo = self.grid.halo
         self.values = self.all_values[halo:-halo, halo:-halo]
+        if self._fill_value is not None:
+            # Cast fill value to dtype of the array
+            self._fill_value = numpy.array(self._fill_value, dtype=self.all_values.dtype)
 
     @staticmethod
     def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
@@ -101,7 +113,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def ma(self) -> numpy.ma.MaskedArray:
-        return numpy.ma.array(self.values, mask=self.grid.mask.values==0)
+        if self._ma is None:
+            self._ma = numpy.ma.array(self.values, mask=self.grid.mask.values==0)
+        return self._ma
 
     @property
     def xarray(self) -> xarray.DataArray:
@@ -127,25 +141,38 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self._xarray = xarray.DataArray(self.values, coords=coords, dims=('y' + self.grid.postfix, 'x' + self.grid.postfix), attrs=attrs, name=self.name)
         return self._xarray
 
-    @property
-    def plot(self):
-        return self.xarray.plot
+    def plot(self, **kwargs):
+        if 'x' not in kwargs and 'y' not in kwargs:
+            kwargs['x'] = ('lon' if self.grid.domain.spherical else 'x') + self.grid.postfix
+            kwargs['y'] = ('lat' if self.grid.domain.spherical else 'y') + self.grid.postfix
+        if 'shading' not in kwargs:
+            kwargs['shading'] = 'auto'
+        return self.xarray.plot(**kwargs)
 
-    def interp(self, target_grid, out: Optional['Array'] = None):
-        if out is None:
-            out = Array.create(target_grid, dtype=self.dtype)
-        key = (self.grid.type, target_grid.type)
+    def interp(self, target):
+        if not isinstance(target, Array):
+            # Target must be a grid
+            target = Array.create(target, dtype=self.dtype)
+        key = (self.grid.type, target.grid.type)
         if key == (_pygetm.UGRID, _pygetm.TGRID):
-            self.grid.interp_x(self, out, offset=1)
+            self.grid.interp_x(self, target, offset=1)
+        elif key == (_pygetm.TGRID, _pygetm.UGRID):
+            self.grid.interp_x(self, target, offset=0)
         elif key == (_pygetm.VGRID, _pygetm.TGRID):
-            self.grid.interp_y(self, out, offset=1)
+            self.grid.interp_y(self, target, offset=1)
+        elif key == (_pygetm.TGRID, _pygetm.VGRID):
+            self.grid.interp_y(self, target, offset=0)
+        elif key == (_pygetm.XGRID, _pygetm.TGRID):
+            self.grid.interp_xy(self, target, ioffset=0, joffset=0)
+        elif key == (_pygetm.TGRID, _pygetm.XGRID):
+            self.grid.interp_xy(self, target, ioffset=1, joffset=1)
         elif key in ((_pygetm.UGRID, _pygetm.UUGRID), (_pygetm.VGRID, _pygetm.UVGRID)):
-            self.grid.interp_x(self, out, offset=0)
+            self.grid.interp_x(self, target, offset=0)
         elif key in ((_pygetm.UGRID, _pygetm.VUGRID), (_pygetm.VGRID, _pygetm.VVGRID)):
-            self.grid.interp_y(self, out, offset=0)
+            self.grid.interp_y(self, target, offset=0)
         else:
-            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (self.grid.type, target_grid.type))
-        return out
+            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (self.grid.type, target.grid.type))
+        return target
 
     def __array__(self, dtype=None):
         return numpy.asarray(self.values, dtype=dtype)
@@ -184,6 +211,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def long_name(self) -> Optional[str]:
         return self._long_name
 
+    @property
+    def fill_value(self) -> Optional[Union[int, float]]:
+        return self._fill_value
+
     # Below based on https://numpy.org/devdocs/reference/generated/numpy.lib.mixins.NDArrayOperatorsMixin.html#numpy.lib.mixins.NDArrayOperatorsMixin
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method != '__call__':
@@ -215,3 +246,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         else:
             # one return value
             return self.create(self.grid, fill=result)
+
+    def update(self, time: Union[datetime.datetime, cftime.datetime]):
+        if self.mapped_field is None:
+            return
+        self.mapped_field.getm.update(time)
+        self.values[...] = self.mapped_field

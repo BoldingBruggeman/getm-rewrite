@@ -448,6 +448,8 @@ SUBROUTINE domain_initialize_open_boundaries(self,nbdyp,nwb,nnb,neb,nsb)
       allocate(self%bdy_2d_type(self%nbdy),stat=stat)
       allocate(self%bdy_3d_type(self%nbdy),stat=stat)
    end if
+   allocate(self%bdy_index(self%nbdy),stat=stat)
+   allocate(self%bdy_map(self%nbdyp,2),stat=stat)
 END SUBROUTINE domain_initialize_open_boundaries
 
 !---------------------------------------------------------------------------

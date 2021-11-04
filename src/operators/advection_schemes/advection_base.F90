@@ -52,14 +52,20 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
 #undef _A_
 END SUBROUTINE
 
-SUBROUTINE w3d(imin, imax, jmin, jmax, kmax, w , tmask, dt, h, f)
+SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
    import real64
    ! Subroutine arguments
-   integer, intent(in) :: imin, imax, jmin, jmax, kmax
-   real(real64), intent(in) :: w(imin-1:imax+1,jmin-1:jmax+1,0:kmax)
-   integer, intent(in) :: tmask(imin-1:imax+1,jmin-1:jmax+1)
+   integer, intent(in) :: imin,imax,jmin,jmax,kmax
+   integer, intent(in) :: halo(2)
+#define _2D_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
+#define _3D_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2),0:kmax
+   real(real64), intent(in) :: w(_3D_)
+   integer, intent(in) :: tmask(_2D_)
    real(real64), intent(in) :: dt
-   real(real64), target, intent(inout) :: h(imin-1:imax+1,jmin-1:jmax+1,0:kmax), f(imin-1:imax+1,jmin-1:jmax+1,0:kmax)
+   real(real64), target, intent(inout) :: h(_3D_)
+   real(real64), target, intent(inout) :: f(_3D_)
+#undef _2D_
+#undef _3D_
 END SUBROUTINE
 
    end interface
