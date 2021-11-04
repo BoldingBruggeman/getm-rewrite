@@ -10,6 +10,8 @@ from . import _pygetm
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
+    __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field')
+
     def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None):
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
