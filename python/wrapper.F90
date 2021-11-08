@@ -122,6 +122,9 @@ contains
       type (type_getm_sealevel), pointer :: sealevel
       character(len=10),         pointer :: pname
 
+      integer, parameter :: subtype_boundary = 1
+      integer, parameter :: subtype_depth_explicit = 2
+
       call c_f_pointer(c_loc(name), pname)
 
       p = C_NULL_PTR
@@ -151,6 +154,8 @@ contains
          case ('z'); p = c_loc(grid%z)
          case ('zo'); p = c_loc(grid%zo)
          case ('cor'); p = c_loc(grid%cor)
+         case ('hn'); p = c_loc(grid%hn); sub_type = subtype_depth_explicit
+         case ('ho'); p = c_loc(grid%ho); sub_type = subtype_depth_explicit
          end select
       case (1)
          call c_f_pointer(obj, momentum)
@@ -163,8 +168,8 @@ contains
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
-         case ('bdyu');   p = c_loc(momentum%bdyu); grid_type = 2; sub_type = 1
-         case ('bdyv');   p = c_loc(momentum%bdyv); grid_type = 3; sub_type = 1
+         case ('bdyu');   p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
+         case ('bdyv');   p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -176,7 +181,7 @@ contains
       case (3)
          call c_f_pointer(obj, sealevel)
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
-         case ('zbdy'); p = c_loc(sealevel%zbdy); sub_type = 1
+         case ('zbdy'); p = c_loc(sealevel%zbdy); sub_type = subtype_boundary
          case default; p = C_NULL_PTR
          end select
       end select

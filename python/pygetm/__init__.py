@@ -1,10 +1,12 @@
 import operator
+from typing import Union
 import numpy
 
 from . import _pygetm
 from . import core
 from . import domain
 from . import output
+from . import pyfabm
 
 Advection = _pygetm.Advection
 
@@ -12,10 +14,10 @@ class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
-    _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('output_manager', 'uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
+    _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('output_manager', 'uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'fabm_model')
     __slots__ = _all_fortran_arrays
 
-    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True):
+    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None):
         self.output_manager = output.OutputManager(rank=dom.tiling.rank)
         dom.field_manager = self.output_manager
 
@@ -38,6 +40,17 @@ class Simulation(_pygetm.Simulation):
         self.uva = dom.UV.array(fill=numpy.nan)
         self.vua = dom.VU.array(fill=numpy.nan)
         self.vva = dom.VV.array(fill=numpy.nan)
+
+        if fabm:
+            self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=self.domain.T.hn.all_values.shape, libname='fabm_c')
+            for variable in self.fabm_model.interior_state_variables:
+                ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name)
+                ar.wrap_ndarray(self.domain.T, variable.data)
+            self.fabm_model.link_mask(self.domain.T.mask.all_values)
+            self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
+
+    def start_fabm(self):
+        assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
 
     def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         # compute velocities at time=n-1/2

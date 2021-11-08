@@ -27,7 +27,7 @@ def find_interfaces(c: numpy.ndarray):
 
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
-    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor')
+    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn')
     _all_fortran_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
     __slots__ = _all_fortran_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
 
@@ -287,9 +287,6 @@ class Domain(_pygetm.Domain):
         self.glob: Optional['Domain'] = self
 
         halo = 2
-        self.nx = nx
-        self.ny = ny
-        self.nz = nz
 
         shape = (2 * ny + 1, 2 * nx + 1)
         superhalo = 2 * halo

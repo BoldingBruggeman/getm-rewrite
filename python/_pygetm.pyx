@@ -33,6 +33,7 @@ cpdef enum:
     UGRID = 2
     VGRID = 3
     XGRID = 4
+    WGRID = 5
     UUGRID = -1
     VVGRID = -2
     UVGRID = -3
@@ -52,16 +53,25 @@ cdef class Array:
             return
         self.grid = domain.grids[grid_type]
         if sub_type == 1:
+            # Horizontal-only array on open boundaries
             if data_type == 0:
                 self.all_values = numpy.asarray(<double[:self.grid.nbdyp:1]> self.p)
             else:
                 self.all_values = numpy.asarray(<int[:self.grid.nbdyp:1]> self.p)
             return self.all_values
-        else:
+        elif sub_type == 2:
+            # Depth-explicit array on normal grid
             if data_type == 0:
-                self.all_values = numpy.asarray(<double[:self.grid.ny, :self.grid.nx:1]> self.p)
+                self.all_values = numpy.asarray(<double[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
-                self.all_values = numpy.asarray(<int[:self.grid.ny, :self.grid.nx:1]> self.p)
+                self.all_values = numpy.asarray(<int[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+        else:
+            # Horizontal-only array on normal grid
+            assert sub_type == 0, 'Subtypes other than 0,1,2 not yet implemented'
+            if data_type == 0:
+                self.all_values = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+            else:
+                self.all_values = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
         self.finish_initialization()
         return self
 
@@ -73,16 +83,20 @@ cdef class Array:
 
 cdef class Grid:
     cdef void* p
-    cdef readonly int nx, ny
+    cdef readonly int nx, ny, nz
+    cdef readonly int nx_, ny_, nz_
     cdef readonly Domain domain
 
     def __init__(self, Domain domain, int grid_type):
         self.domain = domain
         self.p = domain_get_grid(domain.p, grid_type)
-        self.nx, self.ny = domain.nx, domain.ny
+        self.nx, self.ny, self.nz = domain.nx, domain.ny, domain.nz
         if grid_type == XGRID:
             self.nx += 1
             self.ny += 1
+        if grid_type == WGRID:
+            self.nz += 1
+        self.nx_, self.ny_, self.nz_ = self.nx + 2 * domain.halox, self.ny + 2 * domain.haloy, self.nz + 2 * domain.haloz
         domain.grids[grid_type] = self
 
     def wrap(self, Array ar, bytes name):
@@ -99,14 +113,15 @@ cdef class Grid:
 
 cdef class Domain:
     cdef void* p
+    cdef readonly int nx, ny, nz
     cdef readonly int halox, haloy, haloz
     cdef readonly double maxdt
-    cdef int nx, ny
 
     def __init__(self, int imin, int imax, int jmin, int jmax, int kmin, int kmax):
         self.p = domain_create(imin, imax, jmin, jmax, kmin, kmax, &self.halox, &self.haloy, &self.haloz)
-        self.nx = imax - imin + 1 + 2 * self.halox
-        self.ny = jmax - jmin + 1 + 2 * self.haloy
+        self.nx = imax - imin + 1
+        self.ny = jmax - jmin + 1
+        self.nz = kmax - kmin + 1
         self.grids = {}
 
     def __dealloc__(self):
@@ -139,7 +154,7 @@ cdef class Advection:
         self.ugrid = grid.ugrid
         self.vgrid = grid.vgrid
         self.p = advection_create(scheme, self.tgrid.p, &pD)
-        self.D = numpy.asarray(<double[:self.tgrid.ny, :self.tgrid.nx:1]> pD)
+        self.D = numpy.asarray(<double[:self.tgrid.ny_, :self.tgrid.nx_:1]> pD)
 
     def calculate(self, Array u not None, Array v not None, double timestep, Array var not None):
         self.D[...] = self.tgrid.D.all_values

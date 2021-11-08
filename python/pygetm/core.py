@@ -88,20 +88,21 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         assert self.grid is not None
         if self._name is not None:
             self.grid.domain.field_manager.register(self)
-        halo = self.grid.halo
-        self.values = self.all_values[halo:-halo, halo:-halo]
+        self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
         if self._fill_value is not None:
             # Cast fill value to dtype of the array
             self._fill_value = numpy.array(self._fill_value, dtype=self.all_values.dtype)
 
     @staticmethod
-    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
+    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
         ar = Array(**kwargs)
         if fill is not None:
             fill = numpy.asarray(fill)
         if dtype is None:
             dtype = float if fill is None else fill.dtype
-        shape = (grid.ny, grid.nx)
+        shape = (grid.ny_, grid.nx_)
+        if is_3d:
+            shape = (grid.nz_,) + shape
         if copy or fill is None:
             data = numpy.empty(shape, dtype=dtype)
             if fill is not None:

@@ -29,16 +29,21 @@ class NetCDFFile(File):
             return
         self.nc = netCDF4.Dataset(self.path, 'w')
         for grid in frozenset(field.grid for field in self.fields.values()):
-            nx, ny = grid.nx, grid.ny
-            if not self.sub:
-                nx, ny = (nx - 2 * grid.halo) * grid.domain.tiling.ncol, (ny - 2 * grid.halo) * grid.domain.tiling.nrow
+            if self.sub:
+                # Output data (including halos) for the current subdomain
+                nx, ny, nz = grid.nx_, grid.ny_, grid.nz_
+            else:
+                # Output data for entire (global) domain
+                nx, ny, nz = grid.nx * grid.domain.tiling.ncol, grid.ny * grid.domain.tiling.nrow, grid.nz
             self.nc.createDimension('x%s' % grid.postfix, nx)
             self.nc.createDimension('y%s' % grid.postfix, ny)
+            self.nc.createDimension('z%s' % grid.postfix, nz)
         self.nc.createDimension('time',)
         self.ncvars = []
         for output_name, field in self.fields.items():
             dims = ('y%s' % field.grid.postfix, 'x%s' % field.grid.postfix)
-            if field.ndim == 3: dims = ('z',) + dims
+            if field.ndim == 3:
+                dims = ('z%s' % field.grid.postfix,) + dims
             dims = ('time',) + dims
             ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)
             for att, value in field.atts.items():
