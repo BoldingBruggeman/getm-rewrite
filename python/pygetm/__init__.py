@@ -52,6 +52,12 @@ class Simulation(_pygetm.Simulation):
     def start_fabm(self):
         assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
 
+    def update_fabm(self, timestep: float):
+        sources_int, sources_sf, sources_bt = self.fabm_model.get_sources()
+        self.fabm_model.interior_state += sources_int * timestep
+        self.fabm_model.surface_state += sources_sf * timestep
+        self.fabm_model.bottom_state += sources_bt * timestep
+
     def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         # compute velocities at time=n-1/2
         self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values
