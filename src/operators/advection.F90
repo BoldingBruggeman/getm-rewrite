@@ -66,6 +66,7 @@ module SUBROUTINE advection_initialize(self, scheme, tgrid)
    end select
 #endif
    allocate(self%D,mold=tgrid%D)
+!KB   allocate(self%hn,mold=tgrid%hn)
 END SUBROUTINE advection_initialize
 
 !---------------------------------------------------------------------------
@@ -129,13 +130,35 @@ MODULE PROCEDURE advection_calculate_3d
 
 !  Local variables
    integer :: k
-   real(real64), allocatable :: hn(:,:,:)
+!KB   real(real64), allocatable :: hn(:,:,:)
+!KB   allocate(hn,mold=tgrid%hn)
 !---------------------------------------------------------------------------
    if (.not. allocated(self%op)) return
 
-   allocate(hn,mold=tgrid%hn)
-   hn = tgrid%hn
-#if 0
+!KB   allocate(hn,mold=tgrid%hn)
+   self%hn = tgrid%hn
+#if 1
+   do k=tgrid%kmin,tgrid%kmax
+!KB - evt. self%D=tgrid%hn(:,:,k) - to avoid 3d aux. variable
+      call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                       ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
+                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+      call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                       vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
+                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+   end do
+!KB   call w_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
+!KB                             tgrid%kmax, w, tgrid%mask, dt, self%hn, f)
+   do k=tgrid%kmin,tgrid%kmax
+!KB - evt. self%D=tgrid%hn(:,:,k) - to avoid 3d aux. variable
+      call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                       ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
+                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+      call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                       vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
+                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+   end do
+#else
    select case (scheme)
       case (SUPERBEE)
          do k=tgrid%kmin,tgrid%kmax

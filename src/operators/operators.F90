@@ -35,6 +35,7 @@ MODULE getm_operators
       class (type_advection_base), allocatable :: op
       real(real64), allocatable, private :: flux(:,:), QU(:,:)
       real(real64), allocatable :: D(:,:)
+      real(real64), allocatable :: hn(:,:,:)
 
       real(real64) :: flux_time
       real(real64) :: adv_time
