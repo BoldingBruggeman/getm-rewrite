@@ -299,7 +299,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         self._numtimes = time_coord.values
         self._time_units = time_coord.attrs['units']
-        self._time_calendar = time_coord.attrs.get('calendar')
+        self._time_calendar = time_coord.attrs.get('calendar', 'standard')
         self._timecoord = xarray.DataArray(cftime.num2date(self._numtimes[0], self._time_units, self._time_calendar))
 
         self._numnow = None
