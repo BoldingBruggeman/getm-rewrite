@@ -44,6 +44,10 @@ cdef class Array:
     cdef readonly numpy.ndarray all_values
     cdef readonly Grid grid
 
+    def __init__(self, Grid grid=None):
+        if grid is not None:
+            self.grid = grid
+
     cdef wrap_c_array(self, Domain domain, int source, void* obj, bytes name):
         cdef int grid_type
         cdef int sub_type
@@ -75,9 +79,9 @@ cdef class Array:
         self.finish_initialization()
         return self
 
-    def wrap_ndarray(self, Grid grid, numpy.ndarray data):
-        self.grid = grid
-        self.all_values = numpy.ascontiguousarray(data)
+    def wrap_ndarray(self, numpy.ndarray data):
+        assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS']
+        self.all_values = data
         self.p = self.all_values.data
         self.finish_initialization()
 

@@ -29,6 +29,7 @@ class File:
             output_name = name
         assert output_name not in self.fields, 'A variable with name "%s" has already been added to %s.' % (output_name, self)
         array = self.field_manager.fields[name]
+        array.saved = True
         dtype = dtype or array.dtype
         field = operators.Field(array)
         if mask:

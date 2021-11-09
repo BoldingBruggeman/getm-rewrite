@@ -1,6 +1,6 @@
 import datetime
 import numbers
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 
 import numpy, numpy.lib.mixins, numpy.typing
 import cftime
@@ -10,9 +10,10 @@ from . import _pygetm
 from . import parallel
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
-    __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field')
+    __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field', 'saved', '_shape', '_ndim', '_size', '_dtype')
 
-    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None):
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None):
+        _pygetm.Array.__init__(self, grid)
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
         self._gather: Optional[parallel.Gather] = None
@@ -21,9 +22,31 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._name = name
         self._units = units
         self._long_name = long_name
-        self._fill_value = fill_value
+        self._fill_value = fill_value if fill_value is None or dtype is None else numpy.array(fill_value, dtype=dtype)
         self._ma = None
         self.mapped_field: Optional[xarray.DataArray] = None
+        self.saved = False   # to be set by pygetm.output.FieldManager if this variable is requested for output
+        self._shape = shape
+        self._ndim = None if shape is None else len(shape)
+        self._size = None if shape is None else numpy.prod(shape)
+        self._dtype = dtype
+
+    def finish_initialization(self):
+        """This is called by the underlying cython implementation after the array receives a value (self.all_values is valid)"""
+        assert self.grid is not None
+        self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
+        self._dtype = self.all_values.dtype
+        self._shape = self.all_values.shape
+        self._ndim = self.all_values.ndim
+        self._size = self.all_values.size
+        if self._fill_value is not None:
+            # Cast fill value to dtype of the array
+            self._fill_value = numpy.array(self._fill_value, dtype=self.all_values.dtype)
+
+    def register(self):
+        assert self.grid is not None
+        if self._name is not None:
+            self.grid.domain.field_manager.register(self)
 
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
@@ -83,19 +106,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if sum is not None:
             return sum / count
 
-    def finish_initialization(self):
-        """This is called by the underlying cython implementation after the array receives a value (self.all_values is valid)"""
-        assert self.grid is not None
-        if self._name is not None:
-            self.grid.domain.field_manager.register(self)
-        self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
-        if self._fill_value is not None:
-            # Cast fill value to dtype of the array
-            self._fill_value = numpy.array(self._fill_value, dtype=self.all_values.dtype)
-
     @staticmethod
     def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
-        ar = Array(**kwargs)
+        ar = Array(grid=grid, **kwargs)
         if fill is not None:
             fill = numpy.asarray(fill)
         if dtype is None:
@@ -109,7 +122,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 data[...] = fill
         else:
             data = numpy.broadcast_to(fill, shape)
-        ar.wrap_ndarray(grid, data)
+        ar.wrap_ndarray(data)
+        ar.register()
         return ar
 
     @property
@@ -186,19 +200,19 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def shape(self):
-        return self.values.shape
+        return self._shape
 
     @property
     def ndim(self):
-        return self.values.ndim
+        return self._ndim
 
     @property
     def size(self):
-        return self.values.size
+        return self._size
 
     @property
     def dtype(self):
-        return self.values.dtype
+        return self._dtype
 
     @property
     def name(self) -> Optional[str]:

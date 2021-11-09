@@ -1,5 +1,7 @@
 import operator
 from typing import Union
+import itertools
+
 import numpy
 
 from . import _pygetm
@@ -14,8 +16,8 @@ class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
-    _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('output_manager', 'uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'fabm_model')
-    __slots__ = _all_fortran_arrays
+    _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
+    __slots__ = _all_fortran_arrays + ('output_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays')
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None):
         self.output_manager = output.OutputManager(rank=dom.tiling.rank)
@@ -42,15 +44,27 @@ class Simulation(_pygetm.Simulation):
         self.vva = dom.VV.array(fill=numpy.nan)
 
         if fabm:
-            self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=self.domain.T.hn.all_values.shape, libname='fabm_c')
-            for variable in self.fabm_model.interior_state_variables:
-                ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name)
-                ar.wrap_ndarray(self.domain.T, variable.data)
+            def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
+                ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
+                if send_data:
+                    ar.wrap_ndarray(variable.data)
+                ar.register()
+                return ar
+
+            domain_shape = self.domain.T.hn.all_values.shape
+            self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=domain_shape, libname='fabm_c')
+            for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
+                fabm_variable_to_array(variable, send_data=True)
+            self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=domain_shape) for variable in self.fabm_model.interior_diagnostic_variables]
+            self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=domain_shape[1:]) for variable in self.fabm_model.horizontal_diagnostic_variables]
             self.fabm_model.link_mask(self.domain.T.mask.all_values)
             self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
 
     def start_fabm(self):
         assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
+        for variable, ar in zip(itertools.chain(self.fabm_model.interior_diagnostic_variables, self.fabm_model.horizontal_diagnostic_variables), itertools.chain(self._fabm_interior_diagnostic_arrays, self._fabm_horizontal_diagnostic_arrays)):
+            if ar.saved:
+                ar.wrap_ndarray(variable.data)
 
     def update_fabm(self, timestep: float):
         sources_int, sources_sf, sources_bt = self.fabm_model.get_sources()

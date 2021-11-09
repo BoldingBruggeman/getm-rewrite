@@ -13,7 +13,7 @@ class Base:
         self.ndim = ndim
         self.grid = grid
         self.fill_value = fill_value
-        self.atts = {}
+        self.atts = atts
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False):
         raise NotImplementedError
