@@ -32,6 +32,8 @@ set(FABM_FORCED_REAL_KIND c_double)
 add_compile_definitions(_FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_UNMASKED_VALUE_=1 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
 add_subdirectory(../extern/fabm/src/drivers/python fabm)
 
+add_compile_definitions(USE_TRANSPORTS 1)
+
 add_library( flom 
   ../extern/flom/src/grid.F90
   ../extern/flom/src/logging.F90
