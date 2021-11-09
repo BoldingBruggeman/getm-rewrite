@@ -77,6 +77,7 @@ cdef class Array:
             else:
                 self.all_values = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
         self.finish_initialization()
+        self.register()
         return self
 
     def wrap_ndarray(self, numpy.ndarray data):
