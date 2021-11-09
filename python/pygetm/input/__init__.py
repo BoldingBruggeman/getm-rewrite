@@ -10,6 +10,15 @@ import cftime
 
 import pygetm.util.interpolate
 
+def debug_nc_reads():
+    import xarray.backends.netCDF4_
+    class NetCDF4ArrayWrapper2(xarray.backends.netCDF4_.NetCDF4ArrayWrapper):
+        __slots__ = ()
+        def _getitem(self, key):
+            print(self.variable_name, key)
+            return super()._getitem(key)
+    xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
+
 @xarray.register_dataarray_accessor('getm')
 class GETMAccessor:
     def __init__(self, xarray_obj: xarray.DataArray):
