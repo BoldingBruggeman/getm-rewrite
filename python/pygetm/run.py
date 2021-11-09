@@ -40,7 +40,10 @@ def run():
 
     runtype = config.get('runtype', 1)
     uv_adv_scheme = config.get('momentum/advection/scheme', 1)
-    sim = pygetm.Simulation(domain, runtype=runtype, advection_scheme=uv_adv_scheme)
+    fabm_config = config.get('fabm/configuration', 'fabm.yaml')
+    if not config.get('fabm/use', False):
+        fabm_config = None
+    sim = pygetm.Simulation(domain, runtype=runtype, advection_scheme=uv_adv_scheme, fabm=fabm_config)
 
     inputs = []
 
@@ -93,10 +96,11 @@ def run():
             sys.exit(2)
         print('The simulation will continue because you specified -f/--force, but these settings will not be used.')
 
-    inputs = t2m, d2m, sp, u10, v10
     timedelta = datetime.timedelta(seconds=timestep)
     date = start
     istep = 0
+    print('Starting simulation at %s' % date)
+    sim.output_manager.save()
     while date < stop:
         date += timedelta
 

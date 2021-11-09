@@ -26,10 +26,15 @@ meteorology:
     path: ../../../igotm/data/ERA-interim/2016.nc
     variable: sp
     time_slice: 4:-4
+bottom:
+  z0_const: 0.001
 open_boundaries:
   legacy_info: ../../../getm-setups/NorthSea/bdyinfo.dat
   elevation:
     tpxo_dir: ../../../igotm/data/TPXO9
+fabm:
+  use: false
+  configuration: ../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml
 output:
   north_sea:
     time_step: 60
@@ -39,4 +44,4 @@ output:
     - t2m    
     - d2m
     - sp 
-    - zt       
+    - zt
