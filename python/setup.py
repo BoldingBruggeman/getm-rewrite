@@ -8,7 +8,12 @@ setup(
     license='GPL',
     packages=find_packages(include=['pygetm*']),
     package_data={'pygetm': ['*.so', '*.dll', '*.dylib', '*.pyd'], 'pygetm.pyfabm': ['*.so', '*.dll', '*.dylib', '*.pyd']},
-    zip_safe=False
+    zip_safe=False,
+    entry_points = {
+        'console_scripts': [
+            'pygetm = pygetm.run:run',
+        ],
+    }
 )
 
 

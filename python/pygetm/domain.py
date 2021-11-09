@@ -78,15 +78,15 @@ class Grid(_pygetm.Grid):
         v_new = u * sin_rot + v * self._cos_rot
         return u_new, v_new
 
-    def array(self, fill=None, dtype=float, **kwargs) -> core.Array:
-        return core.Array.create(self, fill, dtype, **kwargs)
+    def array(self, fill=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=float, **kwargs) -> core.Array:
+        return core.Array.create(self, fill, is_3d, dtype, **kwargs)
 
-    def map(self, field: xarray.DataArray, periodic_lon=True):
+    def map(self, field: xarray.DataArray, periodic_lon=True, name: Optional[str]=None, long_name: Optional[str]=None, units: Optional[str]=None):
         lon, lat = self.lon.values, self.lat.values
         field = input.limit_region(field, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
         field = input.spatial_interpolation(field, lon, lat)
         field = input.temporal_interpolation(field)
-        arr = self.array(name=field.name, long_name=field.attrs.get('long_name'), units=field.attrs.get('units'))
+        arr = self.array(name=name or field.name, long_name=long_name or field.attrs.get('long_name'), units=units or field.attrs.get('units'))
         arr.mapped_field = field
         arr.values[...] = field
         return arr

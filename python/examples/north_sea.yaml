@@ -1,0 +1,42 @@
+time:
+  start: 2016-01-01 00:00:00
+  stop: 2016-02-01 00:00:00
+  timestep: 60
+domain:
+  legacy_topo: ../../../getm-setups/NorthSea/Topo/NS6nm.v01.nc
+  nlev: 30
+meteorology:
+  u10:
+    path: ../../../igotm/data/ERA-interim/2016.nc
+    variable: u10
+    time_slice: 4:-4
+  v10:
+    path: ../../../igotm/data/ERA-interim/2016.nc
+    variable: v10
+    time_slice: 4:-4
+  t2m:
+    path: ../../../igotm/data/ERA-interim/2016.nc
+    variable: t2m
+    time_slice: 4:-4
+  d2m:
+    path: ../../../igotm/data/ERA-interim/2016.nc
+    variable: d2m
+    time_slice: 4:-4
+  sp:
+    path: ../../../igotm/data/ERA-interim/2016.nc
+    variable: sp
+    time_slice: 4:-4
+open_boundaries:
+  legacy_info: ../../../getm-setups/NorthSea/bdyinfo.dat
+  elevation:
+    tpxo_dir: ../../../igotm/data/TPXO9
+output:
+  north_sea:
+    time_step: 60
+    variables:
+    - u10
+    - v10
+    - t2m    
+    - d2m
+    - sp 
+    - zt       
