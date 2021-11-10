@@ -1,6 +1,7 @@
 from typing import Iterable, List, Mapping, Union, Optional, Mapping, Sequence
 import glob
 import numbers
+import logging
 
 import numpy
 import numpy.typing
@@ -10,12 +11,15 @@ import cftime
 
 import pygetm.util.interpolate
 
-def debug_nc_reads():
+def debug_nc_reads(logger: Optional[logging.Logger]=None):
+    if logger is None:
+        logger = logging.getLogger()
     import xarray.backends.netCDF4_
     class NetCDF4ArrayWrapper2(xarray.backends.netCDF4_.NetCDF4ArrayWrapper):
         __slots__ = ()
+        _logger = logger
         def _getitem(self, key):
-            print(self.variable_name, key)
+            self._logger.debug('Reading %s[%s] from %s' % (self.variable_name, key, self.datastore._filename))
             return super()._getitem(key)
     xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
 

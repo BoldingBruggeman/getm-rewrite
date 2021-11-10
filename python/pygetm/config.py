@@ -1,5 +1,7 @@
 from typing import Any, Mapping, Iterator, Optional
 import collections.abc
+import logging
+
 import yaml
 
 from . import input
@@ -40,7 +42,7 @@ class Node(collections.abc.Mapping):
                 unused += value.check()
         return unused
 
-    def get_input(self, name: str, domain: domain.Domain, is_3d: bool=False, default: Optional[float]=None, verbose: bool=False):
+    def get_input(self, name: str, domain: domain.Domain, is_3d: bool=False, default: Optional[float]=None, logger: Optional[logging.Logger]=None):
         info = self.get(name)
         if info is None:
             if default is None:
@@ -53,12 +55,12 @@ class Node(collections.abc.Mapping):
                 start, stop = time_slice.split(':')
                 preprocess = lambda ds: ds.isel(time=slice(int(start), int(stop)))
             path, variable = info['path'], info['variable']
-            if verbose:
-                print('%s%s = variable %s from %s' % (self.prefix, name, variable, path))
+            if logger is not None:
+                logger.info('%s%s = variable %s from %s' % (self.prefix, name, variable, path))
             return domain.T.map(input.get_from_nc(path, variable, preprocess=preprocess), name=name)
         else:
-            if verbose:
-                print('%s%s = %s' % (self.prefix, name, info))
+            if logger is not None:
+                logger.info('%s%s = %s' % (self.prefix, name, info))
             return domain.T.array(fill=info, is_3d=is_3d, name=name)        
 
 def configure(path: str):
