@@ -42,10 +42,10 @@ MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f)
    allocate(self%auxn(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
 #ifdef _NORMAL_ORDER_
 #define ORDER i,j,k
-   allocate(self%a1(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%jmax))
-   allocate(self%a2(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%jmax))
-   allocate(self%a3(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%jmax))
-   allocate(self%a4(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%jmax))
+   allocate(self%a1(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
+   allocate(self%a2(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
+   allocate(self%a3(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
+   allocate(self%a4(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
 #else
 #define ORDER k,i,j
    allocate(self%a1(self%kmin:self%kmax,self%imin:self%imax,self%kmin:self%kmax))
@@ -144,7 +144,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
       do j=self%jmin,self%jmax
          do i=self%imin,self%imax
             if (mask(i,j) ==  1) then
-               x = 2._real64*dt*(nuh(i,j,k)+molecular)
+               x = 2._real64*dt*(nuh(i,j,k+1)+molecular)
                self%auxo(i,j,k)=(1-cnpar)*x/(dzo(i,j,k+1)+dzo(i,j,k))
                self%auxn(i,j,k)=   cnpar *x/(dzn(i,j,k+1)+dzn(i,j,k))
             end if
