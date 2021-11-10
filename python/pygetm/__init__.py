@@ -4,3 +4,4 @@ from . import domain
 from .simulation import *
 
 Advection = _pygetm.Advection
+VerticalDiffusion = _pygetm.VerticalDiffusion

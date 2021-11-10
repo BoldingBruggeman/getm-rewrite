@@ -13,12 +13,15 @@ cdef extern void* domain_get_grid(void* domain, int grid_type) nogil
 cdef extern void domain_initialize(void* grid, int runtype, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
+cdef extern void domain_do_vertical(void* domain) nogil
 cdef extern void grid_interp_x(void* grid, double* source, double* target, int ioffset) nogil
 cdef extern void grid_interp_y(void* grid, double* source, double* target, int joffset) nogil
 cdef extern void grid_interp_xy(void* source_grid, double* source, void* target_grid, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid, void** p) nogil
 cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pvar) nogil
+cdef extern void* vertical_diffusion_create(void* tgrid) nogil
+cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pvar) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_friction) nogil
 cdef extern void momentum_uv_momentum_2d(void* momentum, int runtype, double timestep, double* ptausx, double* ptausy, double* pdpdx, double* pdpdy) nogil
 cdef extern void* pressure_create(int runtype, void* pdomain) nogil
@@ -136,6 +139,9 @@ cdef class Domain:
     def update_depths(self):
         domain_update_depths(self.p)
 
+    def do_vertical(self):
+        domain_do_vertical(self.p)
+
     def initialize(self, int runtype):
         domain_initialize(self.p, runtype, &self.maxdt)
 
@@ -168,6 +174,19 @@ cdef class Advection:
         advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, timestep, <double *>var.p)
         var.update_halos(1)
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, <double *>var.p)
+
+cdef class VerticalDiffusion:
+    cdef void* p
+    cdef Grid tgrid
+    cdef double cnpar
+
+    def __init__(self, Grid grid, double cnpar=1.):
+        self.tgrid = grid
+        self.p = vertical_diffusion_create(self.tgrid.p)
+        self.cnpar = cnpar
+
+    def calculate(self, Array nuh not None, double timestep, Array var not None, double molecular=0.):
+        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, <double *>var.p)
 
 cdef class Simulation:
     cdef readonly Domain domain

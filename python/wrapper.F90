@@ -4,7 +4,7 @@ module pygetm
    use iso_fortran_env, only: real64
 
    use getm_domain, only: type_getm_domain, type_getm_grid
-   use getm_operators, only: type_advection
+   use getm_operators, only: type_advection, type_vertical_diffusion
    use getm_sealevel, only: type_getm_sealevel
    use getm_pressure, only: type_getm_pressure
    use getm_momentum, only: type_getm_momentum
@@ -108,6 +108,15 @@ contains
       end select
       pgrid = c_loc(grid)
    end function
+
+   subroutine domain_do_vertical(pdomain) bind(c)
+      type(c_ptr), intent(in), value :: pdomain
+
+      type (type_getm_domain), pointer :: domain
+
+      call c_f_pointer(pdomain, domain)
+      call domain%do_vertical(1._c_double)
+   end subroutine
 
    subroutine get_array(source_type, obj, name, grid_type, sub_type, data_type, p) bind(c)
       integer(c_int),  value,         intent(in)  :: source_type
@@ -264,6 +273,34 @@ contains
       call domain%update_depths()
    end subroutine
 
+   function vertical_diffusion_create(ptgrid) result(pdiffusion) bind(c)
+      type(c_ptr),    intent(in), value :: ptgrid
+      type(c_ptr) :: pdiffusion
+
+      type (type_getm_grid), pointer :: tgrid
+      type (type_vertical_diffusion), pointer :: diffusion
+
+      call c_f_pointer(ptgrid, tgrid)
+      allocate(diffusion)
+      call diffusion%initialize(tgrid)
+      pdiffusion = c_loc(diffusion)
+   end function
+
+   subroutine vertical_diffusion_calculate(pdiffusion, ptgrid, molecular, pnuh, timestep, cnpar, pvar) bind(c)
+      real(c_double), intent(in), value :: timestep, cnpar, molecular
+      type(c_ptr),    intent(in), value :: pdiffusion, ptgrid, pnuh, pvar
+
+      type (type_getm_grid),          pointer :: tgrid
+      type (type_vertical_diffusion), pointer :: diffusion
+      real(real64), contiguous, pointer, dimension(:,:,:) :: nuh, var
+
+      call c_f_pointer(pdiffusion, diffusion)
+      call c_f_pointer(ptgrid, tgrid)
+      call c_f_pointer(pnuh, nuh, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%u(3) - tgrid%l(3) + 2/))
+      call c_f_pointer(pvar, var, tgrid%u - tgrid%l + 1)
+      call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh, var)
+   end subroutine
+
    function advection_create(scheme, ptgrid, pD) result(padvection) bind(c)
       integer(c_int), intent(in), value :: scheme
       type(c_ptr),    intent(in), value :: ptgrid
@@ -280,7 +317,7 @@ contains
       pD = c_loc(advection%D)
    end function
 
-   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid,  pu, timestep, pvar) bind(c)
+   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, timestep, pvar) bind(c)
       integer(c_int), intent(in), value :: direction
       real(c_double), intent(in), value :: timestep
       type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, pvar

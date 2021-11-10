@@ -35,10 +35,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """This is called by the underlying cython implementation after the array receives a value (self.all_values is valid)"""
         assert self.grid is not None
         self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
-        self._dtype = self.all_values.dtype
-        self._shape = self.all_values.shape
-        self._ndim = self.all_values.ndim
-        self._size = self.all_values.size
+        self._dtype = self.values.dtype
+        self._shape = self.values.shape
+        self._ndim = self.values.ndim
+        self._size = self.values.size
         if self._fill_value is not None:
             # Cast fill value to dtype of the array
             self._fill_value = numpy.array(self._fill_value, dtype=self.all_values.dtype)
@@ -153,7 +153,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                     coords['lon%s' % self.grid.postfix] = self.grid.lon.xarray
                 if dom.lat is not None:
                     coords['lat%s' % self.grid.postfix] = self.grid.lat.xarray
-            self._xarray = xarray.DataArray(self.values, coords=coords, dims=('y' + self.grid.postfix, 'x' + self.grid.postfix), attrs=attrs, name=self.name)
+            dims = ('y' + self.grid.postfix, 'x' + self.grid.postfix)
+            if self.ndim == 3:
+                dims = ('z' + self.grid.postfix,) + dims
+            self._xarray = xarray.DataArray(self.values, coords=coords, dims=dims, attrs=attrs, name=self.name)
         return self._xarray
 
     def plot(self, **kwargs):
@@ -254,13 +257,13 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
         if type(result) is tuple:
             # multiple return values
-            return tuple(self.create(self.grid, fill=x) for x in result)
+            return tuple(self.create(self.grid, fill=x, is_3d=x.ndim == 3) for x in result)
         elif method == 'at':
             # no return value
             return None
         else:
             # one return value
-            return self.create(self.grid, fill=result)
+            return self.create(self.grid, fill=result, is_3d=result.ndim == 3)
 
     def update(self, time: Union[datetime.datetime, cftime.datetime]):
         if self.mapped_field is None:

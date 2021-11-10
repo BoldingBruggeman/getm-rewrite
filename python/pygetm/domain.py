@@ -29,17 +29,18 @@ class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
     _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn')
     _all_fortran_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
-    __slots__ = _all_fortran_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
+    __slots__ = _all_fortran_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', 'wgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
 
-    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
+    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None, wgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
         self.type = grid_type
         self.ioffset = ioffset
         self.joffset = joffset
-        self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
+        self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.WGRID: 'w', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
         self.ugrid: Optional[Grid] = ugrid
         self.vgrid: Optional[Grid] = vgrid
+        self.wgrid: Optional[Grid] = wgrid
         self._sin_rot: Optional[numpy.ndarray] = None
         self._cos_rot: Optional[numpy.ndarray] = None
 
@@ -399,7 +400,8 @@ class Domain(_pygetm.Domain):
         # Create grids
         self.U = Grid(self, _pygetm.UGRID, ioffset=2, joffset=1, ugrid=self.UU, vgrid=self.UV)
         self.V = Grid(self, _pygetm.VGRID, ioffset=1, joffset=2, ugrid=self.VU, vgrid=self.VV)
-        self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1, ugrid=self.U, vgrid=self.V)
+        self.W = Grid(self, _pygetm.WGRID, ioffset=1, joffset=1)
+        self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1, ugrid=self.U, vgrid=self.V, wgrid=self.W)
         self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0)
 
         self.initialized = False
