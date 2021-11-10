@@ -29,6 +29,7 @@ jobs:
           cd python/tests
           python test_2d_transport.py
           python test_2d_flow_symmetry.py
+          python test_vertical_diffusion.py
           python test_parallel_advection.py --nrow 1 --ncol 1 --noplot -n 1 -o par_adv_1x1.nc
           mpiexec -n 2 python test_parallel_advection.py --nrow 2 --ncol 1 --noplot -n 1 -o par_adv_2x1.nc
           mpiexec -n 2 python test_parallel_advection.py --nrow 1 --ncol 2 --noplot -n 1 -o par_adv_1x2.nc
