@@ -49,12 +49,11 @@ class Simulation(_pygetm.Simulation):
                 ar.register()
                 return ar
 
-            domain_shape = self.domain.T.hn.all_values.shape
-            self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=domain_shape, libname='fabm_c')
+            self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=self.domain.T.hn.all_values.shape, libname='fabm_c')
             for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                 fabm_variable_to_array(variable, send_data=True)
-            self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=domain_shape) for variable in self.fabm_model.interior_diagnostic_variables]
-            self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=domain_shape[1:]) for variable in self.fabm_model.horizontal_diagnostic_variables]
+            self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
+            self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.fabm_model.horizontal_diagnostic_variables]
             self.fabm_model.link_mask(self.domain.T.mask.all_values)
             self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
 
