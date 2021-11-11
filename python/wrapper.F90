@@ -301,11 +301,14 @@ contains
       if (c_associated(pea2)) call c_f_pointer(pea2, ea2, tgrid%u - tgrid%l + 1)
       if (c_associated(pea4)) call c_f_pointer(pea4, ea4, tgrid%u - tgrid%l + 1)
       if (c_associated(pea2) .and. c_associated(pea4)) then
-         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, ea2=ea2, ea4=ea4)
+         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+            ea2=ea2, ea4=ea4)
       elseif (c_associated(pea2)) then
-         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, ea2=ea2)
+         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+            ea2=ea2)
       elseif (c_associated(pea4)) then
-         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, ea4=ea4)
+         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+            ea4=ea4)
       else
          call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var)
       end if
