@@ -86,7 +86,7 @@ class Simulation(_pygetm.Simulation):
         self.V.interp(self.uva)
         self.uua.all_values[...] /= self.domain.UU.D.all_values
         self.uva.all_values[...] /= self.domain.UV.D.all_values
-        self.uadv.calculate(self.uua, self.uva, timestep, self.u1)
+        self.uadv(self.uua, self.uva, timestep, self.u1)
         self.advU.all_values[...] = (self.u1.all_values * self.uadv.D - self.U.all_values) * itimestep
 
         # Advect V using velocities interpolated to its own advection grids
@@ -94,7 +94,7 @@ class Simulation(_pygetm.Simulation):
         self.V.interp(self.vva)
         self.vua.all_values[...] /= self.domain.VU.D.all_values
         self.vva.all_values[...] /= self.domain.VV.D.all_values
-        self.vadv.calculate(self.vua, self.vva, timestep, self.v1)
+        self.vadv(self.vua, self.vva, timestep, self.v1)
         self.advV.all_values[...] = (self.v1.all_values * self.vadv.D - self.V.all_values) * itimestep
 
         # Restore velocity at time=n-1/2

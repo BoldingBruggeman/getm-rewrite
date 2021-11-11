@@ -167,7 +167,7 @@ cdef class Advection:
         self.p = advection_create(scheme, self.tgrid.p, &pD)
         self.D = numpy.asarray(<double[:self.tgrid.ny_, :self.tgrid.nx_:1]> pD)
 
-    def calculate(self, Array u not None, Array v not None, double timestep, Array var not None):
+    def __call__(self, Array u not None, Array v not None, double timestep, Array var not None):
         self.D[...] = self.tgrid.D.all_values
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, <double *>var.p)
         var.update_halos(2)
@@ -185,7 +185,7 @@ cdef class VerticalDiffusion:
         self.p = vertical_diffusion_create(self.tgrid.p)
         self.cnpar = cnpar
 
-    def calculate(self, Array nuh not None, double timestep, Array var not None, double molecular=0., Array ea2=None, Array ea4=None):
+    def __call__(self, Array nuh not None, double timestep, Array var not None, double molecular=0., Array ea2=None, Array ea4=None):
         cdef double* pea2 = NULL
         cdef double* pea4 = NULL
         if ea2 is not None:
