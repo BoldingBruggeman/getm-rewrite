@@ -298,7 +298,7 @@ contains
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pnuh, nuh, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%u(3) - tgrid%l(3) + 2/))
       call c_f_pointer(pvar, var, tgrid%u - tgrid%l + 1)
-      call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh, var)
+      call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var)
    end subroutine
 
    function advection_create(scheme, ptgrid, pD) result(padvection) bind(c)
