@@ -19,7 +19,50 @@ CONTAINS
 #define _NORMAL_ORDER_
 !-----------------------------------------------------------------------------
 
-MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f)
+MODULE SUBROUTINE vertical_diffusion_initialize_grid(self,grid)
+
+   !! Initialize the vertical diffusion operator from a grid object
+
+   IMPLICIT NONE
+
+   ! Subroutine arguments
+   class(type_vertical_diffusion), intent(inout) :: self
+   type(type_getm_grid), intent(in) :: grid
+      !! grid dimensions in case of dynamic memory allocation
+
+!  Local constants
+
+!  Local variables
+!---------------------------------------------------------------------------
+#ifndef _STATIC_
+   self%halo=grid%halo
+   self%imin = grid%imin; self%imax = grid%imax
+   self%jmin = grid%jmin; self%jmax = grid%jmax
+   self%kmin = grid%kmin; self%kmax = grid%kmax
+   allocate(self%auxo(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%auxn(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+#ifdef _NORMAL_ORDER_
+#define ORDER i,j,k
+   allocate(self%a1(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a2(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a3(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+   allocate(self%a4(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
+#else
+#define ORDER k,i,j
+   allocate(self%a1(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
+   allocate(self%a2(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
+   allocate(self%a3(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
+   allocate(self%a4(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
+#endif
+#endif
+   self%matrix_time = 0._real64
+   self%tridiag_time = 0._real64
+   is_initialized=.true.
+END SUBROUTINE vertical_diffusion_initialize_grid
+
+!---------------------------------------------------------------------------
+
+MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f,halo)
 
    !! Initialize the vertical diffusion operator from a 3D field
 
@@ -29,11 +72,13 @@ MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f)
    class(type_vertical_diffusion), intent(inout) :: self
    real(real64), dimension(:,:,:), intent(in) :: f
       !! grid dimensions in case of dynamic memory allocation
+   integer, dimension(3), intent(in), optional :: halo
 
 !  Local constants
 
 !  Local variables
 !---------------------------------------------------------------------------
+   if (present(halo)) self%halo=halo
 #ifndef _STATIC_
    self%imin = lbound(f,1); self%imax = ubound(f,1)
    self%jmin = lbound(f,2); self%jmax = ubound(f,2)
@@ -61,48 +106,6 @@ END SUBROUTINE vertical_diffusion_initialize_field
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE vertical_diffusion_initialize_grid(self,grid)
-
-   !! Initialize the vertical diffusion operator from a grid object
-
-   IMPLICIT NONE
-
-   ! Subroutine arguments
-   class(type_vertical_diffusion), intent(inout) :: self
-   type(type_getm_grid), intent(in) :: grid
-      !! grid dimensions in case of dynamic memory allocation
-
-!  Local constants
-
-!  Local variables
-!---------------------------------------------------------------------------
-#ifndef _STATIC_
-   self%imin = grid%imin; self%imax = grid%imax
-   self%jmin = grid%jmin; self%jmax = grid%jmax
-   self%kmin = grid%kmin; self%kmax = grid%kmax
-   allocate(self%auxo(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%auxn(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-#ifdef _NORMAL_ORDER_
-#define ORDER i,j,k
-   allocate(self%a1(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%a2(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%a3(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-   allocate(self%a4(grid%l(1):grid%u(1),grid%l(2):grid%u(2),grid%l(3):grid%u(3)))
-#else
-#define ORDER k,i,j
-   allocate(self%a1(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
-   allocate(self%a2(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
-   allocate(self%a3(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
-   allocate(self%a4(grid%l(3):grid%u(3),grid%l(1):grid%u(1),grid%l(2):grid%u(2)))
-#endif
-#endif
-   self%matrix_time = 0._real64
-   self%tridiag_time = 0._real64
-   is_initialized=.true.
-END SUBROUTINE vertical_diffusion_initialize_grid
-
-!---------------------------------------------------------------------------
-
 MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecular,nuh,var,ea2,ea4)
 
    !! Vertical diffusion
@@ -113,10 +116,10 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    class(type_vertical_diffusion), intent(inout) :: self
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo:,self%jmin-self%halo:
+#define _T2_ self%imin-self%halo(1):,self%jmin-self%halo(2):
    integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo:,self%jmin-self%halo:,self%kmin:
+#define _T3_ self%imin-self%halo(1):,self%jmin-self%halo(2):,self%kmin:
    real(real64), intent(in) :: dzo(_T3_)
    real(real64), intent(in) :: dzn(_T3_)
    real(real64), intent(in) :: molecular
@@ -144,7 +147,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
       do j=self%jmin,self%jmax
          do i=self%imin,self%imax
             if (mask(i,j) ==  1) then
-               x = 2._real64*dt*(nuh(i,j,k+1)+molecular)
+               x = 2._real64*dt*(nuh(i,j,k)+molecular)
                self%auxo(i,j,k)=(1-cnpar)*x/(dzo(i,j,k+1)+dzo(i,j,k))
                self%auxn(i,j,k)=   cnpar *x/(dzn(i,j,k+1)+dzn(i,j,k))
             end if

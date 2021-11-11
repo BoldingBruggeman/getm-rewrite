@@ -104,7 +104,7 @@ MODULE getm_operators
       real(real64), private, dimension(:,:,:), allocatable :: auxo, auxn
       real(real64), private, dimension(:,:,:), allocatable :: a1,a2,a3,a4
 
-      integer, private :: imin,imax,jmin,jmax,kmin,kmax,halo=2
+      integer, private :: imin,imax,jmin,jmax,kmin,kmax,halo(3)=(/2,2,0/)
 
       real(real64) :: matrix_time
       real(real64) :: tridiag_time
@@ -119,26 +119,27 @@ MODULE getm_operators
    end type type_vertical_diffusion
 
    INTERFACE
-      module subroutine vertical_diffusion_initialize_field(self,f)
-         class(type_vertical_diffusion), intent(inout) :: self
-         real(real64), dimension(:,:,:), intent(in) :: f
-            !! variable to be diffused
-      end subroutine vertical_diffusion_initialize_field
-
       module subroutine vertical_diffusion_initialize_grid(self,grid)
          class(type_vertical_diffusion), intent(inout) :: self
          type(type_getm_grid), intent(in) :: grid
             !! to get loop boundaries
       end subroutine vertical_diffusion_initialize_grid
 
+      module subroutine vertical_diffusion_initialize_field(self,f,halo)
+         class(type_vertical_diffusion), intent(inout) :: self
+         real(real64), dimension(:,:,:), intent(in) :: f
+            !! variable to be diffused
+         integer, dimension(3), intent(in), optional :: halo
+      end subroutine vertical_diffusion_initialize_field
+
       module subroutine vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecular,nuh,var,ea2,ea4)
          class(type_vertical_diffusion), intent(inout) :: self
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo:,self%jmin-self%halo:
+#define _T2_ self%imin-self%halo(1):,self%jmin-self%halo(2):
          integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo:,self%jmin-self%halo:,self%kmin:
+#define _T3_ self%imin-self%halo(1):,self%jmin-self%halo(2):,self%kmin:
          real(real64), intent(in) :: dzo(_T3_)
          real(real64), intent(in) :: dzn(_T3_)
          real(real64), intent(in) :: molecular
