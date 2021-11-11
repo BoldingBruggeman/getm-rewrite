@@ -63,4 +63,14 @@ if global_max > ini_max:
 if global_min < ini_min:
     print('ERROR: final global minimum value %s below initial minimum %s' % (global_min, ini_min))
     sys.exit(1)
-    
+
+# Now try without spatial gradient and source term only
+tracer.values[...] = 0
+sources = domain.T.array(fill=1. / dt, is_3d=True) * dt * domain.T.hn  # note that sources should be time- and layer-integrated!
+for _ in range(nstep):
+    vdif(nuh, dt, tracer, ea4=sources)
+delta = valid_tracer / nstep - 1
+error = numpy.abs(delta).max()
+if error > tolerance:
+    print('ERROR: error %s in tracer after using vertical diffusion solver to integrate sources exceeds tolerance %s' % (error, tolerance))
+    sys.exit(1)
