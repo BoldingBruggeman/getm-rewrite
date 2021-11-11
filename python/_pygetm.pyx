@@ -21,7 +21,7 @@ cdef extern void get_array(int source_type, void* grid, const char* name, int* g
 cdef extern void* advection_create(int scheme, void* tgrid, void** p) nogil
 cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pvar) nogil
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
-cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pvar) nogil
+cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_friction) nogil
 cdef extern void momentum_uv_momentum_2d(void* momentum, int runtype, double timestep, double* ptausx, double* ptausy, double* pdpdx, double* pdpdy) nogil
 cdef extern void* pressure_create(int runtype, void* pdomain) nogil
@@ -185,8 +185,14 @@ cdef class VerticalDiffusion:
         self.p = vertical_diffusion_create(self.tgrid.p)
         self.cnpar = cnpar
 
-    def calculate(self, Array nuh not None, double timestep, Array var not None, double molecular=0.):
-        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, <double *>var.p)
+    def calculate(self, Array nuh not None, double timestep, Array var not None, double molecular=0., Array ea2=None, Array ea4=None):
+        cdef double* pea2 = NULL
+        cdef double* pea4 = NULL
+        if ea2 is not None:
+            pea2 = <double *>ea2.p
+        if ea4 is not None:
+            pea4 = <double *>ea4.p
+        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, <double *>var.p, pea2, pea4)
 
 cdef class Simulation:
     cdef readonly Domain domain
