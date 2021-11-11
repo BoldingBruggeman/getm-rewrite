@@ -177,8 +177,8 @@ contains
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
-         case ('bdyu');   p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
-         case ('bdyv');   p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
+         case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
+         case ('bdyv');   if (allocated(momentum%bdyv)) p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -190,7 +190,7 @@ contains
       case (3)
          call c_f_pointer(obj, sealevel)
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
-         case ('zbdy'); p = c_loc(sealevel%zbdy); sub_type = subtype_boundary
+         case ('zbdy'); if (allocated(sealevel%zbdy)) p = c_loc(sealevel%zbdy); sub_type = subtype_boundary
          case default; p = C_NULL_PTR
          end select
       end select
