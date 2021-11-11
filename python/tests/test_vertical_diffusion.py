@@ -64,6 +64,12 @@ if global_min < ini_min:
     print('ERROR: final global minimum value %s below initial minimum %s' % (global_min, ini_min))
     sys.exit(1)
 
+delta = numpy.abs(valid_tracer.sum(axis=0) - 1)
+max_delta = delta.max()
+if max_delta > tolerance:
+    print('ERROR: difference between initial and final depth integral %s exceeds tolerance %s' % (max_delta, tolerance))
+    sys.exit(1)
+
 # Now try without spatial gradient and source term only
 tracer.values[...] = 0
 sources = domain.T.array(fill=1. / dt, is_3d=True) * dt * domain.T.hn  # note that sources should be time- and layer-integrated!
