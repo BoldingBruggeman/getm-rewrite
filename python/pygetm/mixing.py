@@ -12,8 +12,10 @@ def get_buoyancy_frequency(SA: core.Array, ct: core.Array, p: core.Array=None, o
     assert SA.ndim == 3
     if out is None:
         out = SA.grid.wgrid.array(is_3d=True)
+    assert out.grid is SA.grid.wgrid
     if p is None:
         p = -SA.grid.zc
+    assert p.grid is SA.grid
     pygsw.nsquared(SA.grid.hn.all_values, SA.all_values, ct.all_values, p.all_values, SA.grid.lat.all_values, out.all_values[1:-1, :, :])
     return out
 
