@@ -40,11 +40,11 @@ contains
       initialized = .true.
    end subroutine
 
-   subroutine calculate(nlev, dt, h, D, taus, taub, z0s, z0b, NN, SS) bind(c)
+   subroutine calculate(nlev, dt, h, D, u_taus, u_taub, z0s, z0b, NN, SS) bind(c)
       integer(c_int), value, intent(in) :: nlev
-      real(c_double), value, intent(in) :: dt, D, taus, taub, z0s, z0b
+      real(c_double), value, intent(in) :: dt, D, u_taus, u_taub, z0s, z0b
       real(c_double),        intent(in) :: h(0:nlev), SS(0:nlev), NN(0:nlev)
-      call do_turbulence(nlev, dt, D, sqrt(taus), sqrt(taub), z0s, z0b, h, NN, SS)
+      call do_turbulence(nlev, dt, D, u_taus, u_taub, z0s, z0b, h, NN, SS)
    end subroutine
 
    subroutine diff(nlev, dt, cnpar, posconc, h, Bcup, Bcdw, Yup, Ydw, nuY, Lsour, Qsour, Taur, Yobs, Y) bind(c)
