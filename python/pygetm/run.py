@@ -3,8 +3,9 @@ import os.path
 import argparse
 import sys
 from typing import Mapping
-
 import logging
+
+import numpy
 
 import pygetm
 import pygetm.config
@@ -13,6 +14,7 @@ import pygetm.input
 import pygetm.airsea
 import pygetm.legacy
 import pygetm.input.tpxo
+import pygetm.mixing
 
 def run():
     parser = argparse.ArgumentParser()
@@ -35,6 +37,7 @@ def run():
     start = config['time/start']
     stop = config['time/stop']
     timestep = config['time/timestep']
+    split_factor = config.get('time/split_factor', 1)
 
     topo_path = config['domain/legacy_topo']
     nlev = config['domain/nlev']
@@ -46,6 +49,7 @@ def run():
     if bdyinfo is not None:
         logger.info('Loading legacy boundary info from %s...' % bdyinfo)
         pygetm.legacy.load_bdyinfo(domain, os.path.join(root_dir, bdyinfo))
+        logging.info('%i open boundaries found.' % sum(map(len, domain.open_boundaries.values())))
 
     runtype = config.get('runtype', 1)
     uv_adv_scheme = config.get('momentum/advection/scheme', 1)
@@ -59,7 +63,7 @@ def run():
     # Tidal boundary forcing from TPXO
     tpxo_dir = config.get('open_boundaries/elevation/tpxo_dir')
     if tpxo_dir is not None:
-        logging.info('Loading TPXO tidal constituents forcing from %s...' % tpxo_dir)
+        logging.info('Loading TPXO tidal constituents at open boundaries from %s...' % tpxo_dir)
         tpxo_dir = os.path.join(root_dir, tpxo_dir)
         bdy_lon = domain.T.lon[domain.bdy_j, domain.bdy_i]
         bdy_lat = domain.T.lat[domain.bdy_j, domain.bdy_i]
@@ -81,6 +85,28 @@ def run():
     u10 = meteo.get_input('u10', domain, logger=logger)
     v10 = meteo.get_input('v10', domain, logger=logger)
     inputs += [t2m, d2m, sp, u10, v10]
+
+    if runtype == 4:
+        temp = domain.T.array(fill=5., is_3d=True, name='temp', units='degrees_Celsius', long_name='conservative temperature')
+        salt = domain.T.array(fill=35., is_3d=True, name='salt', units='-', long_name='absolute salinity')
+        sst = temp.isel(z=-1)
+        temp_source = domain.T.array(fill=0., is_3d=True, units='W m-2')
+        salt_source = domain.T.array(fill=0., is_3d=True)
+        shf = temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
+
+        SS = domain.W.array(fill=0., is_3d=True, name='SS', units='s-2', long_name='shear frequency squared')
+        NN = domain.W.array(fill=0., is_3d=True, name='NN', units='s-2', long_name='buoyancy frequency squared')
+        u_taus = domain.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity')
+        u_taub = domain.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity')
+        z0s = domain.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness')
+        z0b = domain.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic bottom roughness')
+
+        vertical_diffusion = pygetm.VerticalDiffusion(domain.T, cnpar=1.)
+        turbulence = pygetm.mixing.Turbulence(domain)
+        hf_scale_factor = split_factor * timestep / (pygetm.rho0 * pygetm.cp)
+
+        # ensure ho and hn are up to date and identical
+        domain.do_vertical()
 
     output = config.get('output')
     if output:
@@ -108,8 +134,13 @@ def run():
     timedelta = datetime.timedelta(seconds=timestep)
     date = start
     istep = 0
-    logger.info('Starting simulation at %s' % date)
+
+    for variable in inputs:
+        variable.update(date)
     sim.output_manager.save()
+
+    logger.info('Starting simulation at %s' % date)
+    itime = 0
     while date < stop:
         date += timedelta
 
@@ -122,8 +153,10 @@ def run():
             sim.bdyu[:] = tidal_u
             sim.bdyv[:] = tidal_v
 
-        es, ea, qs, qa, rhoa = pygetm.airsea.humidity(domain.T, 3, d2m - 273.15, sp, t2m - 273.15, t2m - 273.15)
-        tausx, tausy, qe, qh = pygetm.airsea.airsea_fluxes(domain.T, 1, t2m, t2m, u10, v10, rhoa, qs, qa)
+        if runtype != 4:
+            sst = t2m - 273.15
+        es, ea, qs, qa, rhoa = pygetm.airsea.humidity(domain.T, 3, d2m - 273.15, sp, sst, t2m - 273.15)
+        tausx, tausy, qe, qh = pygetm.airsea.airsea_fluxes(domain.T, 1, sst + 273.15, t2m, u10, v10, rhoa, qs, qa)
 
         sim.update_sealevel_boundaries(timestep)
         sim.update_surface_pressure_gradient(domain.T.z, sp)
@@ -137,7 +170,18 @@ def run():
         if args.report != 0 and istep % args.report == 0:
             logger.info(date)
 
+        if runtype == 4 and itime % split_factor == 0:
+            shf.all_values[...] = qe.all_values + qh.all_values
+            vertical_diffusion(turbulence.nuh, split_factor * timestep, temp, ea4=temp_source * hf_scale_factor)
+            vertical_diffusion(turbulence.nuh, split_factor * timestep, salt, ea4=salt_source)
+
+            pygetm.mixing.get_buoyancy_frequency(salt, temp, out=NN)
+            u_taus.all_values[...] = (tausx.all_values**2 + tausy.all_values**2)**0.25 / numpy.sqrt(pygetm.rho0)
+            turbulence(split_factor * timestep, u_taus, u_taub, z0s, z0b, NN, SS)
+
         sim.output_manager.save()
+
+        itime += 1
 
     sim.output_manager.close()
     logger.info('Simulation complete')
