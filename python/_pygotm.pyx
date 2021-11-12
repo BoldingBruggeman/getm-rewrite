@@ -27,8 +27,8 @@ cdef class Mixing:
         self.nuh = numpy.asarray(<double[:nlev+1:1]> pnuh)
         self.pnuh = pnuh
 
-    def turbulence(self, int nlev, double dt, const double[::1] h not None, double D, double taus, double taub, double z0s, double z0b, const double[::1] SS not None, const double[::1] NN not None):
-        calculate(nlev, dt, &h[0], D, taus, taub, z0s, z0b, &SS[0], &NN[0])
+    def turbulence(self, int nlev, double dt, const double[::1] h not None, double D, double u_taus, double u_taub, double z0s, double z0b, const double[::1] SS not None, const double[::1] NN not None):
+        calculate(nlev, dt, &h[0], D, u_taus, u_taub, z0s, z0b, &SS[0], &NN[0])
 
     def diffuse(self, int nlev, double dt, const double[::1] h not None, double[::1] Y not None):
         cdef double[::1] Lsour, Qsour, Taur, Yobs
