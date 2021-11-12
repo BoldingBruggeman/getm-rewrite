@@ -1,6 +1,7 @@
 add_library( getm_domain
     domain.F90
     grids.F90
+#KB    metrics.F90
     imetrics.F90
     register.F90
     uvx_depths.F90
