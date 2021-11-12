@@ -27,12 +27,16 @@ cdef class Mixing:
         self.nuh = numpy.asarray(<double[:nlev+1:1]> pnuh)
         self.pnuh = pnuh
 
-    def turbulence(self, int nlev, double dt, const double[::1] h not None, double D, double u_taus, double u_taub, double z0s, double z0b, const double[::1] SS not None, const double[::1] NN not None):
-        calculate(nlev, dt, &h[0], D, u_taus, u_taub, z0s, z0b, &SS[0], &NN[0])
+    def turbulence(self, double dt, const double[::1] h not None, double D, double u_taus, double u_taub, double z0s, double z0b, const double[::1] SS not None, const double[::1] NN not None):
+        assert SS.shape[0] == NN.shape[0], 'Length of NN (%i) and SS (%i) should be identical.' % (NN.shape[0], SS.shape[0])
+        assert h.shape[0] == NN.shape[0], 'Length of h (%i) should match that of NN and SS (%i).' % (h.shape[0], SS.shape[0])
+        calculate(h.shape[0] - 1, dt, &h[0], D, u_taus, u_taub, z0s, z0b, &SS[0], &NN[0])
 
-    def diffuse(self, int nlev, double dt, const double[::1] h not None, double[::1] Y not None):
+    def diffuse(self, double dt, const double[::1] h not None, double[::1] Y not None):
         cdef double[::1] Lsour, Qsour, Taur, Yobs
+        assert h.shape[0] == Y.shape[0]
+        assert h.shape[0] <= self.nuh.shape[0]
         Lsour = numpy.zeros_like(h)
         Qsour = numpy.zeros_like(h)
         Taur = numpy.full_like(h, 1e15)
-        diff(nlev, dt, 1., 0, &h[0], 1, 1, 0., 0., self.pnuh, &Lsour[0], &Qsour[0], &Taur[0], &Y[0], &Y[0])
+        diff(h.shape[0] - 1, dt, 1., 0, &h[0], 1, 1, 0., 0., self.pnuh, &Lsour[0], &Qsour[0], &Taur[0], &Y[0], &Y[0])

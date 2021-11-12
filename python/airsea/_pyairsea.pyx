@@ -52,4 +52,9 @@ def transfer_coefficients(int method, const double[:, ::1] tw, const double[:, :
         istop = tw.shape[0]
     if jstop is None:
         jstop = tw.shape[1]
+    assert tw.shape[0] == ta.shape[0] and tw.shape[1] == ta.shape[1]
+    assert tw.shape[0] == w.shape[0] and tw.shape[1] == w.shape[1]
+    assert tw.shape[0] == cd_mom.shape[0] and tw.shape[1] == cd_mom.shape[1]
+    assert tw.shape[0] == cd_latent.shape[0] and tw.shape[1] == cd_latent.shape[1]
+    assert tw.shape[0] == cd_sensible.shape[0] and tw.shape[1] == cd_sensible.shape[1]
     transfer_coefficients_2d(tw.shape[1], tw.shape[0], jstart + 1, jstop, istart + 1, istop, method, &tw[0,0], &ta[0,0], &w[0,0], &cd_mom[0,0], &cd_latent[0,0], &cd_sensible[0,0])
