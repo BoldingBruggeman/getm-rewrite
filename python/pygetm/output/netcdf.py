@@ -35,15 +35,16 @@ class NetCDFFile(File):
             else:
                 # Output data for entire (global) domain
                 nx, ny, nz = grid.nx * grid.domain.tiling.ncol, grid.ny * grid.domain.tiling.nrow, grid.nz
-            self.nc.createDimension('x%s' % grid.postfix, nx)
-            self.nc.createDimension('y%s' % grid.postfix, ny)
-            self.nc.createDimension('z%s' % grid.postfix, nz)
+            xname ,yname, zname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix
+            if (xname not in self.nc.dimensions): self.nc.createDimension(xname, nx)
+            if (yname not in self.nc.dimensions): self.nc.createDimension(yname, ny)
+            if (zname not in self.nc.dimensions): self.nc.createDimension(zname, nz)
         self.nc.createDimension('time',)
         self.ncvars = []
         for output_name, field in self.fields.items():
-            dims = ('y%s' % field.grid.postfix, 'x%s' % field.grid.postfix)
+            dims = ('y%s' % field.grid.xypostfix, 'x%s' % field.grid.xypostfix)
             if field.ndim == 3:
-                dims = ('z%s' % field.grid.postfix,) + dims
+                dims = ('z%s' % field.grid.zpostfix,) + dims
             dims = ('time',) + dims
             ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)
             for att, value in field.atts.items():
