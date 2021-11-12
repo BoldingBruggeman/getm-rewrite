@@ -1,5 +1,5 @@
 import operator
-from typing import Union
+from typing import Union, Optional
 import itertools
 
 import numpy
@@ -15,7 +15,7 @@ class Simulation(_pygetm.Simulation):
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays')
+    __slots__ = _all_fortran_arrays + ('output_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'tracers')
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None):
         self.output_manager = output.OutputManager(rank=dom.tiling.rank)
@@ -41,6 +41,8 @@ class Simulation(_pygetm.Simulation):
         self.vua = dom.VU.array(fill=numpy.nan)
         self.vva = dom.VV.array(fill=numpy.nan)
 
+        self.tracers = []
+
         if fabm:
             def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
                 ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
@@ -51,11 +53,18 @@ class Simulation(_pygetm.Simulation):
 
             self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=self.domain.T.hn.all_values.shape, libname='fabm_c')
             for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
-                fabm_variable_to_array(variable, send_data=True)
+                ar = fabm_variable_to_array(variable, send_data=True)
+                if ar.ndim == 3:
+                    self.add_tracer(ar)
             self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
             self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.fabm_model.horizontal_diagnostic_variables]
             self.fabm_model.link_mask(self.domain.T.mask.all_values)
             self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
+
+    def add_tracer(self, array: core.Array, source: Optional[core.Array]=None):
+        assert array.grid is self.domain.T
+        assert source is None or source.grid is self.domain.T
+        self.tracers.append((array, source))
 
     def start_fabm(self):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
