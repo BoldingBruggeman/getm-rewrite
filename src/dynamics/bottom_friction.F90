@@ -31,7 +31,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin,UG%D(i,j))
-            self%rru(i,j)=(kappa/log((self%zub(i,j)+0.5_real64*hh)/self%zub(i,j)))**2
+            self%rru(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
             self%work2d(i,j)=0.25_real64*(self%v1(i,j)+self%v1(i+1,j)+self%v1(i,j-1)+self%v1(i+1,j-1))
          end if
       end do
@@ -42,8 +42,8 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
             if (UG%mask(i,j) > 0) then
                ustar=sqrt(self%rru(i,j)*(self%u1(i,j)**2+self%work2d(i,j)**2))
                hh=max(self%domain%Dmin,UG%D(i,j))
-               self%zub(i,j)=min(hh,self%zub0(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
-               self%rru(i,j)=(kappa/log((self%zub(i,j)+0.5_real64*hh)/self%zub(i,j)))**2
+               UG%z0b(i,j)=min(hh,UG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
+               self%rru(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
             end if
          end do
       end do
@@ -63,7 +63,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin,VG%D(i,j))
-            self%rrv(i,j)=(kappa/log((self%zvb(i,j)+0.5_real64*hh)/self%zvb(i,j)))**2
+            self%rrv(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
             self%work2d(i,j)=0.25_real64*(self%u1(i,j)+self%u1(i+1,j)+self%u1(i,j-1)+self%u1(i+1,j-1))
          end if
       end do
@@ -74,8 +74,8 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
             if (VG%mask(i,j) > 0) then
                ustar=sqrt(self%rrv(i,j)*(self%work2d(i,j)**2+self%v1(i,j)**2))
                hh=max(self%domain%Dmin,VG%D(i,j))
-               self%zvb(i,j)=min(hh,self%zvb0(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
-               self%rrv(i,j)=(kappa/log((self%zvb(i,j)+0.5_real64*hh)/self%zvb(i,j)))**2
+               VG%z0b(i,j)=min(hh,VG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
+               self%rrv(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
             end if
          end do
       end do
@@ -117,12 +117,12 @@ MODULE SUBROUTINE bottom_friction_3d(self)
          self%work2d(i,j)=0._real64
          if (UG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin/UG%kmax,UG%hn(i,j,k))
-            r=(kappa/log((self%zub(i,j)+0.5*hh)/self%zub(i,j)))**2 ! GETM online report - (127)
+            r=(kappa/log((UG%z0b(i,j)+0.5*hh)/UG%z0b(i,j)))**2 ! GETM online report - (127)
             self%work2d(i,j)=0.25_real64*(self%vk(i,j,k)+self%vk(i+1,j,k)+self%vk(i,j-1,k)+self%vk(i+1,j-1,k))
 #if 0
             ustar=sqrt(r*(uuloc(i,j)**2+uvloc(i,j)**2))
-            zub(i,j)=min(hh,zub0(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
-            r=(kappa/log((zub(i,j)+0.5_real64*hh)/zub(i,j)))**2
+            UG%z0b(i,j)=min(hh,UG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
+            r=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
 #endif
             self%rru(i,j)=r*sqrt(self%uk(i,j,k)**2+self%work2d(i,j)**2) ! GETM online report - (126)
          end if
@@ -137,12 +137,12 @@ MODULE SUBROUTINE bottom_friction_3d(self)
          self%work2d(i,j)=0._real64
          if (VG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin/VG%kmax,VG%hn(i,j,k))
-            r=(kappa/log((self%zvb(i,j)+0.5_real64*hh)/self%zvb(i,j)))**2
+            r=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
             self%work2d(i,j)=0.25_real64*(self%uk(i,j,k)+self%uk(i-1,j,k)+self%uk(i,j+1,k)+self%uk(i-1,j+1,k))
 #if 0
             ustar=sqrt(r*(vuloc(i,j)**2+vvloc(i,j)**2))
-            zvb(i,j)=min(hh,zvb0(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
-            r=(kappa/log((zvb(i,j)+0.5*hh)/zvb(i,j)))**2
+            VG%z0b(i,j)=min(hh,VG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
+            r=(kappa/log((VG%z0b(i,j)+0.5*hh)/VG%z0b(i,j)))**2
 #endif
             self%rrv(i,j)=r*sqrt(self%work2d(i,j)**2+self%vk(i,j,k)**2)
          end if
@@ -175,8 +175,6 @@ MODULE SUBROUTINE slow_bottom_friction(self)
 !KB   allocate(rvv, mold=self%V, stat=stat)
 !KB   allocate(ru, mold=self%U, stat=stat)
 !KB   allocate(rv, mold=self%V, stat=stat)
-!KB   self%zub = 0.01_real64
-!KB   self%zvb = 0.01_real64
 
    allocate(Ui, mold=self%U, stat=stat)
    allocate(Vi, mold=self%V, stat=stat)
@@ -210,7 +208,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
          self%work2d(i,j)=0._real64
          if (UG%mask(i,j) .ge. 1) then
             hh=max(self%domain%Dmin,UG%zin(i,j)+UG%H(i,j))
-            self%rru(i,j)=(kappa/log((self%zub(i,j)+0.5_real64*HH)/self%zub(i,j)))**2
+            self%rru(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*HH)/UG%z0b(i,j)))**2
             vloc = 0.25_real64*(Vi(i,j)+Vi(i+1,j)+Vi(i,j-1)+Vi(i+1,j-1))
             self%ru(i,j) = self%rru(i,j)*sqrt(Ui(i,j)**2+vloc**2)
          end if
@@ -224,7 +222,7 @@ MODULE SUBROUTINE slow_bottom_friction(self)
          if (VG%mask(i,j) .ge. 1) then
             ! why not VG%D !KB
             hh=max(self%domain%Dmin,VG%zin(i,j)+VG%H(i,j))
-            self%rrv(i,j)=(kappa/log((self%zvb(i,j)+0.5_real64*hh)/self%zvb(i,j)))**2
+            self%rrv(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
             uloc = 0.25_real64*(Ui(i,j)+Ui(i+1,j)+Ui(i,j-1)+Ui(i+1,j-1))
             self%rv(i,j) = self%rrv(i,j)*sqrt(uloc**2+Vi(i,j)**2)
          end if

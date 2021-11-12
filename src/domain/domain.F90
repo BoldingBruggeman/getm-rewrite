@@ -103,6 +103,8 @@ MODULE getm_domain
         !! cartesian cordinates off grid - e.g. UTM
       real(real64), dimension(:,:), allocatable :: H
         !! undisturbed water depth
+      real(real64), dimension(:,:), allocatable :: z0b,z0b_min
+        !! bottom roughness lengths
       integer, dimension(:,:), allocatable :: mask
         !! mask=0 -> land
       real(real64), dimension(:,:), allocatable :: dlon,dlat
@@ -173,6 +175,7 @@ MODULE getm_domain
       real(real64) :: Dcrit=2._real64
       real(real64) :: Dgamma=1._real64
       real(real64) :: Dmax=1._real64
+      real(real64), public :: z0b_min = 0.001_real64
       logical :: gamma_surf
       real(real64) :: ddl=-1._real64, ddu=-1._real64
       real(real64) :: lat0=-999._real64
@@ -202,6 +205,7 @@ MODULE getm_domain
       procedure :: initialize => domain_initialize
       procedure :: initialize_open_boundaries => domain_initialize_open_boundaries
       procedure :: report => domain_report
+!KB      procedure :: metrics => metrics
       procedure :: imetrics => imetrics
       procedure :: register => register
       procedure :: uvx_depths => uvx_depths
@@ -217,6 +221,10 @@ MODULE getm_domain
    end type type_getm_domain
 
    INTERFACE
+
+!KB      module subroutine metrics(self)
+!KB         class(type_getm_domain), intent(inout) :: self
+!KB      end subroutine metrics
 
       module subroutine imetrics(self)
          class(type_getm_domain), intent(inout) :: self
@@ -339,6 +347,7 @@ SUBROUTINE domain_configure(self,imin,imax,jmin,jmax,kmin,kmax,logs,fm)
    call self%U%configure(logs,grid_type=UGRID,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%V%configure(logs,grid_type=VGRID,imin=imin,imax=imax,jmin=jmin,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
    call self%X%configure(logs,grid_type=XGRID,imin=imin-1,imax=imax,jmin=jmin-1,jmax=jmax,kmin=kmin,kmax=kmax,halo=self%T%halo)
+   self%T%z0b = self%z0b_min; self%T%z0b_min = self%z0b_min
 
 !  set local and global grid extend
 !KB   self%T%ill=self%T%l(1); self%T%ihl=self%T%u(1)
@@ -365,6 +374,8 @@ SUBROUTINE domain_initialize(self,runtype)
 !  Local variables
 !-----------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('domain_initialize()',level=1)
+
+!KBcall self%metrics()
 
    call self%imetrics()
 

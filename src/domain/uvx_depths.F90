@@ -93,6 +93,8 @@ module SUBROUTINE uvx_depths(self)
                   end if
             end select
             UG%D(i,j) = UG%H(i,j)
+            UG%z0b_min(i,j) = 0.5_real64*(TG%z0b(i,j)+TG%z0b(i+1,j))
+            UG%z0b(i,j) = UG%z0b_min(i,j)
          end if
       end do
    end do
@@ -133,6 +135,8 @@ module SUBROUTINE uvx_depths(self)
                   end if
             end select
             VG%D(i,j) = VG%H(i,j)
+            VG%z0b_min(i,j) = 0.5_real64*(TG%z0b(i,j)+TG%z0b(i,j+1))
+            VG%z0b(i,j) = VG%z0b_min(i,j)
          end if
       end do
    end do

@@ -67,8 +67,6 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: SxD,SyD ! Slow diffusion
       real(real64), dimension(:,:), allocatable :: SxF,SyF ! Slow friction
       real(real64), dimension(:,:), allocatable :: rru,rrv
-      real(real64), dimension(:,:), allocatable :: zub0,zub
-      real(real64), dimension(:,:), allocatable :: zvb0,zvb
       real(real64), dimension(:,:), allocatable :: ru,rv
       real(real64), dimension(:,:), allocatable :: Am,An
       real(real64), dimension(:,:,:), allocatable :: pk,qk,ww
