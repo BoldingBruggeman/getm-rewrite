@@ -129,7 +129,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def ma(self) -> numpy.ma.MaskedArray:
         if self._ma is None:
-            self._ma = numpy.ma.array(self.values, mask=self.grid.mask.values==0)
+            mask = self.grid.mask.values == 0
+            self._ma = numpy.ma.array(self.values, mask=numpy.broadcast_to(mask, self._shape))
         return self._ma
 
     @property
@@ -194,6 +195,13 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def __array__(self, dtype=None):
         return numpy.asarray(self.values, dtype=dtype)
+
+    def isel(self, z: int):
+        if self._ndim != 3:
+            raise NotImplementedError
+        ar = Array(grid=self.grid, units=self._units, long_name=self._long_name if self._long_name is None else '%s @ k=%i' % (self._long_name, z))
+        ar.wrap_ndarray(self.all_values[z, ...])
+        return ar
 
     def __getitem__(self, key):
         return self.values[key]

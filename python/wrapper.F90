@@ -1,6 +1,6 @@
 module pygetm
 
-   use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, C_NULL_CHAR, C_NULL_PTR
+   use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, c_associated, C_NULL_CHAR, C_NULL_PTR
    use iso_fortran_env, only: real64
 
    use getm_domain, only: type_getm_domain, type_getm_grid
@@ -177,8 +177,8 @@ contains
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
-         case ('bdyu');   p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
-         case ('bdyv');   p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
+         case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
+         case ('bdyv');   if (allocated(momentum%bdyv)) p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -190,7 +190,7 @@ contains
       case (3)
          call c_f_pointer(obj, sealevel)
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
-         case ('zbdy'); p = c_loc(sealevel%zbdy); sub_type = subtype_boundary
+         case ('zbdy'); if (allocated(sealevel%zbdy)) p = c_loc(sealevel%zbdy); sub_type = subtype_boundary
          case default; p = C_NULL_PTR
          end select
       end select
@@ -286,19 +286,32 @@ contains
       pdiffusion = c_loc(diffusion)
    end function
 
-   subroutine vertical_diffusion_calculate(pdiffusion, ptgrid, molecular, pnuh, timestep, cnpar, pvar) bind(c)
+   subroutine vertical_diffusion_calculate(pdiffusion, ptgrid, molecular, pnuh, timestep, cnpar, pvar, pea2, pea4) bind(c)
       real(c_double), intent(in), value :: timestep, cnpar, molecular
-      type(c_ptr),    intent(in), value :: pdiffusion, ptgrid, pnuh, pvar
+      type(c_ptr),    intent(in), value :: pdiffusion, ptgrid, pnuh, pvar, pea2, pea4
 
       type (type_getm_grid),          pointer :: tgrid
       type (type_vertical_diffusion), pointer :: diffusion
-      real(real64), contiguous, pointer, dimension(:,:,:) :: nuh, var
+      real(real64), contiguous, pointer, dimension(:,:,:) :: nuh, var, ea2, ea4
 
       call c_f_pointer(pdiffusion, diffusion)
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pnuh, nuh, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%u(3) - tgrid%l(3) + 2/))
       call c_f_pointer(pvar, var, tgrid%u - tgrid%l + 1)
-      call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var)
+      if (c_associated(pea2)) call c_f_pointer(pea2, ea2, tgrid%u - tgrid%l + 1)
+      if (c_associated(pea4)) call c_f_pointer(pea4, ea4, tgrid%u - tgrid%l + 1)
+      if (c_associated(pea2) .and. c_associated(pea4)) then
+         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+            ea2=ea2, ea4=ea4)
+      elseif (c_associated(pea2)) then
+         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+            ea2=ea2)
+      elseif (c_associated(pea4)) then
+         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+            ea4=ea4)
+      else
+         call diffusion%calculate(timestep, cnpar, tgrid%mask, tgrid%ho, tgrid%hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var)
+      end if
    end subroutine
 
    function advection_create(scheme, ptgrid, pD) result(padvection) bind(c)

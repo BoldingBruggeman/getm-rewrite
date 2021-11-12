@@ -13,6 +13,10 @@ domain.do_vertical()
 
 assert (domain.T.hn.all_values == domain.T.hn.all_values).all()
 
+dt = 600
+nstep = 100
+cnpar = 1.
+
 nuh = domain.W.array(fill=1e-2, is_3d=True)
 
 # Set diffusivity at all masked points to NaN
@@ -29,10 +33,10 @@ tracer.values[0, ...] = 1
 
 ini_min = tracer.values[...].min()
 ini_max = tracer.values[...].max()
-vdif = pygetm.VerticalDiffusion(tracer.grid, cnpar=1.)
+vdif = pygetm.VerticalDiffusion(tracer.grid, cnpar=cnpar)
 
-for _ in range(1):
-    vdif.calculate(nuh, 600, tracer)
+for _ in range(nstep):
+    vdif(nuh, dt, tracer)
 
 if not numpy.isfinite(tracer)[...].all():
     print('ERROR: tracer contains non-finite values after diffusion')
@@ -49,9 +53,9 @@ print('Absolute range in profiles: %s' % (col_range,))
 print('Relative range in profiles: %s' % (rel_col_range,))
 max_rel_col_range = rel_col_range.max()
 global_min, global_max = col_min.min(), col_max.max()
-tol = 1e-14
-if max_rel_col_range > 1e-14:
-    print('ERROR: maximum range across domain %s exceeds tolerance %s' % (max_rel_col_range, tol))
+tolerance = 1e-14
+if max_rel_col_range > tolerance:
+    print('ERROR: maximum range across domain %s exceeds tolerance %s' % (max_rel_col_range, tolerance))
     sys.exit(1)
 if global_max > ini_max:
     print('ERROR: final maximum value exceeds %s initial maximum %s' % (global_max, ini_max))
@@ -59,4 +63,20 @@ if global_max > ini_max:
 if global_min < ini_min:
     print('ERROR: final global minimum value %s below initial minimum %s' % (global_min, ini_min))
     sys.exit(1)
-    
+
+delta = numpy.abs(valid_tracer.sum(axis=0) - 1)
+max_delta = delta.max()
+if max_delta > tolerance:
+    print('ERROR: difference between initial and final depth integral %s exceeds tolerance %s' % (max_delta, tolerance))
+    sys.exit(1)
+
+# Now try without spatial gradient and source term only
+tracer.values[...] = 0
+sources = domain.T.array(fill=1. / dt, is_3d=True) * dt * domain.T.hn  # note that sources should be time- and layer-integrated!
+for _ in range(nstep):
+    vdif(nuh, dt, tracer, ea4=sources)
+delta = valid_tracer / nstep - 1
+error = numpy.abs(delta).max()
+if error > tolerance:
+    print('ERROR: error %s in tracer after using vertical diffusion solver to integrate sources exceeds tolerance %s' % (error, tolerance))
+    sys.exit(1)

@@ -95,7 +95,7 @@ if args.output:
     ncf = outman.add_netcdf_file(args.output, interval=10)
     ncf.request('tracer')
 
-adv = pygetm.Advection(subdomain.T, scheme=4)
+advect = pygetm.Advection(subdomain.T, scheme=4)
 
 def main():
     ifig = 0
@@ -124,12 +124,12 @@ def main():
             ifig += 1
 
         # Advect
-        adv.calculate(u, v, timestep, f)
+        advect(u, v, timestep, f)
 
         # Update halos
         f.update_halos()
 
-    outman.save()
+        outman.save()
 
     duration = timeit.default_timer() - start
     print('Time spent in loop: %.4f s' % duration)

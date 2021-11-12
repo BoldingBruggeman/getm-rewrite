@@ -59,20 +59,22 @@ module SUBROUTINE pressure_internal_initialize(self,runtype)
    call mm_s('idpdy',self%idpdy,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
 #endif
    if (runtype > 2) then
-      call self%fm%register('idpdx', 'Pa/m', 'internal pressure gradient - x', &
-                            standard_name='', &
-                            dimensions=(self%domain%T%dim_3d_ids), &
-    !KB                        output_level=output_level_debug, &
-                            part_of_state=.false., &
-                            category='baroclinicity', field=f)
-      call self%fm%send_data('idpdx', self%idpdx(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
-      call self%fm%register('idpdy', 'Pa/m', 'internal pressure gradient - y', &
-                            standard_name='', &
-                            dimensions=(self%domain%T%dim_3d_ids), &
-    !KB                        output_level=output_level_debug, &
-                            part_of_state=.false., &
-                            category='baroclinicity', field=f)
-      call self%fm%send_data('idpdy', self%idpdy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      if (associated(self%fm)) then
+         call self%fm%register('idpdx', 'Pa/m', 'internal pressure gradient - x', &
+                               standard_name='', &
+                               dimensions=(self%domain%T%dim_3d_ids), &
+       !KB                        output_level=output_level_debug, &
+                               part_of_state=.false., &
+                               category='baroclinicity', field=f)
+         call self%fm%send_data('idpdx', self%idpdx(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+         call self%fm%register('idpdy', 'Pa/m', 'internal pressure gradient - y', &
+                               standard_name='', &
+                               dimensions=(self%domain%T%dim_3d_ids), &
+       !KB                        output_level=output_level_debug, &
+                               part_of_state=.false., &
+                               category='baroclinicity', field=f)
+         call self%fm%send_data('idpdy', self%idpdy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+      end if
 
       select case (self%method_internal_pressure)
          case(method_blumberg_mellor)
