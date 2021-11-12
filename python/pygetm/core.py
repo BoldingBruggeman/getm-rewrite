@@ -196,11 +196,14 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def __array__(self, dtype=None):
         return numpy.asarray(self.values, dtype=dtype)
 
-    def isel(self, z: int):
+    def isel(self, z: int, **kwargs):
         if self._ndim != 3:
             raise NotImplementedError
-        ar = Array(grid=self.grid, units=self._units, long_name=self._long_name if self._long_name is None else '%s @ k=%i' % (self._long_name, z))
+        kwargs.setdefault('units', self._units)
+        kwargs.setdefault('long_name', self._long_name if self._long_name is None else '%s @ k=%i' % (self._long_name, z))
+        ar = Array(grid=self.grid, **kwargs)
         ar.wrap_ndarray(self.all_values[z, ...])
+        ar.register()
         return ar
 
     def __getitem__(self, key):
