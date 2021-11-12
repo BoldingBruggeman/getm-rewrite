@@ -14,6 +14,7 @@ import pygetm.input
 import pygetm.airsea
 import pygetm.legacy
 import pygetm.input.tpxo
+import pygetm.parallel
 import pygetm.mixing
 
 def run():
@@ -44,6 +45,11 @@ def run():
     z0_const = config.get('bottom/z0_const', default=0.001)
 
     domain = pygetm.legacy.domain_from_topo(os.path.join(root_dir, topo_path), nlev=nlev, z0_const=z0_const)
+    #global_domain = pygetm.legacy.domain_from_topo(os.path.join(root_dir, topo_path), nlev=nlev, z0_const=z0_const)
+    #tmask = global_domain.mask[1::2, 1::2]
+    #solution = pygetm.parallel.find_optimal_divison(tmask, 96)
+    #print(solution)
+    #dsds
 
     bdyinfo = config.get('open_boundaries/legacy_info')
     if bdyinfo is not None:
@@ -56,6 +62,8 @@ def run():
     fabm_config = config.get('fabm/configuration', 'fabm.yaml')
     if not config.get('fabm/use', False):
         fabm_config = None
+    if fabm_config:
+        logger.info('Loading FABM configuration from %s...' % fabm_config)
     sim = pygetm.Simulation(domain, runtype=runtype, advection_scheme=uv_adv_scheme, fabm=fabm_config)
 
     inputs = []
@@ -86,6 +94,18 @@ def run():
     v10 = meteo.get_input('v10', domain, logger=logger)
     inputs += [t2m, d2m, sp, u10, v10]
 
+    if fabm_config:
+        fabm_input = config.get('fabm/input', {})
+        for name in fabm_input:
+            try:
+                variable = sim.fabm_model.dependencies.find(name)
+            except KeyError:
+                logging.error('Variable %s under fabm/input is not a dependency of the currently loaded biogeochemical model.' % name)
+                sys.exit(1)
+            arr = fabm_input.get_input(name, domain, logger=logger, is_3d=len(variable.shape) == 3)
+            inputs.append(arr)
+            variable.link(arr.all_values)
+
     if runtype == 4:
         temp = domain.T.array(fill=5., is_3d=True, name='temp', units='degrees_Celsius', long_name='conservative temperature')
         salt = domain.T.array(fill=35., is_3d=True, name='salt', units='-', long_name='absolute salinity')
@@ -107,6 +127,9 @@ def run():
 
         # ensure ho and hn are up to date and identical
         domain.do_vertical()
+
+        if fabm_config:
+            sim.start_fabm()
 
     output = config.get('output')
     if output:
@@ -171,13 +194,19 @@ def run():
             logger.info(date)
 
         if runtype == 4 and itime % split_factor == 0:
+            pygetm.mixing.get_buoyancy_frequency(salt, temp, out=NN)
+            u_taus.all_values[...] = (tausx.all_values**2 + tausy.all_values**2)**0.25 / numpy.sqrt(pygetm.rho0)
+            turbulence(split_factor * timestep, u_taus, u_taub, z0s, z0b, NN, SS)
+
             shf.all_values[...] = qe.all_values + qh.all_values
             vertical_diffusion(turbulence.nuh, split_factor * timestep, temp, ea4=temp_source * hf_scale_factor)
             vertical_diffusion(turbulence.nuh, split_factor * timestep, salt, ea4=salt_source)
 
-            pygetm.mixing.get_buoyancy_frequency(salt, temp, out=NN)
-            u_taus.all_values[...] = (tausx.all_values**2 + tausy.all_values**2)**0.25 / numpy.sqrt(pygetm.rho0)
-            turbulence(split_factor * timestep, u_taus, u_taub, z0s, z0b, NN, SS)
+            for ar, src in sim.tracers:
+                vertical_diffusion(turbulence.nuh, split_factor * timestep, ar, ea4=src)
+
+            if fabm_config:
+                sim.update_fabm(split_factor * timestep)
 
         sim.output_manager.save()
 
