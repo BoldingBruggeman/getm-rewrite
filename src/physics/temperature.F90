@@ -72,6 +72,7 @@ MODULE getm_temperature
       procedure :: configuration => temperature_configuration
       procedure :: initialize => temperature_initialize
       procedure :: calculate => temperature_calculate
+      procedure :: adv => temperature_advection
 
    end type type_temperature
 
@@ -171,7 +172,7 @@ END SUBROUTINE temperature_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
+SUBROUTINE temperature_calculate(self,dt,nuh,rad,shf)
 
    !! Short wave radiation, surface heat fluxes and advection/diffusion of the temperature field
 
@@ -180,12 +181,8 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
 !  Subroutine arguments
    class(type_temperature), intent(inout) :: self
    real(real64), intent(in) :: dt
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), dimension(:,:,:), intent(in) :: uk(_T3_)
-   real(real64), dimension(:,:,:), intent(in) :: vk(_T3_)
-   real(real64), dimension(:,:,:), intent(in) :: nuh(_T3_)
-#undef _T3_
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3)-1:
+   real(real64), dimension(:,:,:), intent(in) :: nuh(_T3_)
    real(real64), dimension(:,:,:), intent(in) :: rad(_T3_)
 #undef _T3_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
@@ -200,11 +197,6 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
    if (associated(self%logs)) call self%logs%info('temperature_calculate()',level=2)
 
    TGrid: associate( TG => self%domain%T )
-   UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
-   call self%advection%calculate(self%advection_scheme,UG,uk,VG,vk,dt,TG,self%T)
-   end associate VGrid
-   end associate UGrid
    ! add extra processes
    ! short wave radiation and surface heat flux (sensible, latent and net longwave)
    do k=TG%kmin,TG%kmax
@@ -223,10 +215,42 @@ SUBROUTINE temperature_calculate(self,dt,uk,vk,nuh,rad,shf)
    end do
    !KB max dt = 0.5*dz^2/nuh
    call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmolt,nuh,self%T,ea4=self%ea4)
-
    call self%domain%mirror_bdys(TG,self%T)
    end associate TGrid
 END SUBROUTINE temperature_calculate
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE temperature_advection(self,dt,uk,vk)
+
+   !! Short wave radiation, surface heat fluxes and advection/diffusion of the temperature field
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_temperature), intent(inout) :: self
+   real(real64), intent(in) :: dt
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), dimension(:,:,:), intent(in) :: uk(_T3_)
+   real(real64), dimension(:,:,:), intent(in) :: vk(_T3_)
+#undef _T3_
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j,k
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('temperature_calculate()',level=2)
+
+   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
+!KB   call self%advection%calculate(self%advection_scheme,UG,uk,VG,vk,dt,TG,self%T)
+   call self%domain%mirror_bdys(TG,self%T)
+   end associate VGrid
+   end associate UGrid
+   end associate TGrid
+END SUBROUTINE temperature_advection
 
 !---------------------------------------------------------------------------
 

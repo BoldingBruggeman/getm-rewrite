@@ -64,6 +64,7 @@ MODULE getm_salinity
       procedure :: configuration => salinity_configuration
       procedure :: initialize => salinity_initialize
       procedure :: calculate => salinity_calculate
+      procedure :: adv => salinity_advection
 
    end type type_salinity
 
@@ -156,9 +157,37 @@ END SUBROUTINE salinity_initialize
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
+SUBROUTINE salinity_calculate(self,dt,nuh)
 
-   !! Advection/diffusion of the salinity field
+   !! diffusion of the salinity field
+
+   IMPLICIT NONE
+
+!  Subroutine arguments
+   class(type_salinity), intent(inout) :: self
+   real(real64), intent(in) :: dt
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: nuh(_T3_)
+#undef _T3_
+
+!  Local constants
+
+!  Local variables
+   integer :: rc
+!---------------------------------------------------------------------------
+   if (associated(self%logs)) call self%logs%info('salinity_calculate()',level=2)
+
+   TGrid: associate( TG => self%domain%T )
+   call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmols,nuh,self%S)
+   call self%domain%mirror_bdys(TG,self%S)
+   end associate TGrid
+END SUBROUTINE salinity_calculate
+
+!---------------------------------------------------------------------------
+
+SUBROUTINE salinity_advection(self,dt,uk,vk)
+
+   !! advection of the salinity field
 
    IMPLICIT NONE
 
@@ -168,7 +197,6 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: uk(_T3_)
    real(real64), intent(in) :: vk(_T3_)
-   real(real64), intent(in) :: nuh(_T3_)
 #undef _T3_
 
 !  Local constants
@@ -181,14 +209,12 @@ SUBROUTINE salinity_calculate(self,dt,uk,vk,nuh)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
-   call self%advection%calculate(self%advection_scheme,UG,uk,VG,vk,dt,TG,self%S)
+!KB   call self%advection%calculate(self%advection_scheme,UG,uk,VG,vk,dt,TG,self%S)
+   call self%domain%mirror_bdys(TG,self%S)
    end associate VGrid
    end associate UGrid
-   call self%vertical_diffusion%calculate(dt,self%cnpar,TG%mask,TG%hn,TG%hn,self%avmols,nuh,self%S)
-
-   call self%domain%mirror_bdys(TG,self%S)
    end associate TGrid
-END SUBROUTINE salinity_calculate
+END SUBROUTINE salinity_advection
 
 !---------------------------------------------------------------------------
 
