@@ -165,6 +165,7 @@ contains
          case ('cor'); p = c_loc(grid%cor)
          case ('hn'); p = c_loc(grid%hn); sub_type = subtype_depth_explicit
          case ('ho'); p = c_loc(grid%ho); sub_type = subtype_depth_explicit
+         case ('zc'); p = c_loc(grid%zc); sub_type = subtype_depth_explicit
          end select
       case (1)
          call c_f_pointer(obj, momentum)
