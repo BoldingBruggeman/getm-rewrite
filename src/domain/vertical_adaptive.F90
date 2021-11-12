@@ -33,7 +33,7 @@ MODULE SUBROUTINE init_adaptive(self)
    real(real64), dimension(:), allocatable :: be
    real(real64), dimension(:), allocatable :: sig
    real(real64) :: HH, alpha
-   integer :: i,j,k,kk
+   integer :: i,j,k,kk,l(3)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('init_vertical_adaptive()',level=3)
    stop 'init_adaptive()'
@@ -48,7 +48,8 @@ MODULE SUBROUTINE init_adaptive(self)
    do k=0,self%T%kmax
       ga(k) = k
    end do
-   call mm_s('gga',gga,self%T%l+(/0,0,-1/),self%T%u,stat=stat)
+   l = self%T%l+(/0,0,-1/)
+   call mm_s('gga',gga,l,self%T%u,stat=stat)
    if (stat /= 0) stop 'coordinates: Error allocating memory (gga)'
    be(0)=  -1._real64
    sig(0)= -1._real64

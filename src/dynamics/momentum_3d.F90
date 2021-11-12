@@ -26,7 +26,7 @@ MODULE SUBROUTINE uv_initialize_3d(self)
 !  Local constants
 
 !  Local variables
-   integer :: stat
+   integer :: stat, l(3)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_initialize_3d()',level=2)
    TGrid: associate( TG => self%domain%T )
@@ -49,7 +49,8 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('taub',self%taub,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
-   call mm_s('SS',self%SS,TG%l+(/0,0,-1/),TG%u,def=0._real64,stat=stat)
+   l = TG%l+(/0,0,-1/)
+   call mm_s('SS',self%SS,l,TG%u,def=0._real64,stat=stat)
    if (self%advection_scheme > 0) then
       call mm_s('uuadvhn',self%uuadvgrid%hn,TG%hn,def=0._real64,stat=stat)
       call mm_s('uvadvhn',self%uvadvgrid%hn,TG%hn,def=0._real64,stat=stat)

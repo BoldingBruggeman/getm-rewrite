@@ -20,9 +20,10 @@ CONTAINS
 !  Local constants
 
 !  Local variables
-   integer :: stat
+   integer :: stat, l(3)
 !-----------------------------------------------------------------------
-   call mm_s('dR',self%dR,self%domain%T%l+(/0,0,-1/),self%domain%T%u,def=0._real64,stat=stat)
+   l = self%domain%T%l+(/0,0,-1/)
+   call mm_s('dR',self%dR,l,self%domain%T%u,def=0._real64,stat=stat)
    call mm_s('dZ',self%dZ,self%dR,def=0._real64,stat=stat)
    call mm_s('P',self%P,self%domain%T%l,self%domain%T%u,def=0._real64,stat=stat)
    call mm_s('FC',self%FC,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
