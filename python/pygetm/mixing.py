@@ -25,6 +25,7 @@ class Turbulence:
         self.eps = domain.W.array(fill=0., is_3d=True, name='eps', units='m2 s-3', long_name='energy dissipation rate')
         self.L = domain.W.array(fill=0., is_3d=True, name='L', units='m', long_name='turbulence length scale')
         self.nuh = domain.W.array(fill=0., is_3d=True, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat')
+        self.num = domain.W.array(fill=0., is_3d=True, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum')
 
     def __call__(self, timestep: float, u_taus: core.Array, u_taub: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
         for j in range(self.domain.ny):
@@ -38,3 +39,4 @@ class Turbulence:
                     self.eps[:, j, i] = self.mix.eps
                     self.L[:, j, i] = self.mix.L
                     self.nuh[:, j, i] = self.mix.nuh
+                    self.num[:, j, i] = self.mix.num
