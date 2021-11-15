@@ -17,6 +17,7 @@ sim = pygetm.Simulation(domain, runtype=4, advection_scheme=1, fabm='../../exter
 
 #sim.input_manager.debug_nc_reads()
 
+sim.logger.info('Setting up output')
 output = sim.output_manager.add_netcdf_file('northsea.nc', interval=60)
 output.request('u10')
 output.request('v10')
@@ -29,8 +30,7 @@ output.request('V')
 output.request('zt')
 output.request('med_ergom_o2')
 
-# Meteorology from ERA
-sim.logger.info('Setting up meteorological forcing')
+sim.logger.info('Setting up ERA meteorological forcing')
 era_kwargs = {'preprocess': lambda ds: ds.isel(time=slice(4, -4))}
 sim.airsea.tcc.set(pygetm.input.from_nc(era_path, 'tcc', **era_kwargs))
 sim.airsea.t2m.set(pygetm.input.from_nc(era_path, 't2m', **era_kwargs) - 273.15)
@@ -39,8 +39,7 @@ sim.airsea.sp.set(pygetm.input.from_nc(era_path, 'sp', **era_kwargs))
 sim.airsea.u10.set(pygetm.input.from_nc(era_path, 'u10', **era_kwargs))
 sim.airsea.v10.set(pygetm.input.from_nc(era_path, 'v10', **era_kwargs))
 
-# Tidal boundary forcing from TPXO
-sim.logger.info('Setting up tidal boundary forcing')
+sim.logger.info('Setting up TPXO tidal boundary forcing')
 tpxo_dir = os.path.join(igotm_data_dir, 'TPXO9')
 bdy_lon = domain.T.lon[domain.bdy_j, domain.bdy_i]
 bdy_lat = domain.T.lat[domain.bdy_j, domain.bdy_i]
@@ -48,7 +47,7 @@ sim.zbdy.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=tpxo_dir), on_grid=Tru
 sim.bdyu.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='u', root=tpxo_dir), on_grid=True)
 sim.bdyv.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='v', root=tpxo_dir), on_grid=True)
 
-# Additional FABM forcing
+sim.logger.info('Setting up FABM dependencies that GETM does not provide')
 sim.get_fabm_dependency('downwelling_photosynthetic_radiative_flux').set(0)
 sim.get_fabm_dependency('surface_downwelling_photosynthetic_radiative_flux').set(0)
 sim.get_fabm_dependency('bottom_stress').set(0)
