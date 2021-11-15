@@ -29,7 +29,7 @@ add_subdirectory(../extern/gotm gotm EXCLUDE_FROM_ALL)
 set(PYFABM_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyfabm CACHE STRING "Dircotry to write pyfabm library to" FORCE)
 set(PYFABM_DIM_COUNT 3 CACHE STRING "Number of FABM dimensions" FORCE)
 set(FABM_FORCED_REAL_KIND c_double)
-add_compile_definitions(_FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_UNMASKED_VALUE_=1 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
+add_compile_definitions(_FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_MASKED_VALUE_=0 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
 add_subdirectory(../extern/fabm/src/drivers/python fabm)
 
 add_compile_definitions(USE_TRANSPORTS=1)

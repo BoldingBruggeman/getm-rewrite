@@ -50,7 +50,7 @@ class GOTM(Turbulence):
         loc_L = self.mix.L
         for j in range(self.domain.ny):
             for i in range(self.domain.nx):
-                if self.domain.T.mask[j, i] == 1:
+                if self.domain.T.mask[j, i] != 0:
                     loc_tke[:] = self.tke[:, j, i]
                     loc_eps[:] = self.eps[:, j, i]
                     loc_L[:] = self.L[:, j, i]
