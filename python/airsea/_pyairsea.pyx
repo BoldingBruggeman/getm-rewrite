@@ -1,4 +1,5 @@
 # cython: language_level=3
+# cython: profile=True
 
 cimport cython
 
@@ -45,6 +46,12 @@ def longwave_radiation(int method, const double[:, ::1] dlat, const double[:, ::
         istop = dlat.shape[0]
     if jstop is None:
         jstop = dlat.shape[1]
+    assert tw.shape[0] == dlat.shape[0] and tw.shape[1] == dlat.shape[1]
+    assert ta.shape[0] == dlat.shape[0] and ta.shape[1] == dlat.shape[1]
+    assert cloud.shape[0] == dlat.shape[0] and cloud.shape[1] == dlat.shape[1]
+    assert ea.shape[0] == dlat.shape[0] and ea.shape[1] == dlat.shape[1]
+    assert qa.shape[0] == dlat.shape[0] and qa.shape[1] == dlat.shape[1]
+    assert ql.shape[0] == dlat.shape[0] and ql.shape[1] == dlat.shape[1]
     longwave_radiation_2d(dlat.shape[1], dlat.shape[0], jstart + 1, jstop, istart + 1, istop, method, &dlat[0,0], &tw[0,0], &ta[0,0], &cloud[0,0], &ea[0,0], &qa[0,0], &ql[0,0])
 
 def transfer_coefficients(int method, const double[:, ::1] tw, const double[:, ::1] ta, const double[:, ::1] w, double[:, ::1] cd_mom, double[:, ::1] cd_latent, double[:, ::1] cd_sensible, int istart=0, istop=None, int jstart=0, jstop=None):

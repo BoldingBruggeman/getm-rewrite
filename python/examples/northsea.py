@@ -1,40 +1,63 @@
 import datetime
 import os.path
+import logging
 
 import pygetm
-import pygetm.domain
 import pygetm.input
 import pygetm.legacy
 import pygetm.input.tpxo
 
 getm_setups_dir = '../../../getm-setups'
+igotm_data_dirs = ('/server/data', '../../../igotm/data')
 
-domain = pygetm.legacy.domain_from_topo(os.path.join(getm_setups_dir, 'NorthSea/Topo/NS6nm.v01.nc'), nlev=1, z0_const=0.001)
+igotm_data_dir = next(filter(os.path.isdir, igotm_data_dirs))
+era_path = os.path.join(igotm_data_dir, 'ERA-interim/2016.nc')
+
+domain = pygetm.legacy.domain_from_topo(os.path.join(getm_setups_dir, 'NorthSea/Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001)
 pygetm.legacy.load_bdyinfo(domain, os.path.join(getm_setups_dir, 'NorthSea/bdyinfo.dat'))
-sim = pygetm.Simulation(domain, runtype=1, advection_scheme=1)
+sim = pygetm.Simulation(domain, runtype=4, advection_scheme=1, fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml')
 
+#sim.input_manager.debug_nc_reads()
+
+output = sim.output_manager.add_netcdf_file('northsea.nc', interval=60)
+output.request('u10')
+output.request('v10')
+output.request('t2m')
+output.request('d2m')
+output.request('tcc')
+output.request('sp')
+output.request('U')
+output.request('V')
+output.request('zt')
+output.request('med_ergom_o2')
+
+# Meteorology from ERA
+sim.logger.info('Setting up meteorological forcing')
+era_kwargs = {'preprocess': lambda ds: ds.isel(time=slice(4, -4))}
+sim.airsea.tcc.set(pygetm.input.from_nc(era_path, 'tcc', **era_kwargs))
+sim.airsea.t2m.set(pygetm.input.from_nc(era_path, 't2m', **era_kwargs) - 273.15)
+sim.airsea.d2m.set(pygetm.input.from_nc(era_path, 'd2m', **era_kwargs) - 273.15)
+sim.airsea.sp.set(pygetm.input.from_nc(era_path, 'sp', **era_kwargs))
+sim.airsea.u10.set(pygetm.input.from_nc(era_path, 'u10', **era_kwargs))
+sim.airsea.v10.set(pygetm.input.from_nc(era_path, 'v10', **era_kwargs))
+
+# Tidal boundary forcing from TPXO
+sim.logger.info('Setting up tidal boundary forcing')
+tpxo_dir = os.path.join(igotm_data_dir, 'TPXO9')
 bdy_lon = domain.T.lon[domain.bdy_j, domain.bdy_i]
 bdy_lat = domain.T.lat[domain.bdy_j, domain.bdy_i]
-tidal_h = pygetm.input.tpxo.get(bdy_lon, bdy_lat, verbose=True, root='../../../igotm/data/TPXO9')
+sim.zbdy.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=tpxo_dir), on_grid=True)
+sim.bdyu.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='u', root=tpxo_dir), on_grid=True)
+sim.bdyv.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='v', root=tpxo_dir), on_grid=True)
 
-# No surface forcing
-tausx = domain.U.array(fill=0.0)
-tausy = domain.V.array(fill=0.0)
-sp = domain.T.array(fill=0.0)
+# Additional FABM forcing
+sim.get_fabm_dependency('downwelling_photosynthetic_radiative_flux').set(0)
+sim.get_fabm_dependency('surface_downwelling_photosynthetic_radiative_flux').set(0)
+sim.get_fabm_dependency('bottom_stress').set(0)
 
-timestep = 60.
-timedelta = datetime.timedelta(seconds=timestep)
-date = datetime.datetime(2000, 1, 1)
-for itime in range(60 *24 * 5):
-    print(date, domain.T.z.ma.min(), domain.T.z.ma.max())
-    date += timedelta
+sim.start(datetime.datetime(2016, 1, 1), timestep=60., split_factor=30)
 
-    tidal_h.getm.update(date)
-    sim.zbdy[:] = tidal_h
-    sim.update_sealevel_boundaries(timestep)
-    sim.update_surface_pressure_gradient(domain.T.z, sp)
-    sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
-    sim.U.update_halos()
-    sim.V.update_halos()
-    sim.update_sealevel(timestep, sim.U, sim.V)
-    sim.update_depth()
+while sim.time < datetime.datetime(2016, 1, 5):
+    sim.advance()
+
+sim.finish()

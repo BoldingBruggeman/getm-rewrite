@@ -1,9 +1,7 @@
-import datetime
 import numbers
 from typing import Optional, Union, Tuple
 
 import numpy, numpy.lib.mixins, numpy.typing
-import cftime
 import xarray
 
 from . import _pygetm
@@ -12,7 +10,7 @@ from . import parallel
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field', 'saved', '_shape', '_ndim', '_size', '_dtype')
 
-    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None):
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None, fabm_standard_name: Optional[str]=None):
         _pygetm.Array.__init__(self, grid)
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
@@ -30,18 +28,23 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._ndim = None if shape is None else len(shape)
         self._size = None if shape is None else numpy.prod(shape)
         self._dtype = dtype
+        self.fabm_standard_name = fabm_standard_name
+        self.values = None
 
     def finish_initialization(self):
         """This is called by the underlying cython implementation after the array receives a value (self.all_values is valid)"""
         assert self.grid is not None
-        self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
-        self._dtype = self.values.dtype
-        self._shape = self.values.shape
-        self._ndim = self.values.ndim
-        self._size = self.values.size
+        self._dtype = self.all_values.dtype
+        self._ndim = self.all_values.ndim
         if self._fill_value is not None:
             # Cast fill value to dtype of the array
-            self._fill_value = numpy.array(self._fill_value, dtype=self.all_values.dtype)
+            self._fill_value = numpy.array(self._fill_value, dtype=self._dtype)
+        if self.on_boundary:
+            # boundary array
+            return
+        self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
+        self._shape = self.values.shape
+        self._size = self.values.size
 
     def register(self):
         assert self.grid is not None
@@ -126,39 +129,17 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         ar.register()
         return ar
 
+    def fill(self, value):
+        self.all_values[...] = value
+        if self.fill_value is not None:
+            self.all_values[..., self.grid.mask.all_values == 0] = self.fill_value
+
     @property
     def ma(self) -> numpy.ma.MaskedArray:
         if self._ma is None:
             mask = self.grid.mask.values == 0
             self._ma = numpy.ma.array(self.values, mask=numpy.broadcast_to(mask, self._shape))
         return self._ma
-
-    @property
-    def xarray(self) -> xarray.DataArray:
-        if self._xarray is None:
-            attrs = {}
-            for key in ('units', 'long_name'):
-                value = getattr(self, key)
-                if value is not None:
-                    attrs[key] = value
-            dom = self.grid.domain
-            coords = {}
-            if self.name not in ('x' + self.grid.xypostfix, 'y' + self.grid.xypostfix, 'lon' + self.grid.xypostfix, 'lat' + self.grid.xypostfix):
-                if dom.x_is_1d:
-                    coords['x%s' % self.grid.xypostfix] = self.grid.x.xarray[0, :]
-                if dom.y_is_1d:
-                    coords['y%s' % self.grid.xypostfix] = self.grid.y.xarray[:, 0]
-                coords['x%s2' % self.grid.xypostfix] = self.grid.x.xarray
-                coords['y%s2' % self.grid.xypostfix] = self.grid.y.xarray
-                if dom.lon is not None:
-                    coords['lon%s' % self.grid.xypostfix] = self.grid.lon.xarray
-                if dom.lat is not None:
-                    coords['lat%s' % self.grid.xypostfix] = self.grid.lat.xarray
-            dims = ('y' + self.grid.xypostfix, 'x' + self.grid.xypostfix)
-            if self.ndim == 3:
-                dims = ('z' + self.grid.zpostfix,) + dims
-            self._xarray = xarray.DataArray(self.values, coords=coords, dims=dims, attrs=attrs, name=self.name)
-        return self._xarray
 
     def plot(self, **kwargs):
         if 'x' not in kwargs and 'y' not in kwargs:
@@ -276,8 +257,48 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # one return value
             return self.create(self.grid, fill=result, is_3d=result.ndim == 3)
 
-    def update(self, time: Union[datetime.datetime, cftime.datetime]):
-        if self.mapped_field is None:
+    def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
+        if isinstance(value, (numbers.Number, numpy.ndarray)):
+            self.fill(value)
             return
-        self.mapped_field.getm.update(time)
-        self.values[...] = self.mapped_field
+
+        import pygetm.input
+        assert isinstance(value, xarray.DataArray), 'If value is not numeric, it should be an xarray.DataArray, but it is %s (type %s).' % (value, type(value))
+        assert isinstance(value.variable.data, pygetm.input.LazyArray), 'If value is an xarray.DataArray, its underlying type should be a LazyArray, but it is %s (type %s).' % (value.variable.data, type(value.variable.data))
+
+        if include_halos is None:
+            include_halos = self.values is None
+        target = self.all_values if include_halos else self.values
+        if not on_grid:
+            lon, lat = self.grid.lon.values, self.grid.lat.values
+            value = pygetm.input.limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
+            value = pygetm.input.spatial_interpolation(value, lon, lat)
+        value = pygetm.input.temporal_interpolation(value)
+        self.grid.domain.input_manager.add(self, value, target)
+
+    @property
+    def xarray(self) -> xarray.DataArray:
+        if self._xarray is None:
+            attrs = {}
+            for key in ('units', 'long_name'):
+                value = getattr(self, key)
+                if value is not None:
+                    attrs[key] = value
+            dom = self.grid.domain
+            coords = {}
+            if self.name not in ('x' + self.grid.xypostfix, 'y' + self.grid.xypostfix, 'lon' + self.grid.xypostfix, 'lat' + self.grid.xypostfix):
+                if dom.x_is_1d:
+                    coords['x%s' % self.grid.xypostfix] = self.grid.x.xarray[0, :]
+                if dom.y_is_1d:
+                    coords['y%s' % self.grid.xypostfix] = self.grid.y.xarray[:, 0]
+                coords['x%s2' % self.grid.xypostfix] = self.grid.x.xarray
+                coords['y%s2' % self.grid.xypostfix] = self.grid.y.xarray
+                if dom.lon is not None:
+                    coords['lon%s' % self.grid.xypostfix] = self.grid.lon.xarray
+                if dom.lat is not None:
+                    coords['lat%s' % self.grid.xypostfix] = self.grid.lat.xarray
+            dims = ('y' + self.grid.xypostfix, 'x' + self.grid.xypostfix)
+            if self.ndim == 3:
+                dims = ('z' + self.grid.zpostfix,) + dims
+            self._xarray = xarray.DataArray(self.values, coords=coords, dims=dims, attrs=attrs, name=self.name)
+        return self._xarray

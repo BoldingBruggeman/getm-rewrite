@@ -1,25 +1,38 @@
 import operator
 from typing import Union, Optional
 import itertools
+import logging
+import datetime
 
 import numpy
 
+from . import constants
 from . import _pygetm
 from . import core
 from . import domain
 from . import output
 from . import pyfabm
+from . import mixing
+import pygetm.airsea
 
 class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
+    _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'tracers')
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
 
-    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None):
-        self.output_manager = output.OutputManager(rank=dom.tiling.rank)
+    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
+        if logger is None:
+            logging.basicConfig(level=log_level)
+            self.logger = logging.getLogger()
+
+        self.output_manager = output.OutputManager(rank=dom.tiling.rank, logger=self.logger.getChild('output_manager'))
+        self.input_manager = dom.input_manager
         dom.field_manager = self.output_manager
+
+        self.input_manager.set_logger(self.logger.getChild('input_manager'))
 
         assert not dom.initialized
         _pygetm.Simulation.__init__(self, dom, runtype, apply_bottom_friction)
@@ -33,6 +46,32 @@ class Simulation(_pygetm.Simulation):
 
         self.update_depth()
 
+        self.airsea = airsea or pygetm.airsea.FluxesFromMeteo(self.domain)
+
+        if runtype == 4:
+            self.temp = dom.T.array(fill=5., is_3d=True, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
+            self.salt = dom.T.array(fill=35., is_3d=True, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
+            self.sst = self.temp.isel(z=-1)
+            self.temp_source = dom.T.array(fill=0., is_3d=True, units='W m-2')
+            self.salt_source = dom.T.array(fill=0., is_3d=True)
+            self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
+
+            self.SS = dom.W.array(fill=0., is_3d=True, name='SS', units='s-2', long_name='shear frequency squared')
+            self.NN = dom.W.array(fill=0., is_3d=True, name='NN', units='s-2', long_name='buoyancy frequency squared')
+            self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity')
+            self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity')
+            self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness')
+            self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic bottom roughness')
+
+            self.turbulence = turbulence or mixing.GOTM(self.domain)
+
+            self.vertical_diffusion = pygetm.VerticalDiffusion(dom.T, cnpar=1.)
+
+            # ensure ho and hn are up to date and identical
+            dom.do_vertical()
+        else:
+            self.sst = self.airsea.t2m
+
         self.uadv = _pygetm.Advection(dom.U, scheme=advection_scheme)
         self.vadv = _pygetm.Advection(dom.V, scheme=advection_scheme)
 
@@ -43,6 +82,7 @@ class Simulation(_pygetm.Simulation):
 
         self.tracers = []
 
+        self.fabm_model = None
         if fabm:
             def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
                 ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
@@ -61,21 +101,86 @@ class Simulation(_pygetm.Simulation):
             self.fabm_model.link_mask(self.domain.T.mask.all_values)
             self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
 
+    def get_fabm_dependency(self, name):
+        variable = self.fabm_model.dependencies.find(name)
+        arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_name, is_3d=len(variable.shape) == 3)
+        variable.link(arr.all_values)
+        return arr
+
     def add_tracer(self, array: core.Array, source: Optional[core.Array]=None):
         assert array.grid is self.domain.T
         assert source is None or source.grid is self.domain.T
         self.tracers.append((array, source))
 
-    def start_fabm(self):
+    def start(self, time: datetime.datetime, timestep, split_factor=1, report=10):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
-        and after the FBAM model has been provided with all dependencies"""
-        # Todo: flag saved diagnostics inside pyfabm
-        assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
-        for variable, ar in zip(itertools.chain(self.fabm_model.interior_diagnostic_variables, self.fabm_model.horizontal_diagnostic_variables), itertools.chain(self._fabm_interior_diagnostic_arrays, self._fabm_horizontal_diagnostic_arrays)):
-            if ar.saved:
-                ar.wrap_ndarray(variable.data)
-        for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
-            variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
+        and after the FABM model has been provided with all dependencies"""
+        self.logger.info('Starting simulation at %s' % time)
+        self.timestep = timestep
+        self.split_factor = split_factor
+        self.macrotimestep = self.timestep * self.split_factor
+        self.timedelta = datetime.timedelta(seconds=timestep)
+        self.time = time
+        self.istep = 0
+        self.report = report
+
+        if self.fabm_model:
+            # Todo: flag saved diagnostics inside pyfabm
+            for field in self.domain.field_manager.fields.values():
+                if field.fabm_standard_name:
+                    try:
+                        variable = self.fabm_model.dependencies.find(field.fabm_standard_name)
+                    except KeyError:
+                        continue
+                    variable.link(field.all_values)
+            assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
+            for variable, ar in zip(itertools.chain(self.fabm_model.interior_diagnostic_variables, self.fabm_model.horizontal_diagnostic_variables), itertools.chain(self._fabm_interior_diagnostic_arrays, self._fabm_horizontal_diagnostic_arrays)):
+                if ar.saved:
+                    ar.wrap_ndarray(variable.data)
+            for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
+                variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
+
+        self.domain.input_manager.update(time)
+        self.output_manager.save()
+
+    def advance(self):
+        self.time += self.timedelta
+
+        self.domain.input_manager.update(self.time)
+
+        self.airsea(self.sst)
+
+        self.update_sealevel_boundaries(self.timestep)
+        self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
+        self.uv_momentum_2d(self.timestep, self.airsea.taux, self.airsea.tauy, self.dpdx, self.dpdy)
+        self.U.update_halos()
+        self.V.update_halos()
+        self.update_sealevel(self.timestep, self.U, self.V)
+        self.update_depth()
+
+        self.istep += 1
+        if self.report != 0 and self.istep % self.report == 0:
+            self.logger.info(self.time)
+
+        if self.runtype == 4 and self.istep % self.split_factor == 0:
+            pygetm.mixing.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
+            self.u_taus.all_values[...] = (self.airsea.taux_T.all_values**2 + self.airsea.tauy_T.all_values**2)**0.25 / numpy.sqrt(constants.rho0)
+            self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
+
+            self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values
+            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.rho0 * constants.cp)))
+            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
+
+            for array, src in self.tracers:
+                self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=src)
+
+            if self.fabm_model:
+                self.update_fabm(self.macrotimestep)
+
+        self.output_manager.save()
+
+    def finish(self):
+        self.output_manager.close()
 
     def update_fabm(self, timestep: float):
         sources_int, sources_sf, sources_bt = self.fabm_model.get_sources()

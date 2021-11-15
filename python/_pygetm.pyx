@@ -1,4 +1,5 @@
 # cython: language_level=3
+# cython: profile=True
 
 cimport cython
 
@@ -46,6 +47,7 @@ cdef class Array:
     cdef void* p
     cdef readonly numpy.ndarray all_values
     cdef readonly Grid grid
+    cdef readonly int on_boundary
 
     def __init__(self, Grid grid=None):
         if grid is not None:
@@ -55,6 +57,7 @@ cdef class Array:
         cdef int grid_type
         cdef int sub_type
         cdef int data_type
+        self.on_boundary = False
         get_array(source, obj, name, &grid_type, &sub_type, &data_type, &self.p)
         if self.p == NULL:
             return
@@ -65,7 +68,7 @@ cdef class Array:
                 self.all_values = numpy.asarray(<double[:self.grid.nbdyp:1]> self.p)
             else:
                 self.all_values = numpy.asarray(<int[:self.grid.nbdyp:1]> self.p)
-            return self.all_values
+            self.on_boundary = True
         elif sub_type == 2:
             # Depth-explicit array on normal grid
             if data_type == 0:
@@ -168,6 +171,9 @@ cdef class Advection:
         self.D = numpy.asarray(<double[:self.tgrid.ny_, :self.tgrid.nx_:1]> pD)
 
     def __call__(self, Array u not None, Array v not None, double timestep, Array var not None):
+        assert u.grid is self.ugrid
+        assert v.grid is self.vgrid
+        assert var.grid is self.tgrid
         self.D[...] = self.tgrid.D.all_values
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, <double *>var.p)
         var.update_halos(2)
@@ -212,12 +218,20 @@ cdef class Simulation:
         self.nx, self.ny = domain.nx, domain.ny
 
     def uv_momentum_2d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None):
+        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
+        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
+        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
+        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
         momentum_uv_momentum_2d(self.pmomentum, self.runtype, timestep, <double *>tausx.p, <double *>tausy.p, <double *>dpdx.p, <double *>dpdy.p)
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
+        assert z.grid is self.domain.T
+        assert sp.grid is self.domain.T
         pressure_surface(self.ppressure, <double *>z.p, <double *>sp.p)
 
     def update_sealevel(self, double timestep, Array U not None, Array V not None):
+        assert U.grid is self.domain.U
+        assert V.grid is self.domain.V
         sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p)
 
     #def update_sealevel_uvx(self):

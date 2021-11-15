@@ -35,7 +35,7 @@ class NetCDFFile(File):
             else:
                 # Output data for entire (global) domain
                 nx, ny, nz = grid.nx * grid.domain.tiling.ncol, grid.ny * grid.domain.tiling.nrow, grid.nz
-            xname ,yname, zname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix
+            xname, yname, zname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix
             if (xname not in self.nc.dimensions): self.nc.createDimension(xname, nx)
             if (yname not in self.nc.dimensions): self.nc.createDimension(yname, ny)
             if (zname not in self.nc.dimensions): self.nc.createDimension(zname, nz)

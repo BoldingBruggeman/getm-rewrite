@@ -51,4 +51,5 @@ class Data(pygetm.input.LazyArray):
         return True
 
     def __array__(self, dtype=None) -> numpy.ndarray:
+        assert self.time is not None, 'update has not yet been called'
         return otps2.predict_tide_2d(self.components, self.lat, self.time, ntime=1, delta_time=0)[0, ...]

@@ -84,16 +84,6 @@ class Grid(_pygetm.Grid):
     def array(self, fill=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=float, **kwargs) -> core.Array:
         return core.Array.create(self, fill, is_3d, dtype, **kwargs)
 
-    def map(self, field: xarray.DataArray, periodic_lon=True, name: Optional[str]=None, long_name: Optional[str]=None, units: Optional[str]=None):
-        lon, lat = self.lon.values, self.lat.values
-        field = input.limit_region(field, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
-        field = input.spatial_interpolation(field, lon, lat)
-        field = input.temporal_interpolation(field)
-        arr = self.array(name=name or field.name, long_name=long_name or field.attrs.get('long_name'), units=units or field.attrs.get('units'))
-        arr.mapped_field = field
-        arr.values[...] = field
-        return arr
-
     def add_to_netcdf(self, nc: netCDF4.Dataset, postfix: str=''):
         xdim, ydim = 'x' + postfix, 'y' + postfix
         def save(name, units='', long_name=None):
@@ -287,6 +277,7 @@ class Domain(_pygetm.Domain):
         assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
         self.field_manager: Optional[output.FieldManager] = None
+        self.input_manager = input.InputManager()
         self.glob: Optional['Domain'] = self
 
         halo = 2

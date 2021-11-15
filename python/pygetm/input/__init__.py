@@ -11,18 +11,6 @@ import cftime
 
 import pygetm.util.interpolate
 
-def debug_nc_reads(logger: Optional[logging.Logger]=None):
-    if logger is None:
-        logger = logging.getLogger()
-    import xarray.backends.netCDF4_
-    class NetCDF4ArrayWrapper2(xarray.backends.netCDF4_.NetCDF4ArrayWrapper):
-        __slots__ = ()
-        _logger = logger
-        def _getitem(self, key):
-            self._logger.debug('Reading %s[%s] from %s' % (self.variable_name, key, self.datastore._filename))
-            return super()._getitem(key)
-    xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
-
 @xarray.register_dataarray_accessor('getm')
 class GETMAccessor:
     def __init__(self, xarray_obj: xarray.DataArray):
@@ -45,11 +33,9 @@ class GETMAccessor:
     def _interpret_coordinates(self) -> Mapping[str, xarray.DataArray]:
         if self._coordinates is None:
             self._coordinates = {}
-            #print(self._obj)
             for name, coord in self._obj.coords.items():
                 units = coord.attrs.get('units')
                 standard_name = coord.attrs.get('standard_name')
-                #print(name, units, standard_name)
                 if units in ('degrees_north', 'degree_north', 'degree_N', 'degrees_N', 'degreeN', 'degreesN') or standard_name == 'latitude':
                     self._coordinates['latitude'] = coord
                 elif units in ('degrees_east', 'degree_east', 'degree_E', 'degrees_E', 'degreeE', 'degreesE') or standard_name == 'longitude':
@@ -58,12 +44,7 @@ class GETMAccessor:
                     self._coordinates['time'] = coord
         return self._coordinates
 
-    def update(self, time: cftime.datetime) -> bool:
-        if isinstance(self._obj.data, LazyArray):
-            return self._obj.data.update(time)
-        return False
-
-def get_from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=False, **kwargs) -> xarray.DataArray:
+def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=False, **kwargs) -> xarray.DataArray:
     kwargs['decode_times'] = False
     kwargs['cache'] = cache
     if isinstance(paths, str):
@@ -74,15 +55,15 @@ def get_from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, ca
             ds = preprocess(ds)
     else:
         ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
-    return ds[name]
+    array = ds[name]
+    return xarray.DataArray(WrappedArray(array), dims=array.dims, coords=array.coords, attrs=array.attrs)
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self, shape: Iterable[int], dtype, passthrough=()):
+    def __init__(self, shape: Iterable[int], dtype):
         self.shape = tuple(shape)
         self.ndim = len(self.shape)
         self.dtype = dtype
         self._slices = []
-        self.passthrough = frozenset(passthrough)
 
     def update(self, time: cftime.datetime) -> bool:
         return False
@@ -99,13 +80,14 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         if method != '__call__':
             return NotImplemented
 
-        out = kwargs.get('out', ())
-        for x in inputs + out:
-            if not isinstance(x, (numpy.ndarray, numbers.Number, LazyArray)):
+        if 'out' in kwargs:
+            return NotImplemented
+
+        for x in inputs:
+            if not isinstance(x, (numpy.ndarray, numbers.Number, LazyArray, xarray.DataArray)):
                 return NotImplemented
 
-        inputs = tuple(numpy.asarray(x) if isinstance(x, LazyArray) else x for x in inputs)
-        return getattr(ufunc, method)(*inputs, **kwargs)
+        return UFuncResult(getattr(ufunc, method), *inputs, **kwargs)
 
     def __array__(self, dtype=None) -> numpy.ndarray:
         raise NotImplementedError
@@ -113,13 +95,74 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def __getitem__(self, slices) -> numpy.ndarray:
         return self.__array__()[slices]
 
-class UnaryOperatorResult(LazyArray):
-    def __init__(self, source: xarray.DataArray, shape: Iterable[int]=(), dtype=None, passthrough=()):
-        LazyArray.__init__(self, shape, dtype or source.dtype, passthrough)
-        self._source = source
+class OperatorResult(LazyArray):
+    def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, **kwargs):
+        self.inputs = [inp if not isinstance(inp, xarray.DataArray) else inp.variable for inp in inputs]
+        self.lazy_inputs = []
+        for input in inputs:
+            if isinstance(input, xarray.DataArray) and isinstance(input.variable._data, LazyArray):
+                self.lazy_inputs.append(input.data)
+            elif isinstance(input, LazyArray):
+                self.lazy_inputs.append(input)
+        self.kwargs = kwargs
+        if shape is None:
+            # Infer shape from inputs
+            shapes = []
+            for input in inputs:
+                if isinstance(input, (numpy.ndarray, LazyArray, xarray.DataArray)):
+                    shapes.append(input.shape)
+            shape = numpy.broadcast_shapes(*shapes)
+        if passthrough is True:
+            passthrough = range(len(shape))
+        self.passthrough = frozenset(passthrough)
+        super().__init__(shape, float)
 
     def update(self, time: cftime.datetime) -> bool:
-        return self._source.getm.update(time)
+        updated = False
+        for input in self.lazy_inputs:
+            updated = input.update(time) or updated
+        return updated
+
+    def __getitem__(self, slices) -> numpy.ndarray:
+        assert isinstance(slices, tuple)
+        if Ellipsis in slices:
+            i = slices.index(Ellipsis)
+            slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
+        assert len(slices) == self.ndim
+        preslices = tuple([slc if i in self.passthrough else slice(None) for i, slc in enumerate(slices)])
+        postslices = tuple([slc if i not in self.passthrough else slice(None) for i, slc in enumerate(slices)])
+        inputs = [inp if isinstance(inp, numbers.Number) else numpy.asarray(inp[preslices]) for inp in self.inputs]
+        return self.apply(*inputs)[postslices]
+
+    def apply(self, *inputs, dtype=None) -> numpy.ndarray:
+        raise NotImplementedError
+
+    def __array__(self, dtype=None) -> numpy.ndarray:
+        return self.apply(*[numpy.asarray(inp) for inp in self.inputs], dtype=dtype)
+
+class UnaryOperatorResult(OperatorResult):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._source = self.inputs[0]
+ 
+class UFuncResult(OperatorResult):
+    def __init__(self, ufunc, *inputs, **kwargs):
+        super().__init__(*inputs, passthrough=True, **kwargs)
+        self.ufunc = ufunc
+
+    def apply(self, *inputs, dtype=None) -> numpy.ndarray:
+        return self.ufunc(*inputs, **self.kwargs)
+
+class WrappedArray(OperatorResult):
+    def __init__(self, source: xarray.DataArray):
+        assert not isinstance(source.variable._data, LazyArray)
+        super().__init__(source, passthrough=True)
+
+    def apply(self, source, dtype=None) -> numpy.ndarray:
+        return source
+
+    def update(self, time: cftime.datetime) -> bool:
+        return False
 
 class LimitedRegionArray(UnaryOperatorResult):
     def __array__(self, dtype=None) -> numpy.ndarray:
@@ -146,7 +189,7 @@ class LimitedRegionArray(UnaryOperatorResult):
         for src_slice, tgt_slice in self._slices:
             src_slice = tuple([(cust if i in self.passthrough else ori) for i, (cust, ori) in enumerate(zip(slices, src_slice))])
             tgt_slice = tuple([ori for i, (cust, ori) in enumerate(zip(slices, tgt_slice)) if i not in self.passthrough or not isinstance(cust, int)])
-            data[tgt_slice] = self._source.variable[src_slice]
+            data[tgt_slice] = self._source[src_slice]
         return data
 
 def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False) -> xarray.DataArray:
@@ -210,7 +253,7 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
     if verbose:
         print('final shape: %s' % (shape,))
 
-    data = LimitedRegionArray(source, shape, passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)])
+    data = LimitedRegionArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)])
     data._slices.append((center_source, center_target))
     if left_target:
         data._slices.append((left_source, left_target))
@@ -257,7 +300,7 @@ def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: 
 
 class SpatialInterpolation(UnaryOperatorResult):
     def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.DataArray, shape: Iterable[int], npre: int, npost: int):
-        UnaryOperatorResult.__init__(self, source, shape)
+        UnaryOperatorResult.__init__(self, source, shape=shape)
         self._ip = ip
         self.npre = npre
         self.npost = npost
@@ -284,7 +327,7 @@ class SpatialInterpolation(UnaryOperatorResult):
                 src_slice.append(s)
             else:
                 assert isinstance(s, slice) and s.start is None and s.stop is None and s.step is None, '%s' % s
-        source = self._source.variable[tuple(src_slice)]
+        source = self._source[tuple(src_slice)]
         result = self._ip(source.values)
         return result[tuple(tgt_slice)]
 
@@ -306,7 +349,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         assert shape[self._itimedim] > 1, 'Cannot interpolate %s in time because its time dimension has length %i.' % (source.name, shape[self._itimedim])
         shape.pop(self._itimedim)
 
-        UnaryOperatorResult.__init__(self, source, shape)
+        super().__init__(source, shape=shape)
 
         self._current = numpy.empty(shape, dtype=source.dtype)
 
@@ -348,7 +391,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
                 raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source.name, numtime, self._numtimes[self._inext - 1]))
             old, numold = self._next, self._numnext
             self.slices[self._itimedim] = self._inext
-            self._next = self._source.variable[tuple(self.slices)].values
+            self._next = self._source[tuple(self.slices)].values
             self._numnext = self._numtimes[self._inext]
             self._slope = (self._next - old) / (self._numnext - numold)
 
@@ -359,3 +402,36 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._numnow = numtime
         self._timecoord.values[...] = time
         return True
+
+class InputManager:
+    def __init__(self):
+        self.fields = []
+        self._logger = logging.getLogger()
+
+    def debug_nc_reads(self):
+        import xarray.backends.netCDF4_
+        class NetCDF4ArrayWrapper2(xarray.backends.netCDF4_.NetCDF4ArrayWrapper):
+            __slots__ = ()
+            _logger = self._logger.getChild('nc')
+            _logger.setLevel(logging.DEBUG)
+            def _getitem(self, key):
+                self._logger.debug('Reading %s[%s] from %s' % (self.variable_name, key, self.datastore._filename))
+                return super()._getitem(key)
+        xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
+
+    def add(self, array, source: xarray.DataArray, target: numpy.ndarray):
+        assert source.shape == target.shape
+        if isinstance(source.data, LazyArray):
+            self._logger.debug('%s will be updated dynamically' % array.name)
+            self.fields.append((array, source.data, target))
+        else:
+            target[...] = source
+
+    def update(self, time):
+        for array, source, target in self.fields:
+            self._logger.debug('updating %s' % array.name)
+            source.update(time)
+            target[...] = source
+
+    def set_logger(self, logger: logging.Logger):
+        self._logger = logger

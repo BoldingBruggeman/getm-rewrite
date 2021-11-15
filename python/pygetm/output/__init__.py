@@ -1,3 +1,4 @@
+import logging
 from typing import MutableMapping, Optional
 import collections
 
@@ -37,12 +38,14 @@ class File:
         self.fields[output_name] = field
 
 class OutputManager(FieldManager):
-    def __init__(self, rank: int):
+    def __init__(self, rank: int, logger: Optional[logging.Logger]=None):
         FieldManager.__init__(self)
         self.rank = rank
         self.files = []
+        self._logger = logger or logging.getLogger()
 
     def add_netcdf_file(self, path: str, **kwargs):
+        self._logger.debug('Adding NetCDF file %s' % path)
         from . import netcdf
         file = netcdf.NetCDFFile(self, path, rank=self.rank, **kwargs)
         self.files.append(file)
@@ -50,8 +53,10 @@ class OutputManager(FieldManager):
 
     def save(self):
         for file in self.files:
+            self._logger.debug('Saving values to %s' % file)
             file.save()
 
     def close(self):
         for file in self.files:
+            self._logger.debug('Closing %s' % file)
             file.close()

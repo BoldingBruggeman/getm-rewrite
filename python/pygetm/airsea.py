@@ -9,6 +9,55 @@ from . import core
 
 cpa=1008.
 
+class Fluxes:
+    def __init__(self, domain):
+        self.taux = domain.U.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill=0.)
+        self.tauy = domain.V.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill=0.)
+        self.qe = domain.T.array(name='qe', long_name='latent heat flux', units='W m-2', fill=0.)
+        self.qh = domain.T.array(name='qh', long_name='sensible heat flux', units='W m-2', fill=0.)
+        self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill=0.)
+
+    def __call__(self, sst: core.Array) -> None:
+        pass
+
+class FluxesFromMeteo(Fluxes):
+    def __init__(self, domain):
+        super().__init__(domain)
+        self.es = domain.T.array(name='es', long_name='vapor pressure at saturation', units='Pa')
+        self.ea = domain.T.array(name='ea', long_name='vapor pressure', units='Pa')
+        self.qs = domain.T.array(name='qs', long_name='specific humidity at saturation', units='kg kg-1')
+        self.qa = domain.T.array(name='qa', long_name='specific humidity', units='kg kg-1')
+        self.rhoa = domain.T.array(name='rhoa', long_name='air density', units='kg m-3')
+
+        self.t2m = domain.T.array(name='t2m', long_name='air temperature @ 2 m', units='degrees_Celsius')
+        self.d2m = domain.T.array(name='d2m', long_name='dewpoint temperature @ 2 m', units='degrees_Celsius')
+        self.u10 = domain.T.array(name='u10', long_name='wind speed in Eastward direction @ 10 m', units='m s-1')
+        self.v10 = domain.T.array(name='v10', long_name='wind speed in Northward direction @ 10 m', units='m s-1')
+        self.tcc = domain.T.array(name='tcc', long_name='total cloud cover', units='1')
+
+        self.w = domain.T.array(name='w', long_name='wind speed', units='m s-1', fabm_standard_name='wind_speed')
+
+        self.cd_mom = domain.T.array()
+        self.cd_latent = domain.T.array()
+        self.cd_sensible = domain.T.array()
+
+        self.taux_T = domain.T.array()
+        self.tauy_T = domain.T.array()
+
+    def __call__(self, sst: core.Array) -> None:
+        pyairsea.humidity(3, self.d2m.all_values, self.sp.all_values, sst.all_values, self.t2m.all_values, self.es.all_values, self.ea.all_values, self.qs.all_values, self.qa.all_values, self.rhoa.all_values)
+
+        self.w.all_values[...] = numpy.sqrt(self.u10.all_values**2 + self.v10.all_values**2)
+        L = 2.5e6 - 0.00234e6 * sst.all_values   # latent heat of vaporization (J/kg) at sea surface, note SST must be in degrees Celsius
+        pyairsea.transfer_coefficients(1, sst.all_values + 273.15, self.t2m.all_values + 273.15, self.w.all_values, self.cd_mom.all_values, self.cd_latent.all_values, self.cd_sensible.all_values)
+        tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
+        self.taux_T.all_values[...] = tmp * self.u10.all_values
+        self.tauy_T.all_values[...] = tmp * self.v10.all_values
+        self.taux_T.interp(self.taux)
+        self.tauy_T.interp(self.tauy)
+        self.qe.all_values[...] = -self.cd_sensible.all_values * cpa * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
+        self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
+
 def solar_zenith_angle(time: cftime.datetime, grid: domain.Grid, out: Optional[core.Array]=None):
     if out is None:
         out = grid.array(long_name='zenith angle', units='degrees')
@@ -24,19 +73,6 @@ def shortwave_radiation(time: cftime.datetime, grid: domain.Grid, zenith_angle: 
     pyairsea.shortwave_radiation(yday, zenith_angle.all_values, grid.lon.all_values, grid.lat.all_values, cloud.all_values, out.all_values)
     return out
 
-def humidity(grid: domain.Grid, method: int, hum: core.Array, airp: core.Array, tw: core.Array, ta: core.Array, out: Optional[Sequence[core.Array]]=None) -> Tuple[core.Array, core.Array, core.Array, core.Array, core.Array]:
-    if out is None:
-        es = grid.array(long_name='vapor pressure at saturation', units='Pa')
-        ea = grid.array(long_name='vapor pressure', units='Pa')
-        qs = grid.array(long_name='specific humidity at saturation', units='kg kg-1')
-        qa = grid.array(long_name='specific humidity', units='kg kg-1')
-        rhoa = grid.array(long_name='air density', units='kg m-3')
-    else:
-        assert len(out) == 5
-        es, ea, qs, qa, rhoa = out
-    pyairsea.humidity(method, hum.all_values, airp.all_values, tw.all_values, ta.all_values, es.all_values, ea.all_values, qs.all_values, qa.all_values, rhoa.all_values)
-    return es, ea, qs, qa, rhoa
-
 def albedo_water(time: cftime.datetime, grid: domain.Grid, method: int, zenith_angle: core.Array, out: Optional[core.Array]=None):
     if out is None:
         out = grid.array(long_name='albedo', units='1')
@@ -49,22 +85,3 @@ def longwave_radiation(grid: domain.Grid, method: int, tw: core.Array, ta: core.
         out = grid.array(long_name='longwave radiation', units='W m-2')
     pyairsea.longwave_radiation(method, grid.lat.all_values, tw.all_values, ta.all_values, cloud.all_values, ea.all_values, qa.all_values, out.all_values)
     return out
-
-def airsea_fluxes(grid: domain.Grid, method: int, tw: core.Array, ta: core.Array, u10: core.Array, v10: core.Array, rhoa: core.Array, qs: core.Array, qa: core.Array, out: Optional[Sequence[core.Array]]=None) -> Tuple[core.Array, core.Array, core.Array, core.Array]:
-    if out is None:
-        taux = grid.array(long_name='wind stress in West-East direction', units='Pa')
-        tauy = grid.array(long_name='wind stress in South-North direction', units='Pa')
-        qe = grid.array(long_name='latent heat flux', units='W m-2')
-        qh = grid.array(long_name='sensible heat flux', units='W m-2')
-    else:
-        taux, tauy, qe, qh = out
-    w = numpy.sqrt(u10.all_values**2 + v10.all_values**2)
-    L = 2.5e6 - 0.00234e6 * tw.all_values   # latent heat of vaporization (J/kg) at sea surface
-    cd_mom, cd_latent, cd_sensible = numpy.empty_like(w), numpy.empty_like(w), numpy.empty_like(w)
-    pyairsea.transfer_coefficients(1, tw.all_values, ta.all_values, w, cd_mom, cd_latent, cd_sensible)
-    tmp = cd_mom * rhoa.all_values * w
-    taux.all_values[...] = tmp * u10.all_values
-    tauy.all_values[...] = tmp * v10.all_values
-    qe.all_values[...] = -cd_sensible * cpa * rhoa.all_values * w * (tw.all_values - ta.all_values)
-    qh.all_values[...] = -cd_latent * L * rhoa.all_values * w * (qs.all_values - qa.all_values)
-    return taux, tauy, qe, qh
