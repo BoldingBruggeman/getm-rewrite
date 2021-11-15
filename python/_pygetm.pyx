@@ -86,8 +86,8 @@ cdef class Array:
         self.register()
         return self
 
-    def wrap_ndarray(self, numpy.ndarray data):
-        assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS']
+    def wrap_ndarray(self, numpy.ndarray data not None):
+        assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
         self.all_values = data
         self.p = self.all_values.data
         self.finish_initialization()
