@@ -1,9 +1,7 @@
 import datetime
 import os.path
-import logging
 
 import pygetm
-import pygetm.input
 import pygetm.legacy
 import pygetm.input.tpxo
 
