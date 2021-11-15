@@ -125,7 +125,12 @@ class Simulation(_pygetm.Simulation):
         self.report = report
 
         if self.fabm_model:
-            # Todo: flag saved diagnostics inside pyfabm
+            # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
+            # This MUST be done before calling self.fabm_model.start
+            for variable, ar in zip(itertools.chain(self.fabm_model.interior_diagnostic_variables, self.fabm_model.horizontal_diagnostic_variables), itertools.chain(self._fabm_interior_diagnostic_arrays, self._fabm_horizontal_diagnostic_arrays)):
+                variable.save = ar.saved
+
+            # Transfer GETM fields with a standard name to FABM
             for field in self.domain.field_manager.fields.values():
                 if field.fabm_standard_name:
                     try:
@@ -133,10 +138,16 @@ class Simulation(_pygetm.Simulation):
                     except KeyError:
                         continue
                     variable.link(field.all_values)
+
+            # Start FABM. This verifies whether all dependencies are fulfilled and freezes the set of dsiagsntoics that will be saved.
             assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
+
+            # Fill GETM placeholder arrays for all FABM diagnostics that will be computed/saved.
             for variable, ar in zip(itertools.chain(self.fabm_model.interior_diagnostic_variables, self.fabm_model.horizontal_diagnostic_variables), itertools.chain(self._fabm_interior_diagnostic_arrays, self._fabm_horizontal_diagnostic_arrays)):
                 if ar.saved:
                     ar.wrap_ndarray(variable.data)
+
+            # Apply mask to state variables
             for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                 variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
 
