@@ -25,13 +25,14 @@ class Turbulence:
         self.num = domain.W.array(is_3d=True, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=-9999.)
 
 class GOTM(Turbulence):
-    def __init__(self, domain: domain.Domain):
+    def __init__(self, domain: domain.Domain, nml_path: Optional[str]=None):
         super().__init__(domain)
-        self.mix = _pygotm.Mixing(domain.nz)
+        self.mix = _pygotm.Mixing(domain.T.nz, b'' if nml_path is None else nml_path.encode('ascii'))
         self.domain = domain
         self.nuh.fill(self.mix.nuh[:, numpy.newaxis, numpy.newaxis])
         self.num.fill(self.mix.num[:, numpy.newaxis, numpy.newaxis])
         self.tke = domain.W.array(fill=self.mix.tke[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='tke', units='m2 s-2', long_name='turbulent kinetic energy')
+        self.tkeo = domain.W.array(fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='tkeo', units='m2 s-2', long_name='turbulent kinetic energy at previous timestep')
         self.eps = domain.W.array(fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='eps', units='m2 s-3', long_name='energy dissipation rate')
         self.L = domain.W.array(fill=self.mix.L[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='L', units='m', long_name='turbulence length scale')
 
@@ -46,19 +47,24 @@ class GOTM(Turbulence):
         loc_NN = numpy.empty((NN.shape[0],), dtype=NN.dtype)
         loc_SS = numpy.empty((SS.shape[0],), dtype=SS.dtype)
         loc_tke = self.mix.tke
+        loc_tkeo = self.mix.tkeo
         loc_eps = self.mix.eps
         loc_L = self.mix.L
-        for j in range(self.domain.ny):
-            for i in range(self.domain.nx):
+        for j in range(self.domain.T.ny):
+            for i in range(self.domain.T.nx):
                 if self.domain.T.mask[j, i] != 0:
                     loc_tke[:] = self.tke[:, j, i]
+                    #loc_tkeo[:] = self.tkeo[:, j, i]
                     loc_eps[:] = self.eps[:, j, i]
                     loc_L[:] = self.L[:, j, i]
                     loc_h[1:] = self.domain.T.hn[:, j, i]
                     loc_NN[:] = NN[:, j, i]
                     loc_SS[:] = SS[:, j, i]
+                    self.mix.nuh[:] = self.nuh[:, j, i]
+                    self.mix.num[:] = self.num[:, j, i]
                     self.mix.turbulence(timestep, loc_h, self.domain.T.D[j, i], u_taus[j, i], u_taub[j, i], z0s[j, i], z0b[j, i], loc_NN, loc_SS)
                     self.tke[:, j, i] = loc_tke
+                    #self.tkeo[:, j, i] = loc_tkeo
                     self.eps[:, j, i] = loc_eps
                     self.L[:, j, i] = loc_L
                     self.nuh[:, j, i] = self.mix.nuh

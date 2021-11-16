@@ -23,7 +23,7 @@ class Simulation(_pygetm.Simulation):
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
 
-    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
+    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
         if logger is None:
             logging.basicConfig(level=log_level)
             self.logger = logging.getLogger()
@@ -49,6 +49,18 @@ class Simulation(_pygetm.Simulation):
 
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo(self.domain)
 
+        self.uadv = _pygetm.Advection(dom.U, scheme=advection_scheme)
+        self.vadv = _pygetm.Advection(dom.V, scheme=advection_scheme)
+
+        self.uua = dom.UU.array(fill=numpy.nan)
+        self.uva = dom.UV.array(fill=numpy.nan)
+        self.vua = dom.VU.array(fill=numpy.nan)
+        self.vva = dom.VV.array(fill=numpy.nan)
+
+        self.tracers = []
+
+        self.fabm_model = None
+
         if runtype == 4:
             self.temp = dom.T.array(fill=5., is_3d=True, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
             self.salt = dom.T.array(fill=35., is_3d=True, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
@@ -64,43 +76,32 @@ class Simulation(_pygetm.Simulation):
             self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness')
             self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic bottom roughness')
 
-            self.turbulence = turbulence or mixing.GOTM(self.domain)
+            self.turbulence = turbulence or mixing.GOTM(self.domain, nml_path=gotm)
 
             self.vertical_diffusion = pygetm.VerticalDiffusion(dom.T, cnpar=1.)
 
             # ensure ho and hn are up to date and identical
             dom.do_vertical()
+
+            if fabm:
+                def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
+                    ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
+                    if send_data:
+                        ar.wrap_ndarray(variable.data)
+                    ar.register()
+                    return ar
+
+                self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=self.domain.T.hn.all_values.shape, libname='fabm_c')
+                for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
+                    ar = fabm_variable_to_array(variable, send_data=True)
+                    if ar.ndim == 3:
+                        self.add_tracer(ar)
+                self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
+                self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.fabm_model.horizontal_diagnostic_variables]
+                self.fabm_model.link_mask(self.domain.T.mask.all_values)
+                self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
         else:
             self.sst = self.airsea.t2m
-
-        self.uadv = _pygetm.Advection(dom.U, scheme=advection_scheme)
-        self.vadv = _pygetm.Advection(dom.V, scheme=advection_scheme)
-
-        self.uua = dom.UU.array(fill=numpy.nan)
-        self.uva = dom.UV.array(fill=numpy.nan)
-        self.vua = dom.VU.array(fill=numpy.nan)
-        self.vva = dom.VV.array(fill=numpy.nan)
-
-        self.tracers = []
-
-        self.fabm_model = None
-        if fabm:
-            def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
-                ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
-                if send_data:
-                    ar.wrap_ndarray(variable.data)
-                ar.register()
-                return ar
-
-            self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=self.domain.T.hn.all_values.shape, libname='fabm_c')
-            for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
-                ar = fabm_variable_to_array(variable, send_data=True)
-                if ar.ndim == 3:
-                    self.add_tracer(ar)
-            self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
-            self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.fabm_model.horizontal_diagnostic_variables]
-            self.fabm_model.link_mask(self.domain.T.mask.all_values)
-            self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
 
     def get_fabm_dependency(self, name):
         variable = self.fabm_model.dependencies.find(name)
