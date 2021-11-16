@@ -1,5 +1,5 @@
 import logging
-from typing import MutableMapping, Optional
+from typing import MutableMapping, Optional, Union, Iterable
 import collections
 
 import numpy.typing
@@ -24,7 +24,12 @@ class File:
     def close(self):
         pass
 
-    def request(self, name: str, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False):
+    def request(self, name: Union[str, Iterable[str]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False):
+        if not isinstance(name, str):
+            assert output_name is None
+            for n in name:
+                self.request(n, dtype=dtype, mask=mask)
+            return
         assert name in self.field_manager.fields, 'Unknown field "%s" requested. Available: %s' % (name, ', '.join(self.field_manager.fields))
         if output_name is None:
             output_name = name
