@@ -1,7 +1,7 @@
 module pygotm
    use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, C_NULL_CHAR, C_NULL_PTR
 
-   use turbulence, only: init_turbulence, post_init_turbulence, do_turbulence, tke, eps, L, num, nuh, clean_turbulence
+   use turbulence, only: init_turbulence, post_init_turbulence, do_turbulence, tke, tkeo, eps, L, num, nuh, clean_turbulence
    use mtridiagonal, only: init_tridiagonal, clean_tridiagonal
    use yaml_settings
 
@@ -11,16 +11,16 @@ module pygotm
 
 contains
 
-   subroutine initialize(nlev, input_dir, ptke, peps, pL, pnum, pnuh) bind(c)
+   subroutine initialize(nlev, nml_file, ptke, ptkeo, peps, pL, pnum, pnuh) bind(c)
       integer(c_int), value,          intent(in)  :: nlev
-      character(kind=c_char), target, intent(in)  :: input_dir(*)
-      type(c_ptr),                    intent(out) :: ptke, peps, pL, pnum, pnuh
+      character(kind=c_char), target, intent(in)  :: nml_file(*)
+      type(c_ptr),                    intent(out) :: ptke, ptkeo, peps, pL, pnum, pnuh
 
       type (type_settings) :: branch
       integer, parameter :: iunit = 60
-      character(len=256), pointer :: pinput_dir
+      character(len=256), pointer :: pnml_file
 
-      call c_f_pointer(c_loc(input_dir), pinput_dir)
+      call c_f_pointer(c_loc(nml_file), pnml_file)
 
       if (initialized) then
          call clean_turbulence()
@@ -28,10 +28,12 @@ contains
       end if
 
       call init_turbulence(branch)
+      if (pnml_file /= '') call init_turbulence(iunit, pnml_file)
       call init_tridiagonal(nlev)
       call post_init_turbulence(nlev)
 
       ptke = c_loc(tke)
+      ptkeo = c_loc(tkeo)
       peps = c_loc(eps)
       pL   = c_loc(L)
       pnum = c_loc(num)

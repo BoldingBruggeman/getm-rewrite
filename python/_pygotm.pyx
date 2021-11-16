@@ -6,22 +6,24 @@ cimport cython
 cimport numpy
 import numpy
 
-cdef extern void initialize(int nlev, const char* inputdir, double** ptke, double** peps, double** pL, double** pnum, double** pnuh) nogil
+cdef extern void initialize(int nlev, const char* inputdir, double** ptke, double** ptkeo, double** peps, double** pL, double** pnum, double** pnuh) nogil
 cdef extern void calculate(int nlev, double dt, double* h, double D, double taus, double taub, double z0s, double z0b, double* SS, double* NN) nogil
 cdef extern void diff(int nlev, double dt, double cnpar, int posconc, double* h, int Bcup, int Bcdw, double Yup, double Ydw, double* nuY, double* Lsour, double* Qsour, double* Taur, double* Yobs, double* Y)
 
 cdef class Mixing:
-    cdef readonly numpy.ndarray tke, eps, L, num, nuh
+    cdef readonly numpy.ndarray tke, tkeo, eps, L, num, nuh
     cdef double* pnuh
 
-    def __init__(self, int nlev, bytes inputdir=b'.'):
+    def __init__(self, int nlev, bytes nml_path=b''):
         cdef double* ptke
+        cdef double* ptkeo
         cdef double* peps
         cdef double* pL
         cdef double* pnum
         cdef double* pnuh
-        initialize(nlev, inputdir, &ptke, &peps, &pL, &pnum, &pnuh)
+        initialize(nlev, nml_path, &ptke, &ptkeo, &peps, &pL, &pnum, &pnuh)
         self.tke = numpy.asarray(<double[:nlev+1:1]> ptke)
+        self.tkeo = numpy.asarray(<double[:nlev+1:1]> ptkeo)
         self.eps = numpy.asarray(<double[:nlev+1:1]> peps)
         self.L = numpy.asarray(<double[:nlev+1:1]> pL)
         self.num = numpy.asarray(<double[:nlev+1:1]> pnum)
