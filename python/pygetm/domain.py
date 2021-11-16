@@ -1,5 +1,6 @@
 from typing import Optional, Tuple
 import operator
+import logging
 
 import numpy
 import numpy.typing
@@ -206,6 +207,8 @@ class Domain(_pygetm.Domain):
         halo = 0   # coordinates are scattered without their halo - Domain object will update halos upon creation
         share = 1  # one X point overlap in both directions between subdomains for variables on the supergrid
         nx_loc, ny_loc = nx // tiling.ncol, ny // tiling.nrow
+        tiling.ioffset = nx_loc * tiling.icol
+        tiling.joffset = ny_loc * tiling.irow
 
         coordinates = {'f': 'cor'}
         if has_xy:
@@ -285,6 +288,7 @@ class Domain(_pygetm.Domain):
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
         assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
+        self.logger = logging.getLogger()
         self.field_manager: Optional[output.FieldManager] = None
         self.input_manager = input.InputManager()
         self.glob: Optional['Domain'] = self
@@ -410,7 +414,24 @@ class Domain(_pygetm.Domain):
         self.open_boundaries = {}
 
     def add_open_boundary(self, side: int, l: int, mstart: int, mstop: int, type_2d: int, type_3d: int):
-        self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
+        """Note that l, mstart, mstop are 0-based indices in the global domain.
+        mstop indicates the upper limit of the boundary - it is the first index that is EXcluded."""
+        # NB below we convert to indices in the T grid of the current subdomain INCLUDING halos
+        # We also limit the indices to the range valid for the current subdomain.
+        HALO = 2
+        if side in (WEST, EAST):
+            l = HALO + l - self.tiling.ioffset
+            mstart = min(max(0, HALO + mstart - self.tiling.joffset), self.T.ny_)
+            mstop = min(max(0, HALO + mstop - self.tiling.joffset), self.T.ny_)
+            lmax = self.T.nx_
+        else:
+            l = HALO + l - self.tiling.joffset
+            mstart = min(max(0, HALO + mstart - self.tiling.ioffset), self.T.nx_)
+            mstop = min(max(0, HALO + mstop - self.tiling.ioffset), self.T.nx_)
+            lmax = self.T.ny_
+        if l >= 0 and l < lmax and mstop > mstart:
+            # Boundary lies at least partially within current subdomain
+            self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
 
     def initialize(self, runtype, field_manager: Optional[output.FieldManager]=None):
         assert not self.initialized, 'Domain has already been initialized'
@@ -425,25 +446,29 @@ class Domain(_pygetm.Domain):
             self.field_manager = field_manager
         self.field_manager = self.field_manager or output.FieldManager()
 
+        HALO = 2
         nbdyp = 0
         bdyinfo, bdy_i, bdy_j = [], [], []
+        side2count = {}
         for side in (WEST, NORTH, EAST, SOUTH):
-            bounds = self.open_boundaries.setdefault(side, [])
+            bounds = self.open_boundaries.get(side, [])
+            side2count[side] = len(bounds)
             for l, mstart, mstop, type_2d, type_3d in bounds:
-                bdyinfo.append(numpy.array((l, mstart, mstop, type_2d, type_3d, nbdyp), dtype=numpy.intc))
+                # Note that bdyinfo needs indices into the T grid EXCLUDING halos
+                bdyinfo.append(numpy.array((l - HALO, mstart - HALO, mstop - HALO, type_2d, type_3d, nbdyp), dtype=numpy.intc))
                 nbdyp += mstop - mstart
                 if side == WEST:
-                    self.mask[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
-                    self.mask[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
+                    self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
+                    self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
                 elif side == EAST:
-                    self.mask[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
-                    self.mask[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
+                    self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
+                    self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
                 elif side == SOUTH:
-                    self.mask[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
-                    self.mask[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
+                    self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
+                    self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
                 elif side == NORTH:
-                    self.mask[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
-                    self.mask[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
+                    self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
+                    self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
 
                 if side in (WEST, EAST):
                     bdy_i.append(numpy.repeat(l, mstop - mstart))
@@ -453,9 +478,10 @@ class Domain(_pygetm.Domain):
                     bdy_j.append(numpy.repeat(l, mstop - mstart))
         self.bdy_i = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_i, dtype=numpy.intc)
         self.bdy_j = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_j, dtype=numpy.intc)
+        self.logger.info('%i open boundaries' % len(bdyinfo))
         if nbdyp > 0:
             bdyinfo = numpy.stack(bdyinfo, axis=-1)
-            self.initialize_open_boundaries(nwb=len(self.open_boundaries[WEST]), nnb=len(self.open_boundaries[NORTH]), neb=len(self.open_boundaries[EAST]), nsb=len(self.open_boundaries[SOUTH]), nbdyp=nbdyp, bdy_i=self.bdy_i, bdy_j=self.bdy_j, bdy_info=bdyinfo)
+            self.initialize_open_boundaries(nwb=side2count[WEST], nnb=side2count[NORTH], neb=side2count[EAST], nsb=side2count[SOUTH], nbdyp=nbdyp, bdy_i=self.bdy_i - HALO, bdy_j=self.bdy_j - HALO, bdy_info=bdyinfo)
 
         # Mask U,V,X points unless all their T neighbors are valid - this mask will be sent to Fortran and determine which points are computed
         mask_ = numpy.array(self.mask_, copy=True)

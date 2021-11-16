@@ -33,6 +33,7 @@ class Simulation(_pygetm.Simulation):
         dom.field_manager = self.output_manager
 
         self.input_manager.set_logger(self.logger.getChild('input_manager'))
+        dom.logger = self.logger.getChild('domain')
 
         assert not dom.initialized
         _pygetm.Simulation.__init__(self, dom, runtype, apply_bottom_friction)

@@ -51,6 +51,9 @@ class Tiling:
         self.bottomleft = find_neighbor(self.irow - 1, self.icol - 1)
         self.bottomright = find_neighbor(self.irow - 1, self.icol + 1)
 
+        self.ioffset = 0
+        self.joffset = 0
+
         self.caches = {}
 
     def __bool__(self) -> bool:
