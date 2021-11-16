@@ -198,19 +198,28 @@ class Domain(_pygetm.Domain):
         return Domain.create(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
 
     @staticmethod
-    def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, **kwargs):
+    def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, **kwargs):
         assert nx % tiling.ncol == 0, 'Cannot divide number of x points (%i) by number of subdomain columns (%i)' % (nx, tiling.ncol)
         assert ny % tiling.nrow == 0, 'Cannot divide number of y points (%i) by number of subdomain rows (%i)' % (ny, tiling.nrow)
         assert global_domain is None or global_domain.initialized
 
-        halo = 0
-        share = 1
+        halo = 0   # coordinates are scattered without their halo - Domain object will update halos upon creation
+        share = 1  # one X point overlap in both directions between subdomains for variables on the supergrid
         nx_loc, ny_loc = nx // tiling.ncol, ny // tiling.nrow
-        x = numpy.empty((2 * (ny_loc + halo) + 1, 2 * (nx_loc + halo) + 1))
-        y = numpy.empty_like(x)
-        parallel.Scatter(tiling, x, halo=halo, share=share)(None if global_domain is None else global_domain.x)
-        parallel.Scatter(tiling, y, halo=halo, share=share)(None if global_domain is None else global_domain.y)
-        domain = Domain(nx_loc, ny_loc, nz, x=x, y=y, tiling=tiling, f=0.)
+
+        coordinates = {'f': 'cor'}
+        if has_xy:
+            coordinates['x'] = 'x'
+            coordinates['y'] = 'y'
+        if has_lonlat:
+            coordinates['lon'] = 'lon'
+            coordinates['lat'] = 'lat'
+        for name, att in coordinates.items():
+            c = numpy.empty((2 * (ny_loc + halo) + 1, 2 * (nx_loc + halo) + 1))
+            parallel.Scatter(tiling, c, halo=halo, share=share)(None if global_domain is None else getattr(global_domain, att))
+            kwargs[name] = c
+
+        domain = Domain(nx_loc, ny_loc, nz, tiling=tiling, **kwargs)
 
         halo = 4
         parallel.Scatter(tiling, domain.mask_, halo=halo, share=share)(None if global_domain is None else global_domain.mask_)
@@ -266,7 +275,7 @@ class Domain(_pygetm.Domain):
             return global_domain
         if global_domain is not None:
             global_domain.initialize(runtype=runtype)
-        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype)
+        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical)
         subdomain.glob = global_domain
         return subdomain
 

@@ -164,7 +164,7 @@ END SUBROUTINE uv_momentum_2d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE u_2d(self,dt,tausx,dpdx)
+MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
 
    IMPLICIT NONE
 
@@ -216,7 +216,7 @@ END SUBROUTINE u_2d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE v_2d(self,dt,tausy,dpdy)
+MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
 
    IMPLICIT NONE
 

@@ -373,21 +373,49 @@ contains
       pmomentum = c_loc(momentum)
    end function
 
-   subroutine momentum_uv_momentum_2d(pmomentum, runtype, timestep, ptausx, ptausy, pdpdx, pdpdy) bind(c)
+   subroutine momentum_u_2d(direction, pmomentum, timestep, ptausx, pdpdx) bind(c)
+      integer(c_int), intent(in), value :: direction
       type(c_ptr),    intent(in), value :: pmomentum
-      integer(c_int), intent(in), value :: runtype
       real(c_double), intent(in), value :: timestep
-      type(c_ptr),    intent(in), value :: ptausx, ptausy, pdpdx, pdpdy
+      type(c_ptr),    intent(in), value :: ptausx, pdpdx
 
       type (type_getm_momentum), pointer :: momentum
-      real(real64), contiguous, pointer, dimension(:,:) :: tausx, tausy, dpdx, dpdy
+      real(real64), contiguous, pointer, dimension(:,:) :: tausx, dpdx
 
       call c_f_pointer(pmomentum, momentum)
       call c_f_pointer(ptausx, tausx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
-      call c_f_pointer(ptausy, tausy, momentum%domain%V%u(1:2) - momentum%domain%V%l(1:2) + 1)
       call c_f_pointer(pdpdx, dpdx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
-      call c_f_pointer(pdpdy, dpdy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
-      call momentum%uv_momentum_2d(runtype, timestep, tausx, tausy, dpdx, dpdy)
+      select case (direction)
+         case (1)
+            call momentum%u_2d(timestep,tausx,dpdx)
+         case (2)
+            call momentum%v_2d(timestep,tausx,dpdx)
+      end select
+   end subroutine
+
+   subroutine momentum_uv_coriolis(direction, pmomentum) bind(c)
+      integer(c_int), intent(in), value :: direction
+      type(c_ptr),    intent(in), value :: pmomentum
+
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pmomentum, momentum)
+      select case (direction)
+         case (1)
+            call momentum%coriolis_fu()
+         case (2)
+            call momentum%coriolis_fv()
+      end select
+   end subroutine
+
+   subroutine momentum_bottom_friction_2d(pmomentum, runtype) bind(c)
+      type(c_ptr),    intent(in), value :: pmomentum
+      integer(c_int), intent(in), value :: runtype
+
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pmomentum, momentum)
+      call momentum%bottom_friction_2d(runtype)
    end subroutine
 
    function pressure_create(runtype, pdomain) result(ppressure) bind(c)

@@ -11,8 +11,8 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
         nc.set_auto_mask(False)
         grid_type = int(numpy.reshape(nc['grid_type'], ()))
         if grid_type == 1:
-            # cartesian
-            pass
+            # Cartesian
+            raise NotImplementedError('No support yet for Cartesian coordinates')
         elif grid_type == 2:
             # spherical
             assert nlev is not None
@@ -32,13 +32,16 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
 
             H = domain.read_centers_to_supergrid(nc['bathymetry'], ioffset, joffset, nx, ny)
             z0 = z0_const if 'z0' not in nc.variables else domain.read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny)
-            return domain.Domain(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=~numpy.ma.getmaskarray(H), **kwargs)
+            global_domain = domain.Domain.create(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=~numpy.ma.getmaskarray(H), **kwargs)
         elif grid_type == 3:
             # planar curvilinear
-            pass
+            raise NotImplementedError('No support yet for planar curvilinear coordinates')
         elif grid_type == 4:
             # spherical curvilinear
-            pass
+            raise NotImplementedError('No support yet for spherical curvilinear coordinates')
+        else:
+            raise NotImplementedError('Unknown grid_type %i found' % grid_type)
+    return global_domain
 
 def load_bdyinfo(dom: domain.Domain, path: str, type_2d: Optional[int]=None, type_3d: Optional[int]=None):
     with open(path) as f:

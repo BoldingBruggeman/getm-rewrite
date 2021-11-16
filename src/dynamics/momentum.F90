@@ -107,6 +107,8 @@ MODULE getm_momentum
       procedure :: initialize_2d => uv_initialize_2d
       procedure :: uv_momentum_2d => uv_momentum_2d
       procedure :: bottom_friction_2d => bottom_friction_2d
+      procedure :: u_2d => u_2d
+      procedure :: v_2d => v_2d
       procedure :: coriolis_fu => coriolis_fu
       procedure :: coriolis_fv => coriolis_fv
       procedure :: uv_advection_2d => uv_advection_2d
@@ -155,6 +157,30 @@ MODULE getm_momentum
             !! surface pressure gradient - including air pressure
 #undef _T2_
       END SUBROUTINE uv_momentum_2d
+
+      MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: tausx(_T2_)
+            !! surface stresses
+         real(real64), intent(in) :: dpdx(_T2_)
+            !! surface pressure gradient - including air pressure
+#undef _T2_
+      END SUBROUTINE u_2d
+
+      MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
+         class(type_getm_momentum), intent(inout) :: self
+         real(real64), intent(in) :: dt
+            !! timestep [s]
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: tausy(_T2_)
+            !! surface stresses
+         real(real64), intent(in) :: dpdy(_T2_)
+            !! surface pressure gradient - including air pressure
+#undef _T2_
+   END SUBROUTINE v_2d
 
       ! 3D routines
       MODULE SUBROUTINE uv_initialize_3d(self)

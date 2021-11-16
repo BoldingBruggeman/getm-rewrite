@@ -157,15 +157,28 @@ class Simulation(_pygetm.Simulation):
     def advance(self):
         self.time += self.timedelta
 
+        # Update all inputs (todo: separate 2D and 3D inputs, as the latter are needed much less frequently)
         self.domain.input_manager.update(self.time)
 
+        # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
         self.airsea(self.sst)
 
+        # Update elevation at the open boundaries
         self.update_sealevel_boundaries(self.timestep)
+
+        # Calculate the surface pressure gradient (T grid)
+        # This requires elevation and surface pressure (both on T grid) to be valid in the halos
+        self.airsea.sp.update_halos()
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
-        self.uv_momentum_2d(self.timestep, self.airsea.taux, self.airsea.tauy, self.dpdx, self.dpdy)
+
+        # Update momentum using surface stresses and pressure gradients
+        self.uv_momentum_2d(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
+
+        # Update halos of U and V as the sea level update below will go into the halos
         self.U.update_halos()
         self.V.update_halos()
+
+        # Update sea level on T grid, and from that calculate sea level and water depth on all grids
         self.update_sealevel(self.timestep, self.U, self.V)
         self.update_depth()
 
@@ -174,17 +187,21 @@ class Simulation(_pygetm.Simulation):
             self.logger.info(self.time)
 
         if self.runtype == 4 and self.istep % self.split_factor == 0:
+            # Buoyancy frequency and turbulence
             pygetm.mixing.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
-            self.u_taus.all_values[...] = (self.airsea.taux_T.all_values**2 + self.airsea.tauy_T.all_values**2)**0.25 / numpy.sqrt(constants.rho0)
+            self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(constants.rho0)
             self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
+            # Temperature and salinity
             self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.rho0 * constants.cp)))
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
 
+            # Transport of passive tracers (including biogeochemical ones)
             for array, src in self.tracers:
                 self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=src)
 
+            # Time-integrate source terms of biogeochemistry
             if self.fabm_model:
                 self.update_fabm(self.macrotimestep)
 

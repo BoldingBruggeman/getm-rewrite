@@ -11,11 +11,14 @@ cpa=1008.
 
 class Fluxes:
     def __init__(self, domain):
-        self.taux = domain.U.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill=0.)
-        self.tauy = domain.V.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill=0.)
+        self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill=0.)
+        self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill=0.)
         self.qe = domain.T.array(name='qe', long_name='latent heat flux', units='W m-2', fill=0.)
         self.qh = domain.T.array(name='qh', long_name='sensible heat flux', units='W m-2', fill=0.)
         self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill=0.)
+
+        self.taux_U = domain.U.array(name='tausxu')
+        self.tauy_V = domain.V.array(name='tausyv')
 
     def __call__(self, sst: core.Array) -> None:
         pass
@@ -41,9 +44,6 @@ class FluxesFromMeteo(Fluxes):
         self.cd_latent = domain.T.array()
         self.cd_sensible = domain.T.array()
 
-        self.taux_T = domain.T.array()
-        self.tauy_T = domain.T.array()
-
     def __call__(self, sst: core.Array) -> None:
         pyairsea.humidity(3, self.d2m.all_values, self.sp.all_values, sst.all_values, self.t2m.all_values, self.es.all_values, self.ea.all_values, self.qs.all_values, self.qa.all_values, self.rhoa.all_values)
 
@@ -51,10 +51,12 @@ class FluxesFromMeteo(Fluxes):
         L = 2.5e6 - 0.00234e6 * sst.all_values   # latent heat of vaporization (J/kg) at sea surface, note SST must be in degrees Celsius
         pyairsea.transfer_coefficients(1, sst.all_values + 273.15, self.t2m.all_values + 273.15, self.w.all_values, self.cd_mom.all_values, self.cd_latent.all_values, self.cd_sensible.all_values)
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
-        self.taux_T.all_values[...] = tmp * self.u10.all_values
-        self.tauy_T.all_values[...] = tmp * self.v10.all_values
-        self.taux_T.interp(self.taux)
-        self.tauy_T.interp(self.tauy)
+        self.taux.all_values[...] = tmp * self.u10.all_values
+        self.tauy.all_values[...] = tmp * self.v10.all_values
+        self.taux.update_halos()
+        self.taux.interp(self.taux_U)
+        self.tauy.update_halos()
+        self.tauy.interp(self.tauy_V)
         self.qe.all_values[...] = -self.cd_sensible.all_values * cpa * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
         self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
 

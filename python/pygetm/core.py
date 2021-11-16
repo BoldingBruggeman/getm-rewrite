@@ -270,7 +270,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             include_halos = self.values is None
         target = self.all_values if include_halos else self.values
         if not on_grid:
-            lon, lat = self.grid.lon.values, self.grid.lat.values
+            lon, lat = (self.grid.lon.all_values, self.grid.lat.all_values) if include_halos else (self.grid.lon.values, self.grid.lat.values)
             value = pygetm.input.limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
             value = pygetm.input.spatial_interpolation(value, lon, lat)
         value = pygetm.input.temporal_interpolation(value)

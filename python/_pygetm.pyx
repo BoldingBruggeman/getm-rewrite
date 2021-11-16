@@ -24,7 +24,9 @@ cdef extern void advection_2d_calculate(int direction, void* advection, void* tg
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_friction) nogil
-cdef extern void momentum_uv_momentum_2d(void* momentum, int runtype, double timestep, double* ptausx, double* ptausy, double* pdpdx, double* pdpdy) nogil
+cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
+cdef extern void momentum_uv_coriolis(int direction, void* momentum) nogil
+cdef extern void momentum_bottom_friction_2d(void* momentum, int runtype) nogil
 cdef extern void* pressure_create(int runtype, void* pdomain) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
@@ -207,6 +209,7 @@ cdef class Simulation:
     cdef void* ppressure
     cdef void* psealevel
     cdef readonly int nx, ny
+    cdef int apply_bottom_friction
 
     def __init__(self, Domain domain, int runtype, int apply_bottom_friction):
         self.domain = domain
@@ -216,13 +219,20 @@ cdef class Simulation:
         self.ppressure = pressure_create(runtype, domain.p)
         self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
+        self.apply_bottom_friction = apply_bottom_friction
 
     def uv_momentum_2d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
         assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
         assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
         assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
-        momentum_uv_momentum_2d(self.pmomentum, self.runtype, timestep, <double *>tausx.p, <double *>tausy.p, <double *>dpdx.p, <double *>dpdy.p)
+        if self.apply_bottom_friction:
+            momentum_bottom_friction_2d(self.pmomentum, self.runtype)
+        momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
+        self.U.update_halos()
+        momentum_uv_coriolis(1, self.pmomentum)
+        momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
+        momentum_uv_coriolis(2, self.pmomentum)
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T

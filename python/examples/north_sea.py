@@ -18,17 +18,12 @@ sim = pygetm.Simulation(domain, runtype=4, advection_scheme=1, fabm='../../exter
 #sim.input_manager.debug_nc_reads()
 
 sim.logger.info('Setting up output')
-output = sim.output_manager.add_netcdf_file('northsea.nc', interval=60)
-output.request('u10')
-output.request('v10')
-output.request('t2m')
-output.request('d2m')
-output.request('tcc')
-output.request('sp')
-output.request('U')
-output.request('V')
+output = sim.output_manager.add_netcdf_file('north_sea.nc', interval=60)
+output.request(('u10', 'v10', 'sp', 't2m', 'd2m', 'tcc'))
+output.request(('U', 'V'))
 output.request('zt')
-output.request('med_ergom_o2')
+output.request(('dpdx', 'dpdy', 'tausxu', 'tausyv'))
+output.request(('med_ergom_o2', 'med_ergom_OFL'))
 
 sim.logger.info('Setting up ERA meteorological forcing')
 era_kwargs = {'preprocess': lambda ds: ds.isel(time=slice(4, -4))}
