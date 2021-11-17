@@ -25,7 +25,13 @@ class Simulation(_pygetm.Simulation):
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
         if logger is None:
-            logging.basicConfig(level=log_level)
+            handlers = []
+            if dom.tiling.rank == 0:
+                handlers.append(logging.StreamHandler())
+            if dom.tiling.n > 1:
+                handlers.append(logging.FileHandler('getm-%04i.log' % dom.tiling.rank, mode='w'))
+            logging.basicConfig(level=log_level, handlers=handlers)
+
             self.logger = logging.getLogger()
 
         self.output_manager = output.OutputManager(rank=dom.tiling.rank, logger=self.logger.getChild('output_manager'))
