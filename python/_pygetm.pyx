@@ -210,8 +210,9 @@ cdef class Simulation:
     cdef void* psealevel
     cdef readonly int nx, ny
     cdef int apply_bottom_friction
+    cdef int ufirst
 
-    def __init__(self, Domain domain, int runtype, int apply_bottom_friction):
+    def __init__(self, Domain domain, int runtype, int apply_bottom_friction, int ufirst=False):
         self.domain = domain
         domain.initialize(runtype)
         self.runtype = runtype
@@ -220,6 +221,7 @@ cdef class Simulation:
         self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
         self.apply_bottom_friction = apply_bottom_friction
+        self.ufirst = ufirst
 
     def uv_momentum_2d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
@@ -228,11 +230,21 @@ cdef class Simulation:
         assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
         if self.apply_bottom_friction:
             momentum_bottom_friction_2d(self.pmomentum, self.runtype)
-        momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
-        self.U.update_halos()
-        momentum_uv_coriolis(1, self.pmomentum)
-        momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
-        momentum_uv_coriolis(2, self.pmomentum)
+        if self.ufirst:
+            momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
+            self.U.update_halos()
+            momentum_uv_coriolis(1, self.pmomentum)
+            momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
+            self.V.update_halos()
+            momentum_uv_coriolis(2, self.pmomentum)
+        else:
+            momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
+            self.V.update_halos()
+            momentum_uv_coriolis(2, self.pmomentum)
+            momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
+            self.U.update_halos()
+            momentum_uv_coriolis(1, self.pmomentum)
+        self.ufirst = not self.ufirst
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T
