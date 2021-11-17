@@ -29,7 +29,9 @@ class Simulation(_pygetm.Simulation):
             if dom.tiling.rank == 0:
                 handlers.append(logging.StreamHandler())
             if dom.tiling.n > 1:
-                handlers.append(logging.FileHandler('getm-%04i.log' % dom.tiling.rank, mode='w'))
+                file_handler = logging.FileHandler('getm-%04i.log' % dom.tiling.rank, mode='w')
+                file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+                handlers.append(file_handler)
             logging.basicConfig(level=log_level, handlers=handlers)
 
             self.logger = logging.getLogger()
