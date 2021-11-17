@@ -1,5 +1,5 @@
 import logging
-from typing import MutableMapping, Optional, Union, Iterable
+from typing import MutableMapping, Optional, Union, Iterable, List
 import collections
 
 import numpy.typing
@@ -17,12 +17,23 @@ class FieldManager:
         self.fields[array.name] = array
 
 class File:
-    def __init__(self, field_manager: FieldManager):
+    def __init__(self, field_manager: FieldManager, interval: int=1):
         self.field_manager = field_manager
         self.fields: MutableMapping[str, operators.Base] = collections.OrderedDict()
+        self.wait = interval
+        self.interval = interval
 
     def close(self):
         pass
+
+    def save(self):
+        self.wait -= 1
+        if self.wait == 0:
+            self.save_now()
+            self.wait = self.interval
+
+    def save_now(self):
+        raise NotImplementedError
 
     def request(self, name: Union[str, Iterable[str]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False):
         if not isinstance(name, str):
@@ -46,7 +57,7 @@ class OutputManager(FieldManager):
     def __init__(self, rank: int, logger: Optional[logging.Logger]=None):
         FieldManager.__init__(self)
         self.rank = rank
-        self.files = []
+        self.files: List[File] = []
         self._logger = logger or logging.getLogger()
 
     def add_netcdf_file(self, path: str, **kwargs):
@@ -55,6 +66,12 @@ class OutputManager(FieldManager):
         file = netcdf.NetCDFFile(self, path, rank=self.rank, **kwargs)
         self.files.append(file)
         return file
+
+    def start(self, save: bool=True):
+        if save:
+            self._logger.info('Saving initial state')
+            for file in self.files:
+                file.save_now()
 
     def save(self):
         for file in self.files:

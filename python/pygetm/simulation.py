@@ -160,8 +160,7 @@ class Simulation(_pygetm.Simulation):
             self.update_fabm_sources()
 
         self.domain.input_manager.update(time)
-        if save:
-            self.output_manager.save()
+        self.output_manager.start()
 
     def advance(self):
         self.time += self.timedelta

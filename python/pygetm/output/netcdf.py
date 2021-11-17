@@ -9,8 +9,8 @@ from . import FieldManager, File
 from .. import _pygetm
 
 class NetCDFFile(File):
-    def __init__(self, field_manager: FieldManager, path: str, rank: int, interval: int=1, sub: bool=False):
-        File.__init__(self, field_manager)
+    def __init__(self, field_manager: FieldManager, path: str, rank: int, sub: bool=False, **kwargs):
+        super().__init__(field_manager, **kwargs)
         name, ext = os.path.splitext(path)
         if sub:
             name += '_%05i' % rank
@@ -18,8 +18,6 @@ class NetCDFFile(File):
         self.nc = None
         self.itime = 0
         self.is_root = rank == 0
-        self.interval = interval
-        self.wait = 0
         self.sub = sub
         self.created = False
 
@@ -51,17 +49,14 @@ class NetCDFFile(File):
                 setattr(ncvar, att, value)
             field.ncvar = ncvar
 
-    def save(self):
-        if self.wait == 0:
-            if not self.created:
-                self._create()
-            for field in self.fields.values():
-                field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
-            if self.nc is not None:
-                self.nc.sync()
-            self.itime += 1
-            self.wait = self.interval
-        self.wait -= 1
+    def save_now(self):
+        if not self.created:
+            self._create()
+        for field in self.fields.values():
+            field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
+        if self.nc is not None:
+            self.nc.sync()
+        self.itime += 1
 
     def close(self):
         if self.nc is not None:
