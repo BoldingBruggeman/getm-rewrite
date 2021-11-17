@@ -228,7 +228,7 @@ class Domain(_pygetm.Domain):
         halo = 4
         parallel.Scatter(tiling, domain.mask_, halo=halo, share=share)(None if global_domain is None else global_domain.mask_)
         parallel.Scatter(tiling, domain.H_, halo=halo, share=share)(None if global_domain is None else global_domain.H_)
-        parallel.Scatter(tiling, domain.z0_, halo=halo, share=share)(None if global_domain is None else global_domain.z0_)
+        parallel.Scatter(tiling, domain.z0b_min_, halo=halo, share=share)(None if global_domain is None else global_domain.z0b_min_)
         parallel.Scatter(tiling, domain.z_, halo=halo, share=share)(None if global_domain is None else global_domain.z_)
         parallel.Scatter(tiling, domain.zo_, halo=halo, share=share)(None if global_domain is None else global_domain.zo_)
 
