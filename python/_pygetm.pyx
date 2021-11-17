@@ -27,6 +27,7 @@ cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_f
 cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
 cdef extern void momentum_uv_coriolis(int direction, void* momentum) nogil
 cdef extern void momentum_bottom_friction_2d(void* momentum, int runtype) nogil
+cdef extern void momentum_bottom_friction_3d(void* momentum) nogil
 cdef extern void* pressure_create(int runtype, void* pdomain) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
@@ -245,6 +246,12 @@ cdef class Simulation:
             self.U.update_halos()
             momentum_uv_coriolis(1, self.pmomentum)
         self.ufirst = not self.ufirst
+
+    def uv_momentum_3d(self, double timestep):
+        self.uk.all.values[...] = self.u1
+        self.vk.all.values[...] = self.v1
+        if self.apply_bottom_friction:
+            momentum_bottom_friction_3d(self.pmomentum)
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T

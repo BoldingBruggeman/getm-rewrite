@@ -16,7 +16,7 @@ from . import mixing
 import pygetm.airsea
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
@@ -195,6 +195,8 @@ class Simulation(_pygetm.Simulation):
             self.logger.info(self.time)
 
         if self.runtype == 4 and self.istep % self.split_factor == 0:
+            self.uv_momentum_3d()
+
             # Buoyancy frequency and turbulence
             pygetm.mixing.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
             self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(constants.rho0)

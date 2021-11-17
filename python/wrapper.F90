@@ -180,6 +180,8 @@ contains
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
          case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
          case ('bdyv');   if (allocated(momentum%bdyv)) p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
+         case ('uk');   p = c_loc(momentum%uk); grid_type = 2; sub_type = subtype_depth_explicit
+         case ('vk');   p = c_loc(momentum%vk); grid_type = 3; sub_type = subtype_depth_explicit
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -416,6 +418,15 @@ contains
 
       call c_f_pointer(pmomentum, momentum)
       call momentum%bottom_friction_2d(runtype)
+   end subroutine
+
+   subroutine momentum_bottom_friction_3d(pmomentum) bind(c)
+      type(c_ptr),    intent(in), value :: pmomentum
+
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pmomentum, momentum)
+      call momentum%bottom_friction_3d()
    end subroutine
 
    function pressure_create(runtype, pdomain) result(ppressure) bind(c)
