@@ -247,9 +247,9 @@ cdef class Simulation:
             momentum_uv_coriolis(1, self.pmomentum)
         self.ufirst = not self.ufirst
 
-    def uv_momentum_3d(self, double timestep):
-        self.uk.all.values[...] = self.u1
-        self.vk.all.values[...] = self.v1
+    def uv_momentum_3d(self):
+        self.uk.all_values[...] = self.u1.all_values
+        self.vk.all_values[...] = self.v1.all_values
         if self.apply_bottom_friction:
             momentum_bottom_friction_3d(self.pmomentum)
 
@@ -279,7 +279,7 @@ cdef class Simulation:
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int ioffset, int joffset, int ncpus):
+cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int ioffset, int joffset, int ncpus, int count=True):
     cdef int nrow = <int>ceil((mask.shape[0] - joffset) / float(ny))
     cdef int ncol = <int>ceil((mask.shape[1] - ioffset) / float(nx))
     cdef int[:, ::1] map
@@ -291,9 +291,17 @@ cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int ioffset, in
     for row in range(nrow):
         for col in range(ncol):
             n = 0
-            for j in range(max(0, joffset + row * ny), min(mask.shape[0], joffset + (row + 1) * ny)):
-                for i in range(max(0, ioffset + col * nx), min(mask.shape[1], ioffset + (col + 1) * nx)):
-                    if mask[j, i] != 0: n += 1
+            if count:
+                for j in range(max(0, joffset + row * ny), min(mask.shape[0], joffset + (row + 1) * ny)):
+                    for i in range(max(0, ioffset + col * nx), min(mask.shape[1], ioffset + (col + 1) * nx)):
+                        if mask[j, i] != 0: n += 1
+            else:
+                for j in range(max(0, joffset + row * ny), min(mask.shape[0], joffset + (row + 1) * ny)):
+                    for i in range(max(0, ioffset + col * nx), min(mask.shape[1], ioffset + (col + 1) * nx)):
+                        if mask[j, i] != 0:
+                            n = 1
+                            break
+                    if n > 0: break
             if n > 0:
                 current_ncpus += 1
                 if ncpus != -1 and current_ncpus > ncpus:
@@ -337,8 +345,9 @@ def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int n
     solution = None
     for ioffset in range(1 - nx, 1):
         for joffset in range(1 - ny, 1):
-            map = get_map(mask, nx, ny, ioffset, joffset, ncpus)
+            map = get_map(mask, nx, ny, ioffset, joffset, ncpus, count=False)
             if map is not None:
+                map = get_map(mask, nx, ny, ioffset, joffset, ncpus, count=True)
                 current_cost = get_cost(map, nx, ny)
                 if cost == -1 or current_cost < cost:
                     cost = current_cost
