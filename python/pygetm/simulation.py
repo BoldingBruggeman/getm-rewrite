@@ -21,7 +21,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
         if logger is None:
@@ -100,6 +100,10 @@ class Simulation(_pygetm.Simulation):
                 self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.fabm_model.horizontal_diagnostic_variables]
                 self.fabm_model.link_mask(self.domain.T.mask.all_values)
                 self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
+
+                self.fabm_sources_interior = numpy.empty_like(self.fabm_model.interior_state)
+                self.fabm_sources_surface = numpy.empty_like(self.fabm_model.surface_state)
+                self.fabm_sources_bottom = numpy.empty_like(self.fabm_model.bottom_state)
         else:
             self.sst = self.airsea.t2m
 
@@ -114,7 +118,7 @@ class Simulation(_pygetm.Simulation):
         assert source is None or source.grid is self.domain.T
         self.tracers.append((array, source))
 
-    def start(self, time: datetime.datetime, timestep, split_factor=1, report=10):
+    def start(self, time: datetime.datetime, timestep, split_factor=1, report=10, save: bool=True):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
         and after the FABM model has been provided with all dependencies"""
         self.logger.info('Starting simulation at %s' % time)
@@ -153,8 +157,11 @@ class Simulation(_pygetm.Simulation):
             for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                 variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
 
+            self.update_fabm_sources()
+
         self.domain.input_manager.update(time)
-        self.output_manager.save()
+        if save:
+            self.output_manager.save()
 
     def advance(self):
         self.time += self.timedelta
@@ -206,17 +213,20 @@ class Simulation(_pygetm.Simulation):
             # Time-integrate source terms of biogeochemistry
             if self.fabm_model:
                 self.update_fabm(self.macrotimestep)
+            self.update_fabm_sources()
 
         self.output_manager.save()
 
     def finish(self):
         self.output_manager.close()
 
+    def update_fabm_sources(self):
+        self.fabm_model.get_sources(out=(self.fabm_sources_interior, self.fabm_sources_surface, self.fabm_sources_bottom))
+
     def update_fabm(self, timestep: float):
-        sources_int, sources_sf, sources_bt = self.fabm_model.get_sources()
-        self.fabm_model.interior_state += sources_int * timestep
-        self.fabm_model.surface_state += sources_sf * timestep
-        self.fabm_model.bottom_state += sources_bt * timestep
+        self.fabm_model.interior_state += self.fabm_sources_interior * timestep
+        self.fabm_model.surface_state += self.fabm_sources_surface * timestep
+        self.fabm_model.bottom_state += self.fabm_sources_bottom * timestep
 
     def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         # compute velocities at time=n-1/2
