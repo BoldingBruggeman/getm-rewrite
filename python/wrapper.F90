@@ -163,6 +163,8 @@ contains
          case ('z'); p = c_loc(grid%z)
          case ('zo'); p = c_loc(grid%zo)
          case ('cor'); p = c_loc(grid%cor)
+         case ('z0b'); p = c_loc(grid%z0b)
+         case ('z0b_min'); p = c_loc(grid%z0b_min)
          case ('hn'); p = c_loc(grid%hn); sub_type = subtype_depth_explicit
          case ('ho'); p = c_loc(grid%ho); sub_type = subtype_depth_explicit
          case ('zc'); p = c_loc(grid%zc); sub_type = subtype_depth_explicit

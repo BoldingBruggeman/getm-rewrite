@@ -28,7 +28,7 @@ def find_interfaces(c: numpy.ndarray):
 
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
-    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc')
+    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'z0b', 'z0b_min')
     _all_fortran_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
     __slots__ = _all_fortran_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'xypostfix', 'zpostfix', 'ugrid', 'vgrid', 'wgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
 
@@ -52,13 +52,14 @@ class Grid(_pygetm.Grid):
             setattr(self, '_%s' % name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
         self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
         self.fill()
+        self.z0b.all_values[...] = self.z0b_min.all_values
         self.nbdyp = nbdyp
 
     def fill(self):
-        read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area')
+        read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'rotation', 'z0b_min')
         nj, ni = self.H.all_values.shape
         has_bounds = self.ioffset > 0 and self.joffset > 0 and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
-        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo', 'rotation'):
+        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo', 'rotation', 'z0b_min'):
             source = getattr(self.domain, name + '_')
             if source is not None:
                 target = getattr(self, name).all_values
@@ -332,7 +333,7 @@ class Domain(_pygetm.Domain):
         self.H, self.H_ = setup_metric(H)
         self.z, self.z_ = setup_metric(z)       # elevation
         self.zo, self.zo_ = setup_metric(zo)    # elevaton on previous time step
-        self.z0, self.z0_ = setup_metric(z0)
+        self.z0b_min, self.z0b_min_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=int, fill_value=0)
 
         cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * lat)
@@ -504,7 +505,7 @@ class Domain(_pygetm.Domain):
         self.VV.mask.all_values[:-1, :][numpy.logical_and(self.V.mask.all_values[:-1, :], self.V.mask.all_values[1:,:])] = 1
 
         self.H_.flags.writeable = self.H.flags.writeable = False
-        self.z0_.flags.writeable = self.z0.flags.writeable = False
+        self.z0b_min_.flags.writeable = self.z0b_min.flags.writeable = False
         self.mask_.flags.writeable = self.mask.flags.writeable = False
         self.z_.flags.writeable = self.z.flags.writeable = False
         self.zo_.flags.writeable = self.zo.flags.writeable = False
