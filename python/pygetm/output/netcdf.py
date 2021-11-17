@@ -9,7 +9,7 @@ from . import FieldManager, File
 from .. import _pygetm
 
 class NetCDFFile(File):
-    def __init__(self, field_manager: FieldManager, path: str, rank: int, sub: bool=False, **kwargs):
+    def __init__(self, field_manager: FieldManager, path: str, rank: int, sub: bool=False, sync_interval: int=1, **kwargs):
         super().__init__(field_manager, **kwargs)
         name, ext = os.path.splitext(path)
         if sub:
@@ -20,6 +20,7 @@ class NetCDFFile(File):
         self.is_root = rank == 0
         self.sub = sub
         self.created = False
+        self.sync_interval = sync_interval
 
     def _create(self):
         self.created = True
@@ -54,9 +55,9 @@ class NetCDFFile(File):
             self._create()
         for field in self.fields.values():
             field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
-        if self.nc is not None:
-            self.nc.sync()
         self.itime += 1
+        if self.nc is not None and self.itime % self.sync_interval == 0:
+            self.nc.sync()
 
     def close(self):
         if self.nc is not None:
