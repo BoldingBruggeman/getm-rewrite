@@ -129,10 +129,16 @@ class OperatorResult(LazyArray):
             i = slices.index(Ellipsis)
             slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
         assert len(slices) == self.ndim
-        preslices = tuple([slc if i in self.passthrough else slice(None) for i, slc in enumerate(slices)])
-        postslices = tuple([slc if i not in self.passthrough else slice(None) for i, slc in enumerate(slices)])
-        inputs = [inp if isinstance(inp, numbers.Number) else numpy.asarray(inp[preslices]) for inp in self.inputs]
-        return self.apply(*inputs)[postslices]
+        preslices, postslices = [], []
+        for i, slc in enumerate(slices):
+            if i in self.passthrough:
+                preslices.append(slc)
+                if not isinstance(slc, int): postslices.append(slice(None))
+            else:
+                preslices.append(slice(None))
+                postslices.append(slc)
+        inputs = [inp if isinstance(inp, numbers.Number) else numpy.asarray(inp[tuple(preslices)]) for inp in self.inputs]
+        return self.apply(*inputs)[tuple(postslices)]
 
     def apply(self, *inputs, dtype=None) -> numpy.ndarray:
         raise NotImplementedError
