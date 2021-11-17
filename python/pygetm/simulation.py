@@ -212,7 +212,7 @@ class Simulation(_pygetm.Simulation):
             # Time-integrate source terms of biogeochemistry
             if self.fabm_model:
                 self.update_fabm(self.macrotimestep)
-            self.update_fabm_sources()
+                self.update_fabm_sources()
 
         self.output_manager.save()
 
