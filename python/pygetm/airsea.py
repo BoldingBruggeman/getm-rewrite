@@ -13,8 +13,8 @@ class Fluxes:
     def __init__(self, domain):
         self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill=numpy.nan)
         self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill=numpy.nan)
-        self.qe = domain.T.array(name='qe', long_name='latent heat flux', units='W m-2', fill=numpy.nan)
-        self.qh = domain.T.array(name='qh', long_name='sensible heat flux', units='W m-2', fill=numpy.nan)
+        self.qe = domain.T.array(name='qe', long_name='sensible heat flux', units='W m-2', fill=numpy.nan)
+        self.qh = domain.T.array(name='qh', long_name='latent heat flux', units='W m-2', fill=numpy.nan)
         self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill=numpy.nan)
         self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill=numpy.nan)
         self.swr = domain.T.array(name='swr', long_name='net downwelling shortwave radiation', units='W m-2', fill=numpy.nan, fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux')
@@ -26,7 +26,7 @@ class Fluxes:
         pass
 
 class FluxesFromMeteo(Fluxes):
-    def __init__(self, domain):
+    def __init__(self, domain, longwave_method: int=1, albedo_method: int=1, compute_swr: bool=True):
         super().__init__(domain)
         self.es = domain.T.array(name='es', long_name='vapor pressure at saturation', units='Pa')
         self.ea = domain.T.array(name='ea', long_name='vapor pressure', units='Pa')
@@ -52,16 +52,29 @@ class FluxesFromMeteo(Fluxes):
         self.cd_latent = domain.T.array()
         self.cd_sensible = domain.T.array()
 
-        self.longwave_method = 1
-        self.albedo_method = 1
-        self.compute_swr = True
+        self.longwave_method = longwave_method
+        self.albedo_method = albedo_method
+        self.compute_swr = compute_swr
 
-    def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
-        sst_K = sst.all_values + 273.15
-        t2m_K = self.t2m.all_values + 273.15
-
+    def humidity(self, sst: core.Array):
         pyairsea.humidity(3, self.d2m.all_values, self.sp.all_values, sst.all_values, self.t2m.all_values, self.es.all_values, self.ea.all_values, self.qs.all_values, self.qa.all_values, self.rhoa.all_values)
 
+    def longwave_radiation(self, sst: core.Array):
+        sst_K = sst.all_values + 273.15
+        t2m_K = self.t2m.all_values + 273.15
+        pyairsea.longwave_radiation(self.longwave_method, self.lat.all_values, sst_K, t2m_K, self.tcc.all_values, self.ea.all_values, self.qa.all_values, self.ql.all_values)
+
+    def shortwave_radiation(self, time: cftime.datetime):
+        hh = time.hour + time.minute / 60. + time.second / 3600.
+        yday = time.timetuple()[-2]
+        pyairsea.solar_zenith_angle(yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values)
+        pyairsea.shortwave_radiation(yday, self.zen.all_values, self.lon.all_values, self.lat.all_values, self.tcc.all_values, self.swr.all_values)
+        pyairsea.albedo_water(self.albedo_method, self.zen.all_values, yday, self.albedo.all_values)
+        self.swr.all_values[...] *= 1 - self.albedo.all_values
+
+    def fluxes(self, sst: core.Array):
+        sst_K = sst.all_values + 273.15
+        t2m_K = self.t2m.all_values + 273.15
         self.w.all_values[...] = numpy.sqrt(self.u10.all_values**2 + self.v10.all_values**2)
         L = 2.5e6 - 0.00234e6 * sst.all_values   # latent heat of vaporization (J/kg) at sea surface, note SST must be in degrees Celsius
         pyairsea.transfer_coefficients(1, sst_K, t2m_K, self.w.all_values, self.cd_mom.all_values, self.cd_latent.all_values, self.cd_sensible.all_values)
@@ -75,40 +88,10 @@ class FluxesFromMeteo(Fluxes):
         self.qe.all_values[...] = -self.cd_sensible.all_values * cpa * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
         self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
 
-        pyairsea.longwave_radiation(self.longwave_method, self.lat.all_values, sst_K, t2m_K, self.tcc.all_values, self.ea.all_values, self.qa.all_values, self.ql.all_values)
-
+    def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
+        self.humidity(sst)
+        self.fluxes(sst)
+        self.longwave_radiation(sst)
         if self.compute_swr:
-            hh = time.hour + time.minute / 60. + time.second / 3600.
-            yday = time.timetuple()[-2]
-            pyairsea.solar_zenith_angle(yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values)
-            pyairsea.shortwave_radiation(yday, self.zen.all_values, self.lon.all_values, self.lat.all_values, self.tcc.all_values, self.swr.all_values)
-            pyairsea.albedo_water(self.albedo_method, self.zen.all_values, yday, self.albedo.all_values)
-            self.swr.all_values[...] *= 1 - self.albedo.all_values
+            self.shortwave_radiation(time)
 
-def solar_zenith_angle(time: cftime.datetime, grid: domain.Grid, out: Optional[core.Array]=None):
-    if out is None:
-        out = grid.array(long_name='zenith angle', units='degrees')
-    hh = time.hour + time.minute / 60. + time.second / 3600.
-    yday = time.timetuple()[-2]
-    pyairsea.solar_zenith_angle(yday, hh, grid.lon.all_values, grid.lat.all_values, out.all_values)
-    return out
-
-def shortwave_radiation(time: cftime.datetime, grid: domain.Grid, zenith_angle: core.Array, cloud: core.Array, out: Optional[core.Array]=None):
-    if out is None:
-        out = grid.array(long_name='shortwave radiation', units='W m-2')
-    yday = time.timetuple()[-2]
-    pyairsea.shortwave_radiation(yday, zenith_angle.all_values, grid.lon.all_values, grid.lat.all_values, cloud.all_values, out.all_values)
-    return out
-
-def albedo_water(time: cftime.datetime, grid: domain.Grid, method: int, zenith_angle: core.Array, out: Optional[core.Array]=None):
-    if out is None:
-        out = grid.array(long_name='albedo', units='1')
-    yday = time.timetuple()[-2]
-    pyairsea.albedo_water(method, zenith_angle.all_values, yday, out.all_values)
-    return out
-
-def longwave_radiation(grid: domain.Grid, method: int, tw: core.Array, ta: core.Array, cloud: core.Array, ea: core.Array, qa: core.Array, out: Optional[core.Array]=None):
-    if out is None:
-        out = grid.array(long_name='longwave radiation', units='W m-2')
-    pyairsea.longwave_radiation(method, grid.lat.all_values, tw.all_values, ta.all_values, cloud.all_values, ea.all_values, qa.all_values, out.all_values)
-    return out
