@@ -13,6 +13,10 @@ if (MSVC)
   add_compile_options(/libs:static)
 endif()
 
+# Find target Python interpreter.
+set(Python_FIND_STRATEGY LOCATION)
+find_package(Python3 COMPONENTS Interpreter Development NumPy)
+
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/modules")
 
@@ -54,10 +58,6 @@ target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics
 add_library(cgotm
   pygotm_wrapper.F90)
 target_link_libraries(cgotm turbulence util yaml)
-
-# Find target Python interpreter.
-set(Python_FIND_STRATEGY LOCATION)
-find_package(Python3 COMPONENTS Interpreter Development NumPy)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
   COMMAND ${Python3_EXECUTABLE} -m cython _pygetm.pyx
