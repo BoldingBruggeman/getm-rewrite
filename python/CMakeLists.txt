@@ -15,6 +15,7 @@ endif()
 
 # Find target Python interpreter.
 set(Python_FIND_STRATEGY LOCATION)
+set(Python3_FIND_STRATEGY LOCATION)
 find_package(Python3 COMPONENTS Interpreter Development NumPy)
 
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
