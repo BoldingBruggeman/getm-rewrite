@@ -3,7 +3,7 @@
 	url = ../../BoldingBruggeman/flom.git
 [submodule "extern/gotm"]
 	path = extern/gotm
-	url = git@github.com:gotm-model/code
+	url = ../../gotm-model/code.git
 [submodule "extern/python-otps2"]
 	path = extern/python-otps2
 	url = ../python-otps2.git
