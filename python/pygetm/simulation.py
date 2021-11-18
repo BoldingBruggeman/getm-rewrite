@@ -44,8 +44,14 @@ class Simulation(_pygetm.Simulation):
         self.input_manager.set_logger(self.logger.getChild('input_manager'))
         dom.logger = self.logger.getChild('domain')
 
+        # Disable bottom friction if physical bottom roughness is 0 everywhere
+        if apply_bottom_friction and (dom.z0b_min == 0.).any():
+            self.logger.warning('Disabling bottom friction because bottom roughness is 0 in one or more points.')
+            apply_bottom_friction = False
+
         assert not dom.initialized
         _pygetm.Simulation.__init__(self, dom, runtype, apply_bottom_friction)
+        self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
 
         for name in Simulation._momentum_arrays:
             setattr(self, '_%s' % name, self.wrap(core.Array(name=name), name.encode('ascii'), source=1))
