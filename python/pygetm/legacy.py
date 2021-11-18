@@ -16,8 +16,9 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
         elif grid_type == 2:
             # spherical
             assert nlev is not None
-            nclon = nc['lon']
-            nclat = nc['lat']
+            latname, lonname = nc['bathymetry'].dimensions
+            nclon = nc[lonname]
+            nclat = nc[latname]
             if nx is None:
                 nx = nclon.size - ioffset
             if ny is None:
