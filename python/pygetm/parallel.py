@@ -10,7 +10,7 @@ from . import _pygetm
 Waitall = MPI.Request.Waitall
 
 class Tiling:
-    def __init__(self, nrow: Optional[int]=None, ncol: Optional[int]=None, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False):
+    def __init__(self, nrow: Optional[int]=None, ncol: Optional[int]=None, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False, ioffset_global: int=0, joffset_global: int=0):
         self.n_neigbors = 0
         def find_neighbor(i, j):
             if periodic_x:
@@ -51,8 +51,10 @@ class Tiling:
         self.bottomleft = find_neighbor(self.irow - 1, self.icol - 1)
         self.bottomright = find_neighbor(self.irow - 1, self.icol + 1)
 
-        self.ioffset = 0
-        self.joffset = 0
+        self.ioffset_global = ioffset_global
+        self.joffset_global = joffset_global
+        self.ioffset = self.ioffset_global
+        self.joffset = self.joffset_global
 
         self.caches = {}
 

@@ -36,6 +36,7 @@ class Simulation(_pygetm.Simulation):
 
             self.logger = logging.getLogger()
 
+        self.logger.info('Rank %i of %i, subdomain decompositon %i x %i' % (dom.tiling.rank, dom.tiling.n, dom.tiling.nrow, dom.tiling.ncol))
         self.output_manager = output.OutputManager(rank=dom.tiling.rank, logger=self.logger.getChild('output_manager'))
         self.input_manager = dom.input_manager
         dom.field_manager = self.output_manager

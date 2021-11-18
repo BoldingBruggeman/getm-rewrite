@@ -201,15 +201,17 @@ class Domain(_pygetm.Domain):
 
     @staticmethod
     def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, **kwargs):
-        assert nx % tiling.ncol == 0, 'Cannot divide number of x points (%i) by number of subdomain columns (%i)' % (nx, tiling.ncol)
-        assert ny % tiling.nrow == 0, 'Cannot divide number of y points (%i) by number of subdomain rows (%i)' % (ny, tiling.nrow)
+        nx_eff = nx - tiling.ioffset_global
+        ny_eff = ny - tiling.joffset_global
+        assert nx_eff % tiling.ncol == 0, 'Cannot divide number of x points (%i) by number of subdomain columns (%i)' % (nx_eff, tiling.ncol)
+        assert ny_eff % tiling.nrow == 0, 'Cannot divide number of y points (%i) by number of subdomain rows (%i)' % (ny_eff, tiling.nrow)
         assert global_domain is None or global_domain.initialized
 
         halo = 0   # coordinates are scattered without their halo - Domain object will update halos upon creation
         share = 1  # one X point overlap in both directions between subdomains for variables on the supergrid
-        nx_loc, ny_loc = nx // tiling.ncol, ny // tiling.nrow
-        tiling.ioffset = nx_loc * tiling.icol
-        tiling.joffset = ny_loc * tiling.irow
+        nx_loc, ny_loc = nx_eff // tiling.ncol, ny_eff // tiling.nrow
+        tiling.ioffset = tiling.ioffset_global + nx_loc * tiling.icol
+        tiling.joffset = tiling.joffset_global + ny_loc * tiling.irow
 
         coordinates = {'f': 'cor'}
         if has_xy:
@@ -270,9 +272,9 @@ class Domain(_pygetm.Domain):
     @staticmethod
     def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=None, f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
         global_domain = None
-        global_tiling = tiling = parallel.Tiling(**kwargs)
-        if tiling.n > 1:
-            global_tiling = parallel.Tiling(nrow=1, ncol=1, **kwargs)
+        if tiling is None:
+            tiling = parallel.Tiling(**kwargs)
+        global_tiling = tiling if tiling.n == 1 else parallel.Tiling(nrow=1, ncol=1, **kwargs)
         if tiling.n == 1 or tiling.rank == 0:
             global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo)
         if tiling.n == 1:
