@@ -11,14 +11,16 @@ cpa=1008.
 
 class Fluxes:
     def __init__(self, domain):
-        self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill=0.)
-        self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill=0.)
-        self.qe = domain.T.array(name='qe', long_name='latent heat flux', units='W m-2', fill=0.)
-        self.qh = domain.T.array(name='qh', long_name='sensible heat flux', units='W m-2', fill=0.)
-        self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill=0.)
+        self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill=numpy.nan)
+        self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill=numpy.nan)
+        self.qe = domain.T.array(name='qe', long_name='latent heat flux', units='W m-2', fill=numpy.nan)
+        self.qh = domain.T.array(name='qh', long_name='sensible heat flux', units='W m-2', fill=numpy.nan)
+        self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill=numpy.nan)
+        self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill=numpy.nan)
+        self.swr = domain.T.array(name='swr', long_name='net downwelling shortwave radiation', units='W m-2', fill=numpy.nan, fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux')
 
-        self.taux_U = domain.U.array(name='tausxu')
-        self.tauy_V = domain.V.array(name='tausyv')
+        self.taux_U = domain.U.array(name='tausxu', fill=numpy.nan)
+        self.tauy_V = domain.V.array(name='tausyv', fill=numpy.nan)
 
     def __call__(self, sst: core.Array) -> None:
         pass
@@ -32,6 +34,9 @@ class FluxesFromMeteo(Fluxes):
         self.qa = domain.T.array(name='qa', long_name='specific humidity', units='kg kg-1')
         self.rhoa = domain.T.array(name='rhoa', long_name='air density', units='kg m-3')
 
+        self.zen = domain.T.array(name='zen', long_name='zenith angle', units='degrees')
+        self.albedo = domain.T.array(name='albedo', long_name='albedo', units='1')
+
         self.t2m = domain.T.array(name='t2m', long_name='air temperature @ 2 m', units='degrees_Celsius')
         self.d2m = domain.T.array(name='d2m', long_name='dewpoint temperature @ 2 m', units='degrees_Celsius')
         self.u10 = domain.T.array(name='u10', long_name='wind speed in Eastward direction @ 10 m', units='m s-1')
@@ -40,16 +45,26 @@ class FluxesFromMeteo(Fluxes):
 
         self.w = domain.T.array(name='w', long_name='wind speed', units='m s-1', fabm_standard_name='wind_speed')
 
+        self.lon = domain.T.lon
+        self.lat = domain.T.lat
+
         self.cd_mom = domain.T.array()
         self.cd_latent = domain.T.array()
         self.cd_sensible = domain.T.array()
 
-    def __call__(self, sst: core.Array) -> None:
+        self.longwave_method = 1
+        self.albedo_method = 1
+        self.compute_swr = True
+
+    def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
+        sst_K = sst.all_values + 273.15
+        t2m_K = self.t2m.all_values + 273.15
+
         pyairsea.humidity(3, self.d2m.all_values, self.sp.all_values, sst.all_values, self.t2m.all_values, self.es.all_values, self.ea.all_values, self.qs.all_values, self.qa.all_values, self.rhoa.all_values)
 
         self.w.all_values[...] = numpy.sqrt(self.u10.all_values**2 + self.v10.all_values**2)
         L = 2.5e6 - 0.00234e6 * sst.all_values   # latent heat of vaporization (J/kg) at sea surface, note SST must be in degrees Celsius
-        pyairsea.transfer_coefficients(1, sst.all_values + 273.15, self.t2m.all_values + 273.15, self.w.all_values, self.cd_mom.all_values, self.cd_latent.all_values, self.cd_sensible.all_values)
+        pyairsea.transfer_coefficients(1, sst_K, t2m_K, self.w.all_values, self.cd_mom.all_values, self.cd_latent.all_values, self.cd_sensible.all_values)
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
         self.taux.all_values[...] = tmp * self.u10.all_values
         self.tauy.all_values[...] = tmp * self.v10.all_values
@@ -59,6 +74,16 @@ class FluxesFromMeteo(Fluxes):
         self.tauy.interp(self.tauy_V)
         self.qe.all_values[...] = -self.cd_sensible.all_values * cpa * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
         self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
+
+        pyairsea.longwave_radiation(self.longwave_method, self.lat.all_values, sst_K, t2m_K, self.tcc.all_values, self.ea.all_values, self.qa.all_values, self.ql.all_values)
+
+        if self.compute_swr:
+            hh = time.hour + time.minute / 60. + time.second / 3600.
+            yday = time.timetuple()[-2]
+            pyairsea.solar_zenith_angle(yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values)
+            pyairsea.shortwave_radiation(yday, self.zen.all_values, self.lon.all_values, self.lat.all_values, self.tcc.all_values, self.swr.all_values)
+            pyairsea.albedo_water(self.albedo_method, self.zen.all_values, yday, self.albedo.all_values)
+            self.swr.all_values[...] *= 1 - self.albedo.all_values
 
 def solar_zenith_angle(time: cftime.datetime, grid: domain.Grid, out: Optional[core.Array]=None):
     if out is None:

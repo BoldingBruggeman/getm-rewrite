@@ -177,7 +177,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.input_manager.update(self.time)
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
-        self.airsea(self.sst)
+        self.airsea(self.time, self.sst)
 
         # Update elevation at the open boundaries
         self.update_sealevel_boundaries(self.timestep)
@@ -211,7 +211,7 @@ class Simulation(_pygetm.Simulation):
             self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
             # Temperature and salinity
-            self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values
+            self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.rho0 * constants.cp)))
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
 
