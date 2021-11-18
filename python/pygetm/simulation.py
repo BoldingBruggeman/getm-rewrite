@@ -133,7 +133,7 @@ class Simulation(_pygetm.Simulation):
         assert source is None or source.grid is self.domain.T
         self.tracers.append((array, source))
 
-    def start(self, time: datetime.datetime, timestep, split_factor=1, report=10, save: bool=True):
+    def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
         and after the FABM model has been provided with all dependencies"""
         self.logger.info('Starting simulation at %s' % time)
@@ -175,7 +175,7 @@ class Simulation(_pygetm.Simulation):
             self.update_fabm_sources()
 
         self.domain.input_manager.update(time)
-        self.output_manager.start()
+        self.output_manager.start(save=save)
 
     def advance(self):
         self.time += self.timedelta
