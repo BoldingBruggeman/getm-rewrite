@@ -31,7 +31,10 @@ source ./install
 
 ## Using the model
 
-The best place to start is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
+You should always activate the correct Python environemnt before you use the model with `conda activate pygetm`.
+This needs to be done any time you start a new shell.
+
+The best place to start with the model is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
 
 ```
 cd python/examples
