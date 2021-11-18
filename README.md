@@ -16,6 +16,9 @@ Now make sure your conda environment is initialized:
 conda init bash
 ```
 
+If you are using a different shell than bash, replace `bash` with the name of your shell (see `conda init -h` for supported ones), or use
+`conda init --all`.
+
 This needs to be done just once, as it modifies your `.bashrc` that is sourced every time you login.
 After this, restart your shell by logging out and back in.
 
@@ -28,6 +31,8 @@ conda env create -f environment.yml
 conda activate pygetm
 source ./install
 ```
+
+If you are using a different shell than bash, you may need to replace `source` in the last line  by `bash`.
 
 ## Using the model
 
