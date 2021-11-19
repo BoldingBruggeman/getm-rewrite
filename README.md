@@ -32,7 +32,7 @@ conda activate pygetm
 source ./install
 ```
 
-If you are using a different shell than bash, you may need to replace `source` in the last line  by `bash`.
+If you are using a different shell than bash, you may need to replace `source` in the last line  by `bash`. If you are installing on an HPC system that already has a Fortran compiler and MPI libraries that you would like to use, replace `environment.yml` with `environment-min.yml` in the above.
 
 ## Using the model
 
