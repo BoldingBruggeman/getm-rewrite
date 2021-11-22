@@ -25,3 +25,4 @@ doc/html/
 # Ford documentation
 ford/
 *.pyc
+/build
