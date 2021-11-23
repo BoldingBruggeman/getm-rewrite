@@ -184,6 +184,10 @@ contains
          case ('bdyv');   if (allocated(momentum%bdyv)) p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
          case ('uk');   p = c_loc(momentum%uk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('vk');   p = c_loc(momentum%vk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('ru');   p = c_loc(momentum%ru); grid_type = 2
+         case ('rv');   p = c_loc(momentum%rv); grid_type = 3
+         case ('rru');   p = c_loc(momentum%rru); grid_type = 2
+         case ('rrv');   p = c_loc(momentum%rrv); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)

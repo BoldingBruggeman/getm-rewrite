@@ -56,7 +56,7 @@ def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=
     else:
         ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
     array = ds[name]
-    return xarray.DataArray(WrappedArray(array), dims=array.dims, coords=array.coords, attrs=array.attrs)
+    return xarray.DataArray(WrappedArray(array), dims=array.dims, coords=array.coords, attrs=array.attrs, name='from_nc(%s, %s)' % (paths, name))
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, shape: Iterable[int], dtype):
@@ -98,6 +98,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
 class OperatorResult(LazyArray):
     def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, **kwargs):
         self.inputs = [inp if not isinstance(inp, xarray.DataArray) else inp.variable for inp in inputs]
+        self.input_names = [getattr(inp, 'name', None) for inp in inputs]
         self.lazy_inputs = []
         for input in inputs:
             if isinstance(input, xarray.DataArray) and isinstance(input.variable._data, LazyArray):
@@ -150,7 +151,8 @@ class UnaryOperatorResult(OperatorResult):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._source = self.inputs[0]
- 
+        self._source_name = self.input_names[0]
+
 class UFuncResult(OperatorResult):
     def __init__(self, ufunc, *inputs, **kwargs):
         super().__init__(*inputs, passthrough=True, **kwargs)
@@ -269,7 +271,7 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
     coords = dict(source.coords.items())
     coords[source_lon.name] = target_lon
     coords[source_lat.name] = target_lat
-    return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs)
+    return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs, name='limit_region(%s, minlon=%s, maxlon=%s, minlat=%s, maxlat=%s)' % (source.name, minlon, maxlon, minlat, maxlat))
 
 def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
     assert source.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.name
@@ -302,7 +304,7 @@ def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: 
     coords[lon.name] = lon
     coords[lat.name] = lat
     dims = source.dims[:min(ilondim, ilatdim)] + dimensions + source.dims[max(ilondim, ilatdim) + 1:]
-    return xarray.DataArray(SpatialInterpolation(ip, source, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1), dims=dims, coords=coords, attrs=source.attrs)
+    return xarray.DataArray(SpatialInterpolation(ip, source, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1), dims=dims, coords=coords, attrs=source.attrs, name='spatial_interpolation(%s)' % source.name)
 
 class SpatialInterpolation(UnaryOperatorResult):
     def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.DataArray, shape: Iterable[int], npre: int, npost: int):
@@ -345,7 +347,7 @@ def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     dims = [d for i, d in enumerate(source.dims) if i != result._itimedim]
     coords = dict(source.coords.items())
     coords[time_coord.dims[0]] = result._timecoord
-    return xarray.DataArray(result, dims=dims, coords=coords, attrs=source.attrs)
+    return xarray.DataArray(result, dims=dims, coords=coords, attrs=source.attrs, name='temporal_interpolation(%s)' % source.name)
 
 class TemporalInterpolationResult(UnaryOperatorResult):
     def __init__(self, source: xarray.DataArray):
@@ -385,7 +387,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
             # First call to update - make sure the time series does not start after the requested time.
             self._inext = self._numtimes.searchsorted(numtime, side='right') - 2
             if self._inext < -1:
-                raise Exception('Cannot interpolate %s to value at %s, because time series starts only after %s.' % (self._source.name, numtime, self._numtimes[0]))
+                raise Exception('Cannot interpolate %s to value at %s, because time series starts only after %s.' % (self._source_name, numtime, self._numtimes[0]))
         elif numtime < self._numnow:
             # Subsequent call to update - make sure the requested time equals or exceeds the previously requested value
             raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._numnow, numtime))
@@ -394,7 +396,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
             # Move to next record
             self._inext += 1
             if self._inext == self._numtimes.size:
-                raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source.name, numtime, self._numtimes[self._inext - 1]))
+                raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, numtime, self._numtimes[self._inext - 1]))
             old, numold = self._next, self._numnext
             self.slices[self._itimedim] = self._inext
             self._next = self._source[tuple(self.slices)].values
@@ -428,14 +430,14 @@ class InputManager:
     def add(self, array, source: xarray.DataArray, target: numpy.ndarray):
         assert source.shape == target.shape
         if isinstance(source.data, LazyArray):
-            self._logger.debug('%s will be updated dynamically' % array.name)
-            self.fields.append((array, source.data, target))
+            self._logger.debug('%s will be updated dynamically from %s' % (array.name, source.name))
+            self.fields.append((array.name, source.data, target))
         else:
             target[...] = source
 
     def update(self, time):
-        for array, source, target in self.fields:
-            self._logger.debug('updating %s' % array.name)
+        for name, source, target in self.fields:
+            self._logger.debug('updating %s' % name)
             source.update(time)
             target[...] = source
 

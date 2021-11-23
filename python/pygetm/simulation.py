@@ -16,7 +16,7 @@ from . import mixing
 import pygetm.airsea
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
@@ -45,7 +45,7 @@ class Simulation(_pygetm.Simulation):
         dom.logger = self.logger.getChild('domain')
 
         # Disable bottom friction if physical bottom roughness is 0 everywhere
-        if apply_bottom_friction and (dom.z0b_min == 0.).any():
+        if apply_bottom_friction and (numpy.ma.array(dom.z0b_min, mask=dom.mask==0) == 0.).any():
             self.logger.warning('Disabling bottom friction because bottom roughness is 0 in one or more points.')
             apply_bottom_friction = False
 
@@ -197,7 +197,7 @@ class Simulation(_pygetm.Simulation):
         # Update momentum using surface stresses and pressure gradients
         self.uv_momentum_2d(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
 
-        # Update halos of U and V as the sea level update below will go into the halos
+        # Update halos of U and V as the sea level update below requires valid transports within the halos
         self.U.update_halos()
         self.V.update_halos()
 

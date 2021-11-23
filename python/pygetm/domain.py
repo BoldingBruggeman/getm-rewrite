@@ -201,17 +201,11 @@ class Domain(_pygetm.Domain):
 
     @staticmethod
     def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, **kwargs):
-        nx_eff = nx - tiling.ioffset_global
-        ny_eff = ny - tiling.joffset_global
-        assert nx_eff % tiling.ncol == 0, 'Cannot divide number of x points (%i) by number of subdomain columns (%i)' % (nx_eff, tiling.ncol)
-        assert ny_eff % tiling.nrow == 0, 'Cannot divide number of y points (%i) by number of subdomain rows (%i)' % (ny_eff, tiling.nrow)
+        assert nx == tiling.nx_glob and ny == tiling.ny_glob, 'Extent of global domain (%i, %i) does not match that of tiling (%i, %i).' % (ny, nx, tiling.ny_glob, tiling.nx_glob)
         assert global_domain is None or global_domain.initialized
 
-        halo = 0   # coordinates are scattered without their halo - Domain object will update halos upon creation
+        halo = 4   # coordinates are scattered without their halo - Domain object will update halos upon creation
         share = 1  # one X point overlap in both directions between subdomains for variables on the supergrid
-        nx_loc, ny_loc = nx_eff // tiling.ncol, ny_eff // tiling.nrow
-        tiling.ioffset = tiling.ioffset_global + nx_loc * tiling.icol
-        tiling.joffset = tiling.joffset_global + ny_loc * tiling.irow
 
         coordinates = {'f': 'cor'}
         if has_xy:
@@ -221,18 +215,19 @@ class Domain(_pygetm.Domain):
             coordinates['lon'] = 'lon'
             coordinates['lat'] = 'lat'
         for name, att in coordinates.items():
-            c = numpy.empty((2 * (ny_loc + halo) + 1, 2 * (nx_loc + halo) + 1))
-            parallel.Scatter(tiling, c, halo=halo, share=share)(None if global_domain is None else getattr(global_domain, att))
+            c = numpy.empty((2 * tiling.ny_sub + share, 2 * tiling.nx_sub + share))
+            scatterer = parallel.Scatter(tiling, c, halo=0, share=share, scale=2)
+            scatterer(None if global_domain is None else getattr(global_domain, att))
             kwargs[name] = c
 
-        domain = Domain(nx_loc, ny_loc, nz, tiling=tiling, **kwargs)
+        domain = Domain(tiling.nx_sub, tiling.ny_sub, nz, tiling=tiling, **kwargs)
 
         halo = 4
-        parallel.Scatter(tiling, domain.mask_, halo=halo, share=share)(None if global_domain is None else global_domain.mask_)
-        parallel.Scatter(tiling, domain.H_, halo=halo, share=share)(None if global_domain is None else global_domain.H_)
-        parallel.Scatter(tiling, domain.z0b_min_, halo=halo, share=share)(None if global_domain is None else global_domain.z0b_min_)
-        parallel.Scatter(tiling, domain.z_, halo=halo, share=share)(None if global_domain is None else global_domain.z_)
-        parallel.Scatter(tiling, domain.zo_, halo=halo, share=share)(None if global_domain is None else global_domain.zo_)
+        parallel.Scatter(tiling, domain.mask_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.mask_)
+        parallel.Scatter(tiling, domain.H_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.H_)
+        parallel.Scatter(tiling, domain.z0b_min_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.z0b_min_)
+        parallel.Scatter(tiling, domain.z_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.z_)
+        parallel.Scatter(tiling, domain.zo_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.zo_)
 
         return domain
 
@@ -273,9 +268,12 @@ class Domain(_pygetm.Domain):
     def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
         global_domain = None
         if tiling is None:
-            tiling = parallel.Tiling(**kwargs)
-        global_tiling = tiling if tiling.n == 1 else parallel.Tiling(nrow=1, ncol=1, **kwargs)
-        if tiling.n == 1 or tiling.rank == 0:
+            mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
+            tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], **kwargs)
+        global_tiling = tiling if tiling.n == 1 else parallel.Tiling(nrow=1, ncol=1, use_all=False, **kwargs)
+        if tiling.rank == 0:
+            # master node (possibly only node)
+            tiling.nx_glob, tiling.ny_glob = nx, ny
             global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo)
         if tiling.n == 1:
             return global_domain
@@ -423,14 +421,14 @@ class Domain(_pygetm.Domain):
         # We also limit the indices to the range valid for the current subdomain.
         HALO = 2
         if side in (WEST, EAST):
-            l = HALO + l - self.tiling.ioffset
-            mstart = min(max(0, HALO + mstart - self.tiling.joffset), self.T.ny_)
-            mstop = min(max(0, HALO + mstop - self.tiling.joffset), self.T.ny_)
+            l = HALO + l - self.tiling.xoffset
+            mstart = min(max(0, HALO + mstart - self.tiling.yoffset), self.T.ny_)
+            mstop = min(max(0, HALO + mstop - self.tiling.yoffset), self.T.ny_)
             lmax = self.T.nx_
         else:
-            l = HALO + l - self.tiling.joffset
-            mstart = min(max(0, HALO + mstart - self.tiling.ioffset), self.T.nx_)
-            mstop = min(max(0, HALO + mstop - self.tiling.ioffset), self.T.nx_)
+            l = HALO + l - self.tiling.yoffset
+            mstart = min(max(0, HALO + mstart - self.tiling.xoffset), self.T.nx_)
+            mstop = min(max(0, HALO + mstop - self.tiling.xoffset), self.T.nx_)
             lmax = self.T.ny_
         if l >= 0 and l < lmax and mstop > mstart:
             # Boundary lies at least partially within current subdomain

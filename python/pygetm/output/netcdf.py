@@ -10,7 +10,7 @@ from .. import _pygetm
 
 class NetCDFFile(File):
     def __init__(self, field_manager: FieldManager, path: str, rank: int, sub: bool=False, sync_interval: int=1, **kwargs):
-        super().__init__(field_manager, **kwargs)
+        super().__init__(field_manager, path=path, **kwargs)
         name, ext = os.path.splitext(path)
         if sub:
             name += '_%05i' % rank
@@ -33,7 +33,9 @@ class NetCDFFile(File):
                 nx, ny, nz = grid.nx_, grid.ny_, grid.nz_
             else:
                 # Output data for entire (global) domain
-                nx, ny, nz = grid.nx * grid.domain.tiling.ncol, grid.ny * grid.domain.tiling.nrow, grid.nz
+                nx = grid.domain.tiling.nx_glob + grid.nx - grid.domain.T.nx
+                ny = grid.domain.tiling.ny_glob + grid.ny - grid.domain.T.ny
+                nz = grid.nz
             xname, yname, zname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix
             if (xname not in self.nc.dimensions): self.nc.createDimension(xname, nx)
             if (yname not in self.nc.dimensions): self.nc.createDimension(yname, ny)

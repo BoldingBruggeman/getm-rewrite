@@ -73,7 +73,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self.values[...] = global_data
             return
         if self._scatter is None:
-            self._scatter = parallel.Scatter(self.grid.domain.tiling, self.all_values, halo=self.grid.halo)
+            self._scatter = parallel.Scatter(self.grid.domain.tiling, self.all_values, halo=self.grid.halo, fill_value=self._fill_value)
         self._scatter(None if global_data is None else global_data.all_values)
 
     def gather(self, out: Optional['Array']=None, slice_spec=()):
@@ -82,7 +82,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 out[slice_spec + (Ellipsis,)] = self.values
             return self
         if self._gather is None:
-            self._gather = parallel.Gather(self.grid.domain.tiling, self.values)
+            self._gather = parallel.Gather(self.grid.domain.tiling, self.values, fill_value=self._fill_value)
         result = self._gather(out.values if isinstance(out, Array) else out, slice_spec=slice_spec)
         if result is not None and out is None:
             out = self.grid.domain.glob.grids[self.grid.type].array(dtype=self.dtype)

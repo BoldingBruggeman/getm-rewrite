@@ -17,11 +17,12 @@ class FieldManager:
         self.fields[array.name] = array
 
 class File:
-    def __init__(self, field_manager: FieldManager, interval: int=1):
+    def __init__(self, field_manager: FieldManager, interval: int=1, path: Optional[str]=None):
         self.field_manager = field_manager
         self.fields: MutableMapping[str, operators.Base] = collections.OrderedDict()
         self.wait = interval
         self.interval = interval
+        self.path = path
 
     def close(self):
         pass
@@ -75,10 +76,10 @@ class OutputManager(FieldManager):
 
     def save(self):
         for file in self.files:
-            self._logger.debug('Saving values to %s' % file)
+            self._logger.debug('Saving values to %s' % file.path)
             file.save()
 
     def close(self):
         for file in self.files:
-            self._logger.debug('Closing %s' % file)
+            self._logger.debug('Closing %s' % file.path)
             file.close()

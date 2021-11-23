@@ -85,6 +85,8 @@ cdef class Array:
                 self.all_values = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
                 self.all_values = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+        if self._fill_value is None:
+            self._fill_value = self.all_values.flat[0]
         self.finish_initialization()
         self.register()
         return self
@@ -279,37 +281,55 @@ cdef class Simulation:
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int ioffset, int joffset, int ncpus, int count=True):
-    cdef int nrow = <int>ceil((mask.shape[0] - joffset) / float(ny))
-    cdef int ncol = <int>ceil((mask.shape[1] - ioffset) / float(nx))
-    cdef int[:, ::1] map
-    cdef int current_ncpus = 0
+cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop):
+    for j in range(jstart, jstop):
+        for i in range(istart, istop):
+            if mask[j, i] != 0:
+                return True
+    return False
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop):
+    cdef int count = 0
+    for j in range(jstart, jstop):
+        for i in range(istart, istop):
+            if mask[j, i] != 0:
+                count += 1
+    return count
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus):
+    cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
+    cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
+    cdef int free_cpus = ncpus
     cdef int row, col, i, j, n
-    if ncpus != -1 and nrow * ncol < ncpus:
-        return None
+    if (nrow == 1 and yoffset != 0) or (ncol == 1 and xoffset != 0): return False
+    if (nrow == 2 and yoffset != 0 and yoffset + nrow * ny > mask.shape[0]): return False
+    if (ncol == 2 and xoffset != 0 and xoffset + ncol * nx > mask.shape[1]): return False
+    if nrow * ncol < ncpus:
+        # impossible to use that many cores with the current number of rows and columns
+        return False
+    for row in range(nrow):
+        for col in range(ncol):
+            if subdomain_used(mask, max(0, xoffset + col * nx), min(mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(mask.shape[0], yoffset + (row + 1) * ny)):
+                if free_cpus == 0: return False
+                free_cpus -= 1
+    return free_cpus == 0
+
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset):
+    cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
+    cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
+    cdef int[:, ::1] map
+    cdef int row, col
     map = numpy.empty((nrow, ncol), dtype=int)
     for row in range(nrow):
         for col in range(ncol):
-            n = 0
-            if count:
-                for j in range(max(0, joffset + row * ny), min(mask.shape[0], joffset + (row + 1) * ny)):
-                    for i in range(max(0, ioffset + col * nx), min(mask.shape[1], ioffset + (col + 1) * nx)):
-                        if mask[j, i] != 0: n += 1
-            else:
-                for j in range(max(0, joffset + row * ny), min(mask.shape[0], joffset + (row + 1) * ny)):
-                    for i in range(max(0, ioffset + col * nx), min(mask.shape[1], ioffset + (col + 1) * nx)):
-                        if mask[j, i] != 0:
-                            n = 1
-                            break
-                    if n > 0: break
-            if n > 0:
-                current_ncpus += 1
-                if ncpus != -1 and current_ncpus > ncpus:
-                    return None
-            map[row, col] = n
-    if ncpus == -1 or current_ncpus == ncpus:
-        return map
-    return None
+            map[row, col] = subdomain_count_cells(mask, max(0, xoffset + col * nx), min(mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(mask.shape[0], yoffset + (row + 1) * ny))
+    return map
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -326,7 +346,7 @@ cdef int get_cost(const int[:, ::1] map, int nx, int ny):
     max_cost = 0
     for row in range(map.shape[0]):
         for col in range(map.shape[1]):
-            nint = map[row, col]
+            nint = nx*ny #map[row, col]
             nout = 0
             if get_from_map(map, row - 1, col - 1) > 0: nout += halo * halo
             if get_from_map(map, row + 1, col - 1) > 0: nout += halo * halo
@@ -343,13 +363,12 @@ def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int n
     cdef int[:, ::1] map
     cost = -1
     solution = None
-    for ioffset in range(1 - nx, 1):
-        for joffset in range(1 - ny, 1):
-            map = get_map(mask, nx, ny, ioffset, joffset, ncpus, count=False)
-            if map is not None:
-                map = get_map(mask, nx, ny, ioffset, joffset, ncpus, count=True)
+    for yoffset in range(1 - ny, 1):
+        for xoffset in range(1 - nx, 1):
+            if decomposition_is_valid(mask, nx, ny, xoffset, yoffset, ncpus):
+                map = get_map(mask, nx, ny, xoffset, yoffset)
                 current_cost = get_cost(map, nx, ny)
                 if cost == -1 or current_cost < cost:
                     cost = current_cost
-                    solution = (ioffset, joffset, cost, numpy.asarray(map))
+                    solution = (xoffset, yoffset, cost, numpy.asarray(map))
     return solution

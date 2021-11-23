@@ -120,7 +120,7 @@ MODULE SUBROUTINE bottom_friction_3d(self)
             r=(kappa/log((UG%z0b(i,j)+0.5*hh)/UG%z0b(i,j)))**2 ! GETM online report - (127)
             self%work2d(i,j)=0.25_real64*(self%vk(i,j,k)+self%vk(i+1,j,k)+self%vk(i,j-1,k)+self%vk(i+1,j-1,k))
 #if 0
-            ustar=sqrt(r*(uuloc(i,j)**2+uvloc(i,j)**2))
+            ustar=sqrt(r*(self%uk(i,j,k)**2+self%work2d(i,j)**2))
             UG%z0b(i,j)=min(hh,UG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
             r=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
 #endif
@@ -140,7 +140,7 @@ MODULE SUBROUTINE bottom_friction_3d(self)
             r=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
             self%work2d(i,j)=0.25_real64*(self%uk(i,j,k)+self%uk(i-1,j,k)+self%uk(i,j+1,k)+self%uk(i-1,j+1,k))
 #if 0
-            ustar=sqrt(r*(vuloc(i,j)**2+vvloc(i,j)**2))
+            ustar=sqrt(r*(self%work2d(i,j)**2+self%vk(i,j,k)**2))
             VG%z0b(i,j)=min(hh,VG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
             r=(kappa/log((VG%z0b(i,j)+0.5*hh)/VG%z0b(i,j)))**2
 #endif

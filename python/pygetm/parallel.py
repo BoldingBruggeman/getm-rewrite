@@ -1,4 +1,4 @@
-from typing import Iterable, Optional, Tuple, Union
+from typing import Iterable, Mapping, Optional, Tuple, Union, Any
 import functools
 
 from mpi4py import MPI
@@ -9,38 +9,57 @@ from . import _pygetm
 
 Waitall = MPI.Request.Waitall
 
+def iterate_rankmap(rankmap):
+    for irow in range(rankmap.shape[0]):
+        for icol in range(rankmap.shape[1]):
+            yield irow, icol, rankmap[irow, icol]
+
 class Tiling:
-    def __init__(self, nrow: Optional[int]=None, ncol: Optional[int]=None, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False, ioffset_global: int=0, joffset_global: int=0):
+    @staticmethod
+    def autodetect(mask, **kwargs):
+        solution = find_optimal_divison(mask)
+        counts = solution['map']
+        print(solution)
+        rank_map = numpy.full(counts.shape, -1, dtype=int)
+        rank = 0
+        for irow, icol, count in iterate_rankmap(counts):
+            if count > 0:
+                rank_map[irow, icol] = rank
+                rank += 1
+        tiling = Tiling(map=rank_map, **kwargs)
+        tiling.set_extent(mask.shape[1], mask.shape[0], solution['nx'], solution['ny'], yoffset_global=solution['yoffset'], xoffset_global=solution['xoffset'])
+        return tiling
+
+    def __init__(self, nrow: Optional[int]=None, ncol: Optional[int]=None, map: Optional[numpy.ndarray]=None, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False, use_all: bool=True):
+        if nrow is None or ncol is None:
+            assert map is not None, 'If the number of rows and column in the subdomain decomposition is not provided, the rank map must be provided instead.'
+            self.map = map
+        else:
+            self.map = numpy.arange(nrow * ncol).reshape(nrow, ncol)
+        self.nrow, self.ncol = self.map.shape
+
         self.n_neigbors = 0
-        def find_neighbor(i, j):
+        def find_neighbor(i: int, j: int) -> int:
             if periodic_x:
-                j = j % ncol
+                j = j % self.ncol
             if periodic_y:
-                i = i % nrow
-            if i >= 0 and i < nrow and j >= 0 and j < ncol:
+                i = i % self.nrow
+            if i >= 0 and i < self.nrow and j >= 0 and j < self.ncol:
                 self.n_neigbors += 1
-                return self.map[i, j]
+                return int(self.map[i, j])
+            return -1
 
         self.comm = comm
-        self.rank = self.comm.Get_rank()
+        self.rank: int = self.comm.Get_rank()
         self.n: int = self.comm.Get_size()
-        if nrow is None and ncol is None:
-            # Temporary algorithm for determining subdomain decomposition
-            best = None
-            for nrow in range(1, self.n + 1):
-                if self.n % nrow == 0:
-                    ncol = self.n // nrow
-                    n_exchange = nrow * ncol * 8 - nrow * 2 - ncol * 2 - 4
-                    if best is None or n_exchange < best[0]:
-                        best = (n_exchange, nrow, ncol)
-            nrow, ncol = best[1:]
-            if self.n > 1 and self.rank == 0:
-                print('Using subdomain decomposition %i x %i' % (nrow, ncol))
-        assert nrow * ncol in (1, self.n), 'number of subdomains (%i rows * %i columns = %i) does not match group size of MPI communicator (%i)' % (nrow, ncol, nrow * ncol, self.n)
-        self.map = numpy.arange(nrow * ncol).reshape(nrow, ncol)
+        nactive = (self.map[:, :] != -1).sum()
+        assert nactive == self.n or not use_all, 'number of active subdomains (%i) does not match group size of MPI communicator (%i). Map: %s' % (nactive, self.n, self.map)
+        #print('Using subdomain decomposition %i x %i (%i active nodes)' % (self.nrow, self.ncol, nactive))
 
-        self.irow, self.icol = divmod(self.rank, ncol)
-        self.nrow, self.ncol = nrow, ncol
+        # Determine own row and column in subdomain decomposition
+        for self.irow, self.icol, r in iterate_rankmap(self.map):
+            if r == self.rank:
+                break
 
         self.top = find_neighbor(self.irow + 1, self.icol)
         self.bottom = find_neighbor(self.irow - 1, self.icol)
@@ -50,19 +69,67 @@ class Tiling:
         self.topright = find_neighbor(self.irow + 1, self.icol + 1)
         self.bottomleft = find_neighbor(self.irow - 1, self.icol - 1)
         self.bottomright = find_neighbor(self.irow - 1, self.icol + 1)
-
-        self.ioffset_global = ioffset_global
-        self.joffset_global = joffset_global
-        self.ioffset = self.ioffset_global
-        self.joffset = self.joffset_global
+        #print('Rank %i: top=%i, bottom=%i, left=%i, right=%i, topleft=%i, topright=%i, bottomleft=%i, bottomright=%i' % (self.rank, self.top, self.bottom, self.left, self.right, self.topleft, self.topright, self.bottomleft, self.bottomright))
 
         self.caches = {}
+
+    def set_extent(self, nx_glob: int, ny_glob: int, nx_sub: int, ny_sub: int, xoffset_global: int=0, yoffset_global: int=0):
+        assert isinstance(nx_glob, int)
+        assert isinstance(ny_glob, int)
+        assert isinstance(nx_sub, int)
+        assert isinstance(ny_sub, int)
+        assert isinstance(xoffset_global, int)
+        assert isinstance(yoffset_global, int)
+        assert xoffset_global <= 0
+        assert yoffset_global <= 0
+
+        self.nx_glob, self.ny_glob = nx_glob, ny_glob
+        self.nx_sub, self.ny_sub = nx_sub, ny_sub
+        self.xoffset_global = xoffset_global
+        self.yoffset_global = yoffset_global
+        self.xoffset = self.icol * self.nx_sub + self.xoffset_global
+        self.yoffset = self.irow * self.ny_sub + self.yoffset_global
 
     def __bool__(self) -> bool:
         return self.n_neigbors > 0
 
     def wrap(self, field: numpy.ndarray, halo: int):
         return DistributedArray(self, field, halo)
+
+    def subdomain2slices(self, irow: int, icol: int, halo: int=0, scale: int=1, share: int=0, exclude_halos: bool=True):
+        assert isinstance(share, int)
+        assert isinstance(scale, int)
+        assert isinstance(halo, int)
+        assert self.map[irow, icol] >= 0
+
+        # Global start and stop
+        xstart_glob = scale * ( icol      * self.nx_sub + self.xoffset_global)
+        xstop_glob =  scale * ((icol + 1) * self.nx_sub + self.xoffset_global) + 2 * halo + share
+        ystart_glob = scale * ( irow      * self.ny_sub + self.yoffset_global)
+        ystop_glob =  scale * ((irow + 1) * self.ny_sub + self.yoffset_global) + 2 * halo + share
+
+        # Local start and stop
+        xstart_loc = 0
+        xstop_loc = xstop_glob - xstart_glob
+        ystart_loc = 0
+        ystop_loc = ystop_glob - ystart_glob
+
+        # Shapes of local and global arrays (including halos and inactive strips)
+        local_shape  = (scale * self.ny_sub  + 2 * halo + share, scale * self.nx_sub  + 2 * halo + share)
+        global_shape = (scale * self.ny_glob + 2 * halo + share, scale * self.nx_glob + 2 * halo + share)
+
+        # Calculate offsets based on limits of the global domain
+        extra_offset = halo if exclude_halos else 0
+        xstart_offset = max(xstart_glob + extra_offset, 0              ) - xstart_glob
+        xstop_offset  = min(xstop_glob  - extra_offset, global_shape[1]) - xstop_glob
+        ystart_offset = max(ystart_glob + extra_offset, 0              ) - ystart_glob
+        ystop_offset  = min(ystop_glob  - extra_offset, global_shape[0]) - ystop_glob
+        assert xstart_offset >= 0 and xstop_offset <= 0
+        assert ystart_offset >= 0 and ystop_offset <= 0
+
+        global_slice = (Ellipsis, slice(ystart_glob + ystart_offset, ystop_glob + ystop_offset), slice(xstart_glob + xstart_offset, xstop_glob + xstop_offset))
+        local_slice  = (Ellipsis, slice(ystart_loc  + ystart_offset, ystop_loc  + ystop_offset), slice(xstart_loc  + xstart_offset, xstop_loc  + xstop_offset))
+        return local_slice, global_slice, local_shape, global_shape
 
     def describe(self):
         p = lambda x: '-' if x is None else x
@@ -100,8 +167,9 @@ class DistributedArray:
 
         def add_task(name: str, sendtag: int, recvtag: int, inner: numpy.ndarray, outer: numpy.ndarray, groups: Tuple[int, ...]):
             neighbor = getattr(tiling, name)
+            assert isinstance(neighbor, int), 'Wrong type for neighbor %s: %s (type %s)' % (name, neighbor, type(neighbor))
             assert inner.shape == outer.shape
-            if neighbor is not None:
+            if neighbor != -1:
                 if caches:
                     inner_cache, outer_cache = caches[len(owncaches)]
                 else:
@@ -167,31 +235,37 @@ class Sum:
         return self.result
 
 class Gather:
-    def __init__(self, tiling: Tiling, field: numpy.ndarray, root: int=0):
-        self.rankmap = tiling.map
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, fill_value, root: int=0):
         self.comm = tiling.comm
         self.root = root
         self.field = field
         self.recvbuf = None
+        self.fill_value = numpy.nan if fill_value is None else fill_value
         if tiling.rank == self.root:
-            self.recvbuf = numpy.empty((self.rankmap.size,) + self.field.shape, dtype=self.field.dtype)
+            self.buffers = []
+            self.recvbuf = numpy.empty((tiling.n,) + self.field.shape, dtype=self.field.dtype)
+            for irow, icol, rank in iterate_rankmap(tiling.map):
+                if rank >= 0:
+                    local_slice, global_slice, local_shape, global_shape = tiling.subdomain2slices(irow, icol, exclude_halos=True)
+                    assert field.shape[-2:] == local_shape, 'Field shape %s differs from expected %s' % (field.shape[-2:], local_shape)
+                    self.buffers.append((self.recvbuf[(rank,) + local_slice], global_slice))
+            self.global_shape = global_shape
 
     def __call__(self, out: Optional[numpy.ndarray]=None, slice_spec=()) -> Optional[numpy.ndarray]:
         sendbuf = numpy.ascontiguousarray(self.field)
         self.comm.Gather(sendbuf, self.recvbuf, root=self.root)
         if self.recvbuf is not None:
-            nrow, ncol = self.rankmap.shape
-            ny, nx = self.recvbuf.shape[-2:]
             if out is None:
-                out = numpy.empty(self.recvbuf.shape[1:-2] + (nrow * ny, ncol * nx), dtype=self.recvbuf.dtype)
-            for row in range(nrow):
-                for col in range(ncol):
-                    s = slice_spec + (Ellipsis, slice(row * ny, (row + 1) * ny), slice(col * nx, (col + 1) * nx))
-                    out[s] = self.recvbuf[self.rankmap[row, col], ...]
+                out = numpy.empty(self.recvbuf.shape[1:-2] + self.global_shape, dtype=self.recvbuf.dtype)
+                if self.fill_value is not None:
+                    out.fill(self.fill_value)
+            assert out.shape[-2:] == self.global_shape, 'Global shape %s differs from expected %s' % (out.shape[-2:], self.global_shape)
+            for source, global_slice in self.buffers:
+                out[slice_spec + global_slice] = source
             return out
 
 class Scatter:
-    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, share: int=0, root: int=0):
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, share: int=0, fill_value=0., scale: int=1, exclude_halos: bool=False, root: int=0):
         self.field = field
         self.recvbuf = numpy.ascontiguousarray(field)
         self.rankmap = tiling.map
@@ -199,38 +273,44 @@ class Scatter:
         self.share = share
         self.sendbuf = None
         if tiling.comm.Get_rank() == root:
-            self.sendbuf = numpy.zeros((self.rankmap.size,) + self.recvbuf.shape, dtype=self.recvbuf.dtype)
+            self.buffers = []
+            self.sendbuf = numpy.full((tiling.n,) + self.recvbuf.shape, fill_value, dtype=self.recvbuf.dtype)
+            for irow, icol, rank in iterate_rankmap(tiling.map):
+                if rank >= 0:
+                    local_slice, global_slice, local_shape, global_shape = tiling.subdomain2slices(irow, icol, halo=halo, share=share, scale=scale, exclude_halos=exclude_halos)
+                    assert field.shape[-2:] == local_shape, 'Field shape %s differs from expected %s' % (field.shape[-2:], local_shape)
+                    self.buffers.append((self.sendbuf[(rank,) + local_slice], global_slice))
+            self.global_shape = global_shape
         self.mpi_scatter = functools.partial(tiling.comm.Scatter, self.sendbuf, self.recvbuf, root=root)
 
     def __call__(self, global_data: Optional[numpy.ndarray]):
         if self.sendbuf is not None:
-            ny, nx = self.field.shape[-2:]
-            xspacing, yspacing = nx - 2 * self.halo - self.share, ny - 2 * self.halo - self.share
-            nrow, ncol = self.rankmap.shape
-            assert nrow * yspacing + 2 * self.halo + self.share == global_data.shape[-2] and ncol * xspacing + 2 * self.halo + self.share == global_data.shape[-1], '%s, %i, %i' % (global_data.shape, nrow * yspacing + 2 * self.halo + self.share, ncol * xspacing + 2 * self.halo + self.share)
-            for row in range(nrow):
-                for col in range(ncol):
-                    self.sendbuf[self.rankmap[row, col], ...] = global_data[..., row * yspacing:row * yspacing + ny, col * xspacing:col * xspacing + nx]
+            # we are root and have to send the global field
+            assert global_data.shape[-2:] == self.global_shape, 'Global shape %s differs from expected %s' % (global_data.shape[-2:], self.global_shape)
+            for sendbuf, global_slice in self.buffers:
+                sendbuf[...] = global_data[global_slice]
         self.mpi_scatter()
         if self.recvbuf is not self.field:
             self.field[...] = self.recvbuf
 
-def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2):
+def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2, logger=None) -> Optional[Mapping[str, Any]]:
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.Get_size()
     cost, solution = None, None
     mask = numpy.ascontiguousarray(mask)
     for ny_sub in range(4, mask.shape[0] + 1):
+        if logger and (ny_sub - 3) % 10 == 0:
+            logger.info('%.1f %% complete' % (100 * (ny_sub - 4) / (mask.shape[0] + 1 - 4),))
         for nx_sub in range(max(4, ny_sub // max_aspect_ratio), min(max_aspect_ratio * ny_sub, mask.shape[1] + 1)):
             current_solution = _pygetm.find_subdiv_solutions(mask, nx_sub, ny_sub, ncpus)
             if current_solution:
-                ioffset, joffset, current_cost, submap = current_solution
+                xoffset, yoffset, current_cost, submap = current_solution
                 if cost is None or current_cost < cost:
-                    solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'ioffset': ioffset, 'joffset': joffset, 'cost': current_cost, 'map': submap}
+                    solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'xoffset': xoffset, 'yoffset': yoffset, 'cost': current_cost, 'map': submap}
                     cost = current_cost
     return solution
 
-def find_all_optimal_divisons(mask: numpy.typing.ArrayLike, max_ncpus: Union[int, Iterable[int]], max_aspect_ratio: int=2):
+def find_all_optimal_divisons(mask: numpy.typing.ArrayLike, max_ncpus: Union[int, Iterable[int]], max_aspect_ratio: int=2) -> Optional[Mapping[str, Any]]:
     if isinstance(max_ncpus, int):
         max_ncpus = numpy.arange(1, max_ncpus + 1)
     for ncpus in max_ncpus:

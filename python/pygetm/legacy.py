@@ -33,7 +33,7 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
 
             H = domain.read_centers_to_supergrid(nc['bathymetry'], ioffset, joffset, nx, ny)
             z0 = z0_const if 'z0' not in nc.variables else domain.read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny)
-            global_domain = domain.Domain.create(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=~numpy.ma.getmaskarray(H), **kwargs)
+            global_domain = domain.Domain.create(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=numpy.where(numpy.ma.getmaskarray(H), 0, 1), **kwargs)
         elif grid_type == 3:
             # planar curvilinear
             raise NotImplementedError('No support yet for planar curvilinear coordinates')

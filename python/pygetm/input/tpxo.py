@@ -37,7 +37,7 @@ def get(lon, lat, variable='h', verbose: bool=False, root=ROOT, scale_factor: fl
             ds = ds.set_coords(('lat_%s' % axis, 'lon_%s' % axis))
             x = select(ds['%sIm' % variable])
             components[component] = scale_factor * select(ds['%sRe' % variable]).values, scale_factor * x.values
-    return xarray.DataArray(Data(components, lat), dims=x.dims, coords=x.coords)
+    return xarray.DataArray(Data(components, lat), dims=x.dims, coords=x.coords, name='tpxo(%s, %s)' % (root, variable))
 
 class Data(pygetm.input.LazyArray):
     def __init__(self, components: Mapping[str, Tuple[numpy.ndarray, numpy.ndarray]], lat: numpy.ndarray):
