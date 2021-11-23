@@ -200,7 +200,7 @@ class Domain(_pygetm.Domain):
         return Domain.create(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
 
     @staticmethod
-    def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, **kwargs):
+    def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, logger: Optional[logging.Logger]=None, **kwargs):
         assert nx == tiling.nx_glob and ny == tiling.ny_glob, 'Extent of global domain (%i, %i) does not match that of tiling (%i, %i).' % (ny, nx, tiling.ny_glob, tiling.nx_glob)
         assert global_domain is None or global_domain.initialized
 
@@ -220,7 +220,7 @@ class Domain(_pygetm.Domain):
             scatterer(None if global_domain is None else getattr(global_domain, att))
             kwargs[name] = c
 
-        domain = Domain(tiling.nx_sub, tiling.ny_sub, nz, tiling=tiling, **kwargs)
+        domain = Domain(tiling.nx_sub, tiling.ny_sub, nz, tiling=tiling, logger=logger, **kwargs)
 
         halo = 4
         parallel.Scatter(tiling, domain.mask_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.mask_)
@@ -267,29 +267,30 @@ class Domain(_pygetm.Domain):
     @staticmethod
     def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
         global_domain = None
+        logger = parallel.getLogger()
         if tiling is None:
             mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
-            tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], **kwargs)
+            tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=logger, **kwargs)
         global_tiling = tiling if tiling.n == 1 else parallel.Tiling(nrow=1, ncol=1, use_all=False, **kwargs)
         if tiling.rank == 0:
             # master node (possibly only node)
             tiling.nx_glob, tiling.ny_glob = nx, ny
-            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo)
+            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo, logger=logger)
         if tiling.n == 1:
             return global_domain
         if global_domain is not None:
             global_domain.initialize(runtype=runtype)
-        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical)
+        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, logger=logger)
         subdomain.glob = global_domain
         return subdomain
 
-    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
+    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
         assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
-        self.logger = logging.getLogger()
+        self.logger = logger if logger is not None else parallel.getLogger()
         self.field_manager: Optional[output.FieldManager] = None
         self.input_manager = input.InputManager()
         self.glob: Optional['Domain'] = self

@@ -24,18 +24,7 @@ class Simulation(_pygetm.Simulation):
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
-        if logger is None:
-            handlers = []
-            if dom.tiling.rank == 0:
-                handlers.append(logging.StreamHandler())
-            if dom.tiling.n > 1:
-                file_handler = logging.FileHandler('getm-%04i.log' % dom.tiling.rank, mode='w')
-                file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
-                handlers.append(file_handler)
-            logging.basicConfig(level=log_level, handlers=handlers)
-
-            self.logger = logging.getLogger()
-
+        self.logger = dom.logger
         self.logger.info('Rank %i of %i, subdomain decompositon %i x %i' % (dom.tiling.rank, dom.tiling.n, dom.tiling.nrow, dom.tiling.ncol))
         self.output_manager = output.OutputManager(rank=dom.tiling.rank, logger=self.logger.getChild('output_manager'))
         self.input_manager = dom.input_manager

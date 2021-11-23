@@ -1,4 +1,5 @@
 from typing import Iterable, Mapping, Optional, Tuple, Union, Any
+import logging
 import functools
 
 from mpi4py import MPI
@@ -14,12 +15,25 @@ def iterate_rankmap(rankmap):
         for icol in range(rankmap.shape[1]):
             yield irow, icol, rankmap[irow, icol]
 
+def getLogger(log_level=logging.INFO, comm=MPI.COMM_WORLD):
+    rank = comm.Get_rank()
+    ncpus = comm.Get_size()
+    handlers = []
+    if rank == 0:
+        handlers.append(logging.StreamHandler())
+    if ncpus > 1:
+        file_handler = logging.FileHandler('getm-%04i.log' % rank, mode='w')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+        handlers.append(file_handler)
+    logging.basicConfig(level=log_level, handlers=handlers)
+
+    return logging.getLogger()
+
 class Tiling:
     @staticmethod
-    def autodetect(mask, **kwargs):
-        solution = find_optimal_divison(mask)
+    def autodetect(mask, logger: Optional[logging.Logger]=None, **kwargs):
+        solution = find_optimal_divison(mask, logger=logger)
         counts = solution['map']
-        #print(solution)
         rank_map = numpy.full(counts.shape, -1, dtype=int)
         rank = 0
         for irow, icol, count in iterate_rankmap(counts):
@@ -293,13 +307,15 @@ class Scatter:
         if self.recvbuf is not self.field:
             self.field[...] = self.recvbuf
 
-def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2, logger=None) -> Optional[Mapping[str, Any]]:
+def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2, logger: Optional[logging.Logger]=None) -> Optional[Mapping[str, Any]]:
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.Get_size()
     if ncpus == 1:
         return {'ncpus': 1, 'nx': 1, 'ny': 1, 'xoffset': 0, 'yoffset': 0, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
     cost, solution = None, None
     mask = numpy.ascontiguousarray(mask, dtype=numpy.intc)
+    if logger:
+        logger.info('Determining optimal subdomain decomposition for global domain of %i x %i (%i active cells)' % (mask.shape[1], mask.shape[0], (mask != 0).sum()))
     for ny_sub in range(4, mask.shape[0] + 1):
         if logger and (ny_sub - 3) % 10 == 0:
             logger.info('%.1f %% complete' % (100 * (ny_sub - 4) / (mask.shape[0] + 1 - 4),))
@@ -310,6 +326,8 @@ def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None
                 if cost is None or current_cost < cost:
                     solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'xoffset': xoffset, 'yoffset': yoffset, 'cost': current_cost, 'map': submap}
                     cost = current_cost
+    if logger:
+        logger.info('Optimal subdomain decomposition: %s' % solution)
     return solution
 
 def find_all_optimal_divisons(mask: numpy.typing.ArrayLike, max_ncpus: Union[int, Iterable[int]], max_aspect_ratio: int=2) -> Optional[Mapping[str, Any]]:
