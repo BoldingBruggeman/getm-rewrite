@@ -271,6 +271,8 @@ class Domain(_pygetm.Domain):
         if tiling is None:
             mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
             tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=logger, **kwargs)
+        else:
+            tiling.set_extent(nx, ny)
         global_tiling = tiling if tiling.n == 1 else parallel.Tiling(nrow=1, ncol=1, use_all=False, **kwargs)
         if tiling.rank == 0:
             # master node (possibly only node)

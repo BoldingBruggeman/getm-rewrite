@@ -87,7 +87,7 @@ class Tiling:
 
         self.caches = {}
 
-    def set_extent(self, nx_glob: int, ny_glob: int, nx_sub: int, ny_sub: int, xoffset_global: int=0, yoffset_global: int=0):
+    def set_extent(self, nx_glob: int, ny_glob: int, nx_sub: Optional[int]=None, ny_sub: Optional[int]=None, xoffset_global: int=0, yoffset_global: int=0):
         assert isinstance(nx_glob, int)
         assert isinstance(ny_glob, int)
         assert isinstance(nx_sub, int)
@@ -96,6 +96,11 @@ class Tiling:
         assert isinstance(yoffset_global, int)
         assert xoffset_global <= 0
         assert yoffset_global <= 0
+
+        if nx_sub is None:
+            nx_sub = int(numpy.ceil(nx_glob / self.ncol))
+        if ny_sub is None:
+            ny_sub = int(numpy.ceil(ny_glob / self.nrow))
 
         self.nx_glob, self.ny_glob = nx_glob, ny_glob
         self.nx_sub, self.ny_sub = nx_sub, ny_sub
