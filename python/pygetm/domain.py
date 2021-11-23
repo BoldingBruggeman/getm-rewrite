@@ -411,6 +411,8 @@ class Domain(_pygetm.Domain):
         self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1, ugrid=self.U, vgrid=self.V, wgrid=self.W)
         self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0)
 
+        self.Dmin = 1.
+
         self.initialized = False
         self.open_boundaries = {}
 
@@ -510,7 +512,7 @@ class Domain(_pygetm.Domain):
         self.z_.flags.writeable = self.z.flags.writeable = False
         self.zo_.flags.writeable = self.zo.flags.writeable = False
 
-        _pygetm.Domain.initialize(self, runtype)
+        _pygetm.Domain.initialize(self, runtype, Dmin=self.Dmin)
 
         self.initialized = True
 

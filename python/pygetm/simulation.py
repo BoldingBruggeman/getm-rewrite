@@ -283,6 +283,10 @@ class Simulation(_pygetm.Simulation):
         z_T_half.interp(self.domain.U.z)
         z_T_half.interp(self.domain.V.z)
         z_T_half.interp(self.domain.X.z)
+        self.domain.U.z.all_values.clip(min=-self.domain.U.H + self.domain.Dmin, out=self.domain.U.z.all_values)
+        self.domain.V.z.all_values.clip(min=-self.domain.V.H + self.domain.Dmin, out=self.domain.V.z.all_values)
+        self.domain.X.z.all_values.clip(min=-self.domain.X.H + self.domain.Dmin, out=self.domain.X.z.all_values)
+        z_T_half.all_values.clip(min=-self.domain.T.H + self.domain.Dmin, out=z_T_half.all_values)
 
         # Halo exchange for sea level on U, V, X grids
         self.domain.U.z.update_halos()

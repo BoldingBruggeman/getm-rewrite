@@ -261,14 +261,16 @@ contains
       end do
    end subroutine
 
-   subroutine domain_initialize(pdomain, runtype, maxdt) bind(c)
+   subroutine domain_initialize(pdomain, runtype, Dmin, maxdt) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: runtype
+      real(c_double), intent(in), value :: Dmin
       real(c_double), intent(out)       :: maxdt
 
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
+      domain%Dmin = Dmin
       call domain%initialize(runtype)
       maxdt = domain%maxdt
    end subroutine
