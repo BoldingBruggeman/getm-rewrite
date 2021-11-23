@@ -334,7 +334,7 @@ class Domain(_pygetm.Domain):
         self.z, self.z_ = setup_metric(z)       # elevation
         self.zo, self.zo_ = setup_metric(zo)    # elevaton on previous time step
         self.z0b_min, self.z0b_min_ = setup_metric(z0)
-        self.mask, self.mask_ = setup_metric(mask, dtype=int, fill_value=0)
+        self.mask, self.mask_ = setup_metric(mask, dtype=numpy.intc, fill_value=0)
 
         cor = f if f is not None else 2. * omega * numpy.sin(deg2rad * lat)
         self.cor, self.cor_ = setup_metric(cor, writeable=False)
