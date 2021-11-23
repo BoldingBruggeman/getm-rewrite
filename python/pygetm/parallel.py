@@ -297,7 +297,7 @@ def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.Get_size()
     cost, solution = None, None
-    mask = numpy.ascontiguousarray(mask)
+    mask = numpy.ascontiguousarray(mask, dtype=numpy.intc)
     for ny_sub in range(4, mask.shape[0] + 1):
         if logger and (ny_sub - 3) % 10 == 0:
             logger.info('%.1f %% complete' % (100 * (ny_sub - 4) / (mask.shape[0] + 1 - 4),))
