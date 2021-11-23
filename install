@@ -7,7 +7,7 @@ REPO_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 WORK_DIR=`mktemp -d`
 cd ${WORK_DIR}
 cmake ${REPO_DIR}/python
-cmake --build . --config Release
+cmake --build . --config Release --parallel 4
 cmake --install .
 cd -
 rm -rf ${WORK_DIR}
