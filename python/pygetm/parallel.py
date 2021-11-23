@@ -19,7 +19,7 @@ class Tiling:
     def autodetect(mask, **kwargs):
         solution = find_optimal_divison(mask)
         counts = solution['map']
-        print(solution)
+        #print(solution)
         rank_map = numpy.full(counts.shape, -1, dtype=int)
         rank = 0
         for irow, icol, count in iterate_rankmap(counts):
