@@ -68,7 +68,6 @@ class Tiling:
         self.n: int = self.comm.Get_size()
         nactive = (self.map[:, :] != -1).sum()
         assert nactive == self.n or not use_all, 'number of active subdomains (%i) does not match group size of MPI communicator (%i). Map: %s' % (nactive, self.n, self.map)
-        #print('Using subdomain decomposition %i x %i (%i active nodes)' % (self.nrow, self.ncol, nactive))
 
         # Determine own row and column in subdomain decomposition
         for self.irow, self.icol, r in iterate_rankmap(self.map):
@@ -86,8 +85,15 @@ class Tiling:
         #print('Rank %i: top=%i, bottom=%i, left=%i, right=%i, topleft=%i, topright=%i, bottomleft=%i, bottomright=%i' % (self.rank, self.top, self.bottom, self.left, self.right, self.topleft, self.topright, self.bottomleft, self.bottomright))
 
         self.caches = {}
+        self.nx_glob = None
 
-    def set_extent(self, nx_glob: int, ny_glob: int, nx_sub: Optional[int]=None, ny_sub: Optional[int]=None, xoffset_global: int=0, yoffset_global: int=0):
+    def set_extent(self, nx_glob: int, ny_glob: int, nx_sub: Optional[int]=None, ny_sub: Optional[int]=None, xoffset_global: int=0, yoffset_global: int=0, logger: Optional[logging.Logger]=None):
+        if nx_sub is None:
+            nx_sub = int(numpy.ceil(nx_glob / self.ncol))
+        if ny_sub is None:
+            ny_sub = int(numpy.ceil(ny_glob / self.nrow))
+
+        assert self.nx_glob is None, 'Domain extent has already been set.'
         assert isinstance(nx_glob, int)
         assert isinstance(ny_glob, int)
         assert isinstance(nx_sub, int)
@@ -97,17 +103,17 @@ class Tiling:
         assert xoffset_global <= 0
         assert yoffset_global <= 0
 
-        if nx_sub is None:
-            nx_sub = int(numpy.ceil(nx_glob / self.ncol))
-        if ny_sub is None:
-            ny_sub = int(numpy.ceil(ny_glob / self.nrow))
-
         self.nx_glob, self.ny_glob = nx_glob, ny_glob
         self.nx_sub, self.ny_sub = nx_sub, ny_sub
         self.xoffset_global = xoffset_global
         self.yoffset_global = yoffset_global
         self.xoffset = self.icol * self.nx_sub + self.xoffset_global
         self.yoffset = self.irow * self.ny_sub + self.yoffset_global
+
+        if logger and (self.nrow > 1 or self.ncol > 1):
+            logger.info('Using subdomain decomposition %i x %i (%i active nodes)' % (self.nrow, self.ncol, (self.map[:, :] != -1).sum()))
+            logger.info('Global domain shape %i x %i, subdomain shape %i x %i, global offsets x=%i, y=%i' % (self.nx_glob, self.ny_glob, self.nx_sub, self.ny_sub, self.xoffset_global, self.yoffset_global))
+            logger.info('I am rank %i at subdomain row %i, column %i, with offset x=%i, y=%i' % (self.rank, self.irow, self.icol, self.xoffset, self.yoffset))
 
     def __bool__(self) -> bool:
         return self.n_neigbors > 0

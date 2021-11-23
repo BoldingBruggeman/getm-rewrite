@@ -268,22 +268,41 @@ class Domain(_pygetm.Domain):
     def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
         global_domain = None
         logger = parallel.getLogger()
+        parlogger = logger.getChild('parallel')
+
+        # Determine subdomian division
         if tiling is None:
+            # No tiling provided - autodetect
             mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
-            tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=logger, **kwargs)
+            tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=parlogger, **kwargs)
         else:
-            tiling.set_extent(nx, ny)
-        global_tiling = tiling if tiling.n == 1 else parallel.Tiling(nrow=1, ncol=1, use_all=False, **kwargs)
+            # Existing tiling object provided - transfer extent of global domain to determine subdomain sizes
+            if isinstance(tiling, tuple):
+                tiling = parallel.Tiling(nrow=tiling[0], ncol=tiling[1], use_all=True, **kwargs)
+            tiling.set_extent(nx, ny, logger=parlogger)
+
+        global_tiling = tiling
+        if tiling.n > 1:
+            # The global tiling object is a simple 1x1 partition
+            global_tiling = parallel.Tiling(nrow=1, ncol=1, use_all=False, **kwargs)
+            global_tiling.set_extent(nx, ny)
+
+        # If on master node (possibly only node), create global domain object
         if tiling.rank == 0:
-            # master node (possibly only node)
-            tiling.nx_glob, tiling.ny_glob = nx, ny
             global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo, logger=logger)
+
+        # If there is only one node, return the global domain immediately
         if tiling.n == 1:
             return global_domain
+
+        # If on root, initialize the global domain [JB 2021-11-23 Why? Is this really needed?]
         if global_domain is not None:
             global_domain.initialize(runtype=runtype)
+
+        # Create the subdomain, and (if on root) attach a pointer to the global domain
         subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, logger=logger)
         subdomain.glob = global_domain
+
         return subdomain
 
     def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
