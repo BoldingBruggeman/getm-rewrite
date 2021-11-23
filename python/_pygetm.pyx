@@ -325,7 +325,7 @@ cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, in
     cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
     cdef int[:, ::1] map
     cdef int row, col
-    map = numpy.empty((nrow, ncol), dtype=int)
+    map = numpy.empty((nrow, ncol), dtype=numpy.intc)
     for row in range(nrow):
         for col in range(ncol):
             map[row, col] = subdomain_count_cells(mask, max(0, xoffset + col * nx), min(mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(mask.shape[0], yoffset + (row + 1) * ny))
