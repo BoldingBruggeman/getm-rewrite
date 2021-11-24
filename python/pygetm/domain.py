@@ -285,7 +285,7 @@ class Domain(_pygetm.Domain):
         else:
             # Existing tiling object provided - transfer extent of global domain to determine subdomain sizes
             if isinstance(tiling, tuple):
-                tiling = parallel.Tiling(nrow=tiling[0], ncol=tiling[1], use_all=True, **kwargs)
+                tiling = parallel.Tiling(nrow=tiling[0], ncol=tiling[1], **kwargs)
             tiling.set_extent(nx, ny)
         tiling.report(parlogger)
 
@@ -467,6 +467,13 @@ class Domain(_pygetm.Domain):
             lmax = self.T.ny_
         if l >= 0 and l < lmax and mstop > mstart:
             # Boundary lies at least partially within current subdomain
+            if side in (WEST, EAST):
+                mask = self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2]
+            else:
+                mask = self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2]
+            if (mask == 0).any():
+                self.logger.error('%i of %i points of this open boundary are on land' % ((mask == 0).sum(), mstop - mstart))
+                raise Exception()
             self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
 
     def initialize(self, runtype: int, field_manager: Optional[output.FieldManager]=None):
