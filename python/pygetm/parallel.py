@@ -49,7 +49,7 @@ class Tiling:
     def load(path: str) -> 'Tiling':
         with open(path, 'rb') as f:
             map, periodic_x, periodic_y, nx_glob, ny_glob, nx_sub, ny_sub, xoffset_global, yoffset_global = pickle.load(f)
-        tiling = Tiling(map=map, periodic_x=periodic_x, periodic_y=periodic_y)
+        tiling = Tiling(map=map, periodic_x=periodic_x, periodic_y=periodic_y, ncpus=(map != -1).sum())
         tiling.set_extent(nx_glob, ny_glob, nx_sub, ny_sub, xoffset_global, yoffset_global)
         return tiling
 
@@ -185,17 +185,23 @@ class Tiling:
         print('{:^3}  {:^3}  {:^3}'.format(p(self.bottomleft), p(self.bottom), p(self.bottomright)))
 
     def plot(self, ax=None):
-        x = numpy.linspace(0., self.ncol, self.ncol + 1)
-        y = numpy.linspace(0., self.nrow, self.nrow + 1)
+        x = self.xoffset_global + numpy.arange(self.ncol + 1) * self.nx_sub
+        y = self.yoffset_global + numpy.arange(self.nrow + 1) * self.ny_sub
+        x2d, y2d = numpy.broadcast_arrays(x[numpy.newaxis, :], y[:, numpy.newaxis])
         if ax is None:
             import matplotlib.pyplot
             fig, ax = matplotlib.pyplot.subplots()
-        shape = self.map.shape
-        edge_shape = (shape[0] + 1, shape[1] + 1)
-        ax.pcolormesh(numpy.broadcast_to(x[numpy.newaxis, :], edge_shape), numpy.broadcast_to(y[:, numpy.newaxis], edge_shape), numpy.ones_like(self.map), edgecolors='k')
+        import matplotlib.patches
+        rect = matplotlib.patches.Rectangle((0, 0), self.nx_glob, self.ny_glob, edgecolor='None', facecolor='C0', zorder=-1)
+        ax.pcolormesh(x2d, y2d, numpy.ma.array(x2d[1:, 1:], mask=True), edgecolors='k')
+        ax.add_patch(rect)
         for i in range(self.nrow):
             for j in range(self.ncol):
-                ax.text(0.5 * (x[j] + x[j + 1]), 0.5 * (y[i] + y[i + 1]), '%i' % self.map[i, j], horizontalalignment='center', verticalalignment='center')
+                if self.map[i, j] >= 0:
+                    ax.text(0.5 * (x[j] + x[j + 1]), 0.5 * (y[i] + y[i + 1]), '%i' % self.map[i, j], horizontalalignment='center', verticalalignment='center')
+                else:
+                    ax.plot([x[j], x[j + 1]], [y[i], y[i + 1]], '-k')
+                    ax.plot([x[j], x[j + 1]], [y[i + 1], y[i]], '-k')
 
 ALL = 0
 TOP_BOTTOM = 1
