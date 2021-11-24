@@ -1,6 +1,7 @@
 from typing import Iterable, Mapping, Optional, Tuple, Union, Any
 import logging
 import functools
+import pickle
 
 from mpi4py import MPI
 import numpy
@@ -31,8 +32,8 @@ def getLogger(log_level=logging.INFO, comm=MPI.COMM_WORLD):
 
 class Tiling:
     @staticmethod
-    def autodetect(mask, logger: Optional[logging.Logger]=None, **kwargs):
-        solution = find_optimal_divison(mask, logger=logger)
+    def autodetect(mask, ncpus: Optional[int]=None, logger: Optional[logging.Logger]=None, **kwargs) -> 'Tiling':
+        solution = find_optimal_divison(mask, ncpus, logger=logger)
         counts = solution['map']
         rank_map = numpy.full(counts.shape, -1, dtype=int)
         rank = 0
@@ -40,11 +41,19 @@ class Tiling:
             if count > 0:
                 rank_map[irow, icol] = rank
                 rank += 1
-        tiling = Tiling(map=rank_map, **kwargs)
+        tiling = Tiling(map=rank_map, ncpus=solution['ncpus'], **kwargs)
         tiling.set_extent(mask.shape[1], mask.shape[0], solution['nx'], solution['ny'], yoffset_global=solution['yoffset'], xoffset_global=solution['xoffset'])
         return tiling
 
-    def __init__(self, nrow: Optional[int]=None, ncol: Optional[int]=None, map: Optional[numpy.ndarray]=None, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False, use_all: bool=True):
+    @staticmethod
+    def load(path: str) -> 'Tiling':
+        with open(path, 'rb') as f:
+            map, periodic_x, periodic_y, nx_glob, ny_glob, nx_sub, ny_sub, xoffset_global, yoffset_global = pickle.load(f)
+        tiling = Tiling(map=map, periodic_x=periodic_x, periodic_y=periodic_y)
+        tiling.set_extent(nx_glob, ny_glob, nx_sub, ny_sub, xoffset_global, yoffset_global)
+        return tiling
+
+    def __init__(self, nrow: Optional[int]=None, ncol: Optional[int]=None, map: Optional[numpy.ndarray]=None, comm=MPI.COMM_WORLD, periodic_x: bool=False, periodic_y: bool=False, ncpus: Optional[int]=None):
         if nrow is None or ncol is None:
             assert map is not None, 'If the number of rows and column in the subdomain decomposition is not provided, the rank map must be provided instead.'
             self.map = map
@@ -65,9 +74,12 @@ class Tiling:
 
         self.comm = comm
         self.rank: int = self.comm.Get_rank()
-        self.n: int = self.comm.Get_size()
+        self.n = ncpus if ncpus is not None else self.comm.Get_size()
         nactive = (self.map[:, :] != -1).sum()
-        assert nactive == self.n or not use_all, 'number of active subdomains (%i) does not match group size of MPI communicator (%i). Map: %s' % (nactive, self.n, self.map)
+        assert nactive == self.n, 'number of active subdomains (%i) does not match group size of MPI communicator (%i). Map: %s' % (nactive, self.n, self.map)
+
+        self.periodic_x = periodic_x
+        self.periodic_y = periodic_y
 
         # Determine own row and column in subdomain decomposition
         for self.irow, self.icol, r in iterate_rankmap(self.map):
@@ -87,7 +99,11 @@ class Tiling:
         self.caches = {}
         self.nx_glob = None
 
-    def set_extent(self, nx_glob: int, ny_glob: int, nx_sub: Optional[int]=None, ny_sub: Optional[int]=None, xoffset_global: int=0, yoffset_global: int=0, logger: Optional[logging.Logger]=None):
+    def dump(self, path: str):
+        with open(path, 'wb') as f:
+            pickle.dump((self.map, self.periodic_x, self.periodic_y, self.nx_glob, self.ny_glob, self.nx_sub, self.ny_sub, self.xoffset_global, self.yoffset_global), f)
+
+    def set_extent(self, nx_glob: int, ny_glob: int, nx_sub: Optional[int]=None, ny_sub: Optional[int]=None, xoffset_global: int=0, yoffset_global: int=0):
         if nx_sub is None:
             nx_sub = int(numpy.ceil(nx_glob / self.ncol))
         if ny_sub is None:
@@ -110,6 +126,7 @@ class Tiling:
         self.xoffset = self.icol * self.nx_sub + self.xoffset_global
         self.yoffset = self.irow * self.ny_sub + self.yoffset_global
 
+    def report(self, logger: Optional[logging.Logger]=None):
         if logger and (self.nrow > 1 or self.ncol > 1):
             logger.info('Using subdomain decomposition %i x %i (%i active nodes)' % (self.nrow, self.ncol, (self.map[:, :] != -1).sum()))
             logger.info('Global domain shape %i x %i, subdomain shape %i x %i, global offsets x=%i, y=%i' % (self.nx_glob, self.ny_glob, self.nx_sub, self.ny_sub, self.xoffset_global, self.yoffset_global))
@@ -118,10 +135,15 @@ class Tiling:
     def __bool__(self) -> bool:
         return self.n_neigbors > 0
 
-    def wrap(self, field: numpy.ndarray, halo: int):
+    def wrap(self, field: numpy.ndarray, halo: int) -> 'DistributedArray':
         return DistributedArray(self, field, halo)
 
-    def subdomain2slices(self, irow: int, icol: int, halo: int=0, scale: int=1, share: int=0, exclude_halos: bool=True):
+    def subdomain2slices(self, irow: Optional[int]=None, icol: Optional[int]=None, halo: int=0, scale: int=1, share: int=0, exclude_halos: bool=True) -> Tuple[Tuple[Any, slice, slice], Tuple[Any, slice, slice], Tuple[int, int], Tuple[int, int]]:
+        if irow is None:
+            irow = self.irow
+        if icol is None:
+            icol = self.icol
+
         assert isinstance(share, int)
         assert isinstance(scale, int)
         assert isinstance(halo, int)
@@ -326,7 +348,7 @@ def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None
     cost, solution = None, None
     mask = numpy.ascontiguousarray(mask, dtype=numpy.intc)
     if logger:
-        logger.info('Determining optimal subdomain decomposition for global domain of %i x %i (%i active cells)' % (mask.shape[1], mask.shape[0], (mask != 0).sum()))
+        logger.info('Determining optimal subdomain decomposition of global domain of %i x %i (%i active cells) for %i cores' % (mask.shape[1], mask.shape[0], (mask != 0).sum(), ncpus))
     for ny_sub in range(4, mask.shape[0] + 1):
         if logger and (ny_sub - 3) % 10 == 0:
             logger.info('%.1f %% complete' % (100 * (ny_sub - 4) / (mask.shape[0] + 1 - 4),))

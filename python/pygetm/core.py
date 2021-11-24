@@ -262,6 +262,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self.fill(value)
             return
 
+        if self.all_values is None or self.all_values.size == 0:
+            return
+
         import pygetm.input
         assert isinstance(value, xarray.DataArray), 'If value is not numeric, it should be an xarray.DataArray, but it is %s (type %s).' % (value, type(value))
         assert isinstance(value.variable.data, pygetm.input.LazyArray), 'If value is an xarray.DataArray, its underlying type should be a LazyArray, but it is %s (type %s).' % (value.variable.data, type(value.variable.data))
@@ -270,7 +273,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             include_halos = self.values is None
         target = self.all_values if include_halos else self.values
         if not on_grid:
-            lon, lat = (self.grid.lon.all_values, self.grid.lat.all_values) if include_halos else (self.grid.lon.values, self.grid.lat.values)
+            local_slice, _, _, _ = self.grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=2)
+            lon, lat, target = self.grid.lon.all_values[local_slice], self.grid.lat.all_values[local_slice], self.all_values[local_slice]
             value = pygetm.input.limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
             value = pygetm.input.spatial_interpolation(value, lon, lat)
         value = pygetm.input.temporal_interpolation(value)

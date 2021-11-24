@@ -24,13 +24,12 @@ class Simulation(_pygetm.Simulation):
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
-        self.logger = dom.logger
+        self.logger = dom.root_logger
         self.output_manager = output.OutputManager(rank=dom.tiling.rank, logger=self.logger.getChild('output_manager'))
         self.input_manager = dom.input_manager
         dom.field_manager = self.output_manager
 
         self.input_manager.set_logger(self.logger.getChild('input_manager'))
-        dom.logger = self.logger.getChild('domain')
 
         # Disable bottom friction if physical bottom roughness is 0 everywhere
         if apply_bottom_friction and (numpy.ma.array(dom.z0b_min, mask=dom.mask==0) == 0.).any():
@@ -177,12 +176,12 @@ class Simulation(_pygetm.Simulation):
         # Update elevation at the open boundaries
         self.update_sealevel_boundaries(self.timestep)
 
-        # Calculate the surface pressure gradient (T grid)
+        # Calculate the surface pressure gradient in the U and V points.
         # This requires elevation and surface pressure (both on T grid) to be valid in the halos
         self.airsea.sp.update_halos()
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
 
-        # Update momentum using surface stresses and pressure gradients
+        # Update momentum using surface stresses and pressure gradients. Inputs and outputs on U and V grids.
         self.uv_momentum_2d(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
 
         # Update halos of U and V as the sea level update below requires valid transports within the halos
@@ -200,12 +199,12 @@ class Simulation(_pygetm.Simulation):
         if self.runtype == 4 and self.istep % self.split_factor == 0:
             self.uv_momentum_3d()
 
-            # Buoyancy frequency and turbulence
+            # Buoyancy frequency and turbulence (W grid)
             pygetm.mixing.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
             self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(constants.rho0)
             self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
-            # Temperature and salinity
+            # Temperature and salinity (T grid)
             self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.rho0 * constants.cp)))
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)

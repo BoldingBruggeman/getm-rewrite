@@ -201,6 +201,8 @@ class LimitedRegionArray(UnaryOperatorResult):
         return data
 
 def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False) -> xarray.DataArray:
+    assert numpy.isfinite(minlon) and numpy.isfinite(maxlon), 'Longitude range %s - %s is not valid' % (minlon, maxlon)
+    assert numpy.isfinite(minlat) and numpy.isfinite(maxlat), 'Latitude range %s - %s is not valid' % (minlat, maxlat)
     assert minlon <= maxlon, 'Minimum longitude %s must be smaller than, or equal to, maximum longitude %s.' % (minlon, maxlon)
     assert minlat <= maxlat, 'Minimum latitude %s must be smaller than, or equal to, maximum latitude %s.' % (minlat, maxlat)
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
@@ -279,6 +281,8 @@ def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: 
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
     assert source_lon.ndim == 1
     assert source_lat.ndim == 1
+    assert numpy.isfinite(lon).all(), 'Some longitudes are non-finite: %s' % (lon,)
+    assert numpy.isfinite(lat).all(), 'Some latitudes are non-finite: %s' % (lat,)
     lon, lat = numpy.broadcast_arrays(lon, lat)
     ilondim = source.dims.index(source_lon.dims[0])
     ilatdim = source.dims.index(source_lat.dims[0])

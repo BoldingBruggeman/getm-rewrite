@@ -11,7 +11,7 @@ setup(
     zip_safe=False,
     entry_points = {
         'console_scripts': [
-            'pygetm = pygetm.run:run',
+            'pygetm-subdiv = pygetm.subdiv:main',
         ],
     }
 )

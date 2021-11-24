@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 import operator
 import logging
+import os.path
 
 import numpy
 import numpy.typing
@@ -265,26 +266,33 @@ class Domain(_pygetm.Domain):
         data[-superhalo:, -superhalo  :          ] = data_ext[-superhalo:,                      -superhalo:              ]
 
     @staticmethod
-    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., **kwargs):
+    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
         global_domain = None
-        logger = parallel.getLogger()
+        logger = logger or parallel.getLogger()
         parlogger = logger.getChild('parallel')
 
-        # Determine subdomian division
+        # Determine subdomain division
         if tiling is None:
             # No tiling provided - autodetect
             mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
             tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=parlogger, **kwargs)
+        elif isinstance(tiling, str):
+            # Path to dumped Tiling object provided
+            if not os.path.isfile(tiling):
+                logger.critical('Cannot find file %s. If tiling is a string, it must be the path to an existing file with a pickled tiling object.' % tiling)
+                raise Exception()
+            tiling = parallel.Tiling.load(tiling)
         else:
             # Existing tiling object provided - transfer extent of global domain to determine subdomain sizes
             if isinstance(tiling, tuple):
                 tiling = parallel.Tiling(nrow=tiling[0], ncol=tiling[1], use_all=True, **kwargs)
-            tiling.set_extent(nx, ny, logger=parlogger)
+            tiling.set_extent(nx, ny)
+        tiling.report(parlogger)
 
         global_tiling = tiling
         if tiling.n > 1:
             # The global tiling object is a simple 1x1 partition
-            global_tiling = parallel.Tiling(nrow=1, ncol=1, use_all=False, **kwargs)
+            global_tiling = parallel.Tiling(nrow=1, ncol=1, ncpus=1, **kwargs)
             global_tiling.set_extent(nx, ny)
 
         # If on master node (possibly only node), create global domain object
@@ -311,10 +319,13 @@ class Domain(_pygetm.Domain):
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
         assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
-        self.logger = logger if logger is not None else parallel.getLogger()
+        self.root_logger = logger if logger is not None else parallel.getLogger()
+        self.logger = self.root_logger.getChild('domain')
         self.field_manager: Optional[output.FieldManager] = None
         self.input_manager = input.InputManager()
         self.glob: Optional['Domain'] = self
+
+        self.logger.info('Domain size (T grid): %i x %i (%i cells)' % (nx, ny, nx * ny))
 
         halo = 2
 
@@ -458,7 +469,7 @@ class Domain(_pygetm.Domain):
             # Boundary lies at least partially within current subdomain
             self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
 
-    def initialize(self, runtype, field_manager: Optional[output.FieldManager]=None):
+    def initialize(self, runtype: int, field_manager: Optional[output.FieldManager]=None):
         assert not self.initialized, 'Domain has already been initialized'
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained by the domain to be used for e.g. plotting
         tmask = self.mask_[1::2, 1::2]
@@ -503,7 +514,7 @@ class Domain(_pygetm.Domain):
                     bdy_j.append(numpy.repeat(l, mstop - mstart))
         self.bdy_i = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_i, dtype=numpy.intc)
         self.bdy_j = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_j, dtype=numpy.intc)
-        self.logger.info('%i open boundaries' % len(bdyinfo))
+        self.logger.info('%i open boundaries (%i West, %i North, %i East, %i South)' % (len(bdyinfo), side2count[WEST], side2count[NORTH], side2count[EAST], side2count[SOUTH]))
         if nbdyp > 0:
             bdyinfo = numpy.stack(bdyinfo, axis=-1)
             self.initialize_open_boundaries(nwb=side2count[WEST], nnb=side2count[NORTH], neb=side2count[EAST], nsb=side2count[SOUTH], nbdyp=nbdyp, bdy_i=self.bdy_i - HALO, bdy_j=self.bdy_j - HALO, bdy_info=bdyinfo)
@@ -527,6 +538,8 @@ class Domain(_pygetm.Domain):
         self.UV.mask.all_values[:-1, :][numpy.logical_and(self.U.mask.all_values[:-1, :], self.U.mask.all_values[1:,:])] = 1
         self.VU.mask.all_values[:, :-1][numpy.logical_and(self.V.mask.all_values[:, :-1], self.V.mask.all_values[:,1:])] = 1
         self.VV.mask.all_values[:-1, :][numpy.logical_and(self.V.mask.all_values[:-1, :], self.V.mask.all_values[1:,:])] = 1
+
+        self.logger.info('Number of unmasked points excluding halos: %i on T grid, %i on U grid, %i on V grid, %i on X grid' % ((self.T.mask.values > 0).sum(), (self.U.mask.values > 0).sum(), (self.V.mask.values > 0).sum(), (self.X.mask.values > 0).sum()))
 
         self.H_.flags.writeable = self.H.flags.writeable = False
         self.z0b_min_.flags.writeable = self.z0b_min.flags.writeable = False
