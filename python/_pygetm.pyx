@@ -281,7 +281,8 @@ cdef class Simulation:
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop):
+@cython.profile(False)
+cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) nogil:
     for j in range(jstart, jstop):
         for i in range(istart, istop):
             if mask[j, i] != 0:
@@ -290,7 +291,8 @@ cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstar
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop):
+@cython.profile(False)
+cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) nogil:
     cdef int count = 0
     for j in range(jstart, jstop):
         for i in range(istart, istop):
@@ -300,7 +302,8 @@ cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, in
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus):
+@cython.cdivision(True)
+cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus) nogil:
     cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
     cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
     cdef int free_cpus = ncpus
@@ -320,6 +323,7 @@ cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoff
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
+@cython.cdivision(True)
 cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset):
     cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
     cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
@@ -333,14 +337,15 @@ cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, in
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int get_from_map(const int[:, ::1] map, int row, int col):
+@cython.profile(False)
+cdef int get_from_map(const int[:, ::1] map, int row, int col) nogil:
     if row < 0 or col < 0 or row >= map.shape[0] or col >= map.shape[1]:
         return 0
     return map[row, col]
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int get_cost(const int[:, ::1] map, int nx, int ny):
+cdef int get_cost(const int[:, ::1] map, int nx, int ny) nogil:
     cdef int row, col, nint, nout, max_cost
     cdef int halo = 2
     max_cost = 0
