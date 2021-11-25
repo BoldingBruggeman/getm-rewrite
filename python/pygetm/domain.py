@@ -227,7 +227,7 @@ class Domain(_pygetm.Domain):
     @staticmethod
     def partition(tiling: parallel.Tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, logger: Optional[logging.Logger]=None, **kwargs):
         assert nx == tiling.nx_glob and ny == tiling.ny_glob, 'Extent of global domain (%i, %i) does not match that of tiling (%i, %i).' % (ny, nx, tiling.ny_glob, tiling.nx_glob)
-        assert tiling.comm.Get_size() == tiling.n, 'Number of active cores in subdomain decompositon (%i) does not match available number of cores (%i).' % (tiling.comm.Get_size(), tiling.n)
+        assert tiling.n == tiling.comm.Get_size(), 'Number of active cores in subdomain decompositon (%i) does not match available number of cores (%i).' % (tiling.n, tiling.comm.Get_size())
         assert global_domain is None or global_domain.initialized
 
         halo = 4   # coordinates are scattered without their halo - Domain object will update halos upon creation
