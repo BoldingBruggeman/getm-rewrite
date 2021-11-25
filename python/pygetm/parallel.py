@@ -356,7 +356,7 @@ def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.Get_size()
     if ncpus == 1:
-        return {'ncpus': 1, 'nx': 1, 'ny': 1, 'xoffset': 0, 'yoffset': 0, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
+        return {'ncpus': 1, 'nx': mask.shape[1], 'ny': mask.shape[0], 'xoffset': 0, 'yoffset': 0, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
     cost, solution = None, None
     mask = numpy.ascontiguousarray(mask, dtype=numpy.intc)
     if logger:
