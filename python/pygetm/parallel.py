@@ -187,14 +187,12 @@ class Tiling:
     def plot(self, ax=None):
         x = self.xoffset_global + numpy.arange(self.ncol + 1) * self.nx_sub
         y = self.yoffset_global + numpy.arange(self.nrow + 1) * self.ny_sub
-        x2d, y2d = numpy.broadcast_arrays(x[numpy.newaxis, :], y[:, numpy.newaxis])
         if ax is None:
             import matplotlib.pyplot
             fig, ax = matplotlib.pyplot.subplots()
         import matplotlib.patches
-        rect = matplotlib.patches.Rectangle((0, 0), self.nx_glob, self.ny_glob, edgecolor='None', facecolor='C0', zorder=-1)
-        ax.pcolormesh(x2d, y2d, numpy.ma.array(x2d[1:, 1:], mask=True), edgecolors='k')
-        ax.add_patch(rect)
+        ax.add_patch(matplotlib.patches.Rectangle((0, 0), self.nx_glob, self.ny_glob, edgecolor='None', facecolor='C0', zorder=-1))
+        ax.pcolormesh(x, y, numpy.empty((self.nrow, self.ncol)), edgecolors='k', facecolor='none')
         for i in range(self.nrow):
             for j in range(self.ncol):
                 if self.map[i, j] >= 0:
