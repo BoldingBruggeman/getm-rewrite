@@ -351,7 +351,7 @@ cdef int get_cost(const int[:, ::1] map, int nx, int ny) nogil:
     max_cost = 0
     for row in range(map.shape[0]):
         for col in range(map.shape[1]):
-            nint = nx*ny #map[row, col]
+            nint = map[row, col]  # unmasked cells only
             nout = 0
             if get_from_map(map, row - 1, col - 1) > 0: nout += halo * halo
             if get_from_map(map, row + 1, col - 1) > 0: nout += halo * halo
@@ -362,7 +362,7 @@ cdef int get_cost(const int[:, ::1] map, int nx, int ny) nogil:
             if get_from_map(map, row, col - 1) > 0: nout += halo * nx
             if get_from_map(map, row, col + 1) > 0: nout += halo * nx
             max_cost = max(max_cost, nint + 10 * nout)  # for now assume halo cells are 10x as expensive as interior cells
-    return max_cost
+    return max_cost + nx * ny     # add an overhead for all cells - unmasked or not
 
 def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus):
     cdef int[:, ::1] map
