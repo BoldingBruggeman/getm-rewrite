@@ -10,7 +10,7 @@ from . import parallel
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field', 'saved', '_shape', '_ndim', '_size', '_dtype')
 
-    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None, fabm_standard_name: Optional[str]=None):
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None, fabm_standard_name: Optional[str]=None, constant: bool=False):
         _pygetm.Array.__init__(self, grid)
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
@@ -29,6 +29,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._size = None if shape is None else numpy.prod(shape)
         self._dtype = dtype
         self.fabm_standard_name = fabm_standard_name
+        self.constant = constant
         self.values = None
 
     def finish_initialization(self):
