@@ -201,6 +201,14 @@ class Tiling:
                     ax.plot([x[j], x[j + 1]], [y[i], y[i + 1]], '-k')
                     ax.plot([x[j], x[j + 1]], [y[i + 1], y[i]], '-k')
 
+    def get_work_array(self, shape: Tuple[int, ...], dtype: numpy.typing.DTypeLike, fill_value=None):
+        key = (shape, dtype, fill_value)
+        if key not in self.caches:
+            self.caches[key] = numpy.empty(shape, dtype)
+            if fill_value is not None:
+                self.caches[key].fill(fill_value)
+        return self.caches[key]
+
 ALL = 0
 TOP_BOTTOM = 1
 LEFT_RIGHT = 2
@@ -294,7 +302,7 @@ class Gather:
         self.fill_value = numpy.nan if fill_value is None else fill_value
         if tiling.rank == self.root:
             self.buffers = []
-            self.recvbuf = numpy.empty((tiling.n,) + self.field.shape, dtype=self.field.dtype)
+            self.recvbuf = tiling.get_work_array((tiling.n,) + self.field.shape, self.field.dtype)
             for irow, icol, rank in iterate_rankmap(tiling.map):
                 if rank >= 0:
                     local_slice, global_slice, local_shape, global_shape = tiling.subdomain2slices(irow, icol, exclude_halos=True)
@@ -325,7 +333,7 @@ class Scatter:
         self.sendbuf = None
         if tiling.comm.Get_rank() == root:
             self.buffers = []
-            self.sendbuf = numpy.full((tiling.n,) + self.recvbuf.shape, fill_value, dtype=self.recvbuf.dtype)
+            self.sendbuf = tiling.get_work_array((tiling.n,) + self.recvbuf.shape, self.recvbuf.dtype, fill_value=fill_value)
             for irow, icol, rank in iterate_rankmap(tiling.map):
                 if rank >= 0:
                     local_slice, global_slice, local_shape, global_shape = tiling.subdomain2slices(irow, icol, halo=halo, share=share, scale=scale, exclude_halos=exclude_halos)
