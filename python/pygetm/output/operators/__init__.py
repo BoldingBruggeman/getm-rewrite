@@ -9,12 +9,13 @@ import netCDF4
 import pygetm.core
 
 class Base:
-    def __init__(self, ndim: int, dtype: numpy.typing.DTypeLike, grid, fill_value=None, atts={}):
+    def __init__(self, ndim: int, dtype: numpy.typing.DTypeLike, grid, fill_value=None, constant: bool=False, atts={}):
         self.dtype = dtype
         self.ndim = ndim
         self.grid = grid
         self.fill_value = fill_value
         self.atts = atts
+        self.constant = constant
         self.coordinates = []
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False):
@@ -76,7 +77,7 @@ class Field(Base):
             atts['long_name'] = array.long_name
         self.collection = collection
         self.array = array
-        super().__init__(array.ndim, array.dtype, array.grid, array.fill_value, atts)
+        super().__init__(array.ndim, array.dtype, array.grid, array.fill_value, array.constant, atts)
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
         if sub:
@@ -100,7 +101,7 @@ class Field(Base):
 
 class Mask(Base):
     def __init__(self, source: Base):
-        super().__init__(source.ndim, source.dtype, source.grid, source.fill_value, source.atts)
+        super().__init__(source.ndim, source.dtype, source.grid, source.fill_value, source.constant, source.atts)
         self.source = source
         if self.fill_value is None:
             self.fill_value = netCDF4.default_fillvals.get(self.dtype.str[1:])

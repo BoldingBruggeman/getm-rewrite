@@ -30,8 +30,8 @@ def find_interfaces(c: numpy.ndarray):
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
     _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'z0b', 'z0b_min')
-    _all_fortran_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
-    __slots__ = _all_fortran_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'xypostfix', 'zpostfix', 'ugrid', 'vgrid', 'wgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
+    _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
+    __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'xypostfix', 'zpostfix', 'ugrid', 'vgrid', 'wgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
 
     def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None, wgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
@@ -49,8 +49,32 @@ class Grid(_pygetm.Grid):
         self._cos_rot: Optional[numpy.ndarray] = None
 
     def initialize(self, nbdyp: int):
+        array_args = {
+            'x': dict(units='m', constant=True),
+            'y': dict(units='m', constant=True),
+            'lon': dict(units='degrees_north', long_name='longitude', constant=True),
+            'lat': dict(units='degrees_east', long_name='latitude', constant=True),
+            'dx': dict(units='m', constant=True),
+            'dy': dict(units='m', constant=True),
+            'dlon': dict(units='degrees_north', constant=True),
+            'dlat': dict(units='degrees_east', constant=True),
+            'H': dict(units='m', long_name='water depth at rest', constant=True),
+            'D': dict(units='m', long_name='water depth'),
+            'mask': dict(constant=True),
+            'z': dict(units='m', long_name='elevation'),
+            'zo': dict(units='m', long_name='elevation at previous time step'),
+            'area': dict(units='m2', long_name='grid cell area', constant=True),
+            'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True),
+            'cor': dict(units='1', long_name='Coriolis parameter', constant=True),
+            'ho': dict(units='m', long_name='layer heights at previous time step'),
+            'hn': dict(units='m', long_name='layer heights'),
+            'zc': dict(units='m', long_name='depth'),
+            'z0b': dict(units='m', long_name='hydrodynamic bottom roughness'),
+            'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True),
+        }
         for name in self._fortran_arrays:
-            setattr(self, '_%s' % name, self.wrap(core.Array(name=name + self.postfix), name.encode('ascii')))
+            array = core.Array(name=name + self.postfix, **array_args[name])
+            setattr(self, '_%s' % name, self.wrap(array, name.encode('ascii')))
         self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
         self.fill()
         self.z0b.all_values[...] = self.z0b_min.all_values
@@ -105,7 +129,7 @@ class Grid(_pygetm.Grid):
         save('area', 'm2')
         save('cor', 's-1', 'Coriolis parameter')
 
-for membername in Grid._all_fortran_arrays:
+for membername in Grid._all_arrays:
     setattr(Grid, membername[1:], property(operator.attrgetter(membername)))
 
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
@@ -201,8 +225,9 @@ class Domain(_pygetm.Domain):
         return Domain.create(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
 
     @staticmethod
-    def partition(tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, logger: Optional[logging.Logger]=None, **kwargs):
+    def partition(tiling: parallel.Tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, logger: Optional[logging.Logger]=None, **kwargs):
         assert nx == tiling.nx_glob and ny == tiling.ny_glob, 'Extent of global domain (%i, %i) does not match that of tiling (%i, %i).' % (ny, nx, tiling.ny_glob, tiling.nx_glob)
+        assert tiling.comm.Get_size() == tiling.n, 'Number of active cores in subdomain decompositon (%i) does not match available number of cores (%i).' % (tiling.comm.Get_size(), tiling.n)
         assert global_domain is None or global_domain.initialized
 
         halo = 4   # coordinates are scattered without their halo - Domain object will update halos upon creation

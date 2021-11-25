@@ -24,41 +24,49 @@ class NetCDFFile(File):
 
     def _create(self):
         self.created = True
-        if not (self.is_root or self.sub):
-            return
-        self.nc = netCDF4.Dataset(self.path, 'w')
-        for grid in frozenset(field.grid for field in self.fields.values()):
-            if self.sub:
-                # Output data (including halos) for the current subdomain
-                nx, ny, nz = grid.nx_, grid.ny_, grid.nz_
-            else:
-                # Output data for entire (global) domain
-                nx = grid.domain.tiling.nx_glob + grid.nx - grid.domain.T.nx
-                ny = grid.domain.tiling.ny_glob + grid.ny - grid.domain.T.ny
-                nz = grid.nz
-            xname, yname, zname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix
-            if (xname not in self.nc.dimensions): self.nc.createDimension(xname, nx)
-            if (yname not in self.nc.dimensions): self.nc.createDimension(yname, ny)
-            if (zname not in self.nc.dimensions): self.nc.createDimension(zname, nz)
-        self.nc.createDimension('time',)
-        self.ncvars = []
+
+        if self.is_root or self.sub:
+            # Create the NetCDF file
+            self.nc = netCDF4.Dataset(self.path, 'w')
+            for grid in frozenset(field.grid for field in self.fields.values()):
+                if self.sub:
+                    # Output data (including halos) for the current subdomain
+                    nx, ny, nz = grid.nx_, grid.ny_, grid.nz_
+                else:
+                    # Output data for entire (global) domain
+                    nx = grid.domain.tiling.nx_glob + grid.nx - grid.domain.T.nx
+                    ny = grid.domain.tiling.ny_glob + grid.ny - grid.domain.T.ny
+                    nz = grid.nz
+                xname, yname, zname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix
+                if (xname not in self.nc.dimensions): self.nc.createDimension(xname, nx)
+                if (yname not in self.nc.dimensions): self.nc.createDimension(yname, ny)
+                if (zname not in self.nc.dimensions): self.nc.createDimension(zname, nz)
+            self.nc.createDimension('time',)
+            self.ncvars = []
+            for output_name, field in self.fields.items():
+                dims = ('y%s' % field.grid.xypostfix, 'x%s' % field.grid.xypostfix)
+                if field.ndim == 3:
+                    dims = ('z%s' % field.grid.zpostfix,) + dims
+                if not field.constant:
+                    dims = ('time',) + dims
+                ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)
+                for att, value in field.atts.items():
+                    setattr(ncvar, att, value)
+                if field.coordinates:
+                    setattr(ncvar, 'coordinates', ' '.join(field.coordinates))
+                field.ncvar = ncvar
+
+        # Save time-invariant fields
         for output_name, field in self.fields.items():
-            dims = ('y%s' % field.grid.xypostfix, 'x%s' % field.grid.xypostfix)
-            if field.ndim == 3:
-                dims = ('z%s' % field.grid.zpostfix,) + dims
-            dims = ('time',) + dims
-            ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)
-            for att, value in field.atts.items():
-                setattr(ncvar, att, value)
-            if field.coordinates:
-                setattr(ncvar, 'coordinates', ' '.join(field.coordinates))
-            field.ncvar = ncvar
+            if field.constant:
+                field.get(getattr(field, 'ncvar', None), sub=self.sub)
 
     def save_now(self):
         if not self.created:
             self._create()
         for field in self.fields.values():
-            field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
+            if not field.constant:
+                field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
         self.itime += 1
         if self.nc is not None and self.itime % self.sync_interval == 0:
             self.nc.sync()
