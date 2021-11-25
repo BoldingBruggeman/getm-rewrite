@@ -10,7 +10,7 @@ import numpy
 
 cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin, int kmax, int* halox, int* haloy, int* haloz) nogil
 cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int nwb, int nnb, int neb, int nsb, int* bdy_info, int* bdy_i, int* bdy_j) nogil
-cdef extern void* domain_get_grid(void* domain, int grid_type) nogil
+cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
 cdef extern void domain_initialize(void* grid, int runtype, double Dmin, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
@@ -105,13 +105,13 @@ cdef class Grid:
 
     def __init__(self, Domain domain, int grid_type):
         self.domain = domain
-        self.p = domain_get_grid(domain.p, grid_type)
         self.nx, self.ny, self.nz = domain.nx, domain.ny, domain.nz
         if grid_type == XGRID:
             self.nx += 1
             self.ny += 1
         if grid_type == WGRID:
             self.nz += 1
+        self.p = domain_get_grid(domain.p, grid_type, 1, self.nx, 1, self.ny, 1, self.nz, domain.halox, domain.haloy, domain.haloz)
         self.nx_, self.ny_, self.nz_ = self.nx + 2 * domain.halox, self.ny + 2 * domain.haloy, self.nz + 2 * domain.haloz
         domain.grids[grid_type] = self
 

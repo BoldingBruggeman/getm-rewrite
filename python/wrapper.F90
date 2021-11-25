@@ -86,9 +86,10 @@ contains
       end if
    end subroutine
 
-   function domain_get_grid(pdomain, grid_type) result(pgrid) bind(c)
+   function domain_get_grid(pdomain, grid_type, imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz) result(pgrid) bind(c)
       type(c_ptr),         intent(in), value :: pdomain
       integer(kind=c_int), intent(in), value :: grid_type
+      integer(kind=c_int), intent(in), value :: imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz
       type(c_ptr)                            :: pgrid
 
       type (type_getm_domain),   pointer :: domain
@@ -103,8 +104,8 @@ contains
       case (4); grid => domain%X
       case default
          allocate(grid)
-         call grid%configure(grid_type=grid_type, imin=domain%T%imin, imax=domain%T%imax, &
-            jmin=domain%T%jmin, jmax=domain%T%jmax, kmin=domain%T%kmin, kmax=domain%T%kmax, halo=domain%T%halo)
+         call grid%configure(grid_type=grid_type, imin=imin, imax=imax, &
+            jmin=jmin, jmax=jmax, kmin=kmin, kmax=kmax, halo=(/halox, haloy, haloz/))
       end select
       pgrid = c_loc(grid)
    end function
