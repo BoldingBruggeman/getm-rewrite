@@ -50,6 +50,8 @@ class NetCDFFile(File):
             ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)
             for att, value in field.atts.items():
                 setattr(ncvar, att, value)
+            if field.coordinates:
+                setattr(ncvar, 'coordinates', ' '.join(field.coordinates))
             field.ncvar = ncvar
 
     def save_now(self):

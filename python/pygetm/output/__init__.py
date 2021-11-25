@@ -16,10 +16,9 @@ class FieldManager:
         assert array.name not in self.fields, 'A field with name "%s" has already been registered.' % array.name
         self.fields[array.name] = array
 
-class File:
+class File(operators.FieldCollection):
     def __init__(self, field_manager: FieldManager, interval: int=1, path: Optional[str]=None):
-        self.field_manager = field_manager
-        self.fields: MutableMapping[str, operators.Base] = collections.OrderedDict()
+        super().__init__(field_manager)
         self.wait = interval
         self.interval = interval
         self.path = path
@@ -35,24 +34,6 @@ class File:
 
     def save_now(self):
         raise NotImplementedError
-
-    def request(self, name: Union[str, Iterable[str]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False):
-        if not isinstance(name, str):
-            assert output_name is None
-            for n in name:
-                self.request(n, dtype=dtype, mask=mask)
-            return
-        assert name in self.field_manager.fields, 'Unknown field "%s" requested. Available: %s' % (name, ', '.join(self.field_manager.fields))
-        if output_name is None:
-            output_name = name
-        assert output_name not in self.fields, 'A variable with name "%s" has already been added to %s.' % (output_name, self)
-        array = self.field_manager.fields[name]
-        array.saved = True
-        dtype = dtype or array.dtype
-        field = operators.Field(array)
-        if mask:
-            field = operators.Mask(field)
-        self.fields[output_name] = field
 
 class OutputManager(FieldManager):
     def __init__(self, rank: int, logger: Optional[logging.Logger]=None):
