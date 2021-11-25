@@ -27,6 +27,8 @@ def find_interfaces(c: numpy.ndarray):
     c_if[-1] = c[-1] + 0.5 * d[-1]
     return c_if
 
+FILL_VALUE = -2e20
+
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
     _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'z0b', 'z0b_min')
@@ -50,27 +52,27 @@ class Grid(_pygetm.Grid):
 
     def initialize(self, nbdyp: int):
         array_args = {
-            'x': dict(units='m', constant=True),
-            'y': dict(units='m', constant=True),
-            'lon': dict(units='degrees_north', long_name='longitude', constant=True, fill_value=-9999.),
-            'lat': dict(units='degrees_east', long_name='latitude', constant=True, fill_value=-9999.),
-            'dx': dict(units='m', constant=True),
-            'dy': dict(units='m', constant=True),
-            'dlon': dict(units='degrees_north', constant=True),
-            'dlat': dict(units='degrees_east', constant=True),
-            'H': dict(units='m', long_name='water depth at rest', constant=True, fill_value=-9999.),
-            'D': dict(units='m', long_name='water depth', fill_value=-9999.),
+            'x': dict(units='m', constant=True, fill_value=FILL_VALUE),
+            'y': dict(units='m', constant=True, fill_value=FILL_VALUE),
+            'lon': dict(units='degrees_north', long_name='longitude', constant=True, fill_value=FILL_VALUE),
+            'lat': dict(units='degrees_east', long_name='latitude', constant=True, fill_value=FILL_VALUE),
+            'dx': dict(units='m', constant=True, fill_value=FILL_VALUE),
+            'dy': dict(units='m', constant=True, fill_value=FILL_VALUE),
+            'dlon': dict(units='degrees_north', constant=True, fill_value=FILL_VALUE),
+            'dlat': dict(units='degrees_east', constant=True, fill_value=FILL_VALUE),
+            'H': dict(units='m', long_name='water depth at rest', constant=True, fill_value=FILL_VALUE),
+            'D': dict(units='m', long_name='water depth', fill_value=FILL_VALUE),
             'mask': dict(constant=True, fill_value=0),
-            'z': dict(units='m', long_name='elevation', fill_value=-9999.),
-            'zo': dict(units='m', long_name='elevation at previous time step', fill_value=-9999.),
-            'area': dict(units='m2', long_name='grid cell area', constant=True, fill_value=-9999.),
-            'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True, fill_value=-9999.),
-            'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=-9999.),
-            'ho': dict(units='m', long_name='layer heights at previous time step', fill_value=-9999.),
-            'hn': dict(units='m', long_name='layer heights', fill_value=-9999.),
-            'zc': dict(units='m', long_name='depth', fill_value=-99999.),
-            'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=-9999.),
-            'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=-9999.),
+            'z': dict(units='m', long_name='elevation', fill_value=FILL_VALUE),
+            'zo': dict(units='m', long_name='elevation at previous time step', fill_value=FILL_VALUE),
+            'area': dict(units='m2', long_name='grid cell area', constant=True, fill_value=FILL_VALUE),
+            'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True, fill_value=FILL_VALUE),
+            'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=FILL_VALUE),
+            'ho': dict(units='m', long_name='layer heights at previous time step', fill_value=FILL_VALUE),
+            'hn': dict(units='m', long_name='layer heights', fill_value=FILL_VALUE),
+            'zc': dict(units='m', long_name='depth', fill_value=0.),
+            'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE),
+            'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=FILL_VALUE),
         }
         for name in self._fortran_arrays:
             array = core.Array(name=name + self.postfix, **array_args[name])

@@ -113,6 +113,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @staticmethod
     def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
         ar = Array(grid=grid, **kwargs)
+        if fill is None and ar.fill_value is None:
+            fill = ar.fill_value
         if fill is not None:
             fill = numpy.asarray(fill)
         if dtype is None:

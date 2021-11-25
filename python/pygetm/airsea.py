@@ -9,18 +9,20 @@ from . import core
 
 cpa=1008.
 
+FILL_VALUE = -2e20
+
 class Fluxes:
     def __init__(self, domain):
-        self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill=numpy.nan)
-        self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill=numpy.nan)
-        self.qe = domain.T.array(name='qe', long_name='sensible heat flux', units='W m-2', fill=numpy.nan)
-        self.qh = domain.T.array(name='qh', long_name='latent heat flux', units='W m-2', fill=numpy.nan)
-        self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill=numpy.nan)
-        self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill=numpy.nan)
-        self.swr = domain.T.array(name='swr', long_name='net downwelling shortwave radiation', units='W m-2', fill=numpy.nan, fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux')
+        self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill_value=FILL_VALUE)
+        self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill_value=FILL_VALUE)
+        self.qe = domain.T.array(name='qe', long_name='sensible heat flux', units='W m-2', fill_value=FILL_VALUE)
+        self.qh = domain.T.array(name='qh', long_name='latent heat flux', units='W m-2', fill_value=FILL_VALUE)
+        self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill_value=FILL_VALUE)
+        self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill_value=FILL_VALUE)
+        self.swr = domain.T.array(name='swr', long_name='net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux')
 
-        self.taux_U = domain.U.array(name='tausxu', fill=numpy.nan)
-        self.tauy_V = domain.V.array(name='tausyv', fill=numpy.nan)
+        self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
+        self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
 
     def __call__(self, sst: core.Array) -> None:
         pass
@@ -28,22 +30,22 @@ class Fluxes:
 class FluxesFromMeteo(Fluxes):
     def __init__(self, domain, longwave_method: int=1, albedo_method: int=1, compute_swr: bool=True):
         super().__init__(domain)
-        self.es = domain.T.array(name='es', long_name='vapor pressure at saturation', units='Pa')
-        self.ea = domain.T.array(name='ea', long_name='vapor pressure', units='Pa')
-        self.qs = domain.T.array(name='qs', long_name='specific humidity at saturation', units='kg kg-1')
-        self.qa = domain.T.array(name='qa', long_name='specific humidity', units='kg kg-1')
-        self.rhoa = domain.T.array(name='rhoa', long_name='air density', units='kg m-3')
+        self.es = domain.T.array(name='es', long_name='vapor pressure at saturation', units='Pa', fill_value=FILL_VALUE)
+        self.ea = domain.T.array(name='ea', long_name='vapor pressure', units='Pa', fill_value=FILL_VALUE)
+        self.qs = domain.T.array(name='qs', long_name='specific humidity at saturation', units='kg kg-1', fill_value=FILL_VALUE)
+        self.qa = domain.T.array(name='qa', long_name='specific humidity', units='kg kg-1', fill_value=FILL_VALUE)
+        self.rhoa = domain.T.array(name='rhoa', long_name='air density', units='kg m-3', fill_value=FILL_VALUE)
 
-        self.zen = domain.T.array(name='zen', long_name='zenith angle', units='degrees')
-        self.albedo = domain.T.array(name='albedo', long_name='albedo', units='1')
+        self.zen = domain.T.array(name='zen', long_name='zenith angle', units='degrees', fill_value=FILL_VALUE)
+        self.albedo = domain.T.array(name='albedo', long_name='albedo', units='1', fill_value=FILL_VALUE)
 
-        self.t2m = domain.T.array(name='t2m', long_name='air temperature @ 2 m', units='degrees_Celsius')
-        self.d2m = domain.T.array(name='d2m', long_name='dewpoint temperature @ 2 m', units='degrees_Celsius')
-        self.u10 = domain.T.array(name='u10', long_name='wind speed in Eastward direction @ 10 m', units='m s-1')
-        self.v10 = domain.T.array(name='v10', long_name='wind speed in Northward direction @ 10 m', units='m s-1')
-        self.tcc = domain.T.array(name='tcc', long_name='total cloud cover', units='1')
+        self.t2m = domain.T.array(name='t2m', long_name='air temperature @ 2 m', units='degrees_Celsius', fill_value=FILL_VALUE)
+        self.d2m = domain.T.array(name='d2m', long_name='dewpoint temperature @ 2 m', units='degrees_Celsius', fill_value=FILL_VALUE)
+        self.u10 = domain.T.array(name='u10', long_name='wind speed in Eastward direction @ 10 m', units='m s-1', fill_value=FILL_VALUE)
+        self.v10 = domain.T.array(name='v10', long_name='wind speed in Northward direction @ 10 m', units='m s-1', fill_value=FILL_VALUE)
+        self.tcc = domain.T.array(name='tcc', long_name='total cloud cover', units='1', fill_value=FILL_VALUE)
 
-        self.w = domain.T.array(name='w', long_name='wind speed', units='m s-1', fabm_standard_name='wind_speed')
+        self.w = domain.T.array(name='w', long_name='wind speed', units='m s-1', fabm_standard_name='wind_speed', fill_value=FILL_VALUE)
 
         self.lon = domain.T.lon
         self.lat = domain.T.lat
