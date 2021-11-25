@@ -87,6 +87,8 @@ cdef class Array:
                 self.all_values = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
         if self._fill_value is None:
             self._fill_value = self.all_values.flat[0]
+        else:
+            self.all_values[...] = self._fill_value
         self.finish_initialization()
         self.register()
         return self

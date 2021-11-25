@@ -77,6 +77,10 @@ class Field(Base):
             atts['long_name'] = array.long_name
         self.collection = collection
         self.array = array
+        self.global_array = None
+        global_domain = array.grid.domain.glob
+        if global_domain and array.constant:
+            self.global_array = global_domain.field_manager.fields.get(array.name)
         super().__init__(array.ndim, array.dtype, array.grid, array.fill_value, array.constant, atts)
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
@@ -85,6 +89,8 @@ class Field(Base):
             out[slice_spec + (Ellipsis,)] = self.array.all_values
         else:
             # Get data for global array
+            if self.global_array:
+                out[...] = self.global_array.values
             self.array.gather(out, slice_spec)
         return out
 

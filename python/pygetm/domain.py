@@ -52,25 +52,25 @@ class Grid(_pygetm.Grid):
         array_args = {
             'x': dict(units='m', constant=True),
             'y': dict(units='m', constant=True),
-            'lon': dict(units='degrees_north', long_name='longitude', constant=True),
-            'lat': dict(units='degrees_east', long_name='latitude', constant=True),
+            'lon': dict(units='degrees_north', long_name='longitude', constant=True, fill_value=-9999.),
+            'lat': dict(units='degrees_east', long_name='latitude', constant=True, fill_value=-9999.),
             'dx': dict(units='m', constant=True),
             'dy': dict(units='m', constant=True),
             'dlon': dict(units='degrees_north', constant=True),
             'dlat': dict(units='degrees_east', constant=True),
-            'H': dict(units='m', long_name='water depth at rest', constant=True),
-            'D': dict(units='m', long_name='water depth'),
-            'mask': dict(constant=True),
-            'z': dict(units='m', long_name='elevation'),
-            'zo': dict(units='m', long_name='elevation at previous time step'),
-            'area': dict(units='m2', long_name='grid cell area', constant=True),
-            'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True),
-            'cor': dict(units='1', long_name='Coriolis parameter', constant=True),
-            'ho': dict(units='m', long_name='layer heights at previous time step'),
-            'hn': dict(units='m', long_name='layer heights'),
-            'zc': dict(units='m', long_name='depth'),
-            'z0b': dict(units='m', long_name='hydrodynamic bottom roughness'),
-            'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True),
+            'H': dict(units='m', long_name='water depth at rest', constant=True, fill_value=-9999.),
+            'D': dict(units='m', long_name='water depth', fill_value=-9999.),
+            'mask': dict(constant=True, fill_value=0),
+            'z': dict(units='m', long_name='elevation', fill_value=-9999.),
+            'zo': dict(units='m', long_name='elevation at previous time step', fill_value=-9999.),
+            'area': dict(units='m2', long_name='grid cell area', constant=True, fill_value=-9999.),
+            'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True, fill_value=-9999.),
+            'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=-9999.),
+            'ho': dict(units='m', long_name='layer heights at previous time step', fill_value=-9999.),
+            'hn': dict(units='m', long_name='layer heights', fill_value=-9999.),
+            'zc': dict(units='m', long_name='depth', fill_value=-99999.),
+            'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=-9999.),
+            'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=-9999.),
         }
         for name in self._fortran_arrays:
             array = core.Array(name=name + self.postfix, **array_args[name])
@@ -84,13 +84,15 @@ class Grid(_pygetm.Grid):
         read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'rotation', 'z0b_min')
         nj, ni = self.H.all_values.shape
         has_bounds = self.ioffset > 0 and self.joffset > 0 and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
+        valid = self.domain.mask_[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2] > 0
         for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo', 'rotation', 'z0b_min'):
             source = getattr(self.domain, name + '_')
             if source is not None:
                 target = getattr(self, name).all_values
                 values = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
                 target.fill(numpy.nan)
-                target[:values.shape[0], :values.shape[1]] = values
+                slc = valid if name in ('z', 'zo',  'z0b_min') else (Ellipsis,)
+                target[:values.shape[0], :values.shape[1]][slc] = values[slc]
                 target.flags.writeable = name not in read_only
                 if has_bounds and name in self._coordinate_arrays:
                     # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.

@@ -57,7 +57,7 @@ class NetCDFFile(File):
                 field.ncvar = ncvar
 
         # Save time-invariant fields
-        for output_name, field in self.fields.items():
+        for field in self.fields.values():
             if field.constant:
                 field.get(getattr(field, 'ncvar', None), sub=self.sub)
 
