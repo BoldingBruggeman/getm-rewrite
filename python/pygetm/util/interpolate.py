@@ -1,5 +1,6 @@
 import sys
 import numpy
+import argparse
 
 class Linear2DGridInterpolator:
     def __init__(self, x, y, xp, yp, preslice=(Ellipsis,), ndim_trailing: int=0, mask=None):
@@ -37,10 +38,10 @@ class Linear2DGridInterpolator:
 
         # Ensure weights are broadcastable to shape of data array
         wshape = x.shape + (1,) * ndim_trailing
-        self.w11.shape = wshape
-        self.w12.shape = wshape
-        self.w21.shape = wshape
-        self.w22.shape = wshape
+        self.w11 = numpy.reshape(self.w11, wshape)
+        self.w12 = numpy.reshape(self.w12, wshape)
+        self.w21 = numpy.reshape(self.w21, wshape)
+        self.w22 = numpy.reshape(self.w22, wshape)
 
         # If we reversed source coordinates, compute the correct indices and swap left and right
         if dxp[0] < 0:
@@ -88,36 +89,66 @@ class Linear2DGridInterpolator:
         return self.w11 * f11 + self.w12 * f12 + self.w21 * f21 + self.w22 * f22
 
 def test():
+    success = True
+
     # Generate random x and y source grid (1D) and a corresponding random f (2D)
     # Draw random x and y from the source space, do linear interpolation, and compare with authoratitive scipy result.
     import numpy.random
     import scipy.interpolate
+
     eps = 5 * numpy.finfo(float).eps
+
+    # Random source grid (1D x and y) - but still monotonically increasing because of the use of cumsum
     dx = numpy.random.random_sample((99,))
     dy = numpy.random.random_sample((100,))
     xp = numpy.cumsum(dx)
     yp = numpy.cumsum(dy)
+
+    # Random source field
+    fp = numpy.random.random_sample((xp.size, yp.size,))
+
+    # Interpolate to source corner positions and verify results are identical to source values
+    def compare(name: str, a, b) -> bool:
+        if a != b:
+            print('Interpolated value does not match source (%s vs. %s) at %s.' % (a, b, name))
+        return a == b
+    success = compare('min x, min y', Linear2DGridInterpolator(xp[0], yp[0], xp, yp)(fp), fp[0, 0]) and success
+    success = compare('min x, max y', Linear2DGridInterpolator(xp[0], yp[-1], xp, yp)(fp), fp[0, -1]) and success
+    success = compare('max x, min y', Linear2DGridInterpolator(xp[-1], yp[0], xp, yp)(fp), fp[-1, 0]) and success
+    success = compare('max x, max y', Linear2DGridInterpolator(xp[-1], yp[-1], xp, yp)(fp), fp[-1, -1]) and success
+
+    f_check = scipy.interpolate.interpn((xp, yp), fp, (xp[:, numpy.newaxis], yp[numpy.newaxis, :]))
+    print('  Interpolate to original grid: Maximum relative error: %s' % (numpy.abs(fp / f_check - 1).max(),))
+    success = (fp - f_check == 0).all() and success
+    
+    # Interpolate to 2D target grid and comapre resuts with that of scipy.interpolate.interpn
     shape = (50, 51)
     x = numpy.random.uniform(xp[0], xp[-1], shape)
     y = numpy.random.uniform(yp[0], yp[-1], shape)
-
-    def compare(a, b):
-        assert a == b, '%s vs %s' % (a, b)
-
-    fp = numpy.random.random_sample((dx.size, dy.size,))
-    compare(Linear2DGridInterpolator(xp[0], yp[0], xp, yp)(fp), fp[0, 0])
-    compare(Linear2DGridInterpolator(xp[0], yp[-1], xp, yp)(fp), fp[0, -1])
-    compare(Linear2DGridInterpolator(xp[-1], yp[0], xp, yp)(fp), fp[-1, 0])
-    compare(Linear2DGridInterpolator(xp[-1], yp[-1], xp, yp)(fp), fp[-1, -1])
-
     ip = Linear2DGridInterpolator(x, y, xp, yp)
     f = ip(fp)
     f_check = scipy.interpolate.interpn((xp, yp), fp, (x, y))
-    print('Maximum relative error: %s' % numpy.abs(f / f_check - 1).max())
-    return numpy.isclose(f, f_check, rtol=eps, atol=eps).all()
+    print('  2D: Maximum relative error: %s' % (numpy.abs(f / f_check - 1).max(),))
+    success = numpy.isclose(f, f_check, rtol=eps, atol=eps).all() and success
+
+    # Interpolate to 1D target grid and comapre resuts with that of scipy.interpolate.interpn
+    shape = (100,)
+    x = numpy.random.uniform(xp[0], xp[-1], shape)
+    y = numpy.random.uniform(yp[0], yp[-1], shape)
+    ip = Linear2DGridInterpolator(x, y, xp, yp)
+    f = ip(fp)
+    f_check = scipy.interpolate.interpn((xp, yp), fp, (x, y))
+    print('  1D: Maximum relative error: %s' % (numpy.abs(f / f_check - 1).max(),))
+    success = numpy.isclose(f, f_check, rtol=eps, atol=eps).all() and success
+
+    return success
 
 if __name__ == '__main__':
-    for _ in range(100):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('N', type=int, help='number of tests')
+    args = parser.parse_args()
+    for itest in range(args.N):
+        print('Test %i: ' % itest)
         if not test():
             print('Large error found')
             sys.exit(1)
