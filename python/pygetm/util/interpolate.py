@@ -102,8 +102,8 @@ def interp_1d(x, xp, fp, axis: int=0):
     # This will be xp.size [invalid!] if last source coordinate >= target coordinate
     ix_right = xp.searchsorted(x, side='right')
 
-    # Clamp interval to last viable option (if x is out of bounds).
-    # By default, this will produce linear extrapolation
+    # Clamp interval to last viable option (if target coordinate is out of bounds).
+    # By default, this will result in linear EXTRApolation
     ix_right_ = numpy.maximum(numpy.minimum(ix_right, xp.size - 1), 1)
     ix_left_ = ix_right_ - 1
     wx_left = (xp[ix_right_] - x) / (xp[ix_right_] - xp[ix_left_])
@@ -118,13 +118,14 @@ def interp_1d(x, xp, fp, axis: int=0):
     return wx_left * f_left + (1. - wx_left) * f_right
 
 def test():
-    success = True
-
     # Generate random x and y source grid (1D) and a corresponding random f (2D)
     # Draw random x and y from the source space, do linear interpolation, and compare with authoratitive scipy result.
     import numpy.random
     import scipy.interpolate
 
+    success = True
+
+    # Maximum acceptable error
     eps = 5 * numpy.finfo(float).eps
 
     print('  Horizontal interpolation:')
