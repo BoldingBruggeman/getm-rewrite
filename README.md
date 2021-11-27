@@ -75,6 +75,40 @@ cd python/examples
 python -m jupyterlab
 ```
 
+## Generating optimal subdomain division
+
+A tool is included to calculated an optimal subdomain division provided only a valid bathymetry file _topo.nc_ and the number of processes the setup is to be run on. The tool searches for a solution with the smallest subdomain size that still covers the entire calculation domain. Output of the command (a python pickle file) is used directly as an argument when the domain object is created in the Python run-script.
+
+The command to generate the subdomain division is:
+```bash
+pygetm-subdiv optimize --legacy --pickle subdiv_7.pickle topo.nc 7
+```
+The calculated layout can be shown - and plotted - via:
+```bash
+pygetm-subdiv show subdiv_7.pickle --plot
+```
+Resulting in in a layout as:
+
+<img src="./images/northsea_subdiv_7.png" alt="northsea_subdiv_7" style="zoom:72%;" />
+
+The example is for the standard North Sea case provided by legacy GETM.
+
+To use a given subdomain division at runtime the call to creating the domain object should be similar to:
+
+```python
+domain = pygetm.legacy.domain_from_topo(os.path.join(getm_setups_dir, 'NorthSea/Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001, tiling='subdiv.pickle')
+```
+
+Note the *tiling*-argument.
+
+## Running the model in parallel
+To run the model in parallel on the command line the _mpiexec_ is used like:
+```bash
+mpixec -np 7 python north_sea.py
+```
+
+Note that the -np 7 argument __must__ match the number of subdomains from the _pygetm-subdiv_ command.
+
 ## Contributing
 
 How to contribute to the development:
