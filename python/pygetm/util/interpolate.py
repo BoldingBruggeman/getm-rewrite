@@ -43,7 +43,7 @@ class Linear2DGridInterpolator:
         self.w21 = numpy.reshape(self.w21, wshape)
         self.w22 = numpy.reshape(self.w22, wshape)
 
-        # If we reversed source coordinates, compute the correct indices and swap left and right
+        # If we reversed source coordinates, compute the correct indices
         if dxp[0] < 0:
             ix_left, ix_right = xp.size - ix_left - 1, xp.size - ix_right - 1
         if dyp[0] < 0:
@@ -91,30 +91,50 @@ class Linear2DGridInterpolator:
 def interp_1d(x, xp, fp, axis: int=0):
     x = numpy.asarray(x)
     xp = numpy.asarray(xp)
-    fp = numpy.asarray(fp)
+    fp = numpy.ma.filled(fp, numpy.nan)
     assert fp.ndim == x.ndim
     assert xp.ndim == 1
     assert fp.shape[:axis] == x.shape[:axis] and fp.shape[axis + 1:] == x.shape[axis + 1:]
     assert fp.shape[axis] == xp.shape[0]
 
+    dxp = numpy.diff(xp)
+    assert (dxp > 0).all() or (dxp < 0).all(), 'source coordinate must be monotonically increasing or decreasing'
+    if dxp[0] < 0:
+        # reversed source coordinate
+        xp = xp[::-1]
+
+    # Deal with masked sections at beginning or end of source values
+    invalid = numpy.isnan(fp)
+    if invalid.any():
+        valid = ~invalid
+        ind = numpy.arange(fp.shape[axis])
+        ind.shape = [1 if i != axis else -1 for i in range(fp.ndim)]
+        ind = numpy.broadcast_to(ind, fp.shape)
+        first = ind.min(axis=axis, where=valid, initial=fp.shape[axis])
+        last = ind.max(axis=axis, where=valid, initial=-1)
+        first = numpy.minimum(first, last)   # where there are no valid elements at all, this will lead to first=last=-1
+    else:
+        first = 0
+        last = fp.shape[axis] - 1
+
     # Look up upper bound of interval around each target coordinate
-    # This will be -1 [invalid!] if first source coordinate < target coordinate
-    # This will be xp.size [invalid!] if last source coordinate >= target coordinate
+    # This will be 0 [invalid!] if first source coordinate < minimum target coordinate
+    # This will be xp.size [invalid!] if last source coordinate >= maximum target coordinate
     ix_right = xp.searchsorted(x, side='right')
 
-    # Clamp interval to last viable option (if target coordinate is out of bounds).
-    # By default, this will result in linear EXTRApolation
-    ix_right_ = numpy.maximum(numpy.minimum(ix_right, xp.size - 1), 1)
-    ix_left_ = ix_right_ - 1
-    wx_left = (xp[ix_right_] - x) / (xp[ix_right_] - xp[ix_left_])
+    # Determine intervals left and right bounds). These will be zero-width (ix_left == ix_right) at the boundaries
+    ix_left = numpy.clip(ix_right - 1, first, last)
+    numpy.clip(ix_right, first, last, out=ix_right)
+    valid_interval = ix_left != ix_right
+    wx_left = numpy.true_divide(xp[ix_right] - x, xp[ix_right] - xp[ix_left], where=valid_interval)
+    numpy.putmask(wx_left, ~valid_interval, 1.)
 
-    # Now correct the weights so that the interpolated value for out-of-bounds x is the value at the outer extreme of fp
-    # That is also the default behaviour of numpy.interp
-    wx_left[ix_right == 0] = 1
-    wx_left[ix_right >= xp.size] = 0
+    # If we reversed source coordinates, compute the correct indices
+    if dxp[0] < 0:
+        ix_left, ix_right = xp.size - ix_left - 1, xp.size - ix_right - 1
 
-    f_left = numpy.take_along_axis(fp, ix_left_, axis=axis)
-    f_right = numpy.take_along_axis(fp, ix_right_, axis=axis)
+    f_left = numpy.take_along_axis(fp, ix_left, axis=axis)
+    f_right = numpy.take_along_axis(fp, ix_right, axis=axis)
     return wx_left * f_left + (1. - wx_left) * f_right
 
 def test():
@@ -150,44 +170,63 @@ def test():
     success = compare('max x, max y', Linear2DGridInterpolator(xp[-1], yp[-1], xp, yp)(fp), fp[-1, -1]) and success
 
     f_check = scipy.interpolate.interpn((xp, yp), fp, (xp[:, numpy.newaxis], yp[numpy.newaxis, :]))
-    print('    Interpolate to original grid: Maximum relative error: %s' % (numpy.abs(fp / f_check - 1).max(),))
+    print('    Interpolate to original grid: maximum relative error: %s' % (numpy.abs(fp / f_check - 1).max(),))
     success = (fp - f_check == 0).all() and success
+
+    def compare_spatial(name: str, x, y):
+        success = True
+
+        f_check = scipy.interpolate.interpn((xp, yp), fp, (x, y))
+
+        f = Linear2DGridInterpolator(x, y, xp, yp)(fp)
+        print('    %s: maximum relative error: %s' % (name, numpy.abs(f / f_check - 1).max(),))
+        success = numpy.isclose(f, f_check, rtol=eps, atol=eps).all() and success
+
+        f2 = Linear2DGridInterpolator(x, y, xp[::-1], yp)(fp[::-1, :])
+        print('    %s x reversed: maximum relative difference with original: %s' % (name, numpy.abs(f2 / f - 1).max(),))
+        success = (f - f2 == 0).all() and success
+
+        f2 = Linear2DGridInterpolator(x, y, xp, yp[::-1])(fp[:, ::-1])
+        print('    %s y reversed: maximum relative difference with original: %s' % (name, numpy.abs(f2 / f - 1).max(),))
+        success = (f - f2 == 0).all() and success
+
+        f2 = Linear2DGridInterpolator(x, y, xp[::-1], yp[::-1])(fp[::-1, ::-1])
+        print('    %s xy reversed: maximum relative difference with original: %s' % (name, numpy.abs(f2 / f - 1).max(),))
+        success = (f - f2 == 0).all() and success
+
+        return success
     
-    # Interpolate to 2D target grid and comapre resuts with that of scipy.interpolate.interpn
+    # Interpolate to 2D target grid and compare resuts with that of scipy.interpolate.interpn
     shape = (50, 51)
     x = numpy.random.uniform(xp[0], xp[-1], shape)
     y = numpy.random.uniform(yp[0], yp[-1], shape)
-    ip = Linear2DGridInterpolator(x, y, xp, yp)
-    f = ip(fp)
-    f_check = scipy.interpolate.interpn((xp, yp), fp, (x, y))
-    print('    2D: Maximum relative error: %s' % (numpy.abs(f / f_check - 1).max(),))
-    success = numpy.isclose(f, f_check, rtol=eps, atol=eps).all() and success
+    success = compare_spatial('2D', x, y) and success
 
-    # Interpolate to 1D target grid and comapre resuts with that of scipy.interpolate.interpn
+    # Interpolate to 1D target grid and compare resuts with that of scipy.interpolate.interpn
     shape = (100,)
     x = numpy.random.uniform(xp[0], xp[-1], shape)
     y = numpy.random.uniform(yp[0], yp[-1], shape)
-    ip = Linear2DGridInterpolator(x, y, xp, yp)
-    f = ip(fp)
-    f_check = scipy.interpolate.interpn((xp, yp), fp, (x, y))
-    print('    1D: Maximum relative error: %s' % (numpy.abs(f / f_check - 1).max(),))
-    success = numpy.isclose(f, f_check, rtol=eps, atol=eps).all() and success
+    success = compare_spatial('1D', x, y) and success
 
     print('  Vertical interpolation:')
     dx = numpy.random.random_sample((99,))
     xp = numpy.cumsum(dx)
     fp = numpy.random.random_sample((xp.size,))
-    x = numpy.random.uniform(0.5 * xp[0], 1.5 * xp[-1], (100,))
+    x = numpy.random.uniform(xp[0] - 5, xp[-1] + 5, (100,))
     f = interp_1d(x, xp, fp)
     f_check = numpy.interp(x, xp, fp)
     print('    1D: maximum relative error: %s' % (numpy.abs(f / f_check - 1).max(),))
     success = numpy.isclose(f, f_check, rtol=eps, atol=eps).all() and success
 
+    f2 = interp_1d(x, xp[::-1], fp[::-1])
+    print('    1D reversed: maximum relative difference with original: %s' % (numpy.abs(f2 / f - 1).max(),))
+    success = (f == f2).all() and success
+
     nx, ny = 5, 6
     dx = numpy.random.random_sample((99,))
     xp = numpy.cumsum(dx)
     fp = numpy.random.random_sample((xp.size, ny, nx))
-    x = numpy.random.uniform(0.5 * xp[0], 1.5 * xp[-1], (100, ny, nx))
+    x = -10 * numpy.random.random_sample((ny, nx)) + 1.5 * numpy.random.random_sample((100, ny, nx)).cumsum(axis=0)
     f = interp_1d(x, xp, fp)
     assert x.shape == f.shape
     current_success = True
@@ -197,10 +236,35 @@ def test():
             f_check = numpy.interp(x[:, j, i], xp, fp[:, j, i])
             current_success = numpy.isclose(f[:, j, i], f_check, rtol=eps, atol=eps).all() and current_success
             error = max(numpy.abs(f[:, j, i] / f_check - 1).max(), error)
-            if not current_success:
-                print(f, f_check, f - f_check)
     print('    3D: maximum relative error: %s' % (error,))
     success = current_success and success
+
+    f2 = interp_1d(x, xp[::-1], fp[::-1, ...])
+    print('    3D reversed: maximum relative difference with original: %s' % (numpy.abs(f2 / f - 1).max(),))
+    success = (f == f2).all() and success
+
+    start = numpy.random.randint(0, fp.shape[0] - 1, fp.shape[1:])
+    stop = numpy.random.randint(start, fp.shape[0])
+    ind = numpy.broadcast_to(numpy.arange(fp.shape[0])[:, numpy.newaxis, numpy.newaxis], fp.shape)
+    mask = numpy.logical_or(ind < start, ind >= stop)
+    masked_fp = numpy.ma.array(fp, mask=mask)
+    f = interp_1d(x, xp, masked_fp)
+    current_success = True
+    error = 0
+    for i in range(x.shape[-1]):
+        for j in range(x.shape[-2]):
+            if start[j, i] == stop[j, i]:
+                # no valid points - all output should be masked
+                assert numpy.isnan(f[:, j, i]).all(), '%s' % (f[:, j, i],)
+            else:
+                assert numpy.isfinite(fp[start[j, i]:stop[j, i], j, i]).all()
+                f_check = numpy.interp(x[:, j, i], xp[start[j, i]:stop[j, i]], fp[start[j, i]:stop[j, i], j, i])
+                current_success = numpy.isclose(f[:, j, i], f_check, rtol=eps, atol=eps).all() and current_success
+                error = max(numpy.abs(f[:, j, i] / f_check - 1).max(), error)
+                if not current_success:
+                    print(start[j, i], stop[j, i], mask[:, j, i], f[:, j, i], f_check, f[:, j, i] - f_check, error)
+                    dsds
+    print('    3D masked: maximum relative error: %s' % (error,))
 
     return success
 
