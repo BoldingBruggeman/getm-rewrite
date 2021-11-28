@@ -353,7 +353,7 @@ class SpatialInterpolation(UnaryOperatorResult):
         result = self._ip(source.values)
         return result[tuple(tgt_slice)]
 
-def vertical_interpolation(source: xarray.DataArray, target_z) -> xarray.DataArray:
+def vertical_interpolation(source: xarray.DataArray, target_z: xarray.DataArray) -> xarray.DataArray:
     source_z = source.getm.z
     assert source_z is not None, 'Variable %s does not have a valid depth coordinate.' % source.name
     assert source_z.ndim == 1
@@ -364,12 +364,12 @@ def vertical_interpolation(source: xarray.DataArray, target_z) -> xarray.DataArr
     for n, c in source.coords.items():
         if not frozenset(c.dims).intersection(source.dims[izdim:izdim + 3]):
             coords[n] = c
-    coords.update(target_z.xarray.coords)
-    dims = source.dims[:izdim] + target_z.xarray.dims + source.dims[izdim + 3:]
+    coords.update(target_z.coords)
+    dims = source.dims[:izdim] + target_z.dims + source.dims[izdim + 3:]
     return xarray.DataArray(VerticalInterpolation(source, target_z), dims=dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
 
 class VerticalInterpolation(UnaryOperatorResult):
-    def __init__(self, source: xarray.DataArray, z):
+    def __init__(self, source: xarray.DataArray, z: xarray.DataArray):
         source_z = source.getm.z
         self.izdim = source.dims.index(source_z.dims[0])
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
@@ -490,15 +490,26 @@ class InputManager:
         if include_halos is None:
             include_halos = array.values is None
 
-        target = array.all_values if include_halos else array.values
         grid = array.grid
         if not on_grid:
-            local_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=2)
-            lon, lat, target = grid.lon.all_values[local_slice], grid.lat.all_values[local_slice], array.all_values[local_slice]
+            # interpolate horizontally to local array including halos
+            target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=2)
+            lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
             value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
             value = horizontal_interpolation(value, lon, lat)
+        else:
+            # we need to map from global domain to subdomain
+            if array.ndim >= 2:
+                # source is global array WITHOUT halos
+                target_slice, global_slice, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=0)
+                value = value[global_slice]
+            else:
+                # open boundary - todo: slice local boundary out of global array
+                # for now assume source is local array including halos
+                target_slice = (Ellipsis,)
+
         if array.ndim == 3:
-            value = vertical_interpolation(value, grid.zc)
+            value = vertical_interpolation(value, grid.zc.xarray[target_slice])
         if value.getm.time is not None:
             if value.getm.time.size > 1:
                 value = temporal_interpolation(value)
@@ -507,12 +518,16 @@ class InputManager:
                 itimedim = value.dims.index(value.getm.time.dims[0])
                 value = value[tuple([0 if idim == itimedim else slice(None) for idim in range(value.ndim)])]
 
+        target = array.all_values[target_slice]
         assert value.shape == target.shape, 'Source shape %s does not match target shape %s' % (value.shape, target.shape)
         if isinstance(value.variable.data, LazyArray) and value.variable.data.is_time_varying():
             self._logger.debug('%s will be updated dynamically from %s' % (array.name, value.name))
             self.fields.append((array.name, value.data, target))
         else:
             self._logger.debug('%s is set to constant %s' % (array.name, value.name))
+            value = numpy.asarray(value)
+            if not numpy.isfinite(value).all(where=grid.mask.all_values[target_slice] != 0):
+                self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in one or more unmasked points.' % (array.name,))
             target[...] = value
 
     def update(self, time):
