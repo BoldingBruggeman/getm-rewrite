@@ -27,6 +27,10 @@ class GETMAccessor:
         return self._interpret_coordinates().get('latitude')
 
     @property
+    def z(self) -> Optional[xarray.DataArray]:
+        return self._interpret_coordinates().get('z')
+
+    @property
     def time(self) -> Optional[xarray.DataArray]:
         return self._interpret_coordinates().get('time')
 
@@ -42,6 +46,8 @@ class GETMAccessor:
                     self._coordinates['longitude'] = coord
                 elif units is not None and ' since ' in units:
                     self._coordinates['time'] = coord
+                elif name == 'zax':
+                    self._coordinates['z'] = coord
         return self._coordinates
 
 def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=False, **kwargs) -> xarray.DataArray:
@@ -95,6 +101,9 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def __getitem__(self, slices) -> numpy.ndarray:
         return self.__array__()[slices]
 
+    def is_time_varying(self) -> bool:
+        return False
+
 class OperatorResult(LazyArray):
     def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, **kwargs):
         self.inputs = [inp if not isinstance(inp, xarray.DataArray) else inp.variable for inp in inputs]
@@ -116,6 +125,7 @@ class OperatorResult(LazyArray):
         if passthrough is True:
             passthrough = range(len(shape))
         self.passthrough = frozenset(passthrough)
+        assert all([isinstance(dim, int) for dim in self.passthrough]), 'Invalid passthrough: %s. All entries should be of type int' % (self.passthrough,)
         super().__init__(shape, float)
 
     def update(self, time: cftime.datetime) -> bool:
@@ -275,7 +285,7 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
     coords[source_lat.name] = target_lat
     return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs, name='limit_region(%s, minlon=%s, maxlon=%s, minlat=%s, maxlat=%s)' % (source.name, minlon, maxlon, minlat, maxlat))
 
-def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
+def horizontal_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
     assert source.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.name
     assert source.getm.latitude is not None, 'Variable %s does not have a valid latitude coordinate.' % source.name
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
@@ -308,7 +318,7 @@ def spatial_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: 
     coords[lon.name] = lon
     coords[lat.name] = lat
     dims = source.dims[:min(ilondim, ilatdim)] + dimensions + source.dims[max(ilondim, ilatdim) + 1:]
-    return xarray.DataArray(SpatialInterpolation(ip, source, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1), dims=dims, coords=coords, attrs=source.attrs, name='spatial_interpolation(%s)' % source.name)
+    return xarray.DataArray(SpatialInterpolation(ip, source, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1), dims=dims, coords=coords, attrs=source.attrs, name='horizontal_interpolation(%s)' % source.name)
 
 class SpatialInterpolation(UnaryOperatorResult):
     def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.DataArray, shape: Iterable[int], npre: int, npost: int):
@@ -342,6 +352,37 @@ class SpatialInterpolation(UnaryOperatorResult):
         source = self._source[tuple(src_slice)]
         result = self._ip(source.values)
         return result[tuple(tgt_slice)]
+
+def vertical_interpolation(source: xarray.DataArray, target_z) -> xarray.DataArray:
+    source_z = source.getm.z
+    assert source_z is not None, 'Variable %s does not have a valid depth coordinate.' % source.name
+    assert source_z.ndim == 1
+    izdim = source.dims.index(source_z.dims[0])
+    assert source.ndim - izdim == 3
+    assert source.shape[izdim + 1:izdim + 3] == target_z.shape[1:], '%s vs %s' % (source.shape[izdim + 1:izdim + 3], target_z.shape[1:])
+    coords = {}
+    for n, c in source.coords.items():
+        if not frozenset(c.dims).intersection(source.dims[izdim:izdim + 3]):
+            coords[n] = c
+    coords.update(target_z.xarray.coords)
+    dims = source.dims[:izdim] + target_z.xarray.dims + source.dims[izdim + 3:]
+    return xarray.DataArray(VerticalInterpolation(source, target_z), dims=dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
+
+class VerticalInterpolation(UnaryOperatorResult):
+    def __init__(self, source: xarray.DataArray, z):
+        source_z = source.getm.z
+        self.izdim = source.dims.index(source_z.dims[0])
+        passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
+        shape = list(source.shape)
+        shape[self.izdim] = z.shape[0]
+        UnaryOperatorResult.__init__(self, source, shape=shape, passthrough=passthrough)
+        self.z = z
+        self.source_z = source_z.values
+        if (self.source_z >= 0.).all():
+            self.source_z = -self.source_z
+
+    def apply(self, source, dtype=None) -> numpy.ndarray:
+        return pygetm.util.interpolate.interp_1d(self.z.values, self.source_z, source, axis=0)
 
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     time_coord = source.getm.time
@@ -379,6 +420,9 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self._current
+
+    def is_time_varying(self) -> bool:
+        return True
 
     def update(self, time: cftime.datetime) -> bool:
         # Convert the time into a numerical value matching units and calendar of the variable's time coordinate
@@ -431,19 +475,55 @@ class InputManager:
                 return super()._getitem(key)
         xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
 
-    def add(self, array, source: xarray.DataArray, target: numpy.ndarray):
-        assert source.shape == target.shape
-        if isinstance(source.data, LazyArray):
-            self._logger.debug('%s will be updated dynamically from %s' % (array.name, source.name))
-            self.fields.append((array.name, source.data, target))
+    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
+        if array.all_values is None or array.all_values.size == 0:
+            self._logger.warning('Ignoring asssignment to array %s because it has no associated data.' % self.name)
+            return
+
+        if isinstance(value, (numbers.Number, numpy.ndarray)):
+            array.fill(value)
+            return
+
+        assert isinstance(value, xarray.DataArray), 'If value is not numeric, it should be an xarray.DataArray, but it is %s (type %s).' % (value, type(value))
+        assert isinstance(value.variable.data, LazyArray), 'If value is an xarray.DataArray, its underlying type should be a LazyArray, but it is %s (type %s).' % (value.variable.data, type(value.variable.data))
+
+        if include_halos is None:
+            include_halos = array.values is None
+
+        target = array.all_values if include_halos else array.values
+        grid = array.grid
+        if not on_grid:
+            local_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=2)
+            lon, lat, target = grid.lon.all_values[local_slice], grid.lat.all_values[local_slice], array.all_values[local_slice]
+            value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
+            value = horizontal_interpolation(value, lon, lat)
+        if array.ndim == 3:
+            value = vertical_interpolation(value, grid.zc)
+        if value.getm.time is not None:
+            if value.getm.time.size > 1:
+                value = temporal_interpolation(value)
+            else:
+                self._logger.warning('%s is set to %s, which has only one time point. The value from this time will be used now. %s will not be further updated by the input manager at runtime.' % (array.name, value.name, array.name))
+                itimedim = value.dims.index(value.getm.time.dims[0])
+                value = value[tuple([0 if idim == itimedim else slice(None) for idim in range(value.ndim)])]
+
+        assert value.shape == target.shape, 'Source shape %s does not match target shape %s' % (value.shape, target.shape)
+        if isinstance(value.variable.data, LazyArray) and value.variable.data.is_time_varying():
+            self._logger.debug('%s will be updated dynamically from %s' % (array.name, value.name))
+            self.fields.append((array.name, value.data, target))
         else:
-            target[...] = source
+            self._logger.debug('%s is set to constant %s' % (array.name, value.name))
+            target[...] = value
 
     def update(self, time):
         for name, source, target in self.fields:
             self._logger.debug('updating %s' % name)
             source.update(time)
             target[...] = source
+
+    @property
+    def logger(self) -> logging.Logger:
+        return self._logger
 
     def set_logger(self, logger: logging.Logger):
         self._logger = logger

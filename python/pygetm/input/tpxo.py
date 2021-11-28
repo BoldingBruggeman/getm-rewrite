@@ -15,7 +15,7 @@ def get(lon, lat, variable='h', verbose: bool=False, root=ROOT, scale_factor: fl
 
     def select(ncvar) -> xarray.DataArray:
         out = pygetm.input.limit_region(ncvar, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=True)
-        out = pygetm.input.spatial_interpolation(out, lon, lat)
+        out = pygetm.input.horizontal_interpolation(out, lon, lat)
         return out
 
     if variable in ('hz', 'hu', 'hv'):
@@ -53,3 +53,6 @@ class Data(pygetm.input.LazyArray):
     def __array__(self, dtype=None) -> numpy.ndarray:
         assert self.time is not None, 'update has not yet been called'
         return otps2.predict_tide_2d(self.components, self.lat, self.time, ntime=1, delta_time=0)[0, ...]
+
+    def is_time_varying(self) -> bool:
+        return True

@@ -261,27 +261,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return self.create(self.grid, fill=result, is_3d=result.ndim == 3)
 
     def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
-        if isinstance(value, (numbers.Number, numpy.ndarray)):
-            self.fill(value)
-            return
-
-        if self.all_values is None or self.all_values.size == 0:
-            return
-
-        import pygetm.input
-        assert isinstance(value, xarray.DataArray), 'If value is not numeric, it should be an xarray.DataArray, but it is %s (type %s).' % (value, type(value))
-        assert isinstance(value.variable.data, pygetm.input.LazyArray), 'If value is an xarray.DataArray, its underlying type should be a LazyArray, but it is %s (type %s).' % (value.variable.data, type(value.variable.data))
-
-        if include_halos is None:
-            include_halos = self.values is None
-        target = self.all_values if include_halos else self.values
-        if not on_grid:
-            local_slice, _, _, _ = self.grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=2)
-            lon, lat, target = self.grid.lon.all_values[local_slice], self.grid.lat.all_values[local_slice], self.all_values[local_slice]
-            value = pygetm.input.limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
-            value = pygetm.input.spatial_interpolation(value, lon, lat)
-        value = pygetm.input.temporal_interpolation(value)
-        self.grid.domain.input_manager.add(self, value, target)
+        self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos)
 
     @property
     def xarray(self) -> xarray.DataArray:

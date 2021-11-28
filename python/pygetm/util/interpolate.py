@@ -92,9 +92,9 @@ def interp_1d(x, xp, fp, axis: int=0):
     x = numpy.asarray(x)
     xp = numpy.asarray(xp)
     fp = numpy.ma.filled(fp, numpy.nan)
-    assert fp.ndim == x.ndim
-    assert xp.ndim == 1
-    assert fp.shape[:axis] == x.shape[:axis] and fp.shape[axis + 1:] == x.shape[axis + 1:]
+    assert fp.ndim == x.ndim, 'Number of dimensions %i of source values does not match %i of target coordinate.' % (fp.ndim, x.ndim)
+    assert xp.ndim == 1, 'Source coordinate must be 1D but its shape is %s.' % (xp.shape,)
+    assert fp.shape[:axis] == x.shape[:axis] and fp.shape[axis + 1:] == x.shape[axis + 1:], 'Shapes of source values %s and target coordinate %s should match everywhere except the depth dimension (%i)' % (fp.shape, x.shape, axis)
     assert fp.shape[axis] == xp.shape[0]
 
     dxp = numpy.diff(xp)
