@@ -15,13 +15,15 @@ from . import pyfabm
 from . import mixing
 import pygetm.airsea
 
+FILL_VALUE = -2.e20
+
 class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None, turbulence: Optional[mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, logger: Optional[logging.Logger]=None, log_level: int=logging.INFO):
         self.logger = dom.root_logger
@@ -66,24 +68,22 @@ class Simulation(_pygetm.Simulation):
         if runtype == 4:
             self.temp = dom.T.array(fill=5., is_3d=True, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
             self.salt = dom.T.array(fill=35., is_3d=True, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
+            self.rho = dom.T.array(is_3d=True, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
             self.sst = self.temp.isel(z=-1)
             self.temp_source = dom.T.array(fill=0., is_3d=True, units='W m-2')
             self.salt_source = dom.T.array(fill=0., is_3d=True)
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
 
-            self.SS = dom.W.array(fill=0., is_3d=True, name='SS', units='s-2', long_name='shear frequency squared')
-            self.NN = dom.W.array(fill=0., is_3d=True, name='NN', units='s-2', long_name='buoyancy frequency squared')
-            self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity')
-            self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity')
-            self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness')
-            self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic bottom roughness')
+            self.SS = dom.W.array(fill=0., is_3d=True, name='SS', units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
+            self.NN = dom.W.array(fill=0., is_3d=True, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
+            self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity', fill_value=FILL_VALUE)
+            self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity', fill_value=FILL_VALUE)
+            self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness', fill_value=FILL_VALUE)
+            self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE)
 
             self.turbulence = turbulence or mixing.GOTM(self.domain, nml_path=gotm)
 
             self.vertical_diffusion = pygetm.VerticalDiffusion(dom.T, cnpar=1.)
-
-            # ensure ho and hn are up to date and identical
-            dom.do_vertical()
 
             if fabm:
                 def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
@@ -111,6 +111,8 @@ class Simulation(_pygetm.Simulation):
 
     def get_fabm_dependency(self, name):
         variable = self.fabm_model.dependencies.find(name)
+        if len(variable.shape) == 0:
+            return variable
         arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_name, is_3d=len(variable.shape) == 3)
         variable.link(arr.all_values)
         return arr
@@ -132,6 +134,10 @@ class Simulation(_pygetm.Simulation):
         self.istep = 0
         self.report = report
 
+        if self.runtype == 4:
+            # ensure ho and hn are up to date and identical
+            self.domain.do_vertical()
+
         if self.fabm_model:
             # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
             # This MUST be done before calling self.fabm_model.start
@@ -145,6 +151,7 @@ class Simulation(_pygetm.Simulation):
                         variable = self.fabm_model.dependencies.find(field.fabm_standard_name)
                     except KeyError:
                         continue
+                    field.saved = True
                     variable.link(field.all_values)
 
             # Start FABM. This verifies whether all dependencies are fulfilled and freezes the set of dsiagsntoics that will be saved.
@@ -160,6 +167,11 @@ class Simulation(_pygetm.Simulation):
                 variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
 
             self.update_fabm_sources()
+
+        if self.runtype == 4:
+            # ensure density is in sync with iniitial T & S
+            if self.rho.saved:
+                pygetm.mixing.get_density(self.salt, self.temp, out=self.rho)
 
         self.domain.input_manager.update(time)
         self.output_manager.start(save=save)
@@ -212,6 +224,10 @@ class Simulation(_pygetm.Simulation):
             # Transport of passive tracers (including biogeochemical ones)
             for array, src in self.tracers:
                 self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=src)
+
+            # Update density to keep it in sync with T and S
+            if self.rho.saved:
+                pygetm.mixing.get_density(self.salt, self.temp, out=self.rho)
 
             # Time-integrate source terms of biogeochemistry
             if self.fabm_model:
