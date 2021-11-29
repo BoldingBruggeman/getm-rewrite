@@ -138,7 +138,7 @@ class Tiling:
     def wrap(self, field: numpy.ndarray, halo: int) -> 'DistributedArray':
         return DistributedArray(self, field, halo)
 
-    def subdomain2slices(self, irow: Optional[int]=None, icol: Optional[int]=None, halo: int=0, scale: int=1, share: int=0, exclude_halos: bool=True) -> Tuple[Tuple[Any, slice, slice], Tuple[Any, slice, slice], Tuple[int, int], Tuple[int, int]]:
+    def subdomain2slices(self, irow: Optional[int]=None, icol: Optional[int]=None, halo_sub: int=0, halo_glob: int=0, scale: int=1, share: int=0, exclude_halos: bool=True) -> Tuple[Tuple[Any, slice, slice], Tuple[Any, slice, slice], Tuple[int, int], Tuple[int, int]]:
         if irow is None:
             irow = self.irow
         if icol is None:
@@ -146,14 +146,21 @@ class Tiling:
 
         assert isinstance(share, int)
         assert isinstance(scale, int)
-        assert isinstance(halo, int)
+        assert isinstance(halo_sub, int)
+        assert isinstance(halo_glob, int)
         assert self.map[irow, icol] >= 0
 
-        # Global start and stop
+        # Global start and stop of local subdomain (no halos yet)
         xstart_glob = scale * ( icol      * self.nx_sub + self.xoffset_global)
-        xstop_glob =  scale * ((icol + 1) * self.nx_sub + self.xoffset_global) + 2 * halo + share
+        xstop_glob =  scale * ((icol + 1) * self.nx_sub + self.xoffset_global)
         ystart_glob = scale * ( irow      * self.ny_sub + self.yoffset_global)
-        ystop_glob =  scale * ((irow + 1) * self.ny_sub + self.yoffset_global) + 2 * halo + share
+        ystop_glob =  scale * ((irow + 1) * self.ny_sub + self.yoffset_global)
+
+        # Adjust for halos and any overlap ("share")
+        xstart_glob += - halo_sub + halo_glob
+        xstop_glob  +=   halo_sub + halo_glob + share
+        ystart_glob += - halo_sub + halo_glob
+        ystop_glob  +=   halo_sub + halo_glob + share
 
         # Local start and stop
         xstart_loc = 0
@@ -162,11 +169,11 @@ class Tiling:
         ystop_loc = ystop_glob - ystart_glob
 
         # Shapes of local and global arrays (including halos and inactive strips)
-        local_shape  = (scale * self.ny_sub  + 2 * halo + share, scale * self.nx_sub  + 2 * halo + share)
-        global_shape = (scale * self.ny_glob + 2 * halo + share, scale * self.nx_glob + 2 * halo + share)
+        local_shape  = (scale * self.ny_sub  + 2 * halo_sub  + share, scale * self.nx_sub  + 2 * halo_sub  + share)
+        global_shape = (scale * self.ny_glob + 2 * halo_glob + share, scale * self.nx_glob + 2 * halo_glob + share)
 
         # Calculate offsets based on limits of the global domain
-        extra_offset = halo if exclude_halos else 0
+        extra_offset = halo_sub if exclude_halos else 0
         xstart_offset = max(xstart_glob + extra_offset, 0              ) - xstart_glob
         xstop_offset  = min(xstop_glob  - extra_offset, global_shape[1]) - xstop_glob
         ystart_offset = max(ystart_glob + extra_offset, 0              ) - ystart_glob
@@ -336,7 +343,7 @@ class Scatter:
             self.sendbuf = tiling.get_work_array((tiling.n,) + self.recvbuf.shape, self.recvbuf.dtype, fill_value=fill_value)
             for irow, icol, rank in iterate_rankmap(tiling.map):
                 if rank >= 0:
-                    local_slice, global_slice, local_shape, global_shape = tiling.subdomain2slices(irow, icol, halo=halo, share=share, scale=scale, exclude_halos=exclude_halos)
+                    local_slice, global_slice, local_shape, global_shape = tiling.subdomain2slices(irow, icol, halo_sub=halo, halo_glob=halo, share=share, scale=scale, exclude_halos=exclude_halos)
                     assert field.shape[-2:] == local_shape, 'Field shape %s differs from expected %s' % (field.shape[-2:], local_shape)
                     self.buffers.append((self.sendbuf[(rank,) + local_slice], global_slice))
             self.global_shape = global_shape

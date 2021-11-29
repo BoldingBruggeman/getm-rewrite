@@ -353,7 +353,7 @@ class SpatialInterpolation(UnaryOperatorResult):
         result = self._ip(source.values)
         return result[tuple(tgt_slice)]
 
-def vertical_interpolation(source: xarray.DataArray, target_z: xarray.DataArray) -> xarray.DataArray:
+def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray) -> xarray.DataArray:
     source_z = source.getm.z
     assert source_z is not None, 'Variable %s does not have a valid depth coordinate.' % source.name
     assert source_z.ndim == 1
@@ -362,14 +362,14 @@ def vertical_interpolation(source: xarray.DataArray, target_z: xarray.DataArray)
     assert source.shape[izdim + 1:izdim + 3] == target_z.shape[1:], '%s vs %s' % (source.shape[izdim + 1:izdim + 3], target_z.shape[1:])
     coords = {}
     for n, c in source.coords.items():
-        if not frozenset(c.dims).intersection(source.dims[izdim:izdim + 3]):
+        if n == source.dims[izdim]:
+            coords[n + '_'] = (source.dims[-3:], target_z)
+        else:
             coords[n] = c
-    coords.update(target_z.coords)
-    dims = source.dims[:izdim] + target_z.dims + source.dims[izdim + 3:]
-    return xarray.DataArray(VerticalInterpolation(source, target_z), dims=dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
+    return xarray.DataArray(VerticalInterpolation(source, target_z), dims=source.dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
 
 class VerticalInterpolation(UnaryOperatorResult):
-    def __init__(self, source: xarray.DataArray, z: xarray.DataArray):
+    def __init__(self, source: xarray.DataArray, z: numpy.ndarray):
         source_z = source.getm.z
         self.izdim = source.dims.index(source_z.dims[0])
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
@@ -382,7 +382,7 @@ class VerticalInterpolation(UnaryOperatorResult):
             self.source_z = -self.source_z
 
     def apply(self, source, dtype=None) -> numpy.ndarray:
-        return pygetm.util.interpolate.interp_1d(self.z.values, self.source_z, source, axis=0)
+        return pygetm.util.interpolate.interp_1d(self.z, self.source_z, source, axis=0)
 
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     time_coord = source.getm.time
@@ -492,16 +492,16 @@ class InputManager:
 
         grid = array.grid
         if not on_grid:
-            # interpolate horizontally to local array including halos
-            target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=2)
+            # interpolate horizontally to local array INCLUDING halos
+            target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2)
             lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
             value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
             value = horizontal_interpolation(value, lon, lat)
         else:
             # we need to map from global domain to subdomain
             if array.ndim >= 2:
-                # source is global array WITHOUT halos
-                target_slice, global_slice, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo=0)
+                # source is global array EXCLUDING halos, but subdoain does include halos (i.e., no halos exchange needed after assignment)
+                target_slice, global_slice, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2)
                 value = value[global_slice]
             else:
                 # open boundary - todo: slice local boundary out of global array
@@ -509,7 +509,7 @@ class InputManager:
                 target_slice = (Ellipsis,)
 
         if array.ndim == 3:
-            value = vertical_interpolation(value, grid.zc.xarray[target_slice])
+            value = vertical_interpolation(value, grid.zc.all_values[target_slice])
         if value.getm.time is not None:
             if value.getm.time.size > 1:
                 value = temporal_interpolation(value)
