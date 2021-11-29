@@ -152,8 +152,8 @@ cdef class Domain:
     def do_vertical(self):
         domain_do_vertical(self.p)
         if self.W.zc.saved:
-            self.W.zc.all_values[-1, :, :] = self.T.z
-            self.W.zc.all_values[-2::-1, :, :] = self.T.z - numpy.where(self.T.mask.all_values > 0, self.T.hn.all_values, 0.)[::-1, :, :].cumsum(axis=0)
+            self.W.zc.all_values[-1, :, :] = self.T.z.all_values
+            self.W.zc.all_values[-2::-1, :, :] = self.T.z.all_values - numpy.where(self.T.mask.all_values > 0, self.T.hn.all_values, 0.)[::-1, :, :].cumsum(axis=0)
 
     def initialize(self, int runtype, double Dmin):
         domain_initialize(self.p, runtype, Dmin, &self.maxdt)
