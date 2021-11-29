@@ -111,8 +111,8 @@ def interp_1d(x, xp, fp, axis: int=0):
         ind.shape = [1 if i != axis else -1 for i in range(fp.ndim)]
         ind = numpy.broadcast_to(ind, fp.shape)
         first = ind.min(axis=axis, where=valid, initial=fp.shape[axis])
-        last = ind.max(axis=axis, where=valid, initial=-1)
-        first = numpy.minimum(first, last)   # where there are no valid elements at all, this will lead to first=last=-1
+        last = ind.max(axis=axis, where=valid, initial=0)
+        first = numpy.minimum(first, last)   # where there are no valid elements at all, this will lead to first=last=0
     else:
         first = 0
         last = fp.shape[axis] - 1

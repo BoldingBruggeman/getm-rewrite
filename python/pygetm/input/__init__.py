@@ -524,11 +524,13 @@ class InputManager:
             self._logger.debug('%s will be updated dynamically from %s' % (array.name, value.name))
             self.fields.append((array.name, value.data, target))
         else:
-            self._logger.debug('%s is set to constant %s' % (array.name, value.name))
-            value = numpy.asarray(value)
-            if not numpy.isfinite(value).all(where=grid.mask.all_values[target_slice] != 0):
-                self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in one or more unmasked points.' % (array.name,))
             target[...] = value
+            unmasked = numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
+            finite = numpy.isfinite(target)
+            if not finite.all(where=unmasked):
+                n_unmasked = unmasked.sum()
+                self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in %i of %i unmasked points.' % (array.name, value.name, n_unmasked - finite.sum(where=unmasked), n_unmasked))
+            self._logger.debug('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
 
     def update(self, time):
         for name, source, target in self.fields:
