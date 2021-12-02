@@ -4,7 +4,6 @@ from . import domain
 
 import numpy
 
-import pygsw
 from . import _pygotm
 
 class Turbulence:
