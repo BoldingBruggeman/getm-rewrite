@@ -5,13 +5,12 @@ import numpy
 import pygetm
 
 extent = 50000
-domain = pygetm.domain.Domain.create_cartesian(numpy.linspace(0, extent, 50), numpy.linspace(0, extent, 52), 25, f=0, H=50)
-domain.mask[...] = numpy.random.random_sample(domain.mask.shape) > 0.5
-domain.H[...] = 50
+domain = pygetm.domain.create_cartesian(numpy.linspace(0, extent, 50), numpy.linspace(0, extent, 52), 25, f=0, H=50)
+domain.mask[...] = numpy.random.random_sample(domain.mask.shape) > 0.5   # randomly mask half of the domain
 sim = pygetm.Simulation(domain, runtype=2)
 domain.do_vertical()
 
-assert (domain.T.hn.all_values == domain.T.hn.all_values).all()
+assert (domain.T.ho.all_values == domain.T.hn.all_values).all(), 'ho and hn are not identical'
 
 dt = 600
 nstep = 100
@@ -20,7 +19,7 @@ cnpar = 1.
 nuh = domain.W.array(fill=1e-2, is_3d=True)
 
 # Set diffusivity at all masked points to NaN
-nuh.all_values[:, domain.T.mask.all_values != 1] = numpy.nan
+nuh.all_values[:, domain.W.mask.all_values != 1] = numpy.nan
 
 # Set diffusivity at the very surface and bottom to NaN,
 # so we can later check that this value has not been propagated (used)
@@ -80,3 +79,10 @@ error = numpy.abs(delta).max()
 if error > tolerance:
     print('ERROR: error %s in tracer after using vertical diffusion solver to integrate sources exceeds tolerance %s' % (error, tolerance))
     sys.exit(1)
+
+# Now try without spatial gradient and source term only
+tracer.values[...] = 1
+sources = domain.T.array(fill=-.1 / dt, is_3d=True) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
+for _ in range(1):
+    vdif(nuh, dt, tracer, ea2=sources)
+print(valid_tracer)

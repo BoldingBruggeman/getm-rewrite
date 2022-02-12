@@ -42,7 +42,7 @@ def test(name: str, periodic_x: bool=False, periodic_y: bool=False, tau_x: float
 
     # Set up rectangular domain (all points unmasked)
     extent = 50000
-    domain = pygetm.domain.Domain.create_cartesian(numpy.linspace(0, extent, 50), numpy.linspace(0, extent, 52), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
+    domain = pygetm.domain.create_cartesian(numpy.linspace(0, extent, 50), numpy.linspace(0, extent, 52), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
     distance_from_center = numpy.sqrt((domain.x - 0.5 * extent)**2 + (domain.y - 0.5 * extent)**2)
 
     domain.mask[distance_from_center < extent * (1. / 6. + 1e-12)] = 0

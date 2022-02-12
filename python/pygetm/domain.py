@@ -214,20 +214,45 @@ def interfaces_to_supergrid_2d(data, out: Optional[numpy.ndarray]=None) -> numpy
     out[1::2, 1::2] = 0.25 * (data[:-1,:-1] + data[:-1,1:] + data[1:,:-1] + data[1:,1:])
     return out
 
+def create_cartesian(x, y, nz: int, interfaces=False, **kwargs) -> 'Domain':
+    """Create Cartesian domain from 1D arrays with longitudes and latitudes."""
+    assert x.ndim == 1, 'x coordinate must be one-dimensional'
+    assert y.ndim == 1, 'y coordinate must be one-dimensional'
+
+    if interfaces:
+        nx, ny = x.size - 1, y.size - 1
+        x, y = interfaces_to_supergrid_1d(x), interfaces_to_supergrid_1d(y)
+    else:
+        nx, ny = x.size, y.size
+        x, y = center_to_supergrid_1d(x), center_to_supergrid_1d(y)
+    return Domain.create(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
+
+def create_spherical(lon, lat, nz: int, interfaces=False, **kwargs) -> 'Domain':
+    """Create spherical domain from 1D arrays with longitudes and latitudes."""
+    assert lon.ndim == 1, 'longitude coordinate must be one-dimensional'
+    assert lat.ndim == 1, 'latitude coordinate must be one-dimensional'
+
+    if interfaces:
+        nx, ny = lon.size - 1, lat.size - 1
+        x, y = interfaces_to_supergrid_1d(lon), interfaces_to_supergrid_1d(lat)
+    else:
+        nx, ny = lon.size, lat.size
+        x, y = center_to_supergrid_1d(lon), center_to_supergrid_1d(lat)
+    return Domain.create(nx, ny, nz, lon=lon, lat=lat[:, numpy.newaxis], spherical=True, **kwargs)
+
+def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, maxlat: float, resolution: float, nz: int, **kwargs) -> 'Domain':
+    """Create spherical domain longitude range, latitude range and desired resolution in m."""
+    assert maxlon > minlon, 'Maximum longitude %s must be greater than minimum longitude %s' % (maxlon, minlon)
+    assert maxlat > minlat, 'Maximum latitude %s must be greater than minimum latitude %s' % (maxlat, minlat)
+    assert resolution > 0, 'Desired resolution must be greater than 0, but is %s m' % (resolution,)
+    dlat = resolution / (deg2rad * rearth)
+    minabslat = min(abs(minlat), abs(maxlat))
+    dlon = resolution / (deg2rad * rearth) / numpy.cos(deg2rad * minabslat)
+    nx = int(numpy.ceil((maxlon - minlon) / dlon)) + 1
+    ny = int(numpy.ceil((maxlat - minlat) / dlat)) + 1
+    return create_spherical(numpy.linspace(minlon, maxlon, nx), numpy.linspace(minlat, maxlat, ny), nz=nz, interfaces=True, **kwargs)
+
 class Domain(_pygetm.Domain):
-    @staticmethod
-    def create_cartesian(x, y, nz: int, interfaces=False, **kwargs) -> 'Domain':
-        assert x.ndim == 1, 'x coordinate must be one-dimensional'
-        assert y.ndim == 1, 'y coordinate must be one-dimensional'
-
-        if interfaces:
-            nx, ny = x.size - 1, y.size - 1
-            x, y = interfaces_to_supergrid_1d(x), interfaces_to_supergrid_1d(y)
-        else:
-            nx, ny = x.size, y.size
-            x, y = center_to_supergrid_1d(x), center_to_supergrid_1d(y)
-        return Domain.create(nx, ny, nz, x=x, y=y[:, numpy.newaxis], **kwargs)
-
     @staticmethod
     def partition(tiling: parallel.Tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, logger: Optional[logging.Logger]=None, **kwargs):
         assert nx == tiling.nx_glob and ny == tiling.ny_glob, 'Extent of global domain (%i, %i) does not match that of tiling (%i, %i).' % (ny, nx, tiling.ny_glob, tiling.nx_glob)
@@ -587,32 +612,48 @@ class Domain(_pygetm.Domain):
 
         self.initialized = True
 
-    def set_bathymetry(self, depth, scale_factor=None, minimum_depth=None):
+    def set_bathymetry(self, depth, scale_factor=None):
+        assert not self.initialized, 'set_bathymetry cannot be called after the domain has been initialized.'
         if not isinstance(depth, xarray.DataArray):
             # Depth is provided as raw data and therefore must be already on the supergrid
             self.H[...] = depth
         else:
             # Depth is provided as xarray object that includes coordinates (we require CF compliant longitude, latitude)
             # Interpolate to target grid.
-            self.H[...] = input.SpatialInterpolation(input.Variable(depth), self.lon, self.lat).x.values
+            depth = input.limit_region(depth, self.lon.min(), self.lon.max(), self.lat.min(), self.lat.max())
+            depth = input.horizontal_interpolation(depth, self.lon, self.lat)            
+            self.H[...] = depth.values
         if scale_factor is not None:
             self.H *= scale_factor
-        if minimum_depth is not None:
-            self.H = numpy.ma.masked_less(self.H, minimum_depth)
+
+    def mask_shallow(self, minimum_depth: float):
+        self.mask[self.H < minimum_depth] = 0
+
+    def mask_rectangle(self, xmin: Optional[float]=None, xmax: Optional[float]=None, ymin: Optional[float]=None, ymax: Optional[float]=None, value: int=0):
+        assert not self.initialized, 'adjust_mask cannot be called after the domain has been initialized.'
+        selected = numpy.ones(self.mask.shape, dtype=bool)
+        x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
+        if xmin is not None: selected = numpy.logical_and(selected, x >= xmin)
+        if xmax is not None: selected = numpy.logical_and(selected, x <= xmax)
+        if ymin is not None: selected = numpy.logical_and(selected, y >= ymin)
+        if ymax is not None: selected = numpy.logical_and(selected, y <= ymax)
+        self.mask[selected] = value
 
     def distribute(self, field):
         return self.tiling.wrap(field, halo=self.halo)
 
-    def plot(self, fig=None, show_H: bool=True):
+    def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, interactive: bool=False):
         import matplotlib.pyplot
         import matplotlib.collections
+        import matplotlib.widgets
         if fig is None:
             fig, ax = matplotlib.pyplot.subplots(figsize=(0.15 * self.nx, 0.15 * self.ny))
         else:
             ax = fig.gca()
         x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
         if show_H:
-            c = ax.contourf(x, y, self.H, 20, alpha=0.5)
+            c = ax.pcolormesh(x, y, numpy.ma.array(self.H, mask=self.mask==0), alpha=0.5 if show_mesh else 1, shading='auto')
+            #c = ax.contourf(x, y, numpy.ma.array(self.H, mask=self.mask==0), 20, alpha=0.5 if show_mesh else 1)
             cb = fig.colorbar(c)
             cb.set_label('undisturbed water depth (m)')
 
@@ -622,15 +663,40 @@ class Domain(_pygetm.Domain):
             ax.add_collection(matplotlib.collections.LineCollection(segs1, **kwargs))
             ax.add_collection(matplotlib.collections.LineCollection(segs2, **kwargs))
 
-        plot_mesh(ax, x[::2, ::2], y[::2, ::2], colors='k', linestyle='-', linewidth=.3)
-        #ax.pcolor(x[1::2, 1::2], y[1::2, 1::2], numpy.ma.array(x[1::2, 1::2], mask=True), edgecolors='k', linestyles='--', linewidth=.2)
-        #pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  numpy.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
-        ax.plot(x[::2, ::2], y[::2, ::2], '.k', markersize=3.)
-        ax.plot(x[1::2, 1::2], y[1::2, 1::2], 'xk', markersize=2.5)
+        if show_mesh:
+            plot_mesh(ax, x[::2, ::2], y[::2, ::2], colors='k', linestyle='-', linewidth=.3)
+            #ax.pcolor(x[1::2, 1::2], y[1::2, 1::2], numpy.ma.array(x[1::2, 1::2], mask=True), edgecolors='k', linestyles='--', linewidth=.2)
+            #pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  numpy.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
+            ax.plot(x[::2, ::2], y[::2, ::2], '.k', markersize=3.)
+            ax.plot(x[1::2, 1::2], y[1::2, 1::2], 'xk', markersize=2.5)
         ax.set_xlabel('longitude (degrees East)' if self.spherical else 'x (m)')
         ax.set_ylabel('latitude (degrees North)' if self.spherical else 'y (m)')
         if not self.spherical:
             ax.axis('equal')
+        xmin, xmax = x.min(), x.max()
+        ymin, ymax = y.min(), y.max()
+        xmargin = 0.05 * (xmax - xmin)
+        ymargin = 0.05 * (ymax - ymin)
+        ax.set_xlim(xmin - xmargin, xmax + xmargin)
+        ax.set_ylim(ymin - ymargin, ymax + ymargin)
+
+        def on_select(eclick, erelease):
+            xmin, xmax = min(eclick.xdata, erelease.xdata), max(eclick.xdata, erelease.xdata)
+            ymin, ymax = min(eclick.ydata, erelease.ydata), max(eclick.ydata, erelease.ydata)
+            self.mask_rectangle(xmin, xmax, ymin, ymax)
+            c.set_array(numpy.ma.array(self.H, mask=self.mask==0).ravel())
+            fig.canvas.draw()
+            #self.sel.set_active(False)
+            #self.sel = None
+            #ax.draw()
+            #fig.clf()
+            #self.plot(fig=fig, show_mesh=show_mesh)
+        if interactive:
+            self.sel = matplotlib.widgets.RectangleSelector(
+                    ax, on_select,
+                    useblit=True,
+                    button=[1],
+                    interactive=False)
 
     def save(self, path: str, full: bool=False):
         with netCDF4.Dataset(path, 'w') as nc:
