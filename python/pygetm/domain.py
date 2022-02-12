@@ -642,7 +642,7 @@ class Domain(_pygetm.Domain):
     def distribute(self, field):
         return self.tiling.wrap(field, halo=self.halo)
 
-    def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, interactive: bool=False):
+    def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, editable: bool=False):
         import matplotlib.pyplot
         import matplotlib.collections
         import matplotlib.widgets
@@ -691,7 +691,7 @@ class Domain(_pygetm.Domain):
             #ax.draw()
             #fig.clf()
             #self.plot(fig=fig, show_mesh=show_mesh)
-        if interactive:
+        if editable:
             self.sel = matplotlib.widgets.RectangleSelector(
                     ax, on_select,
                     useblit=True,
