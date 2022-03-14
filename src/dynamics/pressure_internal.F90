@@ -53,10 +53,11 @@ module SUBROUTINE pressure_internal_initialize(self,runtype)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('pressure_internal_initialize()',level=3)
 
-   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
 #ifndef _STATIC_
-   call mm_s('idpdx',self%idpdx,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
-   call mm_s('idpdy',self%idpdy,TG%l(1:3),TG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('idpdx',self%idpdx,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
+   call mm_s('idpdy',self%idpdy,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
 #endif
    if (runtype > 2) then
       if (associated(self%fm)) then
@@ -66,14 +67,14 @@ module SUBROUTINE pressure_internal_initialize(self,runtype)
        !KB                        output_level=output_level_debug, &
                                part_of_state=.false., &
                                category='baroclinicity', field=f)
-         call self%fm%send_data('idpdx', self%idpdx(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+         call self%fm%send_data('idpdx', self%idpdx(UG%imin:UG%imax,UG%jmin:UG%jmax,UG%kmin:UG%kmax))
          call self%fm%register('idpdy', 'Pa/m', 'internal pressure gradient - y', &
                                standard_name='', &
                                dimensions=(self%domain%T%dim_3d_ids), &
        !KB                        output_level=output_level_debug, &
                                part_of_state=.false., &
                                category='baroclinicity', field=f)
-         call self%fm%send_data('idpdy', self%idpdy(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
+         call self%fm%send_data('idpdy', self%idpdy(VG%imin:VG%imax,VG%jmin:VG%jmax,VG%kmin:VG%kmax))
       end if
 
       select case (self%method_internal_pressure)
@@ -82,7 +83,8 @@ module SUBROUTINE pressure_internal_initialize(self,runtype)
             call init_shchepetkin_mcwilliams(self)
       end select
    end if
-   end associate TGrid
+   end associate VGrid
+   end associate UGrid
 END SUBROUTINE pressure_internal_initialize
 
 !-----------------------------------------------------------------------------
@@ -97,10 +99,12 @@ module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: buoy(_T3_)
 #undef _T3_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(inout) :: SxB(_T2_)
-   real(real64), intent(inout) :: SyB(_T2_)
-#undef _T2_
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(inout) :: SxB(_U2_)
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(inout) :: SyB(_V2_)
+#undef _V2_
 
 !  Local constants
 
@@ -115,16 +119,20 @@ module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
       case(method_shchepetkin_mcwilliams)
          call shchepetkin_mcwilliams(self,buoy)
    end select
-   TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
-   VGrid: associate( VG => self%domain%V )
    if(associated(self%logs)) call self%logs%info('slow_buoyancy()',level=3)
-   do j=TG%jmin,TG%jmax
-      do i=TG%imin,TG%imax
+   do j=UG%jmin,UG%jmax
+      do i=UG%imin,UG%imax
          if (UG%mask(i,j) > 0) then
             ! [GETM Scientific Report: eqs. 2.24]
             SxB(i,j)=-SUM(self%idpdx(i,j,1:))
          end if
+      end do
+   end do
+   end associate UGrid
+   VGrid: associate( VG => self%domain%V )
+   do j=VG%jmin,VG%jmax
+      do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
             ! [GETM Scientific Report: eqs. 2.25]
             SyB(i,j)=-SUM(self%idpdy(i,j,1:))
@@ -132,8 +140,6 @@ module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
       end do
    end do
    end associate VGrid
-   end associate UGrid
-   end associate TGrid
 END SUBROUTINE pressure_internal
 
 !---------------------------------------------------------------------------

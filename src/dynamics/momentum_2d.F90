@@ -134,10 +134,14 @@ MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
    real(real64), intent(in) :: tausy(_V2_)
       !! surface stress in local y-direction
 #undef _V2_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: dpdx(_T2_), dpdy(_T2_) !KB Should they be on U and V grid as well
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: dpdx(_U2_)
       !! surface pressure gradient - including air pressure
-#undef _T2_
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: dpdy(_V2_)
+      !! surface pressure gradient - including air pressure
+#undef _V2_
 
 !  Local constants
 
@@ -176,11 +180,9 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
 #define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
    real(real64), intent(in) :: tausx(_U2_)
       !! surface stress in local x-direction
-#undef _U2_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: dpdx(_T2_)
+   real(real64), intent(in) :: dpdx(_U2_)
       !! surface pressure gradient - including air pressure
-#undef _T2_
+#undef _U2_
 
 !  Local constants
 
@@ -228,11 +230,9 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
 #define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
    real(real64), intent(in) :: tausy(_V2_)
       !! surface stress in local y-direction
-#undef _V2_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: dpdy(_T2_)
+   real(real64), intent(in) :: dpdy(_V2_)
       !! surface pressure gradient - including air pressure
-#undef _T2_
+#undef _U2_
 
 !  Local constants
 

@@ -150,36 +150,46 @@ MODULE getm_momentum
          integer, intent(in) :: runtype
          real(real64), intent(in) :: dt
             !! timestep [s]
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-         real(real64), intent(in) :: tausx(_T2_),tausy(_T2_)
-            !! surface stresses
-         real(real64), intent(in) :: dpdx(_T2_), dpdy(_T2_)
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+         real(real64), intent(in) :: tausx(_U2_)
+            !! surface stress
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+         real(real64), intent(in) :: tausy(_V2_)
+            !! surface stress
+#undef _V2_
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+         real(real64), intent(in) :: dpdx(_U2_)
             !! surface pressure gradient - including air pressure
-#undef _T2_
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+         real(real64), intent(in) :: dpdy(_V2_)
+            !! surface pressure gradient - including air pressure
+#undef _V2_
       END SUBROUTINE uv_momentum_2d
 
       MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-         real(real64), intent(in) :: tausx(_T2_)
+#define _U2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: tausx(_U2_)
             !! surface stresses
-         real(real64), intent(in) :: dpdx(_T2_)
+         real(real64), intent(in) :: dpdx(_U2_)
             !! surface pressure gradient - including air pressure
-#undef _T2_
+#undef _U2_
       END SUBROUTINE u_2d
 
       MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-         real(real64), intent(in) :: tausy(_T2_)
+#define _V2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), intent(in) :: tausy(_V2_)
             !! surface stresses
-         real(real64), intent(in) :: dpdy(_T2_)
+         real(real64), intent(in) :: dpdy(_V2_)
             !! surface pressure gradient - including air pressure
-#undef _T2_
+#undef _V2_
    END SUBROUTINE v_2d
 
       ! 3D routines
@@ -191,21 +201,31 @@ MODULE getm_momentum
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: tausx(_T2_)
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: tausx(_U2_)
      !! surface stress - x
-   real(real64), intent(in) :: tausy(_T2_)
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: tausy(_V2_)
      !! surface stress - y
-   real(real64), intent(in) :: dpdx(_T2_)
+#undef _V2_
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: dpdx(_U2_)
      !! surface pressure (including air pressure) - x-gradient
-   real(real64), intent(in) :: dpdy(_T2_)
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: dpdy(_V2_)
      !! surface pressure (including air pressure) - y-gradient
-#undef _T2_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: idpdx(_T3_)
+#undef _V2_
+#define _U3_ self%domain%U%l(1):,self%domain%U%l(2):,self%domain%U%l(3):
+   real(real64), intent(in) :: idpdx(_U3_)
      !! internal pressure - x-gradient
-   real(real64), intent(in) :: idpdy(_T3_)
+#undef _U3_
+#define _V3_ self%domain%V%l(1):,self%domain%V%l(2):,self%domain%V%l(3):
+   real(real64), intent(in) :: idpdy(_V3_)
      !! internal pressure - y-gradient
+#undef _V3_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: viscosity(_T3_)
      !! viscosity
 #undef _T3_
@@ -296,12 +316,14 @@ MODULE getm_momentum
 
       MODULE SUBROUTINE stresses(self,tausx,tausy)
          class(type_getm_momentum), intent(inout) :: self
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-         real(real64), intent(in) :: tausx(_T2_)
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+         real(real64), intent(in) :: tausx(_U2_)
             !! surface stresses - x-direction
-         real(real64), intent(in) :: tausy(_T2_)
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+         real(real64), intent(in) :: tausy(_V2_)
             !! surface stresses - y-direction
-#undef _T2_
+#undef _V2_
       END SUBROUTINE stresses
 
    END INTERFACE

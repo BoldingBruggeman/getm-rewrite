@@ -85,17 +85,23 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    real(real64), intent(in) :: tausy(_V2_)
       !! surface stress in local y-direction
 #undef _V2_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: dpdx(_T2_)
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: dpdx(_U2_)
      !! surface pressure (including air pressure) - x-gradient
-   real(real64), intent(in) :: dpdy(_T2_)
+#undef _U2_
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: dpdy(_V2_)
      !! surface pressure (including air pressure) - y-gradient
-#undef _T2_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: idpdx(_T3_)
+#undef _V2_
+#define _U3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: idpdx(_U3_)
      !! internal pressure - x-gradient
-   real(real64), intent(in) :: idpdy(_T3_)
+#undef _U3_
+#define _V3_ self%domain%V%l(1):,self%domain%V%l(2):,self%domain%V%l(3):
+   real(real64), intent(in) :: idpdy(_V3_)
      !! internal pressure - y-gradient
+#undef _V3_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: viscosity(_T3_)
      !! viscosity
 #undef _T3_
@@ -147,14 +153,14 @@ SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 #define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
    real(real64), intent(in) :: tausx(_U2_)
       !! surface stress in local x-direction
-#undef _U2_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: dpdx(_T2_)
+   real(real64), intent(in) :: dpdx(_U2_)
       !! surface pressure gradient - including air pressure
-#undef _T2_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: idpdx(_T3_)
+#undef _U2_
+#define _U3_ self%domain%U%l(1):,self%domain%U%l(2):,self%domain%U%l(3):
+   real(real64), intent(in) :: idpdx(_U3_)
       !! internal pressure gradient
+#undef _U3_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: viscosity(_T3_)
       !! viscosity
 #undef _T3_
@@ -250,14 +256,14 @@ SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 #define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
    real(real64), intent(in) :: tausy(_V2_)
       !! surface stress in local y-direction
-#undef _V2_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in) :: dpdy(_T2_)
+   real(real64), intent(in) :: dpdy(_V2_)
       !! surface pressure gradient - including air pressure
-#undef _T2_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: idpdy(_T3_)
+#undef _V2_
+#define _V3_ self%domain%V%l(1):,self%domain%V%l(2):,self%domain%V%l(3):
+   real(real64), intent(in) :: idpdy(_V3_)
       !! internal pressure gradient
+#undef _V3_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: viscosity(_T3_)
       !! viscosity
 #undef _T3_

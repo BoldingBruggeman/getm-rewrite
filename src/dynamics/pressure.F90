@@ -139,10 +139,11 @@ SUBROUTINE pressure_initialize(self,runtype,domain)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('pressure_initialize()',level=2)
    self%domain => domain
-   TGrid: associate( TG => self%domain%T )
+   UGrid: associate( UG => self%domain%U )
+   VGrid: associate( VG => self%domain%V )
 #ifndef _STATIC_
-   call mm_s('dpdx',self%dpdx,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
-   call mm_s('dpdy',self%dpdy,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('dpdx',self%dpdx,UG%l(1:2),UG%u(1:2),def=0._real64,stat=stat)
+   call mm_s('dpdy',self%dpdy,VG%l(1:2),VG%u(1:2),def=0._real64,stat=stat)
 #endif
    if (associated(self%fm)) then
       call self%fm%register('dpdx', 'Pa/m', 'surface pressure gradient - x', &
@@ -151,18 +152,19 @@ SUBROUTINE pressure_initialize(self,runtype,domain)
     !KB                        output_level=output_level_debug, &
                             part_of_state=.false., &
                             category='airsea', field=f)
-      call self%fm%send_data('dpdx', self%dpdx(TG%imin:TG%imax,TG%jmin:TG%jmax))
+      call self%fm%send_data('dpdx', self%dpdx(UG%imin:UG%imax,UG%jmin:UG%jmax))
       call self%fm%register('dpdy', 'Pa/m', 'surface pressure gradient - y', &
                             standard_name='', &
                             dimensions=(self%domain%T%dim_2d_ids), &
     !KB                        output_level=output_level_debug, &
                             part_of_state=.false., &
                             category='airsea', field=f)
-      call self%fm%send_data('dpdy', self%dpdy(TG%imin:TG%imax,TG%jmin:TG%jmax))
+      call self%fm%send_data('dpdy', self%dpdy(VG%imin:VG%imax,VG%jmin:VG%jmax))
 
    end if
    call self%internal_initialize(runtype)
-   end associate TGrid
+   end associate VGrid
+   end associate UGrid
 END SUBROUTINE pressure_initialize
 
 !---------------------------------------------------------------------------
