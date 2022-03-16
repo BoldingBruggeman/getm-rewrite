@@ -223,8 +223,9 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
 
 !  Local variables
 #ifdef _AUTOMATIC_
-   real(real64), dimension(0:kmax) :: flux, cfl0, cfls
-   real(real64), dimension(0:kmax), target :: haux, faux
+   real(real64), dimension(0:kmax) :: flux
+   real(real64), dimension(1:kmax-1) :: cfl0, cfls
+   real(real64), dimension(1:kmax), target :: haux, faux
 #else
    real(real64), dimension(:), allocatable, save :: flux, cfl0, cfls
    real(real64), dimension(:), allocatable, target, save :: haux, faux
@@ -239,7 +240,7 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
 !---------------------------------------------------------------------------
    if (first) then
 #ifndef _AUTOMATIC_
-      allocate(flux(0:kmax), cfl0(0:kmax), cfls(0:kmax), haux(0:kmax), faux(0:kmax))
+      allocate(flux(0:kmax), cfl0(1:kmax-1), cfls(1:kmax-1), haux(1:kmax), faux(1:kmax))
 #endif
       first = .false.
    end if
