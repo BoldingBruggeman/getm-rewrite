@@ -213,8 +213,8 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
    real(real64), intent(in) :: w(_3D_)
    integer, intent(in) :: tmask(_2D_)
    real(real64), intent(in) :: dt
-   real(real64), target, intent(inout) :: h(_3D_)
-   real(real64), target, intent(inout) :: f(_3D_)
+   real(real64), target, intent(inout) :: h(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2),1:kmax)
+   real(real64), target, intent(inout) :: f(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2),1:kmax)
 #undef _2D_
 #undef _3D_
 
@@ -229,7 +229,7 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
    real(real64), dimension(:), allocatable, save :: flux, cfl0, cfls
    real(real64), dimension(:), allocatable, target, save :: haux, faux
 #endif
-   real(real64), dimension(:), pointer :: p_haux, p_faux, p1d
+   real(real64), dimension(:), pointer :: p_haux, p_faux
    real(real64) :: itersm1, dtk
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
@@ -334,8 +334,8 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
                end do
 
                if (it .eq. iters) then
-                  p1d => h(i,j,:) ; p_haux(0:) => p1d
-                  p1d => f(i,j,:) ; p_faux(0:) => p1d
+                  p_haux => h(i,j,:)
+                  p_faux => f(i,j,:)
                end if
 
                do k=1,kmax

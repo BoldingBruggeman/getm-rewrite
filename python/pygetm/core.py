@@ -111,7 +111,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return sum / count
 
     @staticmethod
-    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
+    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, is_3d: bool=False, at_interfaces: bool=False, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
         ar = Array(grid=grid, **kwargs)
         if fill is None and ar.fill_value is None:
             fill = ar.fill_value
@@ -121,7 +121,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             dtype = float if fill is None else fill.dtype
         shape = (grid.ny_, grid.nx_)
         if is_3d:
-            shape = (grid.nz_,) + shape
+            shape = (grid.nz_ + 1 if at_interfaces else grid.nz_,) + shape
         if copy or fill is None:
             data = numpy.empty(shape, dtype=dtype)
             if fill is not None:
@@ -155,7 +155,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def interp(self, target):
         if not isinstance(target, Array):
             # Target must be a grid
-            target = Array.create(target, dtype=self.dtype)
+            target = Array.create(target, dtype=self.dtype, is_3d=self.ndim == 3, at_interfaces=self.at_interfaces)
         key = (self.grid.type, target.grid.type)
         if key == (_pygetm.UGRID, _pygetm.TGRID):
             self.grid.interp_x(self, target, offset=1)
@@ -203,6 +203,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def ndim(self):
         return self._ndim
+
+    @property
+    def at_interfaces(self):
+        return self._ndim == 3 and self._shape[0] == self.grid.nz_ + 1
 
     @property
     def size(self):

@@ -45,7 +45,6 @@ cpdef enum:
     UGRID = 2
     VGRID = 3
     XGRID = 4
-    WGRID = 5
     UUGRID = -1
     VVGRID = -2
     UVGRID = -3
@@ -78,14 +77,20 @@ cdef class Array:
                 self.all_values = numpy.asarray(<int[:self.grid.nbdyp:1]> self.p)
             self.on_boundary = True
         elif sub_type == 2:
-            # Depth-explicit array on normal grid
+            # Depth-explicit array on normal grid, layer centers
             if data_type == 0:
                 self.all_values = numpy.asarray(<double[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
                 self.all_values = numpy.asarray(<int[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+        elif sub_type == 3:
+            # Depth-explicit array on normal grid, layer interfaces
+            if data_type == 0:
+                self.all_values = numpy.asarray(<double[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+            else:
+                self.all_values = numpy.asarray(<int[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
         else:
             # Horizontal-only array on normal grid
-            assert sub_type == 0, 'Subtypes other than 0,1,2 not yet implemented'
+            assert sub_type == 0, 'Subtypes other than 0,1,2,3 not yet implemented'
             if data_type == 0:
                 self.all_values = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
@@ -116,8 +121,6 @@ cdef class Grid:
         if grid_type == XGRID:
             self.nx += 1
             self.ny += 1
-        if grid_type == WGRID:
-            self.nz += 1
         self.p = domain_get_grid(domain.p, grid_type, 1, self.nx, 1, self.ny, 1, self.nz, domain.halox, domain.haloy, domain.haloz)
         self.nx_, self.ny_, self.nz_ = self.nx + 2 * domain.halox, self.ny + 2 * domain.haloy, self.nz + 2 * domain.haloz
         domain.grids[grid_type] = self
@@ -176,7 +179,6 @@ cdef class Advection:
     cdef Grid tgrid
     cdef Grid ugrid
     cdef Grid vgrid
-    cdef Grid wgrid
     cdef readonly numpy.ndarray D, h
     cdef double* pD
 
@@ -184,7 +186,6 @@ cdef class Advection:
         self.tgrid = grid
         self.ugrid = grid.ugrid
         self.vgrid = grid.vgrid
-        self.wgrid = grid.wgrid
         self.p = advection_create(scheme, self.tgrid.p)
         self.h = numpy.empty((self.tgrid.nz_, self.tgrid.ny_, self.tgrid.nx_))
         self.D = self.h[0,...]
@@ -202,15 +203,17 @@ cdef class Advection:
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, self.pD, <double *>var.p)
 
     def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None):
-        assert u.grid is self.ugrid
-        assert v.grid is self.vgrid
-        assert w.grid is self.wgrid
-        assert var.grid is self.tgrid
+        assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
+        assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
+        assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
+        assert w.at_interfaces, 'grid mismatch for w: expected values at layer interfaces'
+        assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
+        assert not var.at_interfaces, 'grid mismatch for advected quantity: expected values at layer centers'
         cdef double[:, :, ::1] avar, au, av, ah
         avar = <double[:var.grid.nz_, :var.grid.ny_, :var.grid.nx_:1]> var.p
         au = <double[:u.grid.nz_, :u.grid.ny_, :u.grid.nx_:1]> u.p
         av = <double[:v.grid.nz_, :v.grid.ny_, :v.grid.nx_:1]> v.p
-        ah = self.hn
+        ah = self.h
         self.h[...] = self.tgrid.H.all_values
         for k in range(var.shape[0]):
             advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], 0.5 * timestep, &ah[k,0,0], &avar[k,0,0])
@@ -296,7 +299,8 @@ cdef class Simulation:
         assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
         assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
         assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
-        assert viscosity.grid is self.domain.W, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.W.postfix, viscosity.grid.postfix)
+        assert viscosity.grid is self.domain.T, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.T.postfix, viscosity.grid.postfix)
+        assert viscosity.at_interfaces, 'grid mismatch for viscosity: expected valus at layer interfaces.'
 
         # For now, in absence of 3D momentum, copy [barotropic] depth-averaged horiozntal velocities to 3D velocities
         self.uk.all_values[...] = self.u1.all_values

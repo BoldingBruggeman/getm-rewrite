@@ -134,11 +134,12 @@ contains
 
       integer, parameter :: subtype_boundary = 1
       integer, parameter :: subtype_depth_explicit = 2
+      integer, parameter :: subtype_depth_explicit_interfaces = 3
 
       call c_f_pointer(c_loc(name), pname)
 
       p = C_NULL_PTR
-      grid_type = 1   ! TGRID (1: TGRID, 2: UGRID, 3: VGRID, 4: XGRID, 5: WGRID)
+      grid_type = 1   ! TGRID (1: TGRID, 2: UGRID, 3: VGRID, 4: XGRID)
       sub_type = 0    ! on-grid: 0, on boundary points: 1
       data_type = 0   ! double (use 1 for integer)
       select case (source_type)
@@ -169,6 +170,7 @@ contains
          case ('hn'); p = c_loc(grid%hn); sub_type = subtype_depth_explicit
          case ('ho'); p = c_loc(grid%ho); sub_type = subtype_depth_explicit
          case ('zc'); p = c_loc(grid%zc); sub_type = subtype_depth_explicit
+         case ('zf'); p = c_loc(grid%zf); sub_type = subtype_depth_explicit_interfaces
          end select
       case (1)
          call c_f_pointer(obj, momentum)
@@ -191,7 +193,7 @@ contains
          case ('rrv');   p = c_loc(momentum%rrv); grid_type = 3
          case ('pk');   if (allocated(momentum%pk)) p = c_loc(momentum%pk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('qk');   if (allocated(momentum%qk)) p = c_loc(momentum%qk); grid_type = 3; sub_type = subtype_depth_explicit
-         case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); grid_type = 5; sub_type = subtype_depth_explicit
+         case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); sub_type = subtype_depth_explicit_interfaces
          end select
       case (2)
          call c_f_pointer(obj, pressure)

@@ -13,8 +13,8 @@ class Density:
         assert SA.grid is ct.grid
         assert SA.ndim == 3
         if out is None:
-            out = SA.grid.wgrid.array(is_3d=True)
-        assert out.grid is SA.grid.wgrid
+            out = SA.grid.array(is_3d=True, at_interfaces=True)
+        assert out.grid is SA.grid and out.at_interfaces
         if p is None:
             p = -SA.grid.zc
         assert p.grid is SA.grid

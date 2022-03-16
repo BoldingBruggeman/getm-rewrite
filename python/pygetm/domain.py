@@ -31,22 +31,21 @@ FILL_VALUE = -2e20
 
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
-    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'z0b', 'z0b_min')
+    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min')
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
-    __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'xypostfix', 'zpostfix', 'ugrid', 'vgrid', 'wgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
+    __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'xypostfix', 'zpostfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
 
-    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None, wgrid: Optional['Grid']=None):
+    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
         self.type = grid_type
         self.ioffset = ioffset
         self.joffset = joffset
-        self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.WGRID: 'w', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
-        self.xypostfix = {_pygetm.WGRID: 't'}.get(grid_type, self.postfix)
-        self.zpostfix = {_pygetm.WGRID: 'w'}.get(grid_type, '')
+        self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
+        self.xypostfix = self.postfix
+        self.zpostfix = ''
         self.ugrid: Optional[Grid] = ugrid
         self.vgrid: Optional[Grid] = vgrid
-        self.wgrid: Optional[Grid] = wgrid
         self._sin_rot: Optional[numpy.ndarray] = None
         self._cos_rot: Optional[numpy.ndarray] = None
 
@@ -71,6 +70,7 @@ class Grid(_pygetm.Grid):
             'ho': dict(units='m', long_name='layer heights at previous time step', fill_value=FILL_VALUE),
             'hn': dict(units='m', long_name='layer heights', fill_value=FILL_VALUE),
             'zc': dict(units='m', long_name='depth', fill_value=0.),
+            'zf': dict(units='m', long_name='interface depth', fill_value=0.),
             'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE),
             'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=FILL_VALUE),
         }
@@ -113,7 +113,7 @@ class Grid(_pygetm.Grid):
         return u_new, v_new
 
     def array(self, fill=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=float, **kwargs) -> core.Array:
-        return core.Array.create(self, fill, is_3d, dtype, **kwargs)
+        return core.Array.create(self, fill, is_3d=is_3d, dtype=dtype, **kwargs)
 
     def add_to_netcdf(self, nc: netCDF4.Dataset, postfix: str=''):
         xdim, ydim = 'x' + postfix, 'y' + postfix
@@ -494,8 +494,7 @@ class Domain(_pygetm.Domain):
         # Create grids
         self.U = Grid(self, _pygetm.UGRID, ioffset=2, joffset=1, ugrid=self.UU, vgrid=self.UV)
         self.V = Grid(self, _pygetm.VGRID, ioffset=1, joffset=2, ugrid=self.VU, vgrid=self.VV)
-        self.W = Grid(self, _pygetm.WGRID, ioffset=1, joffset=1)
-        self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1, ugrid=self.U, vgrid=self.V, wgrid=self.W)
+        self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1, ugrid=self.U, vgrid=self.V)
         self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0)
 
         self.Dmin = 1.

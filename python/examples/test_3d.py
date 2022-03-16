@@ -12,7 +12,7 @@ sp = domain.T.array(fill=0.)
 
 idpdx = domain.U.array(fill=0., is_3d=True)
 idpdy = domain.V.array(fill=0., is_3d=True)
-viscosity = domain.W.array(fill=0., is_3d=True)
+viscosity = domain.T.array(fill=0., is_3d=True, at_interfaces=True)
 
 # Time
 timestep = 10.

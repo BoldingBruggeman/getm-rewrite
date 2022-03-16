@@ -295,8 +295,8 @@ class Simulation(_pygetm.Simulation):
 
         _pygetm.Simulation.uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy)
 
-    def uv_momentum_3d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
-        _pygetm.Simulation.uv_momentum_3d(self, timestep, tausx, tausy, dpdx, dpdy, idpdx, idpdy, viscosity)
+    def uvw_momentum_3d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
+        _pygetm.Simulation.uvw_momentum_3d(self, timestep, tausx, tausy, dpdx, dpdy, idpdx, idpdy, viscosity)
 
         itimestep = 1. / timestep
 
@@ -309,7 +309,7 @@ class Simulation(_pygetm.Simulation):
         self.qk.interp(self.uva3d)
         self.uua3d.all_values[...] /= self.domain.UU.H.all_values
         self.uva3d.all_values[...] /= self.domain.UV.H.all_values
-        self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww, timestep, self.uk)
+        self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk)
         self.advU.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
 
         # Advect 3D v velocity using velocities interpolated to its own advection grids
@@ -317,7 +317,7 @@ class Simulation(_pygetm.Simulation):
         self.qk.interp(self.vva3d)
         self.vua3d.all_values[...] /= self.domain.VU.H.all_values
         self.vva3d.all_values[...] /= self.domain.VV.H.all_values
-        self.vadv(self.vua3d, self.vva3d, self.ww, timestep, self.vk)
+        self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk)
         self.advV.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
     def update_depth(self):

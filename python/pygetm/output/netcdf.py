@@ -37,10 +37,11 @@ class NetCDFFile(File):
                     nx = grid.domain.tiling.nx_glob + grid.nx - grid.domain.T.nx
                     ny = grid.domain.tiling.ny_glob + grid.ny - grid.domain.T.ny
                     nz = grid.nz
-                xname, yname, zname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix
+                xname, yname, zname, ziname = 'x%s' % grid.xypostfix, 'y%s' % grid.xypostfix, 'z%s' % grid.zpostfix, 'zi%s' % grid.zpostfix
                 if (xname not in self.nc.dimensions): self.nc.createDimension(xname, nx)
                 if (yname not in self.nc.dimensions): self.nc.createDimension(yname, ny)
                 if (zname not in self.nc.dimensions): self.nc.createDimension(zname, nz)
+                if (ziname not in self.nc.dimensions): self.nc.createDimension(ziname, nz + 1)
             self.nc.createDimension('time',)
             self.ncvars = []
             for output_name, field in self.fields.items():
