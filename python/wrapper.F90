@@ -183,15 +183,15 @@ contains
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
          case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
          case ('bdyv');   if (allocated(momentum%bdyv)) p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
-         case ('uk');   p = c_loc(momentum%uk); grid_type = 2; sub_type = subtype_depth_explicit
-         case ('vk');   p = c_loc(momentum%vk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('uk');   if (allocated(momentum%uk)) p = c_loc(momentum%uk); grid_type = 2; sub_type = subtype_depth_explicit
+         case ('vk');   if (allocated(momentum%vk)) p = c_loc(momentum%vk); grid_type = 3; sub_type = subtype_depth_explicit
          case ('ru');   p = c_loc(momentum%ru); grid_type = 2
          case ('rv');   p = c_loc(momentum%rv); grid_type = 3
          case ('rru');   p = c_loc(momentum%rru); grid_type = 2
          case ('rrv');   p = c_loc(momentum%rrv); grid_type = 3
-         case ('pk');   p = c_loc(momentum%pk); grid_type = 2; sub_type = subtype_depth_explicit
-         case ('qk');   p = c_loc(momentum%qk); grid_type = 3; sub_type = subtype_depth_explicit
-         case ('ww');   p = c_loc(momentum%ww); grid_type = 5; sub_type = subtype_depth_explicit
+         case ('pk');   if (allocated(momentum%pk)) p = c_loc(momentum%pk); grid_type = 2; sub_type = subtype_depth_explicit
+         case ('qk');   if (allocated(momentum%qk)) p = c_loc(momentum%qk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); grid_type = 5; sub_type = subtype_depth_explicit
          end select
       case (2)
          call c_f_pointer(obj, pressure)
