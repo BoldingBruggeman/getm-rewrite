@@ -214,7 +214,7 @@ contains
       integer(c_int), intent(in), value :: ioffset, n
 
       type (type_getm_grid),    pointer :: grid
-      real(real64), contiguous, pointer :: source(:,:), target(:,:)
+      real(real64), contiguous, pointer :: source(:,:,:), target(:,:,:)
       integer :: i, j, k
 
       call c_f_pointer(pgrid, grid)
@@ -223,7 +223,7 @@ contains
       do k = 1, n
          do j = 1, size(source, 2)
             do i = 1, size(source, 1) - 1
-               target(i + ioffset, j) = 0.5_real64 * (source(i, j) + source(i + 1, j))
+               target(i + ioffset, j, k) = 0.5_real64 * (source(i, j, k) + source(i + 1, j, k))
             end do
          end do
       end do
@@ -234,7 +234,7 @@ contains
       integer(c_int), intent(in), value :: joffset, n
 
       type (type_getm_grid),    pointer :: grid
-      real(real64), contiguous, pointer :: source(:,:), target(:,:)
+      real(real64), contiguous, pointer :: source(:,:,:), target(:,:,:)
       integer :: i, j, k
 
       call c_f_pointer(pgrid, grid)
@@ -243,7 +243,7 @@ contains
       do k = 1, n
          do j = 1, size(source, 2) - 1
             do i = 1, size(source, 1)
-               target(i, j + joffset) = 0.5_real64 * (source(i, j) + source(i, j + 1))
+               target(i, j + joffset, k) = 0.5_real64 * (source(i, j, k) + source(i, j + 1, k))
             end do
          end do
       end do
@@ -254,7 +254,7 @@ contains
       integer(c_int), intent(in), value :: ioffset, joffset, n
 
       type (type_getm_grid),    pointer :: source_grid, target_grid
-      real(real64), contiguous, pointer :: source(:,:), target(:,:)
+      real(real64), contiguous, pointer :: source(:,:,:), target(:,:,:)
       integer :: i, j, k
 
       call c_f_pointer(psource_grid, source_grid)
@@ -264,8 +264,8 @@ contains
       do k = 1, n
          do j = 1, size(source, 2) - 1
             do i = 1, size(source, 1) - 1
-               target(i + ioffset, j + joffset) = 0.25_real64 * (source(i, j) + source(i + 1, j) &
-                  + source(i, j + 1) + source(i + 1, j + 1))
+               target(i + ioffset, j + joffset, k) = 0.25_real64 * (source(i, j, k) + source(i + 1, j, k) &
+                  + source(i, j + 1, k) + source(i + 1, j + 1, k))
             end do
          end do
       end do
@@ -447,7 +447,8 @@ contains
       call c_f_pointer(ptausx, tausx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
       call c_f_pointer(pdpdx, dpdx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
       call c_f_pointer(pidpdx, idpdx, momentum%domain%U%u - momentum%domain%U%l + 1)
-      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%T%u(1) - momentum%domain%T%l(1) + 1, momentum%domain%T%u(2) - momentum%domain%T%l(2) + 1, momentum%domain%T%u(3) - momentum%domain%T%l(3) + 2/))
+      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%T%u(1) - momentum%domain%T%l(1) + 1, &
+         momentum%domain%T%u(2) - momentum%domain%T%l(2) + 1, momentum%domain%T%u(3) - momentum%domain%T%l(3) + 2/))
       select case (direction)
          case (1)
             call momentum%pk_3d(timestep,tausx,dpdx,idpdx,viscosity)
