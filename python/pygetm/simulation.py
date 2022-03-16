@@ -88,8 +88,8 @@ class Simulation(_pygetm.Simulation):
             self.salt_source = dom.T.array(fill=0., is_3d=True)
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
 
-            self.SS = dom.W.array(fill=0., is_3d=True, name='SS', units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
-            self.NN = dom.W.array(fill=0., is_3d=True, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
+            self.SS = dom.T.array(fill=0., is_3d=True, at_interfaces=True, name='SS', units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
+            self.NN = dom.T.array(fill=0., is_3d=True, at_interfaces=True, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
             self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity', fill_value=FILL_VALUE)
             self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity', fill_value=FILL_VALUE)
             self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness', fill_value=FILL_VALUE)

@@ -8,8 +8,8 @@ from . import _pygotm
 
 class Turbulence:
     def __init__(self, domain: domain.Domain):
-        self.nuh = domain.W.array(is_3d=True, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=-9999.)
-        self.num = domain.W.array(is_3d=True, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=-9999.)
+        self.nuh = domain.T.array(is_3d=True, at_interfaces=True, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=-9999.)
+        self.num = domain.T.array(is_3d=True, at_interfaces=True, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=-9999.)
 
 class GOTM(Turbulence):
     def __init__(self, domain: domain.Domain, nml_path: Optional[str]=None):
@@ -18,18 +18,18 @@ class GOTM(Turbulence):
         self.domain = domain
         self.nuh.fill(self.mix.nuh[:, numpy.newaxis, numpy.newaxis])
         self.num.fill(self.mix.num[:, numpy.newaxis, numpy.newaxis])
-        self.tke = domain.W.array(fill=self.mix.tke[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='tke', units='m2 s-2', long_name='turbulent kinetic energy')
-        self.tkeo = domain.W.array(fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='tkeo', units='m2 s-2', long_name='turbulent kinetic energy at previous timestep')
-        self.eps = domain.W.array(fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='eps', units='m2 s-3', long_name='energy dissipation rate')
-        self.L = domain.W.array(fill=self.mix.L[:, numpy.newaxis, numpy.newaxis], is_3d=True, name='L', units='m', long_name='turbulence length scale')
+        self.tke = domain.T.array(fill=self.mix.tke[:, numpy.newaxis, numpy.newaxis], is_3d=True, at_interfaces=True, name='tke', units='m2 s-2', long_name='turbulent kinetic energy')
+        self.tkeo = domain.T.array(fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis], is_3d=True, at_interfaces=True, name='tkeo', units='m2 s-2', long_name='turbulent kinetic energy at previous timestep')
+        self.eps = domain.T.array(fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis], is_3d=True, at_interfaces=True, name='eps', units='m2 s-3', long_name='energy dissipation rate')
+        self.L = domain.T.array(fill=self.mix.L[:, numpy.newaxis, numpy.newaxis], is_3d=True, at_interfaces=True, name='L', units='m', long_name='turbulence length scale')
 
     def __call__(self, timestep: float, u_taus: core.Array, u_taub: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
         assert u_taus.grid is self.domain.T and u_taus.ndim == 2
         assert u_taub.grid is self.domain.T and u_taub.ndim == 2
         assert z0s.grid is self.domain.T and z0s.ndim == 2
         assert z0b.grid is self.domain.T and z0b.ndim == 2
-        assert NN.grid is self.domain.W and NN.ndim == 3
-        assert SS.grid is self.domain.W and SS.ndim == 3
+        assert NN.grid is self.domain.T and NN.ndim == 3 and NN.at_interfaces
+        assert SS.grid is self.domain.T and SS.ndim == 3 and SS.at_interfaces
         loc_h = numpy.empty((self.domain.T.hn.shape[0] + 1,), dtype=self.domain.T.hn.dtype)
         loc_NN = numpy.empty((NN.shape[0],), dtype=NN.dtype)
         loc_SS = numpy.empty((SS.shape[0],), dtype=SS.dtype)

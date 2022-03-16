@@ -16,10 +16,10 @@ dt = 600
 nstep = 100
 cnpar = 1.
 
-nuh = domain.W.array(fill=1e-2, is_3d=True)
+nuh = domain.T.array(fill=1e-2, is_3d=True, at_interfaces=True)
 
 # Set diffusivity at all masked points to NaN
-nuh.all_values[:, domain.W.mask.all_values != 1] = numpy.nan
+nuh.all_values[:, domain.T.mask.all_values != 1] = numpy.nan
 
 # Set diffusivity at the very surface and bottom to NaN,
 # so we can later check that this value has not been propagated (used)
