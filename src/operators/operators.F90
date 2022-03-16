@@ -34,8 +34,8 @@ MODULE getm_operators
 
       class (type_advection_base), allocatable :: op
       real(real64), allocatable, private :: flux(:,:), QU(:,:)
-      real(real64), allocatable :: D(:,:)
-      real(real64), allocatable :: hn(:,:,:)
+      !real(real64), allocatable :: D(:,:)
+      !real(real64), allocatable :: hn(:,:,:)
 
       real(real64) :: flux_time
       real(real64) :: adv_time
@@ -47,6 +47,7 @@ MODULE getm_operators
       procedure :: advection_calculate_2d
       procedure :: advection_calculate_u2d
       procedure :: advection_calculate_v2d
+      procedure :: advection_calculate_w3d
       procedure :: advection_calculate_3d
       generic   :: calculate => advection_calculate_2d, advection_calculate_3d
 
@@ -68,23 +69,31 @@ MODULE getm_operators
          real(real64), intent(inout) :: f(:,:)
       end subroutine advection_calculate_2d
 
-      module subroutine advection_calculate_u2d(self, ugrid, u,dt, tgrid, f)
+      module subroutine advection_calculate_u2d(self, ugrid, u,dt, tgrid, D, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: ugrid
          real(real64), intent(in) :: u(:,:)
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
-         real(real64), intent(inout) :: f(:,:)
+         real(real64), intent(inout) :: D(:,:), f(:,:)
       end subroutine advection_calculate_u2d
 
-      module subroutine advection_calculate_v2d(self, vgrid, v, dt, tgrid, f)
+      module subroutine advection_calculate_v2d(self, vgrid, v, dt, tgrid, D, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: vgrid
          real(real64), intent(in) :: v(:,:)
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
-         real(real64), intent(inout) :: f(:,:)
+         real(real64), intent(inout) :: D(:,:), f(:,:)
       end subroutine advection_calculate_v2d
+
+      module subroutine advection_calculate_w3d(self, w, dt, tgrid, h, f)
+         class(type_advection), intent(inout) :: self
+         real(real64), intent(in) :: w(:,:,:)
+         real(real64), intent(in) :: dt
+         type(type_getm_grid), intent(inout) :: tgrid
+         real(real64), intent(inout) :: h(:,:,:), f(:,:,:)
+      end subroutine advection_calculate_w3d
 
       module subroutine advection_calculate_3d(self, ugrid, u, vgrid, v, dt, tgrid, f)
          class(type_advection), intent(inout) :: self

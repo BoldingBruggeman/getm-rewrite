@@ -34,7 +34,8 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    VGrid: associate( VG => self%domain%V )
    call mm_s('pk',self%pk,UG%l(1:3),UG%u(1:3),def=0._real64,stat=stat)
    call mm_s('qk',self%qk,VG%l(1:3),VG%u(1:3),def=0._real64,stat=stat)
-   call mm_s('ww',self%ww,self%pk,def=0._real64,stat=stat)
+   l = TG%l+(/0,0,-1/)
+   call mm_s('ww',self%ww,l,TG%u(1:3),def=0._real64,stat=stat)
    call mm_s('pka',self%pka,self%pk,def=0._real64,stat=stat)
    call mm_s('qka',self%qka,self%qk,def=0._real64,stat=stat)
    call mm_s('fpk',self%fpk,self%pk,def=0._real64,stat=stat)
@@ -49,7 +50,6 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('taub',self%taub,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
    call mm_s('taubx',self%taubx,self%U,def=0._real64,stat=stat)
    call mm_s('tauby',self%tauby,self%V,def=0._real64,stat=stat)
-   l = TG%l+(/0,0,-1/)
    call mm_s('SS',self%SS,l,TG%u,def=0._real64,stat=stat)
    if (self%advection_scheme > 0) then
       call mm_s('uuadvhn',self%uuadvgrid%hn,TG%hn,def=0._real64,stat=stat)
@@ -140,7 +140,7 @@ END SUBROUTINE uvw_momentum_3d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
+MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
    !! solve the 3D momentum equation in the local x-direction
 
    IMPLICIT NONE
@@ -243,7 +243,7 @@ END SUBROUTINE pk_3d
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
+MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
    !! solve the 3D momentum equation in the local y-direction
 
    IMPLICIT NONE

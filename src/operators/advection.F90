@@ -65,8 +65,8 @@ module SUBROUTINE advection_initialize(self, scheme, tgrid)
          call upstream_initialize()
    end select
 #endif
-   allocate(self%D,mold=tgrid%D)
-!KB   allocate(self%hn,mold=tgrid%hn)
+   !allocate(self%D,mold=tgrid%D)
+   !allocate(self%hn,mold=tgrid%hn)
 END SUBROUTINE advection_initialize
 
 !---------------------------------------------------------------------------
@@ -78,20 +78,22 @@ MODULE PROCEDURE advection_calculate_2d
 !  Local constants
 
 !  Local variables
+   real(real64), allocatable :: D(:,:)
 !---------------------------------------------------------------------------
    if (.not. allocated(self%op)) return
 
-   self%D(:,:) = tgrid%D
+   allocate(D,mold=tgrid%D)
+   D(:,:) = tgrid%D
 
    call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%mask,tgrid%iarea,dt/2,self%D,f)
+                    tgrid%mask,tgrid%iarea,dt/2,D,f)
    call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                    tgrid%mask,tgrid%iarea,dt,self%D,f)
+                    tgrid%mask,tgrid%iarea,dt,D,f)
    call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%mask,tgrid%iarea,dt/2,self%D,f)
+                    tgrid%mask,tgrid%iarea,dt/2,D,f)
 
 END PROCEDURE advection_calculate_2d
 
@@ -103,7 +105,7 @@ MODULE PROCEDURE advection_calculate_u2d
 
    call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%mask,tgrid%iarea,dt,self%D,f)
+                    tgrid%mask,tgrid%iarea,dt,D,f)
 
 END PROCEDURE advection_calculate_u2d
 
@@ -116,9 +118,19 @@ MODULE PROCEDURE advection_calculate_v2d
 
    call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                    tgrid%mask,tgrid%iarea,dt,self%D,f)
+                    tgrid%mask,tgrid%iarea,dt,D,f)
 
 END PROCEDURE advection_calculate_v2d
+
+MODULE PROCEDURE advection_calculate_w3d
+
+   IMPLICIT NONE
+
+!---------------------------------------------------------------------------
+   call self%op%w3d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%kmax,tgrid%halo, &
+                    w,tgrid%mask,dt,h,f)
+
+END PROCEDURE advection_calculate_w3d
 
 !---------------------------------------------------------------------------
 
@@ -130,22 +142,21 @@ MODULE PROCEDURE advection_calculate_3d
 
 !  Local variables
    integer :: k
-!KB   real(real64), allocatable :: hn(:,:,:)
-!KB   allocate(hn,mold=tgrid%hn)
+   real(real64), allocatable :: hn(:,:,:)
 !---------------------------------------------------------------------------
    if (.not. allocated(self%op)) return
 
-!KB   allocate(hn,mold=tgrid%hn)
-   self%hn = tgrid%hn
+   allocate(hn,mold=tgrid%hn)
+   hn(:,:,:) = tgrid%hn
 #if 1
    do k=tgrid%kmin,tgrid%kmax
 !KB - evt. self%D=tgrid%hn(:,:,k) - to avoid 3d aux. variable
       call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
       call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
    end do
 !KB   call w_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
 !KB                             tgrid%kmax, w, tgrid%mask, dt, self%hn, f)
@@ -153,10 +164,10 @@ MODULE PROCEDURE advection_calculate_3d
 !KB - evt. self%D=tgrid%hn(:,:,k) - to avoid 3d aux. variable
       call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
       call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,self%hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
    end do
 #else
    select case (scheme)

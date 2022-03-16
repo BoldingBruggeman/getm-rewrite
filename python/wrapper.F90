@@ -138,7 +138,7 @@ contains
       call c_f_pointer(c_loc(name), pname)
 
       p = C_NULL_PTR
-      grid_type = 1   ! TGRID (1: TGRID, 2: UGRID, 3: VGRID, 4: XGRID)
+      grid_type = 1   ! TGRID (1: TGRID, 2: UGRID, 3: VGRID, 4: XGRID, 5: WGRID)
       sub_type = 0    ! on-grid: 0, on boundary points: 1
       data_type = 0   ! double (use 1 for integer)
       select case (source_type)
@@ -189,6 +189,9 @@ contains
          case ('rv');   p = c_loc(momentum%rv); grid_type = 3
          case ('rru');   p = c_loc(momentum%rru); grid_type = 2
          case ('rrv');   p = c_loc(momentum%rrv); grid_type = 3
+         case ('pk');   p = c_loc(momentum%pk); grid_type = 2; sub_type = subtype_depth_explicit
+         case ('qk');   p = c_loc(momentum%qk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('ww');   p = c_loc(momentum%ww); grid_type = 5; sub_type = subtype_depth_explicit
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -206,58 +209,64 @@ contains
       end select
    end subroutine
 
-   subroutine grid_interp_x(pgrid, psource, ptarget, ioffset) bind(c)
+   subroutine grid_interp_x(pgrid, psource, ptarget, ioffset, n) bind(c)
       type(c_ptr),    intent(in), value :: pgrid, psource, ptarget
-      integer(c_int), intent(in), value :: ioffset
+      integer(c_int), intent(in), value :: ioffset, n
 
       type (type_getm_grid),    pointer :: grid
       real(real64), contiguous, pointer :: source(:,:), target(:,:)
-      integer :: i, j
+      integer :: i, j, k
 
       call c_f_pointer(pgrid, grid)
-      call c_f_pointer(psource, source, grid%u(1:2) - grid%l(1:2) + 1)
-      call c_f_pointer(ptarget, target, grid%u(1:2) - grid%l(1:2) + 1)
-      do j = 1, size(source, 2)
-         do i = 1, size(source, 1) - 1
-            target(i + ioffset, j) = 0.5_real64 * (source(i, j) + source(i + 1, j))
+      call c_f_pointer(psource, source, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
+      call c_f_pointer(ptarget, target, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
+      do k = 1, n
+         do j = 1, size(source, 2)
+            do i = 1, size(source, 1) - 1
+               target(i + ioffset, j) = 0.5_real64 * (source(i, j) + source(i + 1, j))
+            end do
          end do
       end do
    end subroutine
 
-   subroutine grid_interp_y(pgrid, psource, ptarget, joffset) bind(c)
+   subroutine grid_interp_y(pgrid, psource, ptarget, joffset, n) bind(c)
       type(c_ptr),    intent(in), value :: pgrid, psource, ptarget
-      integer(c_int), intent(in), value :: joffset
+      integer(c_int), intent(in), value :: joffset, n
 
       type (type_getm_grid),    pointer :: grid
       real(real64), contiguous, pointer :: source(:,:), target(:,:)
-      integer :: i, j
+      integer :: i, j, k
 
       call c_f_pointer(pgrid, grid)
-      call c_f_pointer(psource, source, grid%u(1:2) - grid%l(1:2) + 1)
-      call c_f_pointer(ptarget, target, grid%u(1:2) - grid%l(1:2) + 1)
-      do j = 1, size(source, 2) - 1
-         do i = 1, size(source, 1)
-            target(i, j + joffset) = 0.5_real64 * (source(i, j) + source(i, j + 1))
+      call c_f_pointer(psource, source, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
+      call c_f_pointer(ptarget, target, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
+      do k = 1, n
+         do j = 1, size(source, 2) - 1
+            do i = 1, size(source, 1)
+               target(i, j + joffset) = 0.5_real64 * (source(i, j) + source(i, j + 1))
+            end do
          end do
       end do
    end subroutine
 
-   subroutine grid_interp_xy(psource_grid, psource, ptarget_grid, ptarget, ioffset, joffset) bind(c)
+   subroutine grid_interp_xy(psource_grid, psource, ptarget_grid, ptarget, ioffset, joffset, n) bind(c)
       type(c_ptr),    intent(in), value :: psource_grid, psource, ptarget_grid, ptarget
-      integer(c_int), intent(in), value :: ioffset, joffset
+      integer(c_int), intent(in), value :: ioffset, joffset, n
 
       type (type_getm_grid),    pointer :: source_grid, target_grid
       real(real64), contiguous, pointer :: source(:,:), target(:,:)
-      integer :: i, j
+      integer :: i, j, k
 
       call c_f_pointer(psource_grid, source_grid)
       call c_f_pointer(ptarget_grid, target_grid)
-      call c_f_pointer(psource, source, source_grid%u(1:2) - source_grid%l(1:2) + 1)
-      call c_f_pointer(ptarget, target, target_grid%u(1:2) - target_grid%l(1:2) + 1)
-      do j = 1, size(source, 2) - 1
-         do i = 1, size(source, 1) - 1
-            target(i + ioffset, j + joffset) = 0.25_real64 * (source(i, j) + source(i + 1, j) &
-               + source(i, j + 1) + source(i + 1, j + 1))
+      call c_f_pointer(psource, source, (/source_grid%u(1) - source_grid%l(1) + 1, source_grid%u(2) - source_grid%l(2) + 1, n/))
+      call c_f_pointer(ptarget, target, (/target_grid%u(1) - target_grid%l(1) + 1, target_grid%u(2) - target_grid%l(2) + 1, n/))
+      do k = 1, n
+         do j = 1, size(source, 2) - 1
+            do i = 1, size(source, 1) - 1
+               target(i + ioffset, j + joffset) = 0.25_real64 * (source(i, j) + source(i + 1, j) &
+                  + source(i, j + 1) + source(i + 1, j + 1))
+            end do
          end do
       end do
    end subroutine
@@ -326,10 +335,9 @@ contains
       end if
    end subroutine
 
-   function advection_create(scheme, ptgrid, pD) result(padvection) bind(c)
+   function advection_create(scheme, ptgrid) result(padvection) bind(c)
       integer(c_int), intent(in), value :: scheme
       type(c_ptr),    intent(in), value :: ptgrid
-      type(c_ptr),    intent(out)       :: pD
       type(c_ptr) :: padvection
 
       type (type_getm_grid), pointer :: tgrid
@@ -339,30 +347,49 @@ contains
       allocate(advection)
       call advection%initialize(scheme, tgrid)
       padvection = c_loc(advection)
-      pD = c_loc(advection%D)
+      !pD = c_loc(advection%D)
+      !phn = c_loc(advection%hn)
    end function
 
-   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, timestep, pvar) bind(c)
+   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, timestep, pD, pvar) bind(c)
       integer(c_int), intent(in), value :: direction
       real(c_double), intent(in), value :: timestep
-      type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, pvar
+      type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, pD, pvar
 
       type (type_advection),    pointer                 :: advection
       type (type_getm_grid),  pointer                   :: tgrid, ugrid
-      real(real64), contiguous, pointer, dimension(:,:) :: u, var
+      real(real64), contiguous, pointer, dimension(:,:) :: u, D, var
 
       call c_f_pointer(padvection, advection)
       if (.not. allocated(advection%op)) return
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pugrid, ugrid)
       call c_f_pointer(pu, u, ugrid%u(1:2) - ugrid%l(1:2) + 1)
+      call c_f_pointer(pD, D, tgrid%u(1:2) - tgrid%l(1:2) + 1)
       call c_f_pointer(pvar, var, tgrid%u(1:2) - tgrid%l(1:2) + 1)
       select case (direction)
          case (1)
-            call advection%advection_calculate_u2d(ugrid, u, timestep, tgrid, var)
+            call advection%advection_calculate_u2d(ugrid, u, timestep, tgrid, D, var)
          case (2)
-            call advection%advection_calculate_v2d(ugrid, u, timestep, tgrid, var)
+            call advection%advection_calculate_v2d(ugrid, u, timestep, tgrid, D, var)
       end select
+   end subroutine
+
+   subroutine advection_w_calculate(padvection, ptgrid, pw, timestep, ph, pvar) bind(c)
+      real(c_double), intent(in), value :: timestep
+      type(c_ptr),    intent(in), value :: padvection, ptgrid, pw, ph, pvar
+
+      type (type_advection),    pointer                   :: advection
+      type (type_getm_grid),    pointer                   :: tgrid
+      real(real64), contiguous, pointer, dimension(:,:,:) :: w, h, var
+
+      call c_f_pointer(padvection, advection)
+      if (.not. allocated(advection%op)) return
+      call c_f_pointer(ptgrid, tgrid)
+      call c_f_pointer(pw, w, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%kmax + 1/))
+      call c_f_pointer(ph, h, tgrid%u - tgrid%l + 1)
+      call c_f_pointer(pvar, var, tgrid%u - tgrid%l + 1)
+      call advection%advection_calculate_w3d(w, timestep, tgrid, h, var)
    end subroutine
 
    function momentum_create(runtype, pdomain, apply_bottom_friction) result(pmomentum) bind(c)
@@ -381,6 +408,8 @@ contains
       momentum%apply_bottom_friction = (apply_bottom_friction == 1)
       momentum%apply_diffusion = .false.
       call momentum%initialize(runtype, domain)
+      allocate(momentum%vertical_diffusion)
+      call momentum%vertical_diffusion%initialize(domain%T)
       pmomentum = c_loc(momentum)
    end function
 
@@ -404,6 +433,39 @@ contains
       end select
    end subroutine
 
+   subroutine momentum_u_3d(direction, pmomentum, timestep, ptausx, pdpdx, pidpdx, pviscosity) bind(c)
+      integer(c_int), intent(in), value :: direction
+      type(c_ptr),    intent(in), value :: pmomentum
+      real(c_double), intent(in), value :: timestep
+      type(c_ptr),    intent(in), value :: ptausx, pdpdx, pidpdx, pviscosity
+
+      type (type_getm_momentum), pointer :: momentum
+      real(real64), contiguous, pointer, dimension(:,:) :: tausx, dpdx
+      real(real64), contiguous, pointer, dimension(:,:,:) :: idpdx, viscosity
+
+      call c_f_pointer(pmomentum, momentum)
+      call c_f_pointer(ptausx, tausx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
+      call c_f_pointer(pdpdx, dpdx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
+      call c_f_pointer(pidpdx, idpdx, momentum%domain%U%u - momentum%domain%U%l + 1)
+      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%T%u(1) - momentum%domain%T%l(1) + 1, momentum%domain%T%u(2) - momentum%domain%T%l(2) + 1, momentum%domain%T%u(3) - momentum%domain%T%l(3) + 2/))
+      select case (direction)
+         case (1)
+            call momentum%pk_3d(timestep,tausx,dpdx,idpdx,viscosity)
+         case (2)
+            call momentum%qk_3d(timestep,tausx,dpdx,idpdx,viscosity)
+      end select
+   end subroutine
+
+   subroutine momentum_w_3d(pmomentum, timestep) bind(c)
+      type(c_ptr),    intent(in), value :: pmomentum
+      real(c_double), intent(in), value :: timestep
+
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pmomentum, momentum)
+      call momentum%w_momentum_3d(timestep)
+   end subroutine
+
    subroutine momentum_uv_coriolis(direction, pmomentum) bind(c)
       integer(c_int), intent(in), value :: direction
       type(c_ptr),    intent(in), value :: pmomentum
@@ -416,6 +478,21 @@ contains
             call momentum%coriolis_fu()
          case (2)
             call momentum%coriolis_fv()
+      end select
+   end subroutine
+
+   subroutine momentum_uv_coriolis_3d(direction, pmomentum) bind(c)
+      integer(c_int), intent(in), value :: direction
+      type(c_ptr),    intent(in), value :: pmomentum
+
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pmomentum, momentum)
+      select case (direction)
+         case (1)
+            call momentum%coriolis_fpk()
+         case (2)
+            call momentum%coriolis_fqk()
       end select
    end subroutine
 
@@ -436,6 +513,18 @@ contains
 
       call c_f_pointer(pmomentum, momentum)
       call momentum%bottom_friction_3d()
+   end subroutine
+
+   subroutine momentum_shear_frequency(pmomentum, pviscosity) bind(c)
+      type(c_ptr),    intent(in), value :: pmomentum
+      type(c_ptr),    intent(in), value :: pviscosity
+
+      type (type_getm_momentum), pointer :: momentum
+      real(real64), contiguous, pointer, dimension(:,:,:) :: viscosity
+
+      call c_f_pointer(pmomentum, momentum)
+      call c_f_pointer(pviscosity, viscosity, momentum%domain%T%u - momentum%domain%T%l + 1)
+      call momentum%shear_frequency(viscosity)
    end subroutine
 
    function pressure_create(runtype, pdomain) result(ppressure) bind(c)

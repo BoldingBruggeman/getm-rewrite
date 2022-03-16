@@ -15,19 +15,24 @@ cdef extern void domain_initialize(void* grid, int runtype, double Dmin, double*
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain) nogil
-cdef extern void grid_interp_x(void* grid, double* source, double* target, int ioffset) nogil
-cdef extern void grid_interp_y(void* grid, double* source, double* target, int joffset) nogil
-cdef extern void grid_interp_xy(void* source_grid, double* source, void* target_grid, double* target, int ioffset, int joffset) nogil
+cdef extern void grid_interp_x(void* grid, double* source, double* target, int ioffset, int n) nogil
+cdef extern void grid_interp_y(void* grid, double* source, double* target, int joffset, int n) nogil
+cdef extern void grid_interp_xy(void* source_grid, double* source, void* target_grid, double* target, int ioffset, int joffset, int n) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
-cdef extern void* advection_create(int scheme, void* tgrid, void** p) nogil
-cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pvar) nogil
+cdef extern void* advection_create(int scheme, void* tgrid) nogil
+cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pD, double* pvar) nogil
+cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_friction) nogil
 cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
+cdef extern void momentum_u_3d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx, double* pidpdx, double* pviscosity) nogil
+cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
 cdef extern void momentum_uv_coriolis(int direction, void* momentum) nogil
+cdef extern void momentum_uv_coriolis_3d(int direction, void* momentum) nogil
 cdef extern void momentum_bottom_friction_2d(void* momentum, int runtype) nogil
 cdef extern void momentum_bottom_friction_3d(void* momentum) nogil
+cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void* pressure_create(int runtype, void* pdomain) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
@@ -121,13 +126,13 @@ cdef class Grid:
         return ar.wrap_c_array(self.domain, 0, self.p, name)
 
     def interp_x(self, Array source, Array target, int offset):
-        grid_interp_x(self.p, <double *>source.p, <double *>target.p, offset)
+        grid_interp_x(self.p, <double *>source.p, <double *>target.p, offset, 1 if source.ndim == 2 else source.shape[0])
 
     def interp_y(self, Array source, Array target, int offset):
-        grid_interp_y(self.p, <double *>source.p, <double *>target.p, offset)
+        grid_interp_y(self.p, <double *>source.p, <double *>target.p, offset, 1 if source.ndim == 2 else source.shape[0])
 
     def interp_xy(self, Array source, Array target, int ioffset, int joffset):
-        grid_interp_xy(self.p, <double *>source.p, <double *>target.grid.p, <double *>target.p, ioffset, joffset)
+        grid_interp_xy(self.p, <double *>source.p, <double *>target.grid.p, <double *>target.p, ioffset, joffset, 1 if source.ndim == 2 else source.shape[0])
 
 cdef class Domain:
     cdef void* p
@@ -171,26 +176,54 @@ cdef class Advection:
     cdef Grid tgrid
     cdef Grid ugrid
     cdef Grid vgrid
-    cdef readonly numpy.ndarray D
+    cdef Grid wgrid
+    cdef readonly numpy.ndarray D, h
+    cdef double* pD
 
     def __init__(self, Grid grid, int scheme):
-        cdef void* pD
         self.tgrid = grid
         self.ugrid = grid.ugrid
         self.vgrid = grid.vgrid
-        self.p = advection_create(scheme, self.tgrid.p, &pD)
-        self.D = numpy.asarray(<double[:self.tgrid.ny_, :self.tgrid.nx_:1]> pD)
+        self.wgrid = grid.wgrid
+        self.p = advection_create(scheme, self.tgrid.p)
+        self.h = numpy.empty((self.tgrid.nz_, self.tgrid.ny_, self.tgrid.nx_))
+        self.D = self.h[0,...]
+        self.pD = <double*> self.D.data
 
     def __call__(self, Array u not None, Array v not None, double timestep, Array var not None):
         assert u.grid is self.ugrid
         assert v.grid is self.vgrid
         assert var.grid is self.tgrid
         self.D[...] = self.tgrid.D.all_values
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, <double *>var.p)
+        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, self.pD, <double *>var.p)
         var.update_halos(2)
-        advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, timestep, <double *>var.p)
+        advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, timestep, self.pD, <double *>var.p)
         var.update_halos(1)
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, <double *>var.p)
+        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, self.pD, <double *>var.p)
+
+    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None):
+        assert u.grid is self.ugrid
+        assert v.grid is self.vgrid
+        assert w.grid is self.wgrid
+        assert var.grid is self.tgrid
+        cdef double[:, :, ::1] avar, au, av, ah
+        avar = <double[:var.grid.nz_, :var.grid.ny_, :var.grid.nx_:1]> var.p
+        au = <double[:u.grid.nz_, :u.grid.ny_, :u.grid.nx_:1]> u.p
+        av = <double[:v.grid.nz_, :v.grid.ny_, :v.grid.nx_:1]> v.p
+        ah = self.hn
+        self.h[...] = self.tgrid.H.all_values
+        for k in range(var.shape[0]):
+            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], 0.5 * timestep, &ah[k,0,0], &avar[k,0,0])
+        var.update_halos(1)   # 1 = top-bottom, 2 = left-right
+        for k in range(var.shape[0]):
+            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], 0.5 * timestep, &ah[k,0,0], &avar[k,0,0])
+        advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, timestep, &ah[0,0,0], <double *>var.p)
+        var.update_halos(1)   # 1 = top-bottom, 2 = left-right
+        for k in range(var.shape[0]):
+            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], 0.5 * timestep, &ah[k,0,0], &avar[k,0,0])
+        var.update_halos(2)   # 1 = top-bottom, 2 = left-right
+        for k in range(var.shape[0]):
+            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], 0.5 * timestep, &ah[k,0,0], &avar[k,0,0])
 
 cdef class VerticalDiffusion:
     cdef void* p
@@ -219,7 +252,7 @@ cdef class Simulation:
     cdef void* psealevel
     cdef readonly int nx, ny
     cdef int apply_bottom_friction
-    cdef int ufirst
+    cdef int ufirst, u3dfirst
 
     def __init__(self, Domain domain, int runtype, int apply_bottom_friction, int ufirst=False):
         self.domain = domain
@@ -231,6 +264,7 @@ cdef class Simulation:
         self.nx, self.ny = domain.nx, domain.ny
         self.apply_bottom_friction = apply_bottom_friction
         self.ufirst = ufirst
+        self.u3dfirst = ufirst
 
     def uv_momentum_2d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
@@ -255,11 +289,49 @@ cdef class Simulation:
             momentum_uv_coriolis(1, self.pmomentum)
         self.ufirst = not self.ufirst
 
-    def uv_momentum_3d(self):
+    def uvw_momentum_3d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None, Array idpdx not None, Array idpdy not None, Array viscosity not None):
+        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
+        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
+        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
+        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
+        assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
+        assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
+        assert viscosity.grid is self.domain.W, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.W.postfix, viscosity.grid.postfix)
+
+        # For now, in absence of 3D momentum, copy [barotropic] depth-averaged horiozntal velocities to 3D velocities
         self.uk.all_values[...] = self.u1.all_values
         self.vk.all_values[...] = self.v1.all_values
+
         if self.apply_bottom_friction:
             momentum_bottom_friction_3d(self.pmomentum)
+
+        if self.u3dfirst:
+            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity.p)
+            self.pk.update_halos()
+            momentum_uv_coriolis_3d(1, self.pmomentum)
+            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity.p)
+            self.qk.update_halos()
+            momentum_uv_coriolis_3d(2, self.pmomentum)
+        else:
+            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity.p)
+            self.qk.update_halos()
+            momentum_uv_coriolis_3d(2, self.pmomentum)
+            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity.p)
+            self.pk.update_halos()
+            momentum_uv_coriolis_3d(1, self.pmomentum)
+        self.ufirst = not self.u3dfirst
+
+        momentum_w_3d(self.pmomentum, timestep)
+
+#   call self%velocities_3d()
+#   call self%uv_advection_3d(dt)
+##if 0
+#   call self%uv_diffusion_3d(dt) !KB - makes model go wrong
+##else
+#if (associated(self%logs)) call self%logs%info('*** missing uv_diffusion_3d() ***',level=0)
+##endif
+#   call self%shear_frequency(viscosity)
+#   call self%stresses(tausx,tausy)
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T

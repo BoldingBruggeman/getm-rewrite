@@ -18,12 +18,17 @@ import pygetm.airsea
 
 FILL_VALUE = -2.e20
 
+BAROTROPIC = BAROTROPIC_2D = 1
+BAROTROPIC_3D = 2
+FROZEN_DENSITY = 3
+BAROCLINIC = 4
+
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
-    _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva')
+    _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
@@ -64,6 +69,11 @@ class Simulation(_pygetm.Simulation):
         self.uva = dom.UV.array(fill=numpy.nan)
         self.vua = dom.VU.array(fill=numpy.nan)
         self.vva = dom.VV.array(fill=numpy.nan)
+
+        self.uua3d = dom.UU.array(fill=numpy.nan, is_3d=True)
+        self.uva3d = dom.UV.array(fill=numpy.nan, is_3d=True)
+        self.vua3d = dom.VU.array(fill=numpy.nan, is_3d=True)
+        self.vva3d = dom.VV.array(fill=numpy.nan, is_3d=True)
 
         self.tracers = []
 
@@ -215,7 +225,7 @@ class Simulation(_pygetm.Simulation):
             self.logger.info(self.time)
 
         if self.runtype == 4 and self.istep % self.split_factor == 0:
-            self.uv_momentum_3d()
+            self.uvw_momentum_3d()
 
             # Buoyancy frequency and turbulence (W grid)
             self.density.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
@@ -224,6 +234,7 @@ class Simulation(_pygetm.Simulation):
 
             # Temperature and salinity (T grid)
             self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
+            self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.rho0 * constants.cp)))
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
 
@@ -283,6 +294,31 @@ class Simulation(_pygetm.Simulation):
         self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
 
         _pygetm.Simulation.uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy)
+
+    def uv_momentum_3d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
+        _pygetm.Simulation.uv_momentum_3d(self, timestep, tausx, tausy, dpdx, dpdy, idpdx, idpdy, viscosity)
+
+        itimestep = 1. / timestep
+
+        # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
+        self.uk.all_values[:, :] = self.pk.all_values / self.U.grid.H.all_values
+        self.vk.all_values[:, :] = self.qk.all_values / self.V.grid.H.all_values
+
+        # Advect 3D u velocity using velocities interpolated to its own advection grids
+        self.pk.interp(self.uua3d)
+        self.qk.interp(self.uva3d)
+        self.uua3d.all_values[...] /= self.domain.UU.H.all_values
+        self.uva3d.all_values[...] /= self.domain.UV.H.all_values
+        self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww, timestep, self.uk)
+        self.advU.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
+
+        # Advect 3D v velocity using velocities interpolated to its own advection grids
+        self.pk.interp(self.vua3d)
+        self.qk.interp(self.vva3d)
+        self.vua3d.all_values[...] /= self.domain.VU.H.all_values
+        self.vva3d.all_values[...] /= self.domain.VV.H.all_values
+        self.vadv(self.vua3d, self.vva3d, self.ww, timestep, self.vk)
+        self.advV.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
     def update_depth(self):
         # Halo exchange for sea level on T grid

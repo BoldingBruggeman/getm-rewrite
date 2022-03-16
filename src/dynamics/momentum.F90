@@ -118,6 +118,8 @@ MODULE getm_momentum
       procedure :: uvw_momentum_3d => uvw_momentum_3d
       procedure :: bottom_friction_3d => bottom_friction_3d
       procedure :: w_momentum_3d => w_momentum_3d
+      procedure :: pk_3d => pk_3d
+      procedure :: qk_3d => qk_3d
       procedure :: coriolis_fpk => coriolis_fpk
       procedure :: coriolis_fqk => coriolis_fqk
       procedure :: uv_advection_3d => uv_advection_3d
@@ -234,7 +236,53 @@ MODULE getm_momentum
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
-      END SUBROUTINE w_momentum_3d
+   END SUBROUTINE w_momentum_3d
+
+
+   MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+      !! GETM momentum type
+   real(real64), intent(in) :: dt
+      !! timestep [s]
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+   real(real64), intent(in) :: tausx(_U2_)
+      !! surface stress in local x-direction
+   real(real64), intent(in) :: dpdx(_U2_)
+      !! surface pressure gradient - including air pressure
+#undef _U2_
+#define _U3_ self%domain%U%l(1):,self%domain%U%l(2):,self%domain%U%l(3):
+   real(real64), intent(in) :: idpdx(_U3_)
+      !! internal pressure gradient
+#undef _U3_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: viscosity(_T3_)
+      !! viscosity
+#undef _T3_
+      END SUBROUTINE pk_3d
+
+
+   MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
+!  Subroutine arguments
+   class(type_getm_momentum), intent(inout) :: self
+      !! GETM momentum type
+   real(real64), intent(in) :: dt
+      !! timestep [s]
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+   real(real64), intent(in) :: tausy(_V2_)
+      !! surface stress in local y-direction
+   real(real64), intent(in) :: dpdy(_V2_)
+      !! surface pressure gradient - including air pressure
+#undef _V2_
+#define _V3_ self%domain%V%l(1):,self%domain%V%l(2):,self%domain%V%l(3):
+   real(real64), intent(in) :: idpdy(_V3_)
+      !! internal pressure gradient
+#undef _V3_
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
+   real(real64), intent(in) :: viscosity(_T3_)
+      !! viscosity
+#undef _T3_
+      END SUBROUTINE qk_3d
 
       ! friction
       MODULE SUBROUTINE bottom_friction_2d(self,runtype)
