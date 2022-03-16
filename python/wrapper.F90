@@ -194,8 +194,8 @@ contains
          case ('pk');   if (allocated(momentum%pk)) p = c_loc(momentum%pk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('qk');   if (allocated(momentum%qk)) p = c_loc(momentum%qk); grid_type = 3; sub_type = subtype_depth_explicit
          case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); sub_type = subtype_depth_explicit_interfaces
-         case ('advpk');   if (allocated(momentum%advpk)) p = c_loc(momentum%advpk); grid_type = 2; sub_type = subtype_depth_explicit
-         case ('advqk');   if (allocated(momentum%advqk)) p = c_loc(momentum%advqk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('advpk'); if (allocated(momentum%advpk)) p = c_loc(momentum%advpk); grid_type = 2; sub_type = subtype_depth_explicit
+         case ('advqk'); if (allocated(momentum%advqk)) p = c_loc(momentum%advqk); grid_type = 3; sub_type = subtype_depth_explicit
          end select
       case (2)
          call c_f_pointer(obj, pressure)
