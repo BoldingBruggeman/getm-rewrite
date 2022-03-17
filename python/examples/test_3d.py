@@ -1,3 +1,4 @@
+import datetime
 import numpy
 import pygetm
 
@@ -21,6 +22,10 @@ ntime = int(3600. // timestep)
 plotting_interval = 5
 times = timestep * numpy.arange(ntime)
 mode_split = 10
+domain.T.zio.all_values[...] = 0
+domain.T.zin.all_values[...] = 0
+sim.start(datetime.datetime(2000, 1, 1), timestep, mode_split)
+
 for istep, time in enumerate(times):
     sim.update_surface_pressure_gradient(domain.T.z, sp)
     sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
@@ -29,4 +34,13 @@ for istep, time in enumerate(times):
 
     if istep % mode_split == 0:
         print('sim.uvw_momentum_3d')
+        sim.Ui.all_values[...] /= mode_split
+        sim.Vi.all_values[...] /= mode_split
+        sim.start_3d()
+        sim.update_surface_pressure_gradient(domain.T.zio, sp)
+        print('Ui', sim.Ui.values.min(), sim.Ui.values.max())
+        print('Vi', sim.Vi.values.min(), sim.Vi.values.max())
         sim.uvw_momentum_3d(timestep, tausx, tausy, sim.dpdx, sim.dpdy, idpdx, idpdy, viscosity)
+        print('pk', sim.pk.values.min(), sim.pk.values.max())
+        print('qk', sim.qk.values.min(), sim.qk.values.max())
+        print('ww', sim.ww.values.min(), sim.ww.values.max())

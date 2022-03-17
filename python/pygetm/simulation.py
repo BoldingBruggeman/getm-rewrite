@@ -24,7 +24,7 @@ FROZEN_DENSITY = 3
 BAROCLINIC = 4
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi'
     _pressure_arrays = 'dpdx', 'dpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
@@ -149,9 +149,10 @@ class Simulation(_pygetm.Simulation):
         self.istep = 0
         self.report = report
 
-        if self.runtype == 4:
+        if self.runtype > BAROTROPIC_2D:
             # ensure ho and hn are up to date and identical
-            self.domain.do_vertical()
+            self.start_3d()             # update zio/zin (elevations for 3D time step) on all grids, starting from latest z on T grid
+            self.domain.do_vertical()   # update layer heights on all grids based on bathymetry and elevation (zin)
 
         if self.fabm_model:
             # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
@@ -183,7 +184,7 @@ class Simulation(_pygetm.Simulation):
 
             self.update_fabm_sources()
 
-        if self.runtype == 4:
+        if self.runtype == BAROCLINIC:
             # ensure density is in sync with initial T & S
             if self.rho.saved:
                 self.density.get_density(self.salt, self.temp, out=self.rho)
@@ -224,7 +225,7 @@ class Simulation(_pygetm.Simulation):
         if self.report != 0 and self.istep % self.report == 0:
             self.logger.info(self.time)
 
-        if self.runtype == 4 and self.istep % self.split_factor == 0:
+        if self.runtype > BAROTROPIC_2D and self.istep % self.split_factor == 0:
             self.uvw_momentum_3d()
 
             # Buoyancy frequency and turbulence (W grid)
@@ -297,6 +298,7 @@ class Simulation(_pygetm.Simulation):
 
     def uvw_momentum_3d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         _pygetm.Simulation.uvw_momentum_3d(self, timestep, tausx, tausy, dpdx, dpdy, idpdx, idpdy, viscosity)
+        return   # skip advection for testing
 
         itimestep = 1. / timestep
 
@@ -319,6 +321,37 @@ class Simulation(_pygetm.Simulation):
         self.vva3d.all_values[...] /= self.domain.VV.H.all_values
         self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
+
+    def start_3d(self):
+        # Halo exchange for sea level on T grid
+        self.domain.T.z.update_halos()
+
+        self.domain.T.zio.all_values[...] = self.domain.T.zin.all_values[...]
+        self.domain.U.zio.all_values[...] = self.domain.U.zin.all_values[...]
+        self.domain.V.zio.all_values[...] = self.domain.V.zin.all_values[...]
+        self.domain.X.zio.all_values[...] = self.domain.X.zin.all_values[...]
+
+        self.domain.T.zin.all_values[...] = self.domain.T.z.all_values[...]
+
+        # Compute sea level on U, V, X grids.
+        # Note that this must be at time=n+1/2, whereas sea level on T grid is now at time=n+1.
+        zi_T_half = 0.5 * (self.domain.T.zio + self.domain.T.zin)
+        zi_T_half.interp(self.domain.U.zin)
+        zi_T_half.interp(self.domain.V.zin)
+        zi_T_half.interp(self.domain.X.zin)
+
+        self.domain.U.zin.all_values.clip(min=-self.domain.U.H + self.domain.Dmin, out=self.domain.U.zin.all_values)
+        self.domain.V.zin.all_values.clip(min=-self.domain.V.H + self.domain.Dmin, out=self.domain.V.zin.all_values)
+        self.domain.X.zin.all_values.clip(min=-self.domain.X.H + self.domain.Dmin, out=self.domain.X.zin.all_values)
+
+        # Halo exchange for sea level on U, V, X grids
+        self.domain.U.zin.update_halos()
+        self.domain.V.zin.update_halos()
+        self.domain.X.zin.update_halos()
+
+        self.domain.U.ho.all_values[...] = self.domain.U.hn.all_values[...]
+        self.domain.V.ho.all_values[...] = self.domain.V.hn.all_values[...]
+        self.domain.X.ho.all_values[...] = self.domain.X.hn.all_values[...]
 
     def update_depth(self):
         # Halo exchange for sea level on T grid

@@ -298,9 +298,9 @@ cdef class Simulation:
         assert viscosity.grid is self.domain.T, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.T.postfix, viscosity.grid.postfix)
         assert viscosity.at_interfaces, 'grid mismatch for viscosity: expected valus at layer interfaces.'
 
-        # For now, in absence of 3D momentum, copy [barotropic] depth-averaged horiozntal velocities to 3D velocities
-        self.uk.all_values[...] = self.u1.all_values
-        self.vk.all_values[...] = self.v1.all_values
+        # For now, in absence of 3D momentum, copy [barotropic] depth-averaged horizontal velocities to 3D velocities
+        #self.uk.all_values[...] = self.u1.all_values
+        #self.vk.all_values[...] = self.v1.all_values
 
         if self.apply_bottom_friction:
             momentum_bottom_friction_3d(self.pmomentum)

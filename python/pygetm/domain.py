@@ -31,7 +31,7 @@ FILL_VALUE = -2e20
 
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
-    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min')
+    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
     __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'xypostfix', 'zpostfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
 
@@ -64,6 +64,8 @@ class Grid(_pygetm.Grid):
             'mask': dict(constant=True, fill_value=0),
             'z': dict(units='m', long_name='elevation', fill_value=FILL_VALUE),
             'zo': dict(units='m', long_name='elevation at previous time step', fill_value=FILL_VALUE),
+            'zin': dict(units='m', long_name='elevation at 3d time step', fill_value=FILL_VALUE),
+            'zio': dict(units='m', long_name='elevation at previous 3d time step', fill_value=FILL_VALUE),
             'area': dict(units='m2', long_name='grid cell area', constant=True, fill_value=FILL_VALUE),
             'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True, fill_value=FILL_VALUE),
             'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=FILL_VALUE),

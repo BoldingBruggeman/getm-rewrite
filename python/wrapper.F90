@@ -164,6 +164,8 @@ contains
          case ('mask'); p = c_loc(grid%mask); data_type = 1
          case ('z'); p = c_loc(grid%z)
          case ('zo'); p = c_loc(grid%zo)
+         case ('zio'); p = c_loc(grid%zio)
+         case ('zin'); p = c_loc(grid%zin)
          case ('cor'); p = c_loc(grid%cor)
          case ('z0b'); p = c_loc(grid%z0b)
          case ('z0b_min'); p = c_loc(grid%z0b_min)
@@ -196,6 +198,8 @@ contains
          case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); sub_type = subtype_depth_explicit_interfaces
          case ('advpk'); if (allocated(momentum%advpk)) p = c_loc(momentum%advpk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advqk'); if (allocated(momentum%advqk)) p = c_loc(momentum%advqk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('Ui');   p = c_loc(momentum%Ui); grid_type = 2
+         case ('Vi');   p = c_loc(momentum%Vi); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)

@@ -152,10 +152,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             kwargs['shading'] = 'auto'
         return self.xarray.plot(**kwargs)
 
-    def interp(self, target):
+    def interp(self, target, at_interfaces: bool=None):
         if not isinstance(target, Array):
-            # Target must be a grid
-            target = Array.create(target, dtype=self.dtype, is_3d=self.ndim == 3, at_interfaces=self.at_interfaces)
+            # Target must be a grid; we need to create the array
+            if at_interfaces is None:
+                at_interfaces = self.at_interfaces 
+            target = Array.create(target, dtype=self.dtype, is_3d=self.ndim == 3, at_interfaces=at_interfaces)
         key = (self.grid.type, target.grid.type)
         if key == (_pygetm.UGRID, _pygetm.TGRID):
             self.grid.interp_x(self, target, offset=1)
@@ -173,8 +175,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self.grid.interp_x(self, target, offset=0)
         elif key in ((_pygetm.UGRID, _pygetm.VUGRID), (_pygetm.VGRID, _pygetm.VVGRID)):
             self.grid.interp_y(self, target, offset=0)
+        elif key[0] == key[1] and self.at_interfaces and not target.at_interfaces:
+            # vertical interpolation from layer interfaces to layer centers
+            target.all_values[...] = 0.5 * (self.all_values[:-1, ...] + self.all_values[1:, ...])
         else:
-            raise NotImplementedError('Map not implemented for grid type %i -> grid type %i' % (self.grid.type, target.grid.type))
+            raise NotImplementedError('interp does not know how to interpolate from grid type %i to grid type %i' % (self.grid.type, target.grid.type))
         return target
 
     def __array__(self, dtype=None):
