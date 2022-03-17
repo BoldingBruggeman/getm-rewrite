@@ -77,6 +77,8 @@ class Grid(_pygetm.Grid):
         for name in self._fortran_arrays:
             array = core.Array(name=name + self.postfix, **array_args[name])
             setattr(self, '_%s' % name, self.wrap(array, name.encode('ascii')))
+        self.zc.all_values[...] = 0
+        self.zf.all_values[...] = 0
         self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
         self.fill()
         self.z0b.all_values[...] = self.z0b_min.all_values
