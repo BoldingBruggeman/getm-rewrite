@@ -217,61 +217,48 @@ contains
       end select
    end subroutine
 
-   subroutine grid_interp_x(pgrid, psource, ptarget, ioffset, n) bind(c)
-      type(c_ptr),    intent(in), value :: pgrid, psource, ptarget
-      integer(c_int), intent(in), value :: ioffset, n
+   subroutine grid_interp_x(nx, ny, nz, source, target, ioffset) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, ioffset
+      real(real64),   intent(in)        :: source(nx, ny, nz)
+      real(real64),   intent(inout)     :: target(nx, ny, nz)
 
-      type (type_getm_grid),    pointer :: grid
-      real(real64), contiguous, pointer :: source(:,:,:), target(:,:,:)
       integer :: i, j, k
 
-      call c_f_pointer(pgrid, grid)
-      call c_f_pointer(psource, source, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
-      call c_f_pointer(ptarget, target, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
-      do k = 1, n
-         do j = 1, size(source, 2)
-            do i = 1, size(source, 1) - 1
+      do k = 1, nz
+         do j = 1, ny
+            do i = 1, nx - 1
                target(i + ioffset, j, k) = 0.5_real64 * (source(i, j, k) + source(i + 1, j, k))
             end do
          end do
       end do
    end subroutine
 
-   subroutine grid_interp_y(pgrid, psource, ptarget, joffset, n) bind(c)
-      type(c_ptr),    intent(in), value :: pgrid, psource, ptarget
-      integer(c_int), intent(in), value :: joffset, n
+   subroutine grid_interp_y(nx, ny, nz, source, target, joffset) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, joffset
+      real(real64),   intent(in)        :: source(nx, ny, nz)
+      real(real64),   intent(inout)     :: target(nx, ny, nz)
 
-      type (type_getm_grid),    pointer :: grid
-      real(real64), contiguous, pointer :: source(:,:,:), target(:,:,:)
       integer :: i, j, k
 
-      call c_f_pointer(pgrid, grid)
-      call c_f_pointer(psource, source, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
-      call c_f_pointer(ptarget, target, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, n/))
-      do k = 1, n
-         do j = 1, size(source, 2) - 1
-            do i = 1, size(source, 1)
+      do k = 1, nz
+         do j = 1, ny - 1
+            do i = 1, nx
                target(i, j + joffset, k) = 0.5_real64 * (source(i, j, k) + source(i, j + 1, k))
             end do
          end do
       end do
    end subroutine
 
-   subroutine grid_interp_xy(psource_grid, psource, ptarget_grid, ptarget, ioffset, joffset, n) bind(c)
-      type(c_ptr),    intent(in), value :: psource_grid, psource, ptarget_grid, ptarget
-      integer(c_int), intent(in), value :: ioffset, joffset, n
+   subroutine grid_interp_xy(nx1, ny1, nx2, ny2, nz, source, target, ioffset, joffset) bind(c)
+      integer(c_int), intent(in), value :: nx1, ny1, nx2, ny2, nz, ioffset, joffset
+      real(real64),   intent(in)        :: source(nx1, ny1, nz)
+      real(real64),   intent(inout)     :: target(nx2, ny2, nz)
 
-      type (type_getm_grid),    pointer :: source_grid, target_grid
-      real(real64), contiguous, pointer :: source(:,:,:), target(:,:,:)
       integer :: i, j, k
 
-      call c_f_pointer(psource_grid, source_grid)
-      call c_f_pointer(ptarget_grid, target_grid)
-      call c_f_pointer(psource, source, (/source_grid%u(1) - source_grid%l(1) + 1, source_grid%u(2) - source_grid%l(2) + 1, n/))
-      call c_f_pointer(ptarget, target, (/target_grid%u(1) - target_grid%l(1) + 1, target_grid%u(2) - target_grid%l(2) + 1, n/))
-      do k = 1, n
-         do j = 1, size(source, 2) - 1
-            do i = 1, size(source, 1) - 1
+      do k = 1, nz
+         do j = 1, ny1 - 1
+            do i = 1, nx1 - 1
                target(i + ioffset, j + joffset, k) = 0.25_real64 * (source(i, j, k) + source(i + 1, j, k) &
                   + source(i, j + 1, k) + source(i + 1, j + 1, k))
             end do

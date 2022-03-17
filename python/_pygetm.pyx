@@ -15,9 +15,9 @@ cdef extern void domain_initialize(void* grid, int runtype, double Dmin, double*
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain) nogil
-cdef extern void grid_interp_x(void* grid, double* source, double* target, int ioffset, int n) nogil
-cdef extern void grid_interp_y(void* grid, double* source, double* target, int joffset, int n) nogil
-cdef extern void grid_interp_xy(void* source_grid, double* source, void* target_grid, double* target, int ioffset, int joffset, int n) nogil
+cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
+cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* target, int joffset) nogil
+cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, double* source, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
 cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pD, double* pvar) nogil
@@ -129,13 +129,13 @@ cdef class Grid:
         return ar.wrap_c_array(self.domain, 0, self.p, name)
 
     def interp_x(self, Array source, Array target, int offset):
-        grid_interp_x(self.p, <double *>source.p, <double *>target.p, offset, 1 if source.ndim == 2 else source.shape[0])
+        grid_interp_x(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
 
     def interp_y(self, Array source, Array target, int offset):
-        grid_interp_y(self.p, <double *>source.p, <double *>target.p, offset, 1 if source.ndim == 2 else source.shape[0])
+        grid_interp_y(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
 
     def interp_xy(self, Array source, Array target, int ioffset, int joffset):
-        grid_interp_xy(self.p, <double *>source.p, <double *>target.grid.p, <double *>target.p, ioffset, joffset, 1 if source.ndim == 2 else source.shape[0])
+        grid_interp_xy(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], target.all_values.shape[target.all_values.ndim - 1], target.all_values.shape[target.all_values.ndim - 2], 1 if source.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, ioffset, joffset)
 
 cdef class Domain:
     cdef void* p
