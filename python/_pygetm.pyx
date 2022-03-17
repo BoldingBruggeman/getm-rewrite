@@ -128,14 +128,14 @@ cdef class Grid:
     def wrap(self, Array ar, bytes name):
         return ar.wrap_c_array(self.domain, 0, self.p, name)
 
-    def interp_x(self, Array source, Array target, int offset):
-        grid_interp_x(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
+    def interp_x(self, Array source not None, Array target not None, int offset):
+        grid_interp_x(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
 
-    def interp_y(self, Array source, Array target, int offset):
-        grid_interp_y(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
+    def interp_y(self, Array source not None, Array target not None, int offset):
+        grid_interp_y(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
 
-    def interp_xy(self, Array source, Array target, int ioffset, int joffset):
-        grid_interp_xy(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], target.all_values.shape[target.all_values.ndim - 1], target.all_values.shape[target.all_values.ndim - 2], 1 if source.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, ioffset, joffset)
+    def interp_xy(self, Array source not None, Array target not None, int ioffset, int joffset):
+        grid_interp_xy(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], target.all_values.shape[target.all_values.ndim - 1], target.all_values.shape[target.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, ioffset, joffset)
 
 cdef class Domain:
     cdef void* p
@@ -206,6 +206,7 @@ cdef class Advection:
         assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
         assert not var.at_interfaces, 'grid mismatch for advected quantity: expected values at layer centers'
         cdef double[:, :, ::1] avar, au, av, ah
+        cdef int k
         avar = <double[:var.grid.nz_, :var.grid.ny_, :var.grid.nx_:1]> var.p
         au = <double[:u.grid.nz_, :u.grid.ny_, :u.grid.nx_:1]> u.p
         av = <double[:v.grid.nz_, :v.grid.ny_, :v.grid.nx_:1]> v.p
