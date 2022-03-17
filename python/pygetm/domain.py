@@ -33,7 +33,7 @@ class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
     _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
-    __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'xypostfix', 'zpostfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
+    __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
 
     def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
@@ -42,8 +42,6 @@ class Grid(_pygetm.Grid):
         self.ioffset = ioffset
         self.joffset = joffset
         self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
-        self.xypostfix = self.postfix
-        self.zpostfix = ''
         self.ugrid: Optional[Grid] = ugrid
         self.vgrid: Optional[Grid] = vgrid
         self._sin_rot: Optional[numpy.ndarray] = None
@@ -71,8 +69,8 @@ class Grid(_pygetm.Grid):
             'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=FILL_VALUE),
             'ho': dict(units='m', long_name='layer heights at previous time step', fill_value=FILL_VALUE),
             'hn': dict(units='m', long_name='layer heights', fill_value=FILL_VALUE),
-            'zc': dict(units='m', long_name='depth', fill_value=0.),
-            'zf': dict(units='m', long_name='interface depth', fill_value=0.),
+            'zc': dict(units='m', long_name='depth', fill_value=FILL_VALUE),
+            'zf': dict(units='m', long_name='interface depth', fill_value=FILL_VALUE),
             'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE),
             'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=FILL_VALUE),
         }

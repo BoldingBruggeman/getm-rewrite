@@ -146,8 +146,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def plot(self, **kwargs):
         if 'x' not in kwargs and 'y' not in kwargs:
-            kwargs['x'] = ('lon' if self.grid.domain.spherical else 'x') + self.grid.xypostfix
-            kwargs['y'] = ('lat' if self.grid.domain.spherical else 'y') + self.grid.xypostfix
+            kwargs['x'] = ('lon' if self.grid.domain.spherical else 'x') + self.grid.postfix
+            kwargs['y'] = ('lat' if self.grid.domain.spherical else 'y') + self.grid.postfix
         if 'shading' not in kwargs:
             kwargs['shading'] = 'auto'
         return self.xarray.plot(**kwargs)
@@ -282,19 +282,19 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                     attrs[key] = value
             dom = self.grid.domain
             coords = {}
-            if self.name not in ('x' + self.grid.xypostfix, 'y' + self.grid.xypostfix, 'lon' + self.grid.xypostfix, 'lat' + self.grid.xypostfix):
+            if self.name not in ('x' + self.grid.postfix, 'y' + self.grid.postfix, 'lon' + self.grid.postfix, 'lat' + self.grid.postfix):
                 if dom.x_is_1d:
-                    coords['x%s' % self.grid.xypostfix] = self.grid.x.xarray[0, :]
+                    coords['x%s' % self.grid.postfix] = self.grid.x.xarray[0, :]
                 if dom.y_is_1d:
-                    coords['y%s' % self.grid.xypostfix] = self.grid.y.xarray[:, 0]
-                coords['x%s2' % self.grid.xypostfix] = self.grid.x.xarray
-                coords['y%s2' % self.grid.xypostfix] = self.grid.y.xarray
+                    coords['y%s' % self.grid.postfix] = self.grid.y.xarray[:, 0]
+                coords['x%s2' % self.grid.postfix] = self.grid.x.xarray
+                coords['y%s2' % self.grid.postfix] = self.grid.y.xarray
                 if dom.lon is not None:
-                    coords['lon%s' % self.grid.xypostfix] = self.grid.lon.xarray
+                    coords['lon%s' % self.grid.postfix] = self.grid.lon.xarray
                 if dom.lat is not None:
-                    coords['lat%s' % self.grid.xypostfix] = self.grid.lat.xarray
-            dims = ('y' + self.grid.xypostfix, 'x' + self.grid.xypostfix)
+                    coords['lat%s' % self.grid.postfix] = self.grid.lat.xarray
+            dims = ('y' + self.grid.postfix, 'x' + self.grid.postfix)
             if self.ndim == 3:
-                dims = ('z' + self.grid.zpostfix,) + dims
+                dims = ('zi' if self.at_interfaces else 'z',) + dims
             self._xarray = xarray.DataArray(self.values, coords=coords, dims=dims, attrs=attrs, name=self.name)
         return self._xarray

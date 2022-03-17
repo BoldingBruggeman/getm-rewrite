@@ -51,12 +51,18 @@ class Simulation(_pygetm.Simulation):
         _pygetm.Simulation.__init__(self, dom, runtype, apply_bottom_friction)
         self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
 
+        array_args = {
+            'ww': dict(units='m s-1', long_name='vertical velocity', fill_value=FILL_VALUE),
+        }
+
         for name in Simulation._momentum_arrays:
-            setattr(self, '_%s' % name, self.wrap(core.Array(name=name), name.encode('ascii'), source=1))
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=1))
         for name in Simulation._pressure_arrays:
-            setattr(self, '_%s' % name, self.wrap(core.Array(name=name), name.encode('ascii'), source=2))
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=2))
         for name in Simulation._sealevel_arrays:
-            setattr(self, '_%s' % name, self.wrap(core.Array(name=name), name.encode('ascii'), source=3))
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=3))
+
+        self.ww.all_values[...] = 0.
 
         self.update_depth()
 

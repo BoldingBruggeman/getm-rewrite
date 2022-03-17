@@ -96,11 +96,17 @@ class Field(Base):
 
     def get_coordinates(self) -> Sequence['Base']:
         coords = []
-        coords.append(self.collection.require(self.array.grid.lon.name))
-        coords.append(self.collection.require(self.array.grid.lat.name))
+        x, y = (self.array.grid.lon, self.array.grid.lat) if self.array.grid.domain.spherical else (self.array.grid.x, self.array.grid.y)
+        coords.append(self.collection.require(x.name))
+        coords.append(self.collection.require(y.name))
         if self.array.ndim == 3:
-            coords.append(self.collection.require(self.array.grid.zc.name))
+            z = self.array.grid.zf if self.array.at_interfaces else self.array.grid.zc
+            coords.append(self.collection.require(z.name))
         return coords
+
+    @property
+    def at_interfaces(self) -> bool:
+        return self.array.at_interfaces
 
     def get_expression(self) -> str:
         return self.array.name
@@ -127,3 +133,7 @@ class Mask(Base):
 
     def get_expression(self) -> str:
         return 'mask(%s)' % self.source.get_expression()
+
+    @property
+    def at_interfaces(self) -> bool:
+        return self.source.at_interfaces
