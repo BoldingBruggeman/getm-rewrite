@@ -5,6 +5,7 @@ import numpy
 
 import pygetm
 import pygetm.domain
+from pygetm.constants import RHO0
 
 def check_range(name, values, rtol=1e-12, atol=1e-12, target_value=None):
     values = numpy.asarray(values)
@@ -53,9 +54,8 @@ def test(name, periodic_x: bool=False, periodic_y: bool=False, tau_x: float=0., 
         sim.update_sealevel(timestep, sim.U, sim.V)
         sim.update_depth()
 
-    rho0 = 1025.
-    success = check_range('U', sim.U, target_value=None if apply_bottom_friction else ntime * timestep * tau_x / rho0)
-    success = check_range('V', sim.V, target_value=None if apply_bottom_friction else ntime * timestep * tau_y / rho0) and success
+    success = check_range('U', sim.U, target_value=None if apply_bottom_friction else ntime * timestep * tau_x / RHO0)
+    success = check_range('V', sim.V, target_value=None if apply_bottom_friction else ntime * timestep * tau_y / RHO0) and success
     success = check_range('z', domain.T.z, target_value=0) and success
     return success
 

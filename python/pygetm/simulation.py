@@ -237,13 +237,13 @@ class Simulation(_pygetm.Simulation):
 
             # Buoyancy frequency and turbulence (W grid)
             self.density.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
-            self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(constants.rho0)
+            self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(constants.RHO0)
             self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
             # Temperature and salinity (T grid)
             self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
             self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.rho0 * constants.cp)))
+            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.RHO0 * constants.CP)))
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
 
             # Transport of passive tracers (including biogeochemical ones)
@@ -393,7 +393,7 @@ class Simulation(_pygetm.Simulation):
         self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
 
     @property
-    def Ekin(self, rho0: float=1025.):
+    def Ekin(self, rho0: float=constants.RHO0):
         dom = self.domain
         U = self.U.interp(dom.T)
         V = self.V.interp(dom.T)
