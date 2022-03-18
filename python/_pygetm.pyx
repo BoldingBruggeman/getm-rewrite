@@ -218,7 +218,7 @@ cdef class Advection:
         assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
         assert w.at_interfaces, 'grid mismatch for w: expected values at layer interfaces'
         assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
-        assert not var.at_interfaces, 'grid mismatch for advected quantity: expected values at layer centers'
+        assert var.ndim == 3 and not var.at_interfaces, 'grid mismatch for advected quantity: expected 3D variable defined at layer centers'
         cdef double[:, :, ::1] avar, au, av
         cdef int k
         avar = <double[:var.grid.nz_, :var.grid.ny_, :var.grid.nx_:1]> var.p
