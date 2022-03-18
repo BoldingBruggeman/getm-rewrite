@@ -117,6 +117,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             fill = ar.fill_value
         if fill is not None:
             fill = numpy.asarray(fill)
+            if fill.ndim == 3:
+                is_3d = True
+                if fill.shape[0] == grid.nz_ + 1: at_interfaces = True
         if dtype is None:
             dtype = float if fill is None else fill.dtype
         shape = (grid.ny_, grid.nx_)
@@ -261,13 +264,13 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
         if type(result) is tuple:
             # multiple return values
-            return tuple(self.create(self.grid, fill=x, is_3d=x.ndim == 3) for x in result)
+            return tuple(self.create(self.grid, x) for x in result)
         elif method == 'at':
             # no return value
             return None
         else:
             # one return value
-            return self.create(self.grid, fill=result, is_3d=result.ndim == 3)
+            return self.create(self.grid, result)
 
     def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
         self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos)
