@@ -310,22 +310,20 @@ class Simulation(_pygetm.Simulation):
         itimestep = 1. / timestep
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
-        self.uk.all_values[:, :] = self.pk.all_values / self.U.grid.H.all_values
-        self.vk.all_values[:, :] = self.qk.all_values / self.V.grid.H.all_values
+        self.uk.all_values[:, :] = self.pk.all_values / self.U.grid.hn.all_values
+        self.vk.all_values[:, :] = self.qk.all_values / self.V.grid.hn.all_values
 
         # Advect 3D u velocity using velocities interpolated to its own advection grids
-        self.pk.interp(self.uua3d)
-        self.qk.interp(self.uva3d)
-        self.uua3d.all_values[...] /= self.domain.UU.H.all_values
-        self.uva3d.all_values[...] /= self.domain.UV.H.all_values
+        # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
+        self.uk.interp(self.uua3d)
+        self.vk.interp(self.uva3d)
         self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk)
         self.advpk.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
 
         # Advect 3D v velocity using velocities interpolated to its own advection grids
-        self.pk.interp(self.vua3d)
-        self.qk.interp(self.vva3d)
-        self.vua3d.all_values[...] /= self.domain.VU.H.all_values
-        self.vva3d.all_values[...] /= self.domain.VV.H.all_values
+        # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
+        self.uk.interp(self.vua3d)
+        self.vk.interp(self.vva3d)
         self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
