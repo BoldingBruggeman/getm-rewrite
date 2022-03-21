@@ -6,6 +6,7 @@ import numpy
 
 import pygetm
 import pygetm.domain
+import pygetm.debug
 
 def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, apply_bottom_friction: bool=False):
     domain = pygetm.domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 50, f=0, H=50)
@@ -59,12 +60,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
             for ar in [U1, U2, V1, V2, W1, W2, dH]:
                 maxtp = numpy.maximum(maxtp, numpy.abs(ar))
             reldiv = div / numpy.where(maxtp > 0., maxtp, 1.)
-            missing_w = div / domain.T.area.values
-            max_missing_w = numpy.abs(missing_w).max()
-            print('maximum divergence (as missing vertical velocity in m s-1): %.6e ' % max_missing_w, end='')
-            success = max_missing_w < 1e-15
-            print('OK' if success else 'FAILED')
-            if not success:
+            if not pygetm.debug.check_zero('maximum divergence (as missing vertical velocity in m s-1)', div / domain.T.area.values):
                 return False
             #for k in range(div.shape[0]):
             #    print(reldiv[k, ...].min(), reldiv[k, ...].max())
@@ -76,6 +72,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
             sim.Ui.all_values[...] = 0
             sim.Vi.all_values[...] = 0
         #print((t * domain.T.hn * domain.T.area).values.sum() / pre_tot - 1)
+    return True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
