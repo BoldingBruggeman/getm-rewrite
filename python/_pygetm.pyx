@@ -304,15 +304,15 @@ cdef class Simulation:
             momentum_uv_coriolis(1, self.pmomentum)
         self.ufirst = not self.ufirst
 
-    def uvw_momentum_3d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None, Array idpdx not None, Array idpdy not None, Array viscosity not None):
+    def uvw_momentum_3d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None, Array idpdx not None, Array idpdy not None, Array viscosity_u not None, Array viscosity_v not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
         assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
         assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
         assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
         assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
         assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
-        assert viscosity.grid is self.domain.T, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.T.postfix, viscosity.grid.postfix)
-        assert viscosity.z == INTERFACES, 'grid mismatch for viscosity: expected values at layer interfaces.'
+        assert viscosity_u.grid is self.domain.U and viscosity_u.z == INTERFACES, 'grid mismatch for viscosity_u: expected %s, got %s' % (self.domain.U.postfix, viscosity_u.grid.postfix)
+        assert viscosity_v.grid is self.domain.V and viscosity_v.z == INTERFACES, 'grid mismatch for viscosity_v: expected %s, got %s' % (self.domain.V.postfix, viscosity_v.grid.postfix)
 
         # For now, in absence of 3D momentum, copy [barotropic] depth-averaged horizontal velocities to 3D velocities
         #self.uk.all_values[...] = self.u1.all_values
@@ -322,17 +322,17 @@ cdef class Simulation:
             momentum_bottom_friction_3d(self.pmomentum)
 
         if self.u3dfirst:
-            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity.p)
+            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
             self.pk.update_halos()
             momentum_uv_coriolis_3d(1, self.pmomentum)
-            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity.p)
+            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
             self.qk.update_halos()
             momentum_uv_coriolis_3d(2, self.pmomentum)
         else:
-            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity.p)
+            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
             self.qk.update_halos()
             momentum_uv_coriolis_3d(2, self.pmomentum)
-            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity.p)
+            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
             self.pk.update_halos()
             momentum_uv_coriolis_3d(1, self.pmomentum)
         self.ufirst = not self.u3dfirst

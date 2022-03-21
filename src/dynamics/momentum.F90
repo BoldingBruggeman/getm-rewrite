@@ -254,11 +254,9 @@ MODULE getm_momentum
 #define _U3_ self%domain%U%l(1):,self%domain%U%l(2):,self%domain%U%l(3):
    real(real64), intent(in) :: idpdx(_U3_)
       !! internal pressure gradient
-#undef _U3_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: viscosity(_T3_)
+   real(real64), intent(in) :: viscosity(_U3_)
       !! viscosity
-#undef _T3_
+#undef _U3_
       END SUBROUTINE pk_3d
 
 
@@ -277,11 +275,9 @@ MODULE getm_momentum
 #define _V3_ self%domain%V%l(1):,self%domain%V%l(2):,self%domain%V%l(3):
    real(real64), intent(in) :: idpdy(_V3_)
       !! internal pressure gradient
-#undef _V3_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: viscosity(_T3_)
+   real(real64), intent(in) :: viscosity(_V3_)
       !! viscosity
-#undef _T3_
+#undef _V3_
       END SUBROUTINE qk_3d
 
       ! friction

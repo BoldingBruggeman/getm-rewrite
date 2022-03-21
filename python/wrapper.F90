@@ -442,13 +442,13 @@ contains
       call c_f_pointer(ptausx, tausx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
       call c_f_pointer(pdpdx, dpdx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
       call c_f_pointer(pidpdx, idpdx, momentum%domain%U%u - momentum%domain%U%l + 1)
-      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%T%u(1) - momentum%domain%T%l(1) + 1, &
-         momentum%domain%T%u(2) - momentum%domain%T%l(2) + 1, momentum%domain%T%u(3) - momentum%domain%T%l(3) + 2/))
+      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%U%u(1) - momentum%domain%U%l(1) + 1, &
+         momentum%domain%U%u(2) - momentum%domain%U%l(2) + 1, momentum%domain%U%u(3) - momentum%domain%U%l(3) + 2/))
       select case (direction)
          case (1)
-            call momentum%pk_3d(timestep,tausx,dpdx,idpdx,viscosity)
+            call momentum%pk_3d(timestep,tausx,dpdx,idpdx,viscosity(:, :, 2:size(viscosity,3) - 1))
          case (2)
-            call momentum%qk_3d(timestep,tausx,dpdx,idpdx,viscosity)
+            call momentum%qk_3d(timestep,tausx,dpdx,idpdx,viscosity(:, :, 2:size(viscosity,3) - 1))
       end select
    end subroutine
 

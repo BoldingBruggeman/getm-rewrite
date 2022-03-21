@@ -159,11 +159,9 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 #define _U3_ self%domain%U%l(1):,self%domain%U%l(2):,self%domain%U%l(3):
    real(real64), intent(in) :: idpdx(_U3_)
       !! internal pressure gradient
-#undef _U3_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: viscosity(_T3_)
+   real(real64), intent(in) :: viscosity(_U3_)   ! interior interfaces only!
       !! viscosity
-#undef _T3_
+#undef _U3_
 
 !  Local constants
 
@@ -175,12 +173,9 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
    do k=UG%kmin,UG%kmax
       do j=UG%jmin,UG%jmax
          do i=UG%imin,UG%imax
-            self%num(i,j,k)=0._real64
             self%ea2(i,j,k)=0._real64
             self%ea4(i,j,k)=0._real64
             if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-               ! Eddy viscosity at U-points
-               self%num(i,j,k)=0.5_real64*(viscosity(i,j,k)+viscosity(i+1,j,k))
                ! Coriolis, advection/diffusion and internal pressure
 !KB               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
                ! check signs for components
@@ -218,7 +213,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,self%num,self%pk, &
+   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,viscosity,self%pk, &
                                           ea2=self%ea2,ea4=self%ea4)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
@@ -262,11 +257,9 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 #define _V3_ self%domain%V%l(1):,self%domain%V%l(2):,self%domain%V%l(3):
    real(real64), intent(in) :: idpdy(_V3_)
       !! internal pressure gradient
-#undef _V3_
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
-   real(real64), intent(in) :: viscosity(_T3_)
+   real(real64), intent(in) :: viscosity(_V3_)   ! interior interfaces only!
       !! viscosity
-#undef _T3_
+#undef _V3_
 
 !  Local constants
 
@@ -278,12 +271,9 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
    do k=VG%kmin,VG%kmax
       do j=VG%jmin,VG%jmax
          do i=VG%imin,VG%imax
-            self%num(i,j,k)=0._real64
             self%ea2(i,j,k)=0._real64
             self%ea4(i,j,k)=0._real64
             if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-               ! Eddy viscosity at V-points
-               self%num(i,j,k)=0.5_real64*(viscosity(i,j,k)+viscosity(i,j+1,k))
                ! Coriolis, advection/diffusion and internal pressure
 !KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
                ! check signs for components
@@ -321,7 +311,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
          end if
       end do
    end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,self%num,self%qk, &
+   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,viscosity,self%qk, &
                                           ea2=self%ea2,ea4=self%ea4)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
