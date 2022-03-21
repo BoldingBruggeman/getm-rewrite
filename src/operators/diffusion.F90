@@ -123,7 +123,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    real(real64), intent(in) :: dzo(_T3_)
    real(real64), intent(in) :: dzn(_T3_)
    real(real64), intent(in) :: molecular
-   real(real64), intent(in) :: nuh(_T3_)
+   real(real64), intent(in) :: nuh(_T3_)   ! Note: this is diffusivity defined at the interior interfaces, from kmin to kmax-1. surface/bottom are absent
    real(real64), intent(inout) :: var(_T3_)
    real(real64), intent(in), optional :: ea2(_T3_)
    real(real64), intent(in), optional :: ea4(_T3_)
