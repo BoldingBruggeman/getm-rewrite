@@ -346,8 +346,9 @@ contains
       !phn = c_loc(advection%hn)
    end function
 
-   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, timestep, pD, pvar) bind(c)
+   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, Ah, timestep, pD, pvar) bind(c)
       integer(c_int), intent(in), value :: direction
+      real(c_double), intent(in), value :: Ah
       real(c_double), intent(in), value :: timestep
       type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, pD, pvar
 
@@ -364,9 +365,9 @@ contains
       call c_f_pointer(pvar, var, tgrid%u(1:2) - tgrid%l(1:2) + 1)
       select case (direction)
          case (1)
-            call advection%advection_calculate_u2d(ugrid, u, timestep, tgrid, D, var)
+            call advection%advection_calculate_u2d(ugrid, u, Ah, timestep, tgrid, D, var)
          case (2)
-            call advection%advection_calculate_v2d(ugrid, u, timestep, tgrid, D, var)
+            call advection%advection_calculate_v2d(ugrid, u, Ah, timestep, tgrid, D, var)
       end select
    end subroutine
 

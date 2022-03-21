@@ -20,7 +20,7 @@ contains
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
+SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
@@ -32,6 +32,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
    real(real64), intent(in) :: u(_A_)
    integer, intent(in) :: tmask(_A_)
    real(real64), intent(in) :: iA(_A_)
+   real(real64), intent(in) :: Ah
    real(real64), intent(in) :: dt
    real(real64), intent(inout) :: h(_A_)
    real(real64), intent(inout) :: f(_A_)
@@ -49,6 +50,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
+   real(real64) :: lAh=0._real64
    integer :: i, j
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
@@ -59,6 +61,8 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
    ! the provided velocity MUST be ZERO at land!
    flux(imin-halo(1),:) = 0._real64
      QU(imin-halo(1),:) = 0._real64
+
+   if (Ah > 0._real) lAh=Ah ! optionally apply diffusion
 
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
@@ -89,7 +93,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
 #include "limiters.h"
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
-            flux(i,j) = QU(i,j)*fu
+            flux(i,j) = QU(i,j)*fu - lAh*hu(i,j)*(f(i+1,j)-f(i,j))/dxu(i,j)
          else
             flux(i,j) = 0._real64
          end if
@@ -112,7 +116,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
 !#endif
 END SUBROUTINE u2d
 
-SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
+SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
@@ -124,6 +128,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    real(real64), intent(in) :: v(_A_)
    integer, intent(in) :: tmask(_A_)
    real(real64), intent(in) :: iA(_A_)
+   real(real64), intent(in) :: Ah
    real(real64), intent(in) :: dt
    real(real64), intent(inout) :: h(_A_)
    real(real64), intent(inout) :: f(_A_)
@@ -141,6 +146,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
+   real(real64) :: lAh=0._real64
    integer :: i, j
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
@@ -151,6 +157,8 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    ! the provided velocity MUST be ZERO at land!
    flux(:,jmin-halo(2)) = 0._real64
      QV(:,jmin-halo(2)) = 0._real64
+
+   if (Ah > 0._real) lAh=Ah ! optionally apply diffusion
 
 !  TODO: (vertical) interation!!!
    do j=jmin-1,jmax
@@ -181,7 +189,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
 #include "limiters.h"
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
-            flux(i,j) = QV(i,j)*fu
+            flux(i,j) = QV(i,j)*fu - lAh*hv(i,j)*(f(i,j+1)-f(i,j))/dyu(i,j)
          else
             flux(i,j) = 0._real64
          end if

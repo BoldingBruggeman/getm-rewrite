@@ -22,7 +22,7 @@ cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* t
 cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, double* source, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
-cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double timestep, double* pD, double* pvar) nogil
+cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double Ah, double timestep, double* pD, double* pvar) nogil
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pvar, double* pea2, double* pea4) nogil
@@ -201,20 +201,20 @@ cdef class Advection:
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def __call__(self, Array u not None, Array v not None, double timestep, Array var not None):
+    def __call__(self, Array u not None, Array v not None, double Ah=0, double timestep, Array var not None):
         assert u.grid is self.ugrid
         assert v.grid is self.vgrid
         assert var.grid is self.tgrid
         self._h[0,:,:] = self.D_ref
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, &self._h[0,0,0], <double *>var.p)
+        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self._h[0,0,0], <double *>var.p)
         var.update_halos(2)
-        advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, timestep, &self._h[0,0,0], <double *>var.p)
+        advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self._h[0,0,0], <double *>var.p)
         var.update_halos(1)
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, 0.5 * timestep, &self._h[0,0,0], <double *>var.p)
+        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self._h[0,0,0], <double *>var.p)
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None):
+    def apply_3d(self, Array u not None, Array v not None, Array w not None, double Ah=0, double timestep, Array var not None):
         assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
         assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
         assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
@@ -228,17 +228,17 @@ cdef class Advection:
         av = <double[:v.grid.nz_, :v.grid.ny_, :v.grid.nx_:1]> v.p
         self._h[:,:,:] = self.h_ref
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
         var.update_halos(1)   # 1 = top-bottom, 2 = left-right
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
         advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, timestep, &self._h[0,0,0], <double *>var.p)
         var.update_halos(1)   # 1 = top-bottom, 2 = left-right
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
         var.update_halos(2)   # 1 = top-bottom, 2 = left-right
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
 
 cdef class VerticalDiffusion:
     cdef void* p
