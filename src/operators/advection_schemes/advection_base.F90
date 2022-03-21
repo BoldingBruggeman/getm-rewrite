@@ -14,7 +14,7 @@ module advection_base
    end type
 
    interface
-SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
+SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
    import real64
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
@@ -27,13 +27,14 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,dt,h,f)
    real(real64), intent(in) :: u(_A_)
    integer, intent(in) :: tmask(_A_)
    real(real64), intent(in) :: iA(_A_)
+   real(real64), intent(in) :: Ah
    real(real64), intent(in) :: dt
    real(real64), intent(inout) :: h(_A_)
    real(real64), intent(inout) :: f(_A_)
 #undef _A_
 END SUBROUTINE
 
-SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
+SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
    import real64
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
@@ -46,6 +47,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,dt,h,f)
    real(real64), intent(in) :: v(_A_)
    integer, intent(in) :: tmask(_A_)
    real(real64), intent(in) :: iA(_A_)
+   real(real64), intent(in) :: Ah
    real(real64), intent(in) :: dt
    real(real64), intent(inout) :: h(_A_)
    real(real64), intent(inout) :: f(_A_)

@@ -62,7 +62,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
    flux(imin-halo(1),:) = 0._real64
      QU(imin-halo(1),:) = 0._real64
 
-   if (Ah > 0._real) lAh=Ah ! optionally apply diffusion
+   if (Ah > 0._real64) lAh=Ah ! optionally apply diffusion
 
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
@@ -158,7 +158,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
    flux(:,jmin-halo(2)) = 0._real64
      QV(:,jmin-halo(2)) = 0._real64
 
-   if (Ah > 0._real) lAh=Ah ! optionally apply diffusion
+   if (Ah > 0._real64) lAh=Ah ! optionally apply diffusion
 
 !  TODO: (vertical) interation!!!
    do j=jmin-1,jmax
@@ -189,7 +189,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
 #include "limiters.h"
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
-            flux(i,j) = QV(i,j)*fu - lAh*hv(i,j)*(f(i,j+1)-f(i,j))/dyu(i,j)
+            flux(i,j) = QV(i,j)*fu - lAh*hv(i,j)*(f(i,j+1)-f(i,j))/dyv(i,j)
          else
             flux(i,j) = 0._real64
          end if

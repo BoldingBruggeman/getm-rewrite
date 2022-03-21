@@ -60,28 +60,31 @@ MODULE getm_operators
          type(type_getm_grid), intent(in) :: tgrid
       end subroutine advection_initialize
 
-      module subroutine advection_calculate_2d(self, ugrid, u, vgrid, v, dt, tgrid, f)
+      module subroutine advection_calculate_2d(self, ugrid, u, vgrid, v, Ah, dt, tgrid, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:), v(:,:)
+         real(real64), intent(in) :: Ah
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
          real(real64), intent(inout) :: f(:,:)
       end subroutine advection_calculate_2d
 
-      module subroutine advection_calculate_u2d(self, ugrid, u,dt, tgrid, D, f)
+      module subroutine advection_calculate_u2d(self, ugrid, u, Ah, dt, tgrid, D, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: ugrid
          real(real64), intent(in) :: u(:,:)
+         real(real64), intent(in) :: Ah
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
          real(real64), intent(inout) :: D(:,:), f(:,:)
       end subroutine advection_calculate_u2d
 
-      module subroutine advection_calculate_v2d(self, vgrid, v, dt, tgrid, D, f)
+      module subroutine advection_calculate_v2d(self, vgrid, v, Ah, dt, tgrid, D, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: vgrid
          real(real64), intent(in) :: v(:,:)
+         real(real64), intent(in) :: Ah
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
          real(real64), intent(inout) :: D(:,:), f(:,:)
@@ -95,10 +98,11 @@ MODULE getm_operators
          real(real64), intent(inout) :: h(:,:,:), f(:,:,:)
       end subroutine advection_calculate_w3d
 
-      module subroutine advection_calculate_3d(self, ugrid, u, vgrid, v, dt, tgrid, f)
+      module subroutine advection_calculate_3d(self, ugrid, u, vgrid, v, Ah, dt, tgrid, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:,:), v(:,:,:)
+         real(real64), intent(in) :: Ah
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
          real(real64), intent(inout) :: f(:,:,:)

@@ -87,13 +87,13 @@ MODULE PROCEDURE advection_calculate_2d
 
    call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%mask,tgrid%iarea,dt/2,D,f)
+                    tgrid%mask,tgrid%iarea,Ah,dt/2,D,f)
    call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                    tgrid%mask,tgrid%iarea,dt,D,f)
+                    tgrid%mask,tgrid%iarea,Ah,dt,D,f)
    call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%mask,tgrid%iarea,dt/2,D,f)
+                    tgrid%mask,tgrid%iarea,Ah,dt/2,D,f)
 
 END PROCEDURE advection_calculate_2d
 
@@ -105,7 +105,7 @@ MODULE PROCEDURE advection_calculate_u2d
 
    call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%mask,tgrid%iarea,dt,D,f)
+                    tgrid%mask,tgrid%iarea,Ah,dt,D,f)
 
 END PROCEDURE advection_calculate_u2d
 
@@ -118,7 +118,7 @@ MODULE PROCEDURE advection_calculate_v2d
 
    call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                     vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                    tgrid%mask,tgrid%iarea,dt,D,f)
+                    tgrid%mask,tgrid%iarea,Ah,dt,D,f)
 
 END PROCEDURE advection_calculate_v2d
 
@@ -153,10 +153,10 @@ MODULE PROCEDURE advection_calculate_3d
 !KB - evt. self%D=tgrid%hn(:,:,k) - to avoid 3d aux. variable
       call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,Ah,dt/2,hn(:,:,k),f(:,:,k))
       call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,Ah,dt/2,hn(:,:,k),f(:,:,k))
    end do
 !KB   call w_advection_superbee(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax, &
 !KB                             tgrid%kmax, w, tgrid%mask, dt, self%hn, f)
@@ -164,10 +164,10 @@ MODULE PROCEDURE advection_calculate_3d
 !KB - evt. self%D=tgrid%hn(:,:,k) - to avoid 3d aux. variable
       call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        ugrid%mask,ugrid%dx,ugrid%dy,ugrid%hn(:,:,k),u(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,Ah,dt/2,hn(:,:,k),f(:,:,k))
       call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
                        vgrid%mask,vgrid%dx,vgrid%dy,vgrid%hn(:,:,k),v(:,:,k), &
-                       tgrid%mask,tgrid%iarea,dt/2,hn(:,:,k),f(:,:,k))
+                       tgrid%mask,tgrid%iarea,Ah,dt/2,hn(:,:,k),f(:,:,k))
    end do
 #else
    select case (scheme)
