@@ -201,7 +201,7 @@ cdef class Advection:
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def __call__(self, Array u not None, Array v not None, double Ah, double timestep, Array var not None):
+    def __call__(self, Array u not None, Array v not None, double timestep, Array var not None, double Ah = 0):
         assert u.grid is self.ugrid
         assert v.grid is self.vgrid
         assert var.grid is self.tgrid
@@ -214,7 +214,7 @@ cdef class Advection:
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def apply_3d(self, Array u not None, Array v not None, Array w not None, double Ah, double timestep, Array var not None):
+    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0):
         assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
         assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
         assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
