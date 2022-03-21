@@ -8,6 +8,8 @@ from libc.math cimport ceil
 cimport numpy
 import numpy
 
+from pygetm.constants import *
+
 cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin, int kmax, int* halox, int* haloy, int* haloz) nogil
 cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int nwb, int nnb, int neb, int nsb, int* bdy_info, int* bdy_i, int* bdy_j) nogil
 cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
@@ -216,9 +218,9 @@ cdef class Advection:
         assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
         assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
         assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
-        assert w.at_interfaces, 'grid mismatch for w: expected values at layer interfaces'
+        assert w.z == INTERFACES, 'grid mismatch for w: expected values at layer interfaces'
         assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
-        assert var.ndim == 3 and not var.at_interfaces, 'grid mismatch for advected quantity: expected 3D variable defined at layer centers'
+        assert var.ndim == 3 and var.z != INTERFACES, 'grid mismatch for advected quantity: expected 3D variable defined at layer centers'
         cdef double[:, :, ::1] avar, au, av
         cdef int k
         avar = <double[:var.grid.nz_, :var.grid.ny_, :var.grid.nx_:1]> var.p
@@ -310,7 +312,7 @@ cdef class Simulation:
         assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
         assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
         assert viscosity.grid is self.domain.T, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.T.postfix, viscosity.grid.postfix)
-        assert viscosity.at_interfaces, 'grid mismatch for viscosity: expected valus at layer interfaces.'
+        assert viscosity.z == INTERFACES, 'grid mismatch for viscosity: expected values at layer interfaces.'
 
         # For now, in absence of 3D momentum, copy [barotropic] depth-averaged horizontal velocities to 3D velocities
         #self.uk.all_values[...] = self.u1.all_values

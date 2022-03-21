@@ -16,7 +16,7 @@ dt = 600
 nstep = 100
 cnpar = 1.
 
-nuh = domain.T.array(fill=1e-2, is_3d=True, at_interfaces=True)
+nuh = domain.T.array(fill=1e-2, z=pygetm.INTERFACES)
 
 # Set diffusivity at all masked points to NaN
 nuh.all_values[:, domain.T.mask.all_values != 1] = numpy.nan
@@ -26,7 +26,7 @@ nuh.all_values[:, domain.T.mask.all_values != 1] = numpy.nan
 nuh.all_values[0, ...] = numpy.nan
 nuh.all_values[-1, ...] = numpy.nan
 
-tracer = domain.T.array(is_3d=True)
+tracer = domain.T.array(z=pygetm.CENTERS)
 tracer.values[...] = 0
 tracer.values[0, ...] = 1
 
@@ -71,7 +71,7 @@ if max_delta > tolerance:
 
 # Now try without spatial gradient and source term only
 tracer.values[...] = 0
-sources = domain.T.array(fill=1. / dt, is_3d=True) * dt * domain.T.hn  # note that sources should be time- and layer-integrated!
+sources = domain.T.array(fill=1. / dt, z=pygetm.CENTERS) * dt * domain.T.hn  # note that sources should be time- and layer-integrated!
 for _ in range(nstep):
     vdif(nuh, dt, tracer, ea4=sources)
 delta = valid_tracer / nstep - 1
@@ -82,7 +82,7 @@ if error > tolerance:
 
 # Now try without spatial gradient and source term only
 tracer.values[...] = 1
-sources = domain.T.array(fill=-.1 / dt, is_3d=True) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
+sources = domain.T.array(fill=-.1 / dt, z=pygetm.CENTERS) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
 for _ in range(1):
     vdif(nuh, dt, tracer, ea2=sources)
 print(valid_tracer)

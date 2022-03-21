@@ -6,7 +6,7 @@ import datetime
 
 import numpy
 
-from . import constants
+from .constants import *
 from . import _pygetm
 from . import core
 from . import domain
@@ -77,26 +77,26 @@ class Simulation(_pygetm.Simulation):
         self.vua = dom.VU.array(fill=numpy.nan)
         self.vva = dom.VV.array(fill=numpy.nan)
 
-        self.uua3d = dom.UU.array(fill=numpy.nan, is_3d=True)
-        self.uva3d = dom.UV.array(fill=numpy.nan, is_3d=True)
-        self.vua3d = dom.VU.array(fill=numpy.nan, is_3d=True)
-        self.vva3d = dom.VV.array(fill=numpy.nan, is_3d=True)
+        self.uua3d = dom.UU.array(fill=numpy.nan, z=CENTERS)
+        self.uva3d = dom.UV.array(fill=numpy.nan, z=CENTERS)
+        self.vua3d = dom.VU.array(fill=numpy.nan, z=CENTERS)
+        self.vva3d = dom.VV.array(fill=numpy.nan, z=CENTERS)
 
         self.tracers = []
 
         self.fabm_model = None
 
         if runtype == 4:
-            self.temp = dom.T.array(fill=5., is_3d=True, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
-            self.salt = dom.T.array(fill=35., is_3d=True, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
-            self.rho = dom.T.array(is_3d=True, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
+            self.temp = dom.T.array(fill=5., z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
+            self.salt = dom.T.array(fill=35., z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
+            self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
             self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature')
-            self.temp_source = dom.T.array(fill=0., is_3d=True, units='W m-2')
-            self.salt_source = dom.T.array(fill=0., is_3d=True)
+            self.temp_source = dom.T.array(fill=0., z=CENTERS, units='W m-2')
+            self.salt_source = dom.T.array(fill=0., z=CENTERS)
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
 
-            self.SS = dom.T.array(fill=0., is_3d=True, at_interfaces=True, name='SS', units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
-            self.NN = dom.T.array(fill=0., is_3d=True, at_interfaces=True, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
+            self.SS = dom.T.array(fill=0., z=INTERFACES, name='SS', units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
+            self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
             self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity', fill_value=FILL_VALUE)
             self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity', fill_value=FILL_VALUE)
             self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness', fill_value=FILL_VALUE)
@@ -135,7 +135,7 @@ class Simulation(_pygetm.Simulation):
         variable = self.fabm_model.dependencies.find(name)
         if len(variable.shape) == 0:
             return variable
-        arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_name, is_3d=len(variable.shape) == 3)
+        arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_name, z=len(variable.shape) == 3)
         variable.link(arr.all_values)
         return arr
 
@@ -237,13 +237,13 @@ class Simulation(_pygetm.Simulation):
 
             # Buoyancy frequency and turbulence (W grid)
             self.density.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
-            self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(constants.RHO0)
+            self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(RHO0)
             self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
             # Temperature and salinity (T grid)
             self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
             self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (constants.RHO0 * constants.CP)))
+            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (RHO0 * CP)))
             self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
 
             # Transport of passive tracers (including biogeochemical ones)
@@ -393,7 +393,7 @@ class Simulation(_pygetm.Simulation):
         self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
 
     @property
-    def Ekin(self, rho0: float=constants.RHO0):
+    def Ekin(self, rho0: float=RHO0):
         dom = self.domain
         U = self.U.interp(dom.T)
         V = self.V.interp(dom.T)

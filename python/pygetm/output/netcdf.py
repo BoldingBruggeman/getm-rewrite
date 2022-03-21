@@ -7,6 +7,7 @@ import netCDF4
 from .. import core
 from . import FieldManager, File
 from .. import _pygetm
+from ..constants import INTERFACES
 
 class NetCDFFile(File):
     def __init__(self, field_manager: FieldManager, path: str, rank: int, sub: bool=False, sync_interval: int=1, **kwargs):
@@ -46,8 +47,8 @@ class NetCDFFile(File):
             self.ncvars = []
             for output_name, field in self.fields.items():
                 dims = ('y%s' % field.grid.postfix, 'x%s' % field.grid.postfix)
-                if field.ndim == 3:
-                    dims = ('zi' if field.at_interfaces else 'z',) + dims
+                if field.z:
+                    dims = ('zi' if field.z == INTERFACES else 'z',) + dims
                 if not field.constant:
                     dims = ('time',) + dims
                 ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)

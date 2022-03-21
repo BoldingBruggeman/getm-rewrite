@@ -114,8 +114,8 @@ class Grid(_pygetm.Grid):
         v_new = u * sin_rot + v * self._cos_rot
         return u_new, v_new
 
-    def array(self, fill=None, is_3d: bool=False, dtype: numpy.typing.DTypeLike=float, **kwargs) -> core.Array:
-        return core.Array.create(self, fill, is_3d=is_3d, dtype=dtype, **kwargs)
+    def array(self, *args, **kwargs) -> core.Array:
+        return core.Array.create(self,  *args, **kwargs)
 
     def add_to_netcdf(self, nc: netCDF4.Dataset, postfix: str=''):
         xdim, ydim = 'x' + postfix, 'y' + postfix

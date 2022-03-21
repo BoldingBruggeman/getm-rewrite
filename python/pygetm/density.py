@@ -1,6 +1,7 @@
 import numpy
 
 from . import core
+from .constants import *
 import pygsw
 
 # Below we package up all equation-of-state/TEOS10 methods in a class.
@@ -13,8 +14,8 @@ class Density:
         assert SA.grid is ct.grid
         assert SA.ndim == 3
         if out is None:
-            out = SA.grid.array(is_3d=True, at_interfaces=True)
-        assert out.grid is SA.grid and out.at_interfaces
+            out = SA.grid.array(z=INTERFACES)
+        assert out.grid is SA.grid and out.z == INTERFACES
         if p is None:
             p = -SA.grid.zc
         assert p.grid is SA.grid
@@ -25,7 +26,7 @@ class Density:
         """Compute in-situ density from absolute salinity and conservative temperature. Inputs can be 2D or 3D."""
         assert SA.grid is ct.grid
         if out is None:
-            out = SA.grid.array(is_3d=SA.ndim == 3)
+            out = SA.grid.array(z=SA.z)
         assert out.grid is SA.grid
         if p is None:
             p = -SA.grid.zc
@@ -37,7 +38,7 @@ class Density:
         """Compute potential temperature from absolute salinity and conservative temperature. Inputs can be 2D or 3D."""
         assert SA.grid is ct.grid
         if out is None:
-            out = SA.grid.array(is_3d=SA.ndim == 3)
+            out = SA.grid.array(z=SA.z)
         assert out.grid is SA.grid and out.shape == SA.shape
         pygsw.pt_from_ct(SA.all_values.ravel(), ct.all_values.ravel(), out.all_values.ravel())
         return out

@@ -14,9 +14,9 @@ tausx = domain.U.array(fill=0.01)
 tausy = domain.V.array(fill=0.)
 sp = domain.T.array(fill=0.)
 
-idpdx = domain.U.array(fill=0., is_3d=True)
-idpdy = domain.V.array(fill=0., is_3d=True)
-viscosity = domain.T.array(fill=0., is_3d=True, at_interfaces=True)
+idpdx = domain.U.array(fill=0., z=pygetm.CENTERS)
+idpdy = domain.V.array(fill=0., z=pygetm.CENTERS)
+viscosity = domain.T.array(fill=0., z=pygetm.INTERFACES)
 
 # Time
 timestep = 10.

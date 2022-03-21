@@ -7,6 +7,7 @@ import numpy.typing
 import netCDF4
 
 import pygetm.core
+from pygetm.constants import INTERFACES
 
 class Base:
     def __init__(self, ndim: int, dtype: numpy.typing.DTypeLike, grid, fill_value=None, constant: bool=False, atts={}):
@@ -99,14 +100,14 @@ class Field(Base):
         x, y = (self.array.grid.lon, self.array.grid.lat) if self.array.grid.domain.spherical else (self.array.grid.x, self.array.grid.y)
         coords.append(self.collection.require(x.name))
         coords.append(self.collection.require(y.name))
-        if self.array.ndim == 3:
-            z = self.array.grid.zf if self.array.at_interfaces else self.array.grid.zc
+        if self.array.z:
+            z = self.array.grid.zf if self.array.z == INTERFACES else self.array.grid.zc
             coords.append(self.collection.require(z.name))
         return coords
 
     @property
-    def at_interfaces(self) -> bool:
-        return self.array.at_interfaces
+    def z(self) -> bool:
+        return self.array.z
 
     def get_expression(self) -> str:
         return self.array.name
@@ -135,5 +136,5 @@ class Mask(Base):
         return 'mask(%s)' % self.source.get_expression()
 
     @property
-    def at_interfaces(self) -> bool:
-        return self.source.at_interfaces
+    def z(self) -> bool:
+        return self.source.z

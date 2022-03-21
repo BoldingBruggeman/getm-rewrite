@@ -1,11 +1,12 @@
 import numbers
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Literal
 
 import numpy, numpy.lib.mixins, numpy.typing
 import xarray
 
 from . import _pygetm
 from . import parallel
+from .constants import *
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field', 'saved', '_shape', '_ndim', '_size', '_dtype')
@@ -111,20 +112,19 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return sum / count
 
     @staticmethod
-    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, is_3d: bool=False, at_interfaces: bool=False, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
+    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, z: Literal[None, True, False, CENTERS, INTERFACES]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
         ar = Array(grid=grid, **kwargs)
         if fill is None and ar.fill_value is None:
             fill = ar.fill_value
         if fill is not None:
             fill = numpy.asarray(fill)
-            if fill.ndim == 3:
-                is_3d = True
-                if fill.shape[0] == grid.nz_ + 1: at_interfaces = True
+            if z is None:
+                z = False if fill.ndim != 3 else (INTERFACES if fill.shape[0] == grid.nz_ + 1 else CENTERS)
         if dtype is None:
             dtype = float if fill is None else fill.dtype
         shape = (grid.ny_, grid.nx_)
-        if is_3d:
-            shape = (grid.nz_ + 1 if at_interfaces else grid.nz_,) + shape
+        if z:
+            shape = (grid.nz_ + 1 if z == INTERFACES else grid.nz_,) + shape
         if copy or fill is None:
             data = numpy.empty(shape, dtype=dtype)
             if fill is not None:
@@ -155,12 +155,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             kwargs['shading'] = 'auto'
         return self.xarray.plot(**kwargs)
 
-    def interp(self, target, at_interfaces: bool=None):
+    def interp(self, target, z: Literal[None, True, False, CENTERS, INTERFACES]=None):
         if not isinstance(target, Array):
             # Target must be a grid; we need to create the array
-            if at_interfaces is None:
-                at_interfaces = self.at_interfaces 
-            target = Array.create(target, dtype=self.dtype, is_3d=self.ndim == 3, at_interfaces=at_interfaces)
+            target = Array.create(target, dtype=self.dtype, z=z if z is not None else self.z)
         key = (self.grid.type, target.grid.type)
         if key == (_pygetm.UGRID, _pygetm.TGRID):
             self.grid.interp_x(self, target, offset=1)
@@ -178,7 +176,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self.grid.interp_x(self, target, offset=0)
         elif key in ((_pygetm.UGRID, _pygetm.VUGRID), (_pygetm.VGRID, _pygetm.VVGRID)):
             self.grid.interp_y(self, target, offset=0)
-        elif key[0] == key[1] and self.at_interfaces and not target.at_interfaces:
+        elif key[0] == key[1] and self.z == INTERFACES and target.z == CENTERS:
             # vertical interpolation from layer interfaces to layer centers
             target.all_values[...] = 0.5 * (self.all_values[:-1, ...] + self.all_values[1:, ...])
         else:
@@ -213,8 +211,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return self._ndim
 
     @property
-    def at_interfaces(self):
-        return self._ndim == 3 and self._shape[0] == self.grid.nz_ + 1
+    def z(self):
+        return False if self._ndim != 3 else (INTERFACES if self._shape[0] == self.grid.nz_ + 1 else CENTERS)
 
     @property
     def size(self):
@@ -298,6 +296,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                     coords['lat%s' % self.grid.postfix] = self.grid.lat.xarray
             dims = ('y' + self.grid.postfix, 'x' + self.grid.postfix)
             if self.ndim == 3:
-                dims = ('zi' if self.at_interfaces else 'z',) + dims
+                dims = ('zi' if self.z == INTERFACES else 'z',) + dims
             self._xarray = xarray.DataArray(self.values, coords=coords, dims=dims, attrs=attrs, name=self.name)
         return self._xarray
