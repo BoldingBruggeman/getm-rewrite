@@ -50,7 +50,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
-   real(real64) :: lAh=0._real64
+   real(real64) :: lAh
    integer :: i, j
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
@@ -62,7 +62,11 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
    flux(imin-halo(1),:) = 0._real64
      QU(imin-halo(1),:) = 0._real64
 
-   if (Ah > 0._real64) lAh=Ah ! optionally apply diffusion
+   if (Ah > 0._real64) then
+      lAh=Ah ! optionally apply diffusion
+   else
+      lAh=0._real64
+   end if
 
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
@@ -96,6 +100,13 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
             flux(i,j) = QU(i,j)*fu - lAh*hu(i,j)*(f(i+1,j)-f(i,j))/dxu(i,j)
          else
             flux(i,j) = 0._real64
+         end if
+      end do
+   end do
+
+   do j=jmin,jmax
+      do i=imin-1,imax
+         if (umask(i,j) == 1 .or. umask(i,j) == 2) then
          end if
       end do
    end do
@@ -146,7 +157,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
-   real(real64) :: lAh=0._real64
+   real(real64) :: lAh
    integer :: i, j
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
@@ -158,7 +169,11 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
    flux(:,jmin-halo(2)) = 0._real64
      QV(:,jmin-halo(2)) = 0._real64
 
-   if (Ah > 0._real64) lAh=Ah ! optionally apply diffusion
+   if (Ah > 0._real64) then
+      lAh=Ah ! optionally apply diffusion
+   else
+      lAh=0._real64
+   end if
 
 !  TODO: (vertical) interation!!!
    do j=jmin-1,jmax
