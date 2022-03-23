@@ -24,12 +24,12 @@ FROZEN_DENSITY = 3
 BAROCLINIC = 4
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi'
-    _pressure_arrays = 'dpdx', 'dpdy'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS'
+    _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -52,7 +52,10 @@ class Simulation(_pygetm.Simulation):
         self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
 
         array_args = {
+            'uk': dict(units='m s-1', long_name='velocity in Eastward direction', fill_value=FILL_VALUE),
+            'vk': dict(units='m s-1', long_name='velocity in Northward direction', fill_value=FILL_VALUE),
             'ww': dict(units='m s-1', long_name='vertical velocity', fill_value=FILL_VALUE),
+            'SS': dict(units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
         }
 
         for name in Simulation._momentum_arrays:
@@ -86,7 +89,10 @@ class Simulation(_pygetm.Simulation):
 
         self.fabm_model = None
 
-        if runtype == 4:
+        if runtype > BAROTROPIC_2D:
+            self.tracer_advection = _pygetm.Advection(dom.T, scheme=advection_scheme)
+
+        if runtype == BAROCLINIC:
             self.temp = dom.T.array(fill=5., z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
             self.salt = dom.T.array(fill=35., z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
@@ -95,7 +101,6 @@ class Simulation(_pygetm.Simulation):
             self.salt_source = dom.T.array(fill=0., z=CENTERS)
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
 
-            self.SS = dom.T.array(fill=0., z=INTERFACES, name='SS', units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
             self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
             self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity', fill_value=FILL_VALUE)
             self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity', fill_value=FILL_VALUE)
@@ -233,33 +238,56 @@ class Simulation(_pygetm.Simulation):
             self.logger.info(self.time)
 
         if self.runtype > BAROTROPIC_2D and self.istep % self.split_factor == 0:
-            self.uvw_momentum_3d()
+            # Depth-integrated transports have been summed over all microtimesteps. Now average them.
+            self.Ui.all_values[...] /= self.split_factor
+            self.Vi.all_values[...] /= self.split_factor
 
-            # Buoyancy frequency and turbulence (W grid)
-            self.density.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
-            self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(RHO0)
-            self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
+            # Update 3D elevations and layer thicknesses. New elevation on T grid will match elevation at end of 2D timestep,
+            # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 macrotimestep behind. Old
+            # elevations and thicknesses will be one macrotimestep behind new elevations aand thicknesses.
+            self.start_3d()
+            self.domain.do_vertical()
 
-            # Temperature and salinity (T grid)
-            self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
-            self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (RHO0 * CP)))
-            self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
+            # Update presssure gradient for start of the 3D time step. JB: presumably airsea.sp needs to be at start of the macrotimestep - not currently the case if we update meteo on 2D timestep!
+            self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.sp)
 
-            # Transport of passive tracers (including biogeochemical ones)
-            for array, src in self.tracers:
-                self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=src)
+            # JB: at what time should airsea.taux_U and airsea.tauy_V formally be defined? Start of the macrotimestep like dpdx/dpdy? TODO
+            self.uvw_momentum_3d(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.domain.T.array(fill=0., z=INTERFACES)) #self.turbulence.num)
 
-            # Update density to keep it in sync with T and S
-            if self.rho.saved:
-                self.density.get_density(self.salt, self.temp, out=self.rho)
+            if self.runtype == BAROCLINIC:
+                # Buoyancy frequency and turbulence (T grid - interfaces)
+                self.density.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
+                self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(RHO0)
+                self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
-            self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
+                # Temperature and salinity (T grid - centers)
+                self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
+                self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
+                self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (RHO0 * CP)))
+                self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
 
-            # Time-integrate source terms of biogeochemistry
-            if self.fabm_model:
-                self.update_fabm(self.macrotimestep)
-                self.update_fabm_sources()
+                # Transport of passive tracers (including biogeochemical ones)
+                for array, src in self.tracers:
+                    self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, array)
+                    self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=src)
+
+                # Update density to keep it in sync with T and S.
+                # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
+                # Therefore, it is computed only if needed for output (or as input for biogeochemistry)
+                if self.rho.saved:
+                    self.density.get_density(self.salt, self.temp, out=self.rho)
+
+                # From conservative temperature to in-situ sea surface temperature, needed to compute heat/momentum fluxes at the surface
+                self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), out=self.sst)
+
+                # Time-integrate source terms of biogeochemistry
+                if self.fabm_model:
+                    self.update_fabm(self.macrotimestep)
+                    self.update_fabm_sources()
+
+            # Reset depth-integrated transports that will be incremented over subsequent 3D timestep.
+            self.Ui.all_values[...] = 0
+            self.Vi.all_values[...] = 0
 
         self.output_manager.save()
 
@@ -305,13 +333,13 @@ class Simulation(_pygetm.Simulation):
 
     def uvw_momentum_3d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         _pygetm.Simulation.uvw_momentum_3d(self, timestep, tausx, tausy, dpdx, dpdy, idpdx, idpdy, viscosity.interp(self.domain.U), viscosity.interp(self.domain.V))
-        return   # skip advection for testing
 
         itimestep = 1. / timestep
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
         self.uk.all_values[:, :] = self.pk.all_values / self.U.grid.hn.all_values
         self.vk.all_values[:, :] = self.qk.all_values / self.V.grid.hn.all_values
+        return   # skip advection for testing
 
         # Advect 3D u velocity using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
@@ -326,6 +354,8 @@ class Simulation(_pygetm.Simulation):
         self.vk.interp(self.vva3d)
         self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
+
+        self.update_shear_frequency(viscosity)
 
     def start_3d(self):
         # Halo exchange for sea level on T grid

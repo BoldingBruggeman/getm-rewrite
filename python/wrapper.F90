@@ -200,12 +200,15 @@ contains
          case ('advqk'); if (allocated(momentum%advqk)) p = c_loc(momentum%advqk); grid_type = 3; sub_type = subtype_depth_explicit
          case ('Ui');   p = c_loc(momentum%Ui); grid_type = 2
          case ('Vi');   p = c_loc(momentum%Vi); grid_type = 3
+         case ('SS');   if (allocated(momentum%SS)) p = c_loc(momentum%SS); sub_type = subtype_depth_explicit_interfaces
          end select
       case (2)
          call c_f_pointer(obj, pressure)
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
          case ('dpdx'); p = c_loc(pressure%dpdx); grid_type = 2
          case ('dpdy'); p = c_loc(pressure%dpdy); grid_type = 3
+         case ('idpdx'); if (allocated(pressure%idpdx)) p = c_loc(pressure%idpdx); grid_type = 2; sub_type = subtype_depth_explicit
+         case ('idpdy'); if (allocated(pressure%idpdy)) p = c_loc(pressure%idpdy); grid_type = 3; sub_type = subtype_depth_explicit
          case default; p = C_NULL_PTR
          end select
       case (3)
@@ -520,8 +523,8 @@ contains
       real(real64), contiguous, pointer, dimension(:,:,:) :: viscosity
 
       call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(pviscosity, viscosity, momentum%domain%T%u - momentum%domain%T%l + 1)
-      call momentum%shear_frequency(viscosity)
+      call c_f_pointer(pviscosity, viscosity, momentum%domain%T%u - momentum%domain%T%l + 2)
+      call momentum%shear_frequency(viscosity(:, :, 2:size(viscosity,3) - 1))
    end subroutine
 
    function pressure_create(runtype, pdomain) result(ppressure) bind(c)
