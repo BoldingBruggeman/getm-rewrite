@@ -3,6 +3,7 @@ from typing import Union, Optional
 import itertools
 import logging
 import datetime
+import timeit
 
 import numpy
 
@@ -29,7 +30,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -204,6 +205,7 @@ class Simulation(_pygetm.Simulation):
 
         self.domain.input_manager.update(time)
         self.output_manager.start(save=save)
+        self._start_time = timeit.default_timer()
 
     def advance(self):
         self.time += self.timedelta
@@ -252,7 +254,7 @@ class Simulation(_pygetm.Simulation):
             self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.sp)
 
             # JB: at what time should airsea.taux_U and airsea.tauy_V formally be defined? Start of the macrotimestep like dpdx/dpdy? TODO
-            self.uvw_momentum_3d(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.domain.T.array(fill=0., z=INTERFACES)) #self.turbulence.num)
+            self.uvw_momentum_3d(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
 
             if self.runtype == BAROCLINIC:
                 # Buoyancy frequency and turbulence (T grid - interfaces)
@@ -292,6 +294,7 @@ class Simulation(_pygetm.Simulation):
         self.output_manager.save()
 
     def finish(self):
+        self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
         self.output_manager.close()
 
     def update_fabm_sources(self):
