@@ -93,23 +93,13 @@ class Simulation(_pygetm.Simulation):
         if runtype > BAROTROPIC_2D:
             self.tracer_advection = _pygetm.Advection(dom.T, scheme=advection_scheme)
 
-        if runtype == BAROCLINIC:
-            self.temp = dom.T.array(fill=5., z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
-            self.salt = dom.T.array(fill=35., z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
-            self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
-            self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature')
-            self.temp_source = dom.T.array(fill=0., z=CENTERS, units='W m-2')
-            self.salt_source = dom.T.array(fill=0., z=CENTERS)
-            self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
-
+            # Turbulence and associated fields
+            self.turbulence = turbulence or pygetm.mixing.GOTM(self.domain, nml_path=gotm)
             self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
             self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity', fill_value=FILL_VALUE)
             self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity', fill_value=FILL_VALUE)
             self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness', fill_value=FILL_VALUE)
             self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE)
-
-            self.turbulence = turbulence or pygetm.mixing.GOTM(self.domain, nml_path=gotm)
-            self.density = density or pygetm.density.Density()
 
             self.vertical_diffusion = _pygetm.VerticalDiffusion(dom.T, cnpar=1.)
 
@@ -134,6 +124,17 @@ class Simulation(_pygetm.Simulation):
                 self.fabm_sources_interior = numpy.empty_like(self.fabm_model.interior_state)
                 self.fabm_sources_surface = numpy.empty_like(self.fabm_model.surface_state)
                 self.fabm_sources_bottom = numpy.empty_like(self.fabm_model.bottom_state)
+
+        if runtype == BAROCLINIC:
+            self.temp = dom.T.array(fill=5., z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
+            self.salt = dom.T.array(fill=35., z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
+            self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
+            self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature')
+            self.temp_source = dom.T.array(fill=0., z=CENTERS, units='W m-2')
+            self.salt_source = dom.T.array(fill=0., z=CENTERS)
+            self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
+
+            self.density = density or pygetm.density.Density()
         else:
             self.sst = self.airsea.t2m
 
