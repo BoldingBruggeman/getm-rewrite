@@ -389,3 +389,47 @@ def find_all_optimal_divisons(mask: numpy.typing.ArrayLike, max_ncpus: Union[int
         solution = find_optimal_divison(mask, ncpus, max_aspect_ratio=max_aspect_ratio)
         if solution:
             print('{ncpus} cores, optimal subdomain size: {nx} x {ny}, {0} land-only subdomains were dropped, max cost per core: {cost}'.format((solution['map'] == 0).sum(), **solution))
+
+def test_scaling_command():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('setup_script', help='path to Python script that starts the simulation')
+    parser.add_argument('--nmin', type=int, default=1, help='minimum number of CPUs to test with')
+    parser.add_argument('--nmax', type=int, help='maximum number of CPUs to test with')
+    parser.add_argument('--out', help='path to write scaling figure to')
+    args, leftover_args = parser.parse_known_args()
+    test_scaling(args.setup_script, args.nmax, args.nmin, extra_args=leftover_args, out=args.out)
+
+def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra_args: Iterable[str]=[], out: Optional[str]=None):
+    import subprocess
+    import sys
+    import os
+    import re
+    if nmax is None:
+        nmax = os.cpu_count()
+    ncpus = []
+    durations = []
+    for n in range(nmax, nmin - 1, -1):
+        print('Running %s with %i CPUs... ' % (os.path.basename(setup_script), n), end='', flush=True)
+        p = subprocess.run(['mpiexec', '-n', str(n), sys.executable, setup_script] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if p.returncode != 0:
+            log_path = 'scaling-%03i.log' % n
+            with open(log_path, 'w') as f:
+                f.write(p.stdout)
+            print('FAILED, log written to %s' % log_path)
+            continue
+        m = re.search('Time spent in main loop: ([\d\.]+) s', p.stdout)
+        duration = float(m.group(1))
+        print('%.3f s in main loop' % (duration,))
+        ncpus.append(n)
+        durations.append(duration)
+    from matplotlib import pyplot
+    fig, ax = pyplot.subplots()
+    ax.plot(ncpus, durations, '.')
+    ax.grid()
+    ax.set_xlabel('number of CPUs')
+    ax.set_ylabel('duration of %s' % os.path.basename(setup_script))
+    if out:
+        fig.savefig(out, dpi=300)
+    else:
+        pyplot.show()

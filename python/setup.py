@@ -12,6 +12,7 @@ setup(
     entry_points = {
         'console_scripts': [
             'pygetm-subdiv = pygetm.subdiv:main',
+            'pygetm-test-scaling = pygetm.parallel:test_scaling_command',
         ],
     }
 )
