@@ -194,7 +194,7 @@ cdef class Advection:
 
         # Store references to column height and layer height on the tracer grid
         self.D_ref = self.tgrid.D.all_values
-        self.h_ref = self.tgrid.hn.all_values
+        self.h_ref = self.tgrid.ho.all_values
 
         # Efficient reference to work array
         self._h = self.h
@@ -364,6 +364,10 @@ cdef class Simulation:
 
     def update_sealevel_boundaries(self, double timestep):
         sealevel_boundaries(self.psealevel, self.pmomentum, timestep)
+
+    def update_shear_frequency(self, Array viscosity not None):
+        assert viscosity.grid is self.domain.T and viscosity.z == INTERFACES, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.T.postfix, viscosity.grid.postfix)
+        momentum_shear_frequency(self.pmomentum, <double *>viscosity.p)
 
     def wrap(self, Array ar not None, bytes name, int source):
         cdef void* obj = self.pmomentum
