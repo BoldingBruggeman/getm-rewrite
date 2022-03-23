@@ -698,6 +698,7 @@ class Domain(_pygetm.Domain):
                     useblit=True,
                     button=[1],
                     interactive=False)
+        return fig
 
     def save(self, path: str, full: bool=False):
         with netCDF4.Dataset(path, 'w') as nc:
