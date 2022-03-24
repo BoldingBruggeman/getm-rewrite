@@ -30,7 +30,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -151,7 +151,7 @@ class Simulation(_pygetm.Simulation):
         assert source is None or source.grid is self.domain.T
         self.tracers.append((array, source))
 
-    def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True):
+    def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
         and after the FABM model has been provided with all dependencies"""
         self.logger.info('Starting simulation at %s' % time)
@@ -207,6 +207,13 @@ class Simulation(_pygetm.Simulation):
         self.domain.input_manager.update(time)
         self.output_manager.start(save=save)
         self._start_time = timeit.default_timer()
+
+        self._profile = None
+        if profile:
+            import cProfile
+            pr = cProfile.Profile()
+            self._profile = (profile, pr)
+            pr.enable()
 
     def advance(self):
         self.time += self.timedelta
@@ -295,6 +302,13 @@ class Simulation(_pygetm.Simulation):
         self.output_manager.save()
 
     def finish(self):
+        if self._profile:
+            import pstats
+            name, pr = self._profile
+            pr.disable()
+            with open('%s-%03i.prof' % (name, self.domain.tiling.rank), 'w') as f:
+                ps = pstats.Stats(pr, stream=f).sort_stats(pstats.SortKey.TIME)
+                ps.print_stats()
         self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
         self.output_manager.close()
 
