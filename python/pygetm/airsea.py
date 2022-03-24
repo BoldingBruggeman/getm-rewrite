@@ -39,7 +39,7 @@ class Fluxes:
         self.tauy.interp(self.tauy_V)
 
 class FluxesFromMeteo(Fluxes):
-    def __init__(self, domain, longwave_method: int=1, albedo_method: int=1, compute_swr: bool=True, logger: Optional[logging.Logger]=None):
+    def __init__(self, domain, logger: Optional[logging.Logger]=None, longwave_method: int=1, albedo_method: int=1, compute_swr: bool=True):
         super().__init__(domain, logger)
         self.es = domain.T.array(name='es', long_name='vapor pressure at saturation', units='Pa', fill_value=FILL_VALUE)
         self.ea = domain.T.array(name='ea', long_name='vapor pressure', units='Pa', fill_value=FILL_VALUE)
