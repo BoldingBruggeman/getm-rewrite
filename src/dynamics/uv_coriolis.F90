@@ -173,20 +173,20 @@ MODULE SUBROUTINE coriolis_fpk(self)
                do i=VG%imin,VG%imax
                   self%work2d(i,j)=0._real64
                   if(VG%mask(i,j) > 0) then
-                     self%work2d(i,j)=0.25_real64*(self%pk(i,j,k)+self%pk(i+1,j,k)+self%pk(i,j-1,k)+self%pk(i+1,j-1,k))
+                     self%work2d(i,j)=0.25_real64*(self%pk(i,j,k)+self%pk(i-1,j,k)+self%pk(i,j+1,k)+self%pk(i-1,j+1,k))
                   end if
                end do
             end do
          case (2) ! Espelid et al. [2000], IJNME 49, 1521-1545
-            do j=UG%jmin,UG%jmax
-               do i=UG%imin,UG%imax
+            do j=VG%jmin,VG%jmax
+               do i=VG%imin,VG%imax
                   self%work2d(i,j)=0._real64
-                  if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-                     self%work2d(i,j)=0.25_real64*sqrt(UG%ho(i,j,k))*( &
+                  if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+                     self%work2d(i,j)=0.25_real64*sqrt(VG%ho(i,j,k))*( &
                                       +self%pk(i  ,j  ,k)/sqrt(UG%ho(i  ,j  ,k)) &
-                                      +self%pk(i+1,j  ,k)/sqrt(UG%ho(i+1,j  ,k)) &
-                                      +self%pk(i  ,j-1,k)/sqrt(UG%ho(i  ,j-1,k)) &
-                                      +self%pk(i+1,j-1,k)/sqrt(UG%ho(i+1,j-1,k)))
+                                      +self%pk(i-1,j  ,k)/sqrt(UG%ho(i-1,j  ,k)) &
+                                      +self%pk(i  ,j+1,k)/sqrt(UG%ho(i  ,j+1,k)) &
+                                      +self%pk(i-1,j+1,k)/sqrt(UG%ho(i-1,j+1,k)))
                      end if
                   end do
                end do
