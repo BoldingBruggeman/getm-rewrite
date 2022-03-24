@@ -1,5 +1,6 @@
 import numbers
 from typing import Optional, Union, Tuple, Literal
+import logging
 
 import numpy, numpy.lib.mixins, numpy.typing
 import xarray
@@ -114,7 +115,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @staticmethod
     def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, z: Literal[None, True, False, CENTERS, INTERFACES]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
         ar = Array(grid=grid, **kwargs)
-        if fill is None and ar.fill_value is None:
+        if fill is None and ar.fill_value is not None:
             fill = ar.fill_value
         if fill is not None:
             fill = numpy.asarray(fill)
@@ -272,6 +273,15 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
         self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos)
+
+    def require_set(self, logger: Optional[logging.Logger]=None):
+        valid = True
+        if self._fill_value is not None:
+            invalid = self.ma == self._fill_value
+            if invalid.any():
+                (logger or logging.getLogger()).error('%s is masked (%s) in %i unmasked cells.' % (self.name, self._fill_value, invalid.sum()))
+                valid = False
+        return valid
 
     @property
     def xarray(self) -> xarray.DataArray:
