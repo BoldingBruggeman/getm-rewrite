@@ -1,4 +1,5 @@
 from typing import Optional, Sequence, Tuple
+import logging
 
 import numpy
 import cftime
@@ -12,7 +13,9 @@ cpa=1008.
 FILL_VALUE = -2e20
 
 class Fluxes:
-    def __init__(self, domain):
+    def __init__(self, domain, logger: Optional[logging.Logger]=None):
+        self.logger = logger or logging.getLogger()
+
         self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill_value=FILL_VALUE)
         self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill_value=FILL_VALUE)
         self.qe = domain.T.array(name='qe', long_name='sensible heat flux', units='W m-2', fill_value=FILL_VALUE)
@@ -31,8 +34,8 @@ class Fluxes:
         self.tauy.interp(self.tauy_V)
 
 class FluxesFromMeteo(Fluxes):
-    def __init__(self, domain, longwave_method: int=1, albedo_method: int=1, compute_swr: bool=True):
-        super().__init__(domain)
+    def __init__(self, domain, longwave_method: int=1, albedo_method: int=1, compute_swr: bool=True, logger: Optional[logging.Logger]=None):
+        super().__init__(domain, logger)
         self.es = domain.T.array(name='es', long_name='vapor pressure at saturation', units='Pa', fill_value=FILL_VALUE)
         self.ea = domain.T.array(name='ea', long_name='vapor pressure', units='Pa', fill_value=FILL_VALUE)
         self.qs = domain.T.array(name='qs', long_name='specific humidity at saturation', units='kg kg-1', fill_value=FILL_VALUE)
@@ -93,7 +96,10 @@ class FluxesFromMeteo(Fluxes):
 
     def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
         if not self._ready:
-            assert self.t2m.require_set() * self.d2m.require_set() * self.u10.require_set() * self.v10.require_set() * self.tcc.require_set() * self.sp.require_set()
+            assert (self.t2m.require_set(self.logger) * self.d2m.require_set(self.logger)
+                  * self.u10.require_set(self.logger) * self.v10.require_set(self.logger)
+                  * self.tcc.require_set(self.logger) * self.sp.require_set(self.logger)
+                  * sst.require_set(self.logger))
             self._ready = True
 
         self.humidity(sst)

@@ -73,7 +73,7 @@ class Simulation(_pygetm.Simulation):
 
         airsea = airsea or pygetm.airsea.FluxesFromMeteo
         assert issubclass(airsea, pygetm.airsea.Fluxes)
-        self.airsea = airsea(self.domain)
+        self.airsea = airsea(self.domain, self.logger)
 
         self.uadv = _pygetm.Advection(dom.U, scheme=advection_scheme)
         self.vadv = _pygetm.Advection(dom.V, scheme=advection_scheme)
@@ -208,8 +208,6 @@ class Simulation(_pygetm.Simulation):
         self.domain.input_manager.update(time)
         self.output_manager.start(save=save)
         self._start_time = timeit.default_timer()
-
-        assert self.sst.require_set(self.logger)
 
         self._profile = None
         if profile:
