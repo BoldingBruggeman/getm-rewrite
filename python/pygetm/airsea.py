@@ -24,8 +24,11 @@ class Fluxes:
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
         self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
 
-    def __call__(self, sst: core.Array) -> None:
-        pass
+    def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
+        self.taux.update_halos()
+        self.taux.interp(self.taux_U)
+        self.tauy.update_halos()
+        self.tauy.interp(self.tauy_V)
 
 class FluxesFromMeteo(Fluxes):
     def __init__(self, domain, longwave_method: int=1, albedo_method: int=1, compute_swr: bool=True):
@@ -83,10 +86,6 @@ class FluxesFromMeteo(Fluxes):
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
         self.taux.all_values[...] = tmp * self.u10.all_values
         self.tauy.all_values[...] = tmp * self.v10.all_values
-        self.taux.update_halos()
-        self.taux.interp(self.taux_U)
-        self.tauy.update_halos()
-        self.tauy.interp(self.tauy_V)
         self.qe.all_values[...] = -self.cd_sensible.all_values * cpa * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
         self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
 
@@ -96,4 +95,5 @@ class FluxesFromMeteo(Fluxes):
         self.longwave_radiation(sst)
         if self.compute_swr:
             self.shortwave_radiation(time)
+        super().__call__(time, sst)
 
