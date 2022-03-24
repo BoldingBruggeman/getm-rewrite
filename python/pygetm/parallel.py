@@ -34,7 +34,12 @@ def getLogger(log_level=logging.INFO, comm=MPI.COMM_WORLD):
 class Tiling:
     @staticmethod
     def autodetect(mask, ncpus: Optional[int]=None, logger: Optional[logging.Logger]=None, **kwargs) -> 'Tiling':
-        solution = find_optimal_divison(mask, ncpus, logger=logger)
+        comm = kwargs.get('comm', MPI.COMM_WORLD)
+        if comm.Get_rank() == 0:
+            solution = find_optimal_divison(mask, ncpus, logger=logger)
+        else:
+            solution = None
+        solution = comm.bcast(solution, root=0)
         counts = solution['map']
         rank_map = numpy.full(counts.shape, -1, dtype=int)
         rank = 0
