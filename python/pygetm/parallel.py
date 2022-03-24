@@ -10,6 +10,7 @@ import numpy.typing
 from . import _pygetm
 
 Waitall = MPI.Request.Waitall
+Startall = MPI.Prequest.Startall
 
 def iterate_rankmap(rankmap):
     for irow in range(rankmap.shape[0]):
@@ -224,7 +225,7 @@ class DistributedArray:
     __slots__ = ['rank', 'group2task', 'neighbor2name']
     def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int):
         self.rank = tiling.rank
-        self.group2task = {ALL: ([], []), TOP_BOTTOM: ([], []), LEFT_RIGHT: ([], [])}
+        self.group2task = {ALL: ([], [], [], []), TOP_BOTTOM: ([], [], [], []), LEFT_RIGHT: ([], [], [], [])}
         self.neighbor2name = {}
 
         key = (field.shape, halo, field.dtype)
@@ -241,13 +242,15 @@ class DistributedArray:
                 else:
                     inner_cache, outer_cache = numpy.empty_like(inner), numpy.empty_like(outer)
                 owncaches.append((inner_cache, outer_cache))
-                sendtask = (functools.partial(tiling.comm.Isend, inner_cache, neighbor, sendtag), inner, inner_cache)
-                recvtask = (functools.partial(tiling.comm.Irecv, outer_cache, neighbor, recvtag), outer, outer_cache)
+                send_req = tiling.comm.Send_init(inner_cache, neighbor, sendtag)
+                rev_req = tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
                 self.neighbor2name[neighbor] = name
                 for group in groups:
-                    sendtasks, recvtasks = self.group2task[group]
-                    sendtasks.append(sendtask)
-                    recvtasks.append(recvtask)
+                    send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
+                    send_reqs.append(send_req)
+                    send_data.append((inner, inner_cache))
+                    recv_reqs.append(rev_req)
+                    recv_data.append((outer, outer_cache))
 
         add_task('bottomleft',  6, 5, field[...,  halo  :halo*2,  halo  :halo*2], field[...,      :halo,       :halo ], groups=(ALL,))
         add_task('bottom',      3, 2, field[...,  halo  :halo*2,  halo  :-halo],  field[...,      :halo,   halo:-halo], groups=(ALL, TOP_BOTTOM))
@@ -261,32 +264,30 @@ class DistributedArray:
             tiling.caches[key] = owncaches
 
     def update_halos(self, group: int=ALL):
-        sendtasks, recvtasks = self.group2task[group]
-        recreqs = [fn() for fn, _, _ in recvtasks]
-        sendreqs = []
-        for fn, inner, cache in sendtasks:
+        send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
+        Startall(recv_reqs)
+        for inner, cache in send_data:
             cache[...] = inner
-            sendreqs.append(fn())
-        Waitall(recreqs)
-        for _, outer, cache in recvtasks:
+        Startall(send_reqs)
+        Waitall(recv_reqs)
+        for outer, cache in recv_data:
             outer[...] = cache
-        Waitall(sendreqs)
+        Waitall(send_reqs)
 
     def compare_halos(self, group: int=ALL) -> bool:
-        sendtasks, recvtasks = self.group2task[group]
-        recreqs = [fn() for fn, _, _ in recvtasks]
-        sendreqs = []
-        for fn, inner, cache in sendtasks:
+        send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
+        Startall(recv_reqs)
+        for inner, cache in send_data:
             cache[...] = inner
-            sendreqs.append(fn())
-        Waitall(recreqs)
+        Startall(send_reqs)
+        Waitall(recv_reqs)
         match = True
-        for fn, outer, cache in recvtasks:
+        for outer, cache in recv_data:
             if not (outer == cache).all():
                 delta = outer - cache
                 print('Rank %i: mismatch in %s halo! Maximum absolute difference: %s. Values: %s' % (self.rank, self.neighbor2name[fn.args[1]], numpy.abs(delta).max(), delta))
                 match = False
-        Waitall(sendreqs)
+        Waitall(send_reqs)
         return match
 
 class Sum:
@@ -429,6 +430,7 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
     ax.grid()
     ax.set_xlabel('number of CPUs')
     ax.set_ylabel('duration of %s' % os.path.basename(setup_script))
+    ax.set_ylim(0, None)
     if out:
         fig.savefig(out, dpi=300)
     else:
