@@ -279,7 +279,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if self._fill_value is not None:
             invalid = self.ma == self._fill_value
             if invalid.any():
-                (logger or logging.getLogger()).error('%s is masked (%s) in %i unmasked cells.' % (self.name, self._fill_value, invalid.sum()))
+                (logger or logging.getLogger()).error('%s is masked (%s) in %i active grid cells.' % (self.name, self._fill_value, invalid.sum()))
                 valid = False
         return valid
 

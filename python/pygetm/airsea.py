@@ -27,7 +27,12 @@ class Fluxes:
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
         self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
 
+        self._ready = False
+
     def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
+        if not self._ready:
+            assert self.taux.require_set(self.logger) * self.tauy.require_set(self.logger) * self.sp.require_set(self.logger)
+            self._ready = True
         self.taux.update_halos()
         self.taux.interp(self.taux_U)
         self.tauy.update_halos()
@@ -64,8 +69,6 @@ class FluxesFromMeteo(Fluxes):
         self.albedo_method = albedo_method
         self.compute_swr = compute_swr
 
-        self._ready = False
-
     def humidity(self, sst: core.Array):
         pyairsea.humidity(3, self.d2m.all_values, self.sp.all_values, sst.all_values, self.t2m.all_values, self.es.all_values, self.ea.all_values, self.qs.all_values, self.qa.all_values, self.rhoa.all_values)
 
@@ -98,9 +101,7 @@ class FluxesFromMeteo(Fluxes):
         if not self._ready:
             assert (self.t2m.require_set(self.logger) * self.d2m.require_set(self.logger)
                   * self.u10.require_set(self.logger) * self.v10.require_set(self.logger)
-                  * self.tcc.require_set(self.logger) * self.sp.require_set(self.logger)
-                  * sst.require_set(self.logger))
-            self._ready = True
+                  * self.tcc.require_set(self.logger) * sst.require_set(self.logger))
 
         self.humidity(sst)
         self.fluxes(sst)

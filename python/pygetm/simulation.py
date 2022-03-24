@@ -205,8 +205,16 @@ class Simulation(_pygetm.Simulation):
                 self.density.get_density(self.salt, self.temp, out=self.rho)
             self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
 
+        # Update all input fields
         self.domain.input_manager.update(time)
+
+        # Ensure heat and momentum fluxes have sensible values
+        self.airsea(self.time, self.sst)
+        if self.runtype == BAROCLINIC:
+            assert self.airsea.qe.require_set(self.logger) * self.airsea.qh.require_set(self.logger) * self.airsea.ql.require_set(self.logger)
+
         self.output_manager.start(save=save)
+
         self._start_time = timeit.default_timer()
 
         self._profile = None
