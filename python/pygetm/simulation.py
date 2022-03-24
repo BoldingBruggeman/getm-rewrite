@@ -125,18 +125,17 @@ class Simulation(_pygetm.Simulation):
                 self.fabm_sources_surface = numpy.empty_like(self.fabm_model.surface_state)
                 self.fabm_sources_bottom = numpy.empty_like(self.fabm_model.bottom_state)
 
+        self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
+
         if runtype == BAROCLINIC:
             self.temp = dom.T.array(fill=5., z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
             self.salt = dom.T.array(fill=35., z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
-            self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature')
             self.temp_source = dom.T.array(fill=0., z=CENTERS, units='W m-2')
             self.salt_source = dom.T.array(fill=0., z=CENTERS)
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
 
             self.density = density or pygetm.density.Density()
-        else:
-            self.sst = self.airsea.t2m
 
     def get_fabm_dependency(self, name):
         variable = self.fabm_model.dependencies.find(name)
@@ -203,6 +202,8 @@ class Simulation(_pygetm.Simulation):
             if self.rho.saved:
                 self.density.get_density(self.salt, self.temp, out=self.rho)
             self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
+
+        assert self.sst.require_set(self.logger)
 
         self.domain.input_manager.update(time)
         self.output_manager.start(save=save)

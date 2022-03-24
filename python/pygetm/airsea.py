@@ -61,6 +61,8 @@ class FluxesFromMeteo(Fluxes):
         self.albedo_method = albedo_method
         self.compute_swr = compute_swr
 
+        self._ready = False
+
     def humidity(self, sst: core.Array):
         pyairsea.humidity(3, self.d2m.all_values, self.sp.all_values, sst.all_values, self.t2m.all_values, self.es.all_values, self.ea.all_values, self.qs.all_values, self.qa.all_values, self.rhoa.all_values)
 
@@ -90,6 +92,10 @@ class FluxesFromMeteo(Fluxes):
         self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
 
     def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
+        if not self._ready:
+            assert self.t2m.require_set() * self.d2m.require_set() * self.u10.require_set() * self.v10.require_set() * self.tcc.require_set() * self.sp.require_set()
+            self._ready = True
+
         self.humidity(sst)
         self.fluxes(sst)
         self.longwave_radiation(sst)
