@@ -203,11 +203,11 @@ class Simulation(_pygetm.Simulation):
                 self.density.get_density(self.salt, self.temp, out=self.rho)
             self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
 
-        assert self.sst.require_set(self.logger)
-
         self.domain.input_manager.update(time)
         self.output_manager.start(save=save)
         self._start_time = timeit.default_timer()
+
+        assert self.sst.require_set(self.logger)
 
         self._profile = None
         if profile:
