@@ -44,9 +44,9 @@ class Density:
         return out
 
     def convert_ts(self, sp: core.Array, pt: core.Array, p: core.Array=None):
-        """Convert practical salinity and potential temperature into absolute salinity and conservative temperature.
+        """Convert practical salinity and potential temperature to absolute salinity and conservative temperature.
         Pressure must be provided as well as practical salinity and potential temperature.
-        The comversion happens in-place."""
+        The conversion happens in-place."""
         assert sp.grid is pt.grid
         if p is None:
             p = -sp.grid.zc
