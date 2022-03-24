@@ -67,7 +67,8 @@ class NetCDFFile(File):
     def save_now(self):
         if not self.created:
             self._create()
-        self.nctime[self.itime] = self.itime
+        if self.nc is not None:
+            self.nctime[self.itime] = self.itime
         for field in self.fields.values():
             if not field.constant:
                 field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
