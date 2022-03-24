@@ -44,6 +44,7 @@ class NetCDFFile(File):
                 if (zname not in self.nc.dimensions): self.nc.createDimension(zname, nz)
                 if (ziname not in self.nc.dimensions): self.nc.createDimension(ziname, nz + 1)
             self.nc.createDimension('time',)
+            self.nctime = self.nc.createVariable('time', float, ('time',))
             self.ncvars = []
             for output_name, field in self.fields.items():
                 dims = ('y%s' % field.grid.postfix, 'x%s' % field.grid.postfix)
@@ -66,6 +67,7 @@ class NetCDFFile(File):
     def save_now(self):
         if not self.created:
             self._create()
+        self.nctime[self.itime] = self.itime
         for field in self.fields.values():
             if not field.constant:
                 field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
