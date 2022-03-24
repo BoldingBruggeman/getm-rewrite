@@ -58,7 +58,7 @@ class FieldCollection:
         dtype = dtype or array.dtype
         field = Field(array, self)
         if mask:
-            field = Mask(field)
+            field = Mask(field, self)
         self.fields[output_name] = field
         self.expression2name[field.get_expression()] = output_name
         field.coordinates = field.get_coordinates()
@@ -113,12 +113,12 @@ class Field(Base):
         return self.array.name
 
 class Mask(Base):
-    def __init__(self, source: Base):
+    def __init__(self, source: Base, collection: FieldCollection):
         super().__init__(source.ndim, source.dtype, source.grid, source.fill_value, source.constant, source.atts)
         self.source = source
         if self.fill_value is None:
             self.fill_value = netCDF4.default_fillvals.get(self.dtype.str[1:])
-        self.mask = Field(self.source.grid.mask)
+        self.mask = Field(self.source.grid.mask, collection)
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
         data = self.source.get(numpy.empty_like(out[slice_spec + (Ellipsis,)]))
