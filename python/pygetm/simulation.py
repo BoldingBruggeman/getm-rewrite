@@ -164,8 +164,7 @@ class Simulation(_pygetm.Simulation):
 
         if self.runtype > BAROTROPIC_2D:
             # ensure ho and hn are up to date and identical
-            self.start_3d()             # update zio/zin (elevations for 3D time step) on all grids, starting from latest z on T grid
-            self.domain.do_vertical()   # update layer heights on all grids based on bathymetry and elevation (zin)
+            self.start_3d()
 
         if self.fabm_model:
             # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
@@ -263,7 +262,6 @@ class Simulation(_pygetm.Simulation):
             # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 macrotimestep behind. Old
             # elevations and thicknesses will be one macrotimestep behind new elevations aand thicknesses.
             self.start_3d()
-            self.domain.do_vertical()
 
             # Update presssure gradient for start of the 3D time step. JB: presumably airsea.sp needs to be at start of the macrotimestep - not currently the case if we update meteo on 2D timestep!
             self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.sp)
@@ -391,6 +389,7 @@ class Simulation(_pygetm.Simulation):
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
     def start_3d(self):
+        """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step."""
         # Halo exchange for sea level on T grid
         self.domain.T.z.update_halos()
 
@@ -429,6 +428,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
 
     def update_depth(self):
+        """Use surface elevation on T grid to update elevations on U,V,X grids and subsequently update total water depth D on all grids."""
         # Halo exchange for sea level on T grid
         self.domain.T.z.update_halos()
 
