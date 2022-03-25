@@ -200,7 +200,7 @@ MODULE SUBROUTINE coriolis_fpk(self)
                             -self%work2d(i,j)*(TG%dx(i,j+1)-TG%dx(i,j))) &
                             /VG%ho(i,j,k)*VG%iarea(i,j)
                end if
-               self%fpk(i,j,k)=(cord_curv-VG%cor(i,j))*self%work2d(i,j)
+               self%fpk(i,j,k)=(cord_curv+VG%cor(i,j))*self%work2d(i,j)
             end if
          end do
       end do
