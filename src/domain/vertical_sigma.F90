@@ -108,6 +108,20 @@ MODULE SUBROUTINE do_sigma(self)
       end do
    end do
    end associate VGrid
+
+   !! if zin and H are updated in halo zones - extend to all domain
+   XGrid: associate( XG => self%X )
+!KB
+   XG%ho=XG%hn
+   do j=XG%l(2),XG%u(2)  ! requires zin is HALO-updated (-1)
+      do i=XG%l(1),XG%u(1)
+         if (XG%mask(i,j) > 0) then
+!KB            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
+            XG%hn(i,j,1:self%X%kmax)=(XG%zin(i,j)+XG%H(i,j))*dga(:)
+         end if
+      end do
+   end do
+   end associate XGrid
 END SUBROUTINE do_sigma
 
 !---------------------------------------------------------------------------

@@ -362,25 +362,33 @@ class Simulation(_pygetm.Simulation):
         itimestep = 1. / timestep
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
-        self.uk.all_values[:, :] = self.pk.all_values / self.U.grid.hn.all_values
-        self.vk.all_values[:, :] = self.qk.all_values / self.V.grid.hn.all_values
-        return   # skip advection for testing
+        self.uk.all_values[...] = numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0)
+        self.vk.all_values[...] = numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0)
+
+        self.update_shear_frequency(viscosity)
+
+        self.uk.interp(self.uua3d)
+        self.vk.interp(self.uva3d)
+        self.uk.interp(self.vua3d)
+        self.vk.interp(self.vva3d)
 
         # Advect 3D u velocity using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.uk.interp(self.uua3d)
         self.vk.interp(self.uva3d)
-        self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk)
+        self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk, new_h=True)
         self.advpk.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
 
         # Advect 3D v velocity using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.uk.interp(self.vua3d)
         self.vk.interp(self.vva3d)
-        self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk)
+        self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk, new_h=True)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
-        self.update_shear_frequency(viscosity)
+        # Restore velocity at time=n-1/2
+        self.uk.all_values[...] = numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0)
+        self.vk.all_values[...] = numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0)
 
     def start_3d(self):
         # Halo exchange for sea level on T grid
@@ -409,9 +417,16 @@ class Simulation(_pygetm.Simulation):
         self.domain.V.zin.update_halos()
         self.domain.X.zin.update_halos()
 
-        self.domain.U.ho.all_values[...] = self.domain.U.hn.all_values[...]
-        self.domain.V.ho.all_values[...] = self.domain.V.hn.all_values[...]
-        self.domain.X.ho.all_values[...] = self.domain.X.hn.all_values[...]
+        # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
+        # This routine also sets ho to the previous value of hn
+        self.domain.do_vertical()
+
+        # Update thicknesses on advection grids. These must be at time=n+1/2 (whereas the tracer grid is now on t=n+1)
+        # That's already the case for the X grid, but for the T grid we explicitly compute and use thicknesses at time=n+1/2.
+        h_half = self.domain.T.ho.all_values + self.domain.T.hn.all_values
+        self.domain.UU.hn.all_values[:, :, :-1] = h_half[:, :, 1:]
+        self.domain.VV.hn.all_values[:, :-1, :] = h_half[:, 1:, :]
+        self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
 
     def update_depth(self):
         # Halo exchange for sea level on T grid

@@ -180,7 +180,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 !KB               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
-               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%advpk(i,j,k)-self%diffuk(i,j,k)+ip_fac*idpdx(i,j,k))
+               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)+self%advpk(i,j,k)-self%diffuk(i,j,k)+ip_fac*idpdx(i,j,k))
 #else
                self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)+ip_fac*idpdx(i,j,k))
 #endif
@@ -278,7 +278,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 !KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
-               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%advqk(i,j,k)-self%diffvk(i,j,k)+ip_fac*idpdy(i,j,k))
+               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)+self%advqk(i,j,k)-self%diffvk(i,j,k)+ip_fac*idpdy(i,j,k))
 #else
                self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)+ip_fac*idpdy(i,j,k))
 #endif
