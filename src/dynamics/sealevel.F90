@@ -172,6 +172,7 @@ SUBROUTINE sealevel_t(self,dt,U,V,fwf)
          end if
       end do
    end do
+   call self%domain%mirror_bdys(TG,TG%z)
    end associate UGrid
    end associate VGrid
    end associate TGrid

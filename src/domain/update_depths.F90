@@ -54,7 +54,7 @@ module SUBROUTINE update_depths(self)
 #endif
       end do
    end do
-   call self%mirror_bdys(TG,TG%D)
+   !call self%mirror_bdys(TG,TG%D)   JB not needeed if z is correctly mirrored
 
    UGrid: associate( UG => self%U )
    do j=UG%l(2),UG%u(2)
@@ -69,7 +69,7 @@ module SUBROUTINE update_depths(self)
 #endif
       end do
    end do
-   call self%mirror_bdys(UG,UG%D)
+   !call self%mirror_bdys(UG,UG%D)   JB not needeed if z is correctly mirrored
    end associate UGrid
 
    VGrid: associate( VG => self%V )
@@ -85,7 +85,7 @@ module SUBROUTINE update_depths(self)
 #endif
       end do
    end do
-   call self%mirror_bdys(VG,VG%D)
+   !call self%mirror_bdys(VG,VG%D)   JB not needeed if z is correctly mirrored
    end associate VGrid
 
    XGrid: associate( XG => self%X )

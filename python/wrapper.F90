@@ -588,7 +588,6 @@ contains
       call c_f_pointer(pU, U, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
       call c_f_pointer(pV, V, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
       call sealevel%t(timestep, U, V)
-      call sealevel%uvx()
    end subroutine
 
    subroutine sealevel_update_uvx(psealevel) bind(c)
