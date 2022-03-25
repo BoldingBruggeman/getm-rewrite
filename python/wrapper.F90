@@ -181,6 +181,8 @@ contains
          case ('V');   p = c_loc(momentum%V); grid_type = 3
          case ('fU');  p = c_loc(momentum%fU); grid_type = 2
          case ('fV');  p = c_loc(momentum%fV); grid_type = 3
+         case ('fpk');  if (allocated(momentum%fpk)) p = c_loc(momentum%fpk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('fqk');  if (allocated(momentum%fqk)) p = c_loc(momentum%fqk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advU');  p = c_loc(momentum%advU); grid_type = 2
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
