@@ -372,15 +372,11 @@ class Simulation(_pygetm.Simulation):
 
         # Advect 3D u velocity using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
-        self.uk.interp(self.uua3d)
-        self.vk.interp(self.uva3d)
         self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk, new_h=True)
         self.advpk.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
 
         # Advect 3D v velocity using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
-        self.uk.interp(self.vua3d)
-        self.vk.interp(self.vva3d)
         self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk, new_h=True)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
