@@ -9,7 +9,7 @@ from . import domain
 from . import core
 from .constants import FILL_VALUE
 
-cpa=1008.
+CPA = 1008.
 
 class Fluxes:
     def __init__(self, domain, logger: Optional[logging.Logger]=None):
@@ -93,7 +93,7 @@ class FluxesFromMeteo(Fluxes):
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
         self.taux.all_values[...] = tmp * self.u10.all_values
         self.tauy.all_values[...] = tmp * self.v10.all_values
-        self.qe.all_values[...] = -self.cd_sensible.all_values * cpa * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
+        self.qe.all_values[...] = -self.cd_sensible.all_values * CPA * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
         self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
 
     def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
