@@ -17,8 +17,6 @@ import pygetm.mixing
 import pygetm.density
 import pygetm.airsea
 
-FILL_VALUE = -2.e20
-
 BAROTROPIC = BAROTROPIC_2D = 1
 BAROTROPIC_3D = 2
 FROZEN_DENSITY = 3

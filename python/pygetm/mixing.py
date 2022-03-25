@@ -9,8 +9,10 @@ from .constants import *
 
 class Turbulence:
     def __init__(self, domain: domain.Domain):
-        self.nuh = domain.T.array(z=INTERFACES, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=-9999.)
-        self.num = domain.T.array(z=INTERFACES, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=-9999.)
+        self.nuh = domain.T.array(z=INTERFACES, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=FILL_VALUE)
+        self.num = domain.T.array(z=INTERFACES, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=FILL_VALUE)
+        self.nuh.fill(0.)
+        self.num.fill(0.)
 
 class GOTM(Turbulence):
     def __init__(self, domain: domain.Domain, nml_path: Optional[str]=None):

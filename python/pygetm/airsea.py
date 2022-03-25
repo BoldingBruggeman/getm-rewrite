@@ -7,10 +7,9 @@ import cftime
 import pyairsea
 from . import domain
 from . import core
+from .constants import FILL_VALUE
 
 cpa=1008.
-
-FILL_VALUE = -2e20
 
 class Fluxes:
     def __init__(self, domain, logger: Optional[logging.Logger]=None):
