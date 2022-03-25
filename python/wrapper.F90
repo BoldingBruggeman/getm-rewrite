@@ -351,15 +351,15 @@ contains
       !phn = c_loc(advection%hn)
    end function
 
-   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, Ah, timestep, pD, pvar) bind(c)
+   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, Ah, timestep, pD, pDU, pvar) bind(c)
       integer(c_int), intent(in), value :: direction
       real(c_double), intent(in), value :: Ah
       real(c_double), intent(in), value :: timestep
-      type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, pD, pvar
+      type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, pD, pDU, pvar
 
       type (type_advection),    pointer                 :: advection
       type (type_getm_grid),  pointer                   :: tgrid, ugrid
-      real(real64), contiguous, pointer, dimension(:,:) :: u, D, var
+      real(real64), contiguous, pointer, dimension(:,:) :: u, D, DU, var
 
       call c_f_pointer(padvection, advection)
       if (.not. allocated(advection%op)) return
@@ -367,12 +367,17 @@ contains
       call c_f_pointer(pugrid, ugrid)
       call c_f_pointer(pu, u, ugrid%u(1:2) - ugrid%l(1:2) + 1)
       call c_f_pointer(pD, D, tgrid%u(1:2) - tgrid%l(1:2) + 1)
+      call c_f_pointer(pDU, DU, ugrid%u(1:2) - ugrid%l(1:2) + 1)
       call c_f_pointer(pvar, var, tgrid%u(1:2) - tgrid%l(1:2) + 1)
       select case (direction)
          case (1)
-            call advection%advection_calculate_u2d(ugrid, u, Ah, timestep, tgrid, D, var)
+            call advection%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                    ugrid%mask,ugrid%dx,ugrid%dy,DU,u, &
+                    tgrid%mask,tgrid%iarea,Ah,timestep,D,var)
          case (2)
-            call advection%advection_calculate_v2d(ugrid, u, Ah, timestep, tgrid, D, var)
+            call advection%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                    ugrid%mask,ugrid%dx,ugrid%dy,DU,u, &
+                    tgrid%mask,tgrid%iarea,Ah,timestep,D,var)
       end select
    end subroutine
 

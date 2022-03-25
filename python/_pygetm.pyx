@@ -22,7 +22,7 @@ cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* t
 cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, double* source, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
-cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double Ah, double timestep, double* pD, double* pvar) nogil
+cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pvar, double* pea2, double* pea4) nogil
@@ -178,8 +178,8 @@ cdef class Advection:
     cdef Grid ugrid
     cdef Grid vgrid
     cdef readonly numpy.ndarray D, h
-    cdef double[:, :, ::1] _h, h_ref
-    cdef double[:, ::1] D_ref
+    cdef double[:, :, ::1] _h
+    cdef double[:, ::1] D_ref, DU, DV
 
     def __init__(self, Grid grid, int scheme):
         self.tgrid = grid
@@ -194,7 +194,8 @@ cdef class Advection:
 
         # Store references to column height and layer height on the tracer grid
         self.D_ref = self.tgrid.D.all_values
-        self.h_ref = self.tgrid.ho.all_values
+        self.DU = self.ugrid.D.all_values
+        self.DV = self.vgrid.D.all_values
 
         # Efficient reference to work array
         self._h = self.h
@@ -206,39 +207,42 @@ cdef class Advection:
         assert v.grid is self.vgrid
         assert var.grid is self.tgrid
         self._h[0,:,:] = self.D_ref
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self._h[0,0,0], <double *>var.p)
+        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self._h[0,0,0], &self.DV[0,0], <double *>var.p)
         var.update_halos(2)
-        advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self._h[0,0,0], <double *>var.p)
+        advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self._h[0,0,0], &self.DU[0,0], <double *>var.p)
         var.update_halos(1)
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self._h[0,0,0], <double *>var.p)
+        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self._h[0,0,0], &self.DV[0,0], <double *>var.p)
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0):
+    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0, new_h=False):
         assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
         assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
         assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
         assert w.z == INTERFACES, 'grid mismatch for w: expected values at layer interfaces'
         assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
         assert var.ndim == 3 and var.z != INTERFACES, 'grid mismatch for advected quantity: expected 3D variable defined at layer centers'
-        cdef double[:, :, ::1] avar, au, av
+        cdef double[:, :, ::1] avar, au, av, h, hu, hv
         cdef int k
         avar = <double[:var.grid.nz_, :var.grid.ny_, :var.grid.nx_:1]> var.p
         au = <double[:u.grid.nz_, :u.grid.ny_, :u.grid.nx_:1]> u.p
         av = <double[:v.grid.nz_, :v.grid.ny_, :v.grid.nx_:1]> v.p
-        self._h[:,:,:] = self.h_ref
+        h = (self.tgrid.hn if new_h else self.tgrid.ho).all_values
+        hu = (self.ugrid.hn if new_h else self.ugrid.ho).all_values
+        hv = (self.vgrid.hn if new_h else self.vgrid.ho).all_values
+        self._h[:,:,:] = h
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &hu[k,0,0], &avar[k,0,0])
         var.update_halos(1)   # 1 = top-bottom, 2 = left-right
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &hv[k,0,0], &avar[k,0,0])
         advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, timestep, &self._h[0,0,0], <double *>var.p)
         var.update_halos(1)   # 1 = top-bottom, 2 = left-right
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &hv[k,0,0], &avar[k,0,0])
         var.update_halos(2)   # 1 = top-bottom, 2 = left-right
         for k in range(var.all_values.shape[0]):
-            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &avar[k,0,0])
+            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self._h[k,0,0], &hu[k,0,0], &avar[k,0,0])
 
 cdef class VerticalDiffusion:
     cdef void* p
