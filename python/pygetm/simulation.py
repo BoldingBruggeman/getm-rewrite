@@ -362,8 +362,8 @@ class Simulation(_pygetm.Simulation):
         itimestep = 1. / timestep
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
-        self.uk.all_values[...] = numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0)
-        self.vk.all_values[...] = numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0)
+        numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
+        numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
         self.update_shear_frequency(viscosity)
 
@@ -387,8 +387,8 @@ class Simulation(_pygetm.Simulation):
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
         # Restore velocity at time=n-1/2
-        self.uk.all_values[...] = numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0)
-        self.vk.all_values[...] = numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0)
+        numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
+        numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
     def start_3d(self):
         # Halo exchange for sea level on T grid
@@ -421,7 +421,7 @@ class Simulation(_pygetm.Simulation):
         # This routine also sets ho to the previous value of hn
         self.domain.do_vertical()
 
-        # Update thicknesses on advection grids. These must be at time=n+1/2 (whereas the tracer grid is now on t=n+1)
+        # Update thicknesses on advection grids. These must be at time=n+1/2 (whereas the tracer grid is now at t=n+1)
         # That's already the case for the X grid, but for the T grid we explicitly compute and use thicknesses at time=n+1/2.
         h_half = self.domain.T.ho.all_values + self.domain.T.hn.all_values
         self.domain.UU.hn.all_values[:, :, :-1] = h_half[:, :, 1:]
