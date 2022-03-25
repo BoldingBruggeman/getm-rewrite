@@ -395,7 +395,8 @@ contains
       call c_f_pointer(pw, w, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%kmax + 1/))
       call c_f_pointer(ph, h, tgrid%u - tgrid%l + 1)
       call c_f_pointer(pvar, var, tgrid%u - tgrid%l + 1)
-      call advection%advection_calculate_w3d(w, timestep, tgrid, h, var)
+      call advection%op%w3d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%kmax,tgrid%halo, &
+                    w,tgrid%mask,timestep,h,var)
    end subroutine
 
    function momentum_create(runtype, pdomain, apply_bottom_friction) result(pmomentum) bind(c)

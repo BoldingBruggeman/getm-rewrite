@@ -97,41 +97,6 @@ MODULE PROCEDURE advection_calculate_2d
 
 END PROCEDURE advection_calculate_2d
 
-MODULE PROCEDURE advection_calculate_u2d
-
-   IMPLICIT NONE
-
-!---------------------------------------------------------------------------
-
-   call self%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
-                    ugrid%mask,ugrid%dx,ugrid%dy,ugrid%D,u, &
-                    tgrid%mask,tgrid%iarea,Ah,dt,D,f)
-
-END PROCEDURE advection_calculate_u2d
-
-
-MODULE PROCEDURE advection_calculate_v2d
-
-   IMPLICIT NONE
-
-!---------------------------------------------------------------------------
-
-   call self%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
-                    vgrid%mask,vgrid%dx,vgrid%dy,vgrid%D,v, &
-                    tgrid%mask,tgrid%iarea,Ah,dt,D,f)
-
-END PROCEDURE advection_calculate_v2d
-
-MODULE PROCEDURE advection_calculate_w3d
-
-   IMPLICIT NONE
-
-!---------------------------------------------------------------------------
-   call self%op%w3d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%kmax,tgrid%halo, &
-                    w,tgrid%mask,dt,h,f)
-
-END PROCEDURE advection_calculate_w3d
-
 !---------------------------------------------------------------------------
 
 MODULE PROCEDURE advection_calculate_3d
