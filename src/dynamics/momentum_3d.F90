@@ -180,7 +180,12 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 !KB               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
-               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)+self%advpk(i,j,k)-self%diffuk(i,j,k)+ip_fac*idpdx(i,j,k))
+               self%ea4(i,j,k)=dt*(-0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k))*g*dpdx(i,j) &
+                                   +UG%alpha(i,j)*( self%fqk(i,j,k) &
+                                                   +self%advpk(i,j,k) &
+                                                   -self%diffuk(i,j,k) &
+                                                   +ip_fac*idpdx(i,j,k)) &
+                                  )
 #else
                self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)+ip_fac*idpdx(i,j,k))
 #endif
@@ -189,15 +194,14 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
       end do
    end do
 
-   ! Additional matrix elements for inner, surface and bottom layer
+   ! Additional matrix elements for surface and bottom layer
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             ! surface stress
             k=UG%kmax
             self%ea4(i,j,k)=self%ea4(i,j,k)+dt*UG%alpha(i,j)*tausx(i,j)/rho0
-            ! external pressure
-            self%ea4(i,j,1:)=self%ea4(i,j,1:)-dt*0.5_real64*(UG%ho(i,j,1:)+UG%hn(i,j,1:))*g*dpdx(i,j)
+
             ! bottom friction
             k=UG%kmin
             self%ea2(i,j,k)=dt*self%rru(i,j)
@@ -278,7 +282,13 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 !KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
-               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)+self%advqk(i,j,k)-self%diffvk(i,j,k)+ip_fac*idpdy(i,j,k))
+               self%ea4(i,j,k)=dt*(-0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k))*g*dpdy(i,j) &
+                                   +VG%alpha(i,j)*(-self%fpk(i,j,k) &
+                                                   +self%advqk(i,j,k) &
+                                                   -self%diffvk(i,j,k) &
+                                                   +ip_fac*idpdy(i,j,k)) &
+                                  )
+
 #else
                self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)+ip_fac*idpdy(i,j,k))
 #endif
@@ -287,15 +297,14 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
       end do
    end do
 
-   ! Additional matrix elements for inner, surface and bottom layer
+   ! Additional matrix elements for surface and bottom layer
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             ! surface stress
             k=VG%kmax
             self%ea4(i,j,k)=self%ea4(i,j,k)+dt*VG%alpha(i,j)*tausy(i,j)/rho0
-            ! external pressure
-            self%ea4(i,j,1:)=self%ea4(i,j,1:)-dt*0.5_real64*(VG%ho(i,j,1:)+VG%hn(i,j,1:))*g*dpdy(i,j)
+
             ! bottom friction
             k=VG%kmin
 !KB            self%ea2(i,j,k)=dt*self%rrv(i,j)/(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
