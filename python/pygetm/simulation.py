@@ -378,9 +378,21 @@ class Simulation(_pygetm.Simulation):
         _pygetm.Simulation.uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy)
 
     def uvw_momentum_3d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
+        # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids. For that, information from the halos is used.
+        viscosity.update_halos()
+
         _pygetm.Simulation.uvw_momentum_3d(self, timestep, tausx, tausy, dpdx, dpdy, idpdx, idpdy, viscosity.interp(self.domain.U), viscosity.interp(self.domain.V))
 
         itimestep = 1. / timestep
+
+        # Update the halos so that transports (and more importantly, the velocities derived subsequently) are valid there.
+        # This is needed to advect quantities defined on the T grid, as this requires velocities at the boundaries of every T cell
+        # of the subdomain interior; this includes cells at the very Western and Southern boundary, which for U and V grids lie within the halo
+        # Moreover, the velocities will also be interpolated to the advection grids for momentum (UU, UV, VU, VV), which again requires halos values.
+        # It is for the latter that we need to interpolate the vertical velocity.
+        self.pk.update_halos()
+        self.qk.update_halos()
+        self.ww.update_halos()
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
@@ -395,12 +407,12 @@ class Simulation(_pygetm.Simulation):
 
         # Advect 3D u velocity using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
-        self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk, new_h=True)
+        self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk, new_h=True, skip_initial_halo_exchange=True)
         self.advpk.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
 
         # Advect 3D v velocity using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
-        self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk, new_h=True)
+        self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk, new_h=True, skip_initial_halo_exchange=True)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
         # Restore velocity at time=n-1/2
@@ -437,10 +449,14 @@ class Simulation(_pygetm.Simulation):
 
         # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
         # This routine also sets ho to the previous value of hn
+        # All points (interior and halo) are processed, so ho and hn will be valid in halos after this completes.
+        # This does require that halo exchanges for zin on every grid were done beforehand.
         self.domain.do_vertical()
 
         # Update thicknesses on advection grids. These must be at time=n+1/2 (whereas the tracer grid is now at t=n+1)
         # That's already the case for the X grid, but for the T grid we explicitly compute and use thicknesses at time=n+1/2.
+        # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
+        # fortunately these values are not needed for advection.
         h_half = self.domain.T.ho.all_values + self.domain.T.hn.all_values
         self.domain.UU.hn.all_values[:, :, :-1] = h_half[:, :, 1:]
         self.domain.VV.hn.all_values[:, :-1, :] = h_half[:, 1:, :]
