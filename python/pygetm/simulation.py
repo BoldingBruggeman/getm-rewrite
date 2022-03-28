@@ -72,6 +72,11 @@ class Simulation(_pygetm.Simulation):
         for name in Simulation._sealevel_arrays:
             setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=3))
 
+        if runtype > BAROTROPIC_2D:
+            self.uk.all_values.fill(0.)
+            self.vk.all_values.fill(0.)
+            self.ww.all_values.fill(0.)
+
         if self.ww is not None:
             self.ww.all_values[...] = 0.
 
