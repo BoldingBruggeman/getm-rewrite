@@ -13,6 +13,7 @@ from . import core
 from . import parallel
 from . import output
 from . import input
+from .constants import FILL_VALUE
 
 WEST  = 1
 NORTH = 2
@@ -26,8 +27,6 @@ def find_interfaces(c: numpy.ndarray):
     c_if[0] = c[0] - 0.5 * d[0]
     c_if[-1] = c[-1] + 0.5 * d[-1]
     return c_if
-
-FILL_VALUE = -2e20
 
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
