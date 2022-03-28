@@ -18,6 +18,7 @@ contains
 
       type (type_settings) :: branch
       integer, parameter :: iunit = 60
+      integer :: namelen
       character(len=256), pointer :: pnml_file
 
       call c_f_pointer(c_loc(nml_file), pnml_file)
@@ -26,9 +27,9 @@ contains
          call clean_turbulence()
          call clean_tridiagonal()
       end if
-
       call init_turbulence(branch)
-      if (pnml_file /= '') call init_turbulence(iunit, pnml_file)
+      namelen = index(pnml_file, C_NULL_CHAR) - 1
+      if (namelen > 0) call init_turbulence(iunit, pnml_file(:namelen))
       call init_tridiagonal(nlev)
       call post_init_turbulence(nlev)
 
