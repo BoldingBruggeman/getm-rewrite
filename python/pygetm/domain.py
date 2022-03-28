@@ -32,14 +32,15 @@ class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
     _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
-    __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp')
+    __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp', 'overlap')
 
-    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
+    def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, overlap: int=0, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
         self.halo = domain.halo
         self.type = grid_type
         self.ioffset = ioffset
         self.joffset = joffset
+        self.overlap = overlap
         self.postfix = {_pygetm.TGRID: 't', _pygetm.UGRID: 'u', _pygetm.VGRID: 'v', _pygetm.XGRID: 'x', _pygetm.UUGRID: '_uu_adv', _pygetm.VVGRID: '_vv_adv', _pygetm.UVGRID: '_uv_adv', _pygetm.VUGRID: '_vu_adv'}[grid_type]
         self.ugrid: Optional[Grid] = ugrid
         self.vgrid: Optional[Grid] = vgrid
@@ -496,7 +497,7 @@ class Domain(_pygetm.Domain):
         self.U = Grid(self, _pygetm.UGRID, ioffset=2, joffset=1, ugrid=self.UU, vgrid=self.UV)
         self.V = Grid(self, _pygetm.VGRID, ioffset=1, joffset=2, ugrid=self.VU, vgrid=self.VV)
         self.T = Grid(self, _pygetm.TGRID, ioffset=1, joffset=1, ugrid=self.U, vgrid=self.V)
-        self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0)
+        self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0, overlap=1)
 
         self.Dmin = 1.
 
@@ -638,9 +639,6 @@ class Domain(_pygetm.Domain):
         if ymin is not None: selected = numpy.logical_and(selected, y >= ymin)
         if ymax is not None: selected = numpy.logical_and(selected, y <= ymax)
         self.mask[selected] = value
-
-    def distribute(self, field):
-        return self.tiling.wrap(field, halo=self.halo)
 
     def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, editable: bool=False):
         import matplotlib.pyplot

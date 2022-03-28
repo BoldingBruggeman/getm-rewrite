@@ -141,8 +141,8 @@ class Tiling:
     def __bool__(self) -> bool:
         return self.n_neigbors > 0
 
-    def wrap(self, field: numpy.ndarray, halo: int) -> 'DistributedArray':
-        return DistributedArray(self, field, halo)
+    def wrap(self, *args, **kwargs) -> 'DistributedArray':
+        return DistributedArray(self, *args, **kwargs)
 
     def subdomain2slices(self, irow: Optional[int]=None, icol: Optional[int]=None, halo_sub: int=0, halo_glob: int=0, scale: int=1, share: int=0, exclude_halos: bool=True) -> Tuple[Tuple[Any, slice, slice], Tuple[Any, slice, slice], Tuple[int, int], Tuple[int, int]]:
         if irow is None:
@@ -227,13 +227,13 @@ TOP_BOTTOM = 1
 LEFT_RIGHT = 2
 
 class DistributedArray:
-    __slots__ = ['rank', 'group2task', 'neighbor2name']
-    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int):
+    __slots__ = ['rank', 'group2task', 'halo2name']
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, overlap: int=0):
         self.rank = tiling.rank
         self.group2task = {ALL: ([], [], [], []), TOP_BOTTOM: ([], [], [], []), LEFT_RIGHT: ([], [], [], [])}
-        self.neighbor2name = {}
+        self.halo2name = {}
 
-        key = (field.shape, halo, field.dtype)
+        key = (field.shape, halo, overlap, field.dtype)
         caches = tiling.caches.get(key)
         owncaches = []
 
@@ -244,12 +244,14 @@ class DistributedArray:
             if neighbor != -1:
                 if caches:
                     inner_cache, outer_cache = caches[len(owncaches)]
+                    assert inner.shape == inner_cache.shape
+                    assert outer.shape == outer_cache.shape
                 else:
                     inner_cache, outer_cache = numpy.empty_like(inner), numpy.empty_like(outer)
                 owncaches.append((inner_cache, outer_cache))
                 send_req = tiling.comm.Send_init(inner_cache, neighbor, sendtag)
                 rev_req = tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
-                self.neighbor2name[neighbor] = name
+                self.halo2name[id(outer)] = name
                 for group in groups:
                     send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
                     send_reqs.append(send_req)
@@ -257,14 +259,16 @@ class DistributedArray:
                     recv_reqs.append(rev_req)
                     recv_data.append((outer, outer_cache))
 
-        add_task('bottomleft',  6, 5, field[...,  halo  :halo*2,  halo  :halo*2], field[...,      :halo,       :halo ], groups=(ALL,))
-        add_task('bottom',      3, 2, field[...,  halo  :halo*2,  halo  :-halo],  field[...,      :halo,   halo:-halo], groups=(ALL, TOP_BOTTOM))
-        add_task('bottomright', 7, 4, field[...,  halo  :halo*2, -halo*2:-halo],  field[...,      :halo,  -halo:     ], groups=(ALL,))
-        add_task('left',        0, 1, field[...,  halo  :-halo,   halo  :halo*2], field[...,  halo:-halo,      :halo ], groups=(ALL, LEFT_RIGHT))
-        add_task('right',       1, 0, field[...,  halo  :-halo,  -halo*2:-halo],  field[...,  halo:-halo, -halo:     ], groups=(ALL, LEFT_RIGHT))
-        add_task('topleft',     4, 7, field[..., -halo*2:-halo,   halo  :halo*2], field[..., -halo:,           :halo ], groups=(ALL,))
-        add_task('top',         2, 3, field[..., -halo*2:-halo,   halo  :-halo],  field[..., -halo:,       halo:-halo], groups=(ALL, TOP_BOTTOM))
-        add_task('topright',    5, 6, field[..., -halo*2:-halo,  -halo*2:-halo],  field[..., -halo:,      -halo:     ], groups=(ALL,))
+        in_start = halo + overlap
+        in_stop = in_start + halo
+        add_task('bottomleft',  6, 5, field[...,  in_start: in_stop,  in_start: in_stop ], field[...,      :halo,       :halo ], groups=(ALL,))
+        add_task('bottom',      3, 2, field[...,  in_start: in_stop,  halo    :-halo    ], field[...,      :halo,   halo:-halo], groups=(ALL, TOP_BOTTOM))
+        add_task('bottomright', 7, 4, field[...,  in_start: in_stop, -in_stop :-in_start], field[...,      :halo,  -halo:     ], groups=(ALL,))
+        add_task('left',        0, 1, field[...,  halo    :-halo,     in_start: in_stop ], field[...,  halo:-halo,      :halo ], groups=(ALL, LEFT_RIGHT))
+        add_task('right',       1, 0, field[...,  halo    :-halo,    -in_stop :-in_start], field[...,  halo:-halo, -halo:     ], groups=(ALL, LEFT_RIGHT))
+        add_task('topleft',     4, 7, field[..., -in_stop :-in_start, in_start: in_stop ], field[..., -halo:,           :halo ], groups=(ALL,))
+        add_task('top',         2, 3, field[..., -in_stop :-in_start, halo    :-halo    ], field[..., -halo:,       halo:-halo], groups=(ALL, TOP_BOTTOM))
+        add_task('topright',    5, 6, field[..., -in_stop :-in_start,-in_stop :-in_start], field[..., -halo:,      -halo:     ], groups=(ALL,))
         if caches is None:
             tiling.caches[key] = owncaches
 
@@ -288,9 +292,9 @@ class DistributedArray:
         Waitall(recv_reqs)
         match = True
         for outer, cache in recv_data:
-            if not (outer == cache).all():
+            if not numpy.array_equal(outer, cache, equal_nan=True):
                 delta = outer - cache
-                print('Rank %i: mismatch in %s halo! Maximum absolute difference: %s. Values: %s' % (self.rank, self.neighbor2name[fn.args[1]], numpy.abs(delta).max(), delta))
+                print('Rank %i: mismatch in %s halo! Maximum absolute difference: %s. Current %s vs. received %s' % (self.rank, self.halo2name[id(outer)], numpy.abs(delta).max(), outer, cache))
                 match = False
         Waitall(send_reqs)
         return match

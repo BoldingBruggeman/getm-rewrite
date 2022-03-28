@@ -61,14 +61,14 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if not self.grid.domain.tiling:
             return
         if self._dist is None:
-            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo)
+            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo, overlap=self.grid.overlap)
         return self._dist.update_halos(*args, **kwargs)
 
     def compare_halos(self, *args, **kwargs):
         if not self.grid.domain.tiling:
             return True
         if self._dist is None:
-            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo)
+            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo, overlap=self.grid.overlap)
         return self._dist.compare_halos(*args, **kwargs)
 
     def scatter(self, global_data: Optional['Array']):

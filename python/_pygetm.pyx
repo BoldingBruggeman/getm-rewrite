@@ -52,6 +52,11 @@ cpdef enum:
     UVGRID = -3
     VUGRID = -4
 
+# JB: for now, this is copy of the constants in parallel. Values must saty in sync
+cpdef enum:
+    TOP_BOTTOM = 1
+    LEFT_RIGHT = 2
+
 cdef class Array:
     cdef void* p
     cdef readonly numpy.ndarray all_values
@@ -204,20 +209,22 @@ cdef class Advection:
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def __call__(self, Array u not None, Array v not None, double timestep, Array var not None, double Ah = 0):
+    def __call__(self, Array u not None, Array v not None, double timestep, Array var not None, double Ah = 0, skip_initial_halo_exchange=True):
         assert u.grid is self.ugrid
         assert v.grid is self.vgrid
         assert var.grid is self.tgrid
         self.h_work[0,:,:] = self.D_ref
+        if not skip_initial_halo_exchange:
+            var.update_halos(TOP_BOTTOM)
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
-        var.update_halos(2)
+        var.update_halos(LEFT_RIGHT)
         advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self.h_work[0,0,0], &self.DU[0,0], <double *>var.p)
-        var.update_halos(1)
+        var.update_halos(TOP_BOTTOM)
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0, new_h=False):
+    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0, new_h=False, skip_initial_halo_exchange=False):
         assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
         assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
         assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
@@ -231,16 +238,18 @@ cdef class Advection:
         av = <double[:v.grid.nz_, :v.grid.ny_, :v.grid.nx_:1]> v.p
         h = (self.tgrid.hn if new_h else self.tgrid.ho).all_values
         self.h_work[:,:,:] = h
+        if not skip_initial_halo_exchange:
+            var.update_halos(LEFT_RIGHT)
         for k in range(var.all_values.shape[0]):
             advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
-        var.update_halos(1)   # 1 = top-bottom, 2 = left-right
+        var.update_halos(TOP_BOTTOM)
         for k in range(var.all_values.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
         advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, timestep, &self.h_work[0,0,0], <double *>var.p)
-        var.update_halos(1)   # 1 = top-bottom, 2 = left-right
+        var.update_halos(TOP_BOTTOM)
         for k in range(var.all_values.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
-        var.update_halos(2)   # 1 = top-bottom, 2 = left-right
+        var.update_halos(LEFT_RIGHT)
         for k in range(var.all_values.shape[0]):
             advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
 
@@ -320,10 +329,6 @@ cdef class Simulation:
         assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
         assert viscosity_u.grid is self.domain.U and viscosity_u.z == INTERFACES, 'grid mismatch for viscosity_u: expected %s, got %s' % (self.domain.U.postfix, viscosity_u.grid.postfix)
         assert viscosity_v.grid is self.domain.V and viscosity_v.z == INTERFACES, 'grid mismatch for viscosity_v: expected %s, got %s' % (self.domain.V.postfix, viscosity_v.grid.postfix)
-
-        # For now, in absence of 3D momentum, copy [barotropic] depth-averaged horizontal velocities to 3D velocities
-        #self.uk.all_values[...] = self.u1.all_values
-        #self.vk.all_values[...] = self.v1.all_values
 
         if self.apply_bottom_friction:
             momentum_bottom_friction_3d(self.pmomentum)
