@@ -71,7 +71,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
                 return False
             sim.Ui.all_values[...] = 0
             sim.Vi.all_values[...] = 0
-    return pygetm.debug.check_equal('Change in total volume', z_sum_ini, domain.T.z.ma.sum())
+    return pygetm.debug.check_equal('Change in total volume', z_sum_ini, domain.T.z.ma.sum(), rtol=1e-14)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
