@@ -272,7 +272,7 @@ SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    integer :: i,j
 !---------------------------------------------------------------------------
 !KB   if (associated(self%logs)) call self%logs%info('diffusion_driver()',level=2)
-   SHEAR: associate( shear => self%work2d )
+   xSHEAR: associate( shear => self%work2d )
    TGrid: associate( TG => self%domain%T )
    XGrid: associate( XG => self%domain%X )
    UGrid: associate( UG => self%domain%U )
@@ -357,7 +357,7 @@ SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    end associate VGrid
    end associate XGrid
    end associate TGrid
-   end associate SHEAR
+   end associate xSHEAR
 END SUBROUTINE diffusion_driver
 
 !---------------------------------------------------------------------------
