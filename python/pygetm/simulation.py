@@ -141,12 +141,16 @@ class Simulation(_pygetm.Simulation):
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
         if runtype == BAROCLINIC:
-            self.temp = dom.T.array(fill=5., z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature')
-            self.salt = dom.T.array(fill=35., z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity')
+            self.temp = dom.T.array(fill=numpy.nan, z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE)
+            self.salt = dom.T.array(fill=numpy.nan, z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE)
+            self.temp.fill(5.)
+            self.salt.fill(35.)
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
             self.temp_source = dom.T.array(fill=0., z=CENTERS, units='W m-2')
             self.salt_source = dom.T.array(fill=0., z=CENTERS)
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
+            self.add_tracer(self.temp, source=self.temp_source, source_scale=1. / (RHO0 * CP))
+            self.add_tracer(self.salt, source=self.salt_source)
 
             self.density = density or pygetm.density.Density()
 
@@ -158,10 +162,12 @@ class Simulation(_pygetm.Simulation):
         variable.link(arr.all_values)
         return arr
 
-    def add_tracer(self, array: core.Array, source: Optional[core.Array]=None):
+    def add_tracer(self, array: core.Array, source: Optional[core.Array]=None, source_scale: float=1.):
+        """Add a tracer that will be subject to advection and diffusion.
+        The optional source array must after multiplication with source_scale have tracer units per time, multiplied by layer thickness."""
         assert array.grid is self.domain.T
         assert source is None or source.grid is self.domain.T
-        self.tracers.append((array, source))
+        self.tracers.append((array, source, source_scale))
 
     def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
@@ -291,13 +297,13 @@ class Simulation(_pygetm.Simulation):
                 # Temperature and salinity (T grid - centers)
                 self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
                 self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-                self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.temp, ea4=self.temp_source * (self.macrotimestep / (RHO0 * CP)))
-                self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, self.salt, ea4=self.salt_source)
 
                 # Transport of passive tracers (including biogeochemical ones)
-                for array, src in self.tracers:
+                for array, source, source_scale in self.tracers:
+                    if source is not None:
+                        source.values[...] *= self.macrotimestep * source_scale
                     self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, array)
-                    self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=src)
+                    self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=source)
 
                 # Update density to keep it in sync with T and S.
                 # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
