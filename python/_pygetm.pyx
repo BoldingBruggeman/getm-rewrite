@@ -264,7 +264,7 @@ cdef class VerticalDiffusion:
             pea2 = <double *>ea2.p
         if ea4 is not None:
             pea4 = <double *>ea4.p
-        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, <double *>self.ho.p, <double *>self.hn.p, <double *>var.p, pea2, pea4)
+        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, <double *>self.hn.p, <double *>self.hn.p, <double *>var.p, pea2, pea4)
 
 cdef class Simulation:
     cdef readonly Domain domain
