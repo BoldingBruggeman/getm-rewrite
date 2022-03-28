@@ -1,3 +1,4 @@
+from distutils.log import debug
 import sys
 import argparse
 import datetime
@@ -30,8 +31,9 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
     mode_split = 10
     domain.T.zio.all_values[...] = 0
     domain.T.zin.all_values[...] = 0
-    sim.start(datetime.datetime(2000, 1, 1), timestep, mode_split)
-    pre_tot = (t * domain.T.hn * domain.T.area).values.sum()
+    sim.start_3d()
+    z_sum_ini = domain.T.z.ma.sum()
+    pre_tot = (t * domain.T.hn).values.sum()
     for istep, time in enumerate(times):
         sim.update_surface_pressure_gradient(domain.T.z, sp)
         sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
@@ -42,7 +44,6 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
             sim.Ui.all_values[...] /= mode_split
             sim.Vi.all_values[...] /= mode_split
             sim.start_3d()
-            domain.do_vertical()
             sim.update_surface_pressure_gradient(domain.T.zio, sp)
 
             sim.uvw_momentum_3d(timestep * mode_split, tausx, tausy, sim.dpdx, sim.dpdy, idpdx, idpdy, viscosity)
@@ -62,23 +63,22 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
             reldiv = div / numpy.where(maxtp > 0., maxtp, 1.)
             if not pygetm.debug.check_zero('maximum divergence (as missing vertical velocity in m s-1)', div / domain.T.area.values):
                 return False
-            #for k in range(div.shape[0]):
-            #    print(reldiv[k, ...].min(), reldiv[k, ...].max())
-            #print(reldiv.min(), reldiv.max(), div.min(), div.max())
-            #print(reldiv[-1, ...].min(), reldiv[-1, ...].max())
-            #pre_tot = (t * domain.T.hn).values.sum()
-            #adv.apply_3d(sim.uk, sim.vk, sim.ww, timestep * mode_split, t)
-            #print((t * adv.h).values.sum() / pre_tot - 1)
+            adv.apply_3d(sim.uk, sim.vk, sim.ww, timestep * mode_split, t)
+            new_tot = (t * domain.T.hn).values.sum()
+            if not pygetm.debug.check_equal('layer thicknesses', adv.h[:,2:-2,2:-2], domain.T.hn.values, rtol=1e-14, atol=1e-14):
+                return False
+            if not pygetm.debug.check_equal('tracer total', new_tot, pre_tot):
+                return False
             sim.Ui.all_values[...] = 0
             sim.Vi.all_values[...] = 0
-        #print((t * domain.T.hn * domain.T.area).values.sum() / pre_tot - 1)
-    return True
+    return pygetm.debug.check_equal('Change in total volume', z_sum_ini, domain.T.z.ma.sum(), rtol=1e-14)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--tau_x', type=float, default=0.)
+    parser.add_argument('--tau_y', type=float, default=0.)
     parser.add_argument('--apply_bottom_friction', action='store_true')
     args = parser.parse_args()
 
-    if not test(tau_x=0.01):
+    if not test(tau_x=args.tau_x, tau_y=args.tau_y):
         sys.exit(1)
-

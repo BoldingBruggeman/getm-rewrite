@@ -11,14 +11,14 @@ def check_zero(name: str, values: numpy.typing.ArrayLike, tol: float=1e-15, logg
     logger.log(logging.INFO if success else logging.ERROR, '%s: %.6e' % (name, max_val))
     return success
 
-def check_equal(name: str, values: numpy.typing.ArrayLike, values_ref: float=1e-15, rtol=1e-15, atol=1e-15, logger: logging.Logger=None) -> bool:
+def check_equal(name: str, values: numpy.typing.ArrayLike, values_ref: numpy.typing.ArrayLike, rtol=1e-15, atol=1e-15, logger: logging.Logger=None) -> bool:
     logger = logger or logging.getLogger()
     values = numpy.asarray(values)
     values_ref = numpy.asarray(values_ref)
     abs_dif = abs(values - values_ref)
     valid = abs_dif < rtol * abs(values_ref) + atol
     success = valid.all()
-    logger.log(logging.INFO if success else logging.ERROR, '%s: maximum absolute difference %.6e, %s' % (name, abs_dif.max(), values_ref))
+    logger.log(logging.INFO if success else logging.ERROR, '%s: maximum absolute difference %.6e' % (name, abs_dif.max()))
     return success
 
 def check_range(name: str, values: numpy.typing.ArrayLike, rtol=1e-12, atol=1e-12, target_value=None, logger: logging.Logger=None, plot: bool=False) -> bool:
