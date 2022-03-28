@@ -12,6 +12,7 @@ import pygetm.debug
 def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, apply_bottom_friction: bool=False):
     domain = pygetm.domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 50, f=0, H=50)
     sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_3D, advection_scheme=1)
+    sim.logger.info('Starting 3d barotropic test with tau_x=%s, tau_y=%s, apply_bottom_friction=%s' % (tau_x, tau_y, apply_bottom_friction))
 
     # Idealized surface forcing
     tausx = domain.U.array(fill=tau_x)
@@ -67,11 +68,9 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
             new_tot = (t * domain.T.hn).values.sum()
             if not pygetm.debug.check_equal('layer thicknesses', adv.h[:,2:-2,2:-2], domain.T.hn.values, rtol=1e-14, atol=1e-14):
                 return False
-            if not pygetm.debug.check_equal('tracer total', new_tot, pre_tot):
-                return False
             sim.Ui.all_values[...] = 0
             sim.Vi.all_values[...] = 0
-    return pygetm.debug.check_equal('Change in total volume', z_sum_ini, domain.T.z.ma.sum(), rtol=1e-14)
+    return pygetm.debug.check_equal('tracer total before and after simulation', new_tot, pre_tot) and pygetm.debug.check_equal('total volume before and after simulation', z_sum_ini, domain.T.z.ma.sum(), atol=1e-14, rtol=1e-14)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
