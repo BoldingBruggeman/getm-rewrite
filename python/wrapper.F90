@@ -95,6 +95,7 @@ contains
       type (type_getm_domain),   pointer :: domain
       type (type_getm_grid),     pointer :: grid
       type (type_getm_pressure), pointer :: pressure
+      integer                            :: halo(3)
 
       call c_f_pointer(pdomain, domain)
       select case (grid_type)
@@ -104,8 +105,9 @@ contains
       case (4); grid => domain%X
       case default
          allocate(grid)
+         halo = (/halox, haloy, haloz/)
          call grid%configure(grid_type=grid_type, imin=imin, imax=imax, &
-            jmin=jmin, jmax=jmax, kmin=kmin, kmax=kmax, halo=(/halox, haloy, haloz/))
+            jmin=jmin, jmax=jmax, kmin=kmin, kmax=kmax, halo=halo)
       end select
       pgrid = c_loc(grid)
    end function
