@@ -298,6 +298,11 @@ class Simulation(_pygetm.Simulation):
                 self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
                 self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
 
+                # Use previous source terms for biogeochemistry to update tracers
+                # This should be done before the tracer concentrations change due to transport processes
+                if self.fabm_model:
+                    self.update_fabm(self.macrotimestep)
+
                 # Transport of passive tracers (including biogeochemical ones)
                 for array, source, source_scale in self.tracers:
                     if source is not None:
@@ -314,9 +319,8 @@ class Simulation(_pygetm.Simulation):
                 # From conservative temperature to in-situ sea surface temperature, needed to compute heat/momentum fluxes at the surface
                 self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), out=self.sst)
 
-                # Time-integrate source terms of biogeochemistry
+                # Update source terms of biogeochemistry, using the new tracer concentrations
                 if self.fabm_model:
-                    self.update_fabm(self.macrotimestep)
                     self.update_fabm_sources()
 
             # Reset depth-integrated transports that will be incremented over subsequent 3D timestep.
