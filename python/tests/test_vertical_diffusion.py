@@ -1,6 +1,7 @@
 import sys
 
 import numpy
+import numpy.random
 
 import pygetm
 
@@ -86,3 +87,26 @@ sources = domain.T.array(fill=-.1 / dt, z=pygetm.CENTERS) * dt * domain.T.hn   #
 for _ in range(1):
     vdif(nuh, dt, tracer, ea2=sources)
 print(valid_tracer)
+
+# Now try without spatial gradient in tracer, but with variable diffusivity
+tolerance = 1e-11
+rng = numpy.random.default_rng()
+nuh.all_values[:, :, ] = 10.**rng.uniform(-6., 0., nuh.all_values.shape)
+
+# Set diffusivity at all masked points to NaN
+nuh.all_values[:, domain.T.mask.all_values != 1] = numpy.nan
+
+# Set diffusivity at the very surface and bottom to NaN,
+# so we can later check that this value has not been propagated (used)
+nuh.all_values[0, ...] = numpy.nan
+nuh.all_values[-1, ...] = numpy.nan
+
+constant_value = 35.
+tracer.all_values[...] = numpy.nan
+tracer.values[:, domain.T.mask.values == 1] = constant_value
+for _ in range(nstep):
+    vdif(nuh, dt, tracer)
+error = numpy.abs(tracer.ma / constant_value - 1.).max()
+if error > tolerance:
+    print('ERROR: error %s in tracer after using vertical diffusion solver on tracer without gradient exceeds tolerance %s' % (error, tolerance))
+    sys.exit(1)
