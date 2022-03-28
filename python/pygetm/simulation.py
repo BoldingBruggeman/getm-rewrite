@@ -22,6 +22,14 @@ BAROTROPIC_3D = 2
 FROZEN_DENSITY = 3
 BAROCLINIC = 4
 
+# Must match number in .../operators/advection.F90 - do you use them Jorn?
+HSIMT = 1
+MUSCL = 2
+P2_PDM = 3
+SPLMAX13 = 4
+SUPERBEE = 5
+UPSTREAM = 6 
+
 class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
