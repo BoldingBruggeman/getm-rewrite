@@ -121,12 +121,13 @@ class Mask(Base):
         self.mask = Field(self.source.grid.mask, collection)
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
-        data = self.source.get(numpy.empty_like(out[slice_spec + (Ellipsis,)]))
+        data = self.source.get(None if out is None else numpy.empty_like(out[slice_spec + (Ellipsis,)]))
 
         # Obtain mask and apply it
-        mask = self.mask.get(numpy.empty(data.shape, dtype=int))
-        data[mask == 0] = self.fill_value
-        out[slice_spec + (Ellipsis,)] = data
+        mask = self.mask.get(None if out is None else numpy.empty(data.shape, dtype=int))
+        if data is not None:
+            data[mask == 0] = self.fill_value
+            out[slice_spec + (Ellipsis,)] = data
         return out
 
     def get_coordinates(self) -> Sequence['Base']:
