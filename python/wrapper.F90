@@ -385,22 +385,23 @@ contains
       end select
    end subroutine
 
-   subroutine advection_w_calculate(padvection, ptgrid, pw, timestep, ph, pvar) bind(c)
+   subroutine advection_w_calculate(padvection, ptgrid, pw, pw_var, timestep, ph, pvar) bind(c)
       real(c_double), intent(in), value :: timestep
-      type(c_ptr),    intent(in), value :: padvection, ptgrid, pw, ph, pvar
+      type(c_ptr),    intent(in), value :: padvection, ptgrid, pw, pw_var, ph, pvar
 
       type (type_advection),    pointer                   :: advection
       type (type_getm_grid),    pointer                   :: tgrid
-      real(real64), contiguous, pointer, dimension(:,:,:) :: w, h, var
+      real(real64), contiguous, pointer, dimension(:,:,:) :: w, w_var, h, var
 
       call c_f_pointer(padvection, advection)
       if (.not. allocated(advection%op)) return
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pw, w, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%kmax + 1/))
+      call c_f_pointer(pw_var, w_var, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%kmax + 1/))
       call c_f_pointer(ph, h, tgrid%u - tgrid%l + 1)
       call c_f_pointer(pvar, var, tgrid%u - tgrid%l + 1)
-      call advection%op%w3d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%kmax,tgrid%halo, &
-                    w,tgrid%mask,timestep,h,var)
+      call advection%op%w3d(tgrid%imin, tgrid%imax, tgrid%jmin, tgrid%jmax, tgrid%kmax, tgrid%halo, &
+                    w, w_var, tgrid%mask, timestep, h, var)
    end subroutine
 
    function momentum_create(runtype, pdomain, apply_bottom_friction) result(pmomentum) bind(c)

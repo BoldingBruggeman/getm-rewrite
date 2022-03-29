@@ -23,7 +23,7 @@ cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, doub
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
 cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
-cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double timestep, double* ph, double* pvar)
+cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_friction) nogil
@@ -112,6 +112,8 @@ cdef class Array:
 
     def wrap_ndarray(self, numpy.ndarray data not None):
         assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
+        assert self.on_boundary or (data.shape[data.ndim - 1] == self.grid.nx_ and data.shape[data.ndim - 2] == self.grid.ny_), 'Incorrect horizontal extent: expected (ny=%i,nx=%i), got (ny=%i,nx=%i)' % (self.grid.ny_, self.grid.nx_, data.shape[data.ndim - 2], data.shape[data.ndim - 1])
+        assert data.ndim == 2 or data.shape[0] == self.grid.nz_ or data.shape[0] == self.grid.nz_ + 1, 'Incorrect vertical extent: expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[0])
         self.all_values = data
         self.p = self.all_values.data
         self.finish_initialization()
@@ -224,11 +226,15 @@ cdef class Advection:
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0, new_h=False, skip_initial_halo_exchange=False):
+    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0, new_h=False, skip_initial_halo_exchange=False, Array w_var=None):
+        if w_var is None:
+            w_var = w
         assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
         assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
         assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
         assert w.z == INTERFACES, 'grid mismatch for w: expected values at layer interfaces'
+        assert w_var.grid is self.tgrid, 'grid mismatch for w_var: expected %s, got %s' % (self.tgrid.postfix, w_var.grid.postfix)
+        assert w_var.z == INTERFACES, 'grid mismatch for w_var: expected values at layer interfaces'
         assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
         assert var.ndim == 3 and var.z != INTERFACES, 'grid mismatch for advected quantity: expected 3D variable defined at layer centers'
         cdef double[:, :, ::1] avar, au, av, h
@@ -245,7 +251,7 @@ cdef class Advection:
         var.update_halos(TOP_BOTTOM)
         for k in range(var.all_values.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
-        advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, timestep, &self.h_work[0,0,0], <double *>var.p)
+        advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, <double *>w_var.p, timestep, &self.h_work[0,0,0], <double *>var.p)
         var.update_halos(TOP_BOTTOM)
         for k in range(var.all_values.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])

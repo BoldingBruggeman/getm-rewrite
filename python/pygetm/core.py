@@ -181,6 +181,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         elif key[0] == key[1] and self.z == INTERFACES and target.z == CENTERS:
             # vertical interpolation from layer interfaces to layer centers
             target.all_values[...] = 0.5 * (self.all_values[:-1, ...] + self.all_values[1:, ...])
+        elif key[0] == key[1] and self.z == CENTERS and target.z == INTERFACES:
+            # vertical interpolation from layer centers to layer interfaces (top and bottom interfaces will be left untouched)
+            target.all_values[1:-1, ...] = 0.5 * (self.all_values[:-1, ...] + self.all_values[1:, ...])
         else:
             raise NotImplementedError('interp does not know how to interpolate from grid type %i to grid type %i' % (self.grid.type, target.grid.type))
         return target

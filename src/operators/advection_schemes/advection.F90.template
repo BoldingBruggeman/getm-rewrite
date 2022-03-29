@@ -227,13 +227,13 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
 !#endif
 END SUBROUTINE v2d
 
-SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
+SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin, imax, jmin, jmax, kmax
    integer, intent(in) :: halo(2)
 #define _2D_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
 #define _3D_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2),0:kmax
-   real(real64), intent(in) :: w(_3D_)
+   real(real64), intent(in) :: w(_3D_), w_var(_3D_)
    integer, intent(in) :: tmask(_2D_)
    real(real64), intent(in) :: dt
    real(real64), target, intent(inout) :: h(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2),1:kmax)
@@ -277,7 +277,7 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
          if (tmask(i,j) .eq. 1) then
 
             do k=1,kmax-1
-               cfl0(k) = ABS( w(i,j,k) ) * dt / MIN( h(i,j,k) , h(i,j,k+1) )
+               cfl0(k) = ABS( w_var(i,j,k) ) * dt / MIN( h(i,j,k) , h(i,j,k+1) )
             end do
 
             iters = 1
@@ -297,7 +297,7 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
                   cfls = cfl0
                else
                   do k=1,kmax-1
-                     cfls(k) = ABS( w(i,j,k) ) * dt / MIN( haux(k) , haux(k+1) )
+                     cfls(k) = ABS( w_var(i,j,k) ) * dt / MIN( haux(k) , haux(k+1) )
                   end do
                end if
 
@@ -330,7 +330,7 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
 !              Calculating w-interface fluxes !
                do k=1,kmax-1
                   cfl = cfls(k)*itersm1
-                  if (w(i,j,k) .gt. 0) then
+                  if (w_var(i,j,k) .gt. 0) then
                      fu = faux(k)
                      if (k .gt. 1) then
                         fuu = faux(k-1)
@@ -354,7 +354,7 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,tmask,dt,h,f)
 #include "limiters.h"
                      fu = fu + 0.5*limiter*(1-cfl)*deltaf
                   end if
-                  flux(k) = w(i,j,k)*fu
+                  flux(k) = w_var(i,j,k)*fu
                end do
 
                if (it .eq. iters) then
