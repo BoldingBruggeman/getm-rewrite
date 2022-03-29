@@ -36,7 +36,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
@@ -141,6 +141,12 @@ class Simulation(_pygetm.Simulation):
                 self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.fabm_model.horizontal_diagnostic_variables]
                 self.fabm_model.link_mask(self.domain.T.mask.all_values)
                 self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
+
+                self.fabm_conserved_quantity_totals = numpy.empty((len(self.fabm_model.conserved_quantities),) + self.domain.T.H.all_values.shape, dtype=self.fabm_sources_interior.dtype)
+                for i, variable in enumerate(self.fabm_model.conserved_quantities):
+                    ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T)
+                    ar.wrap_ndarray(self.fabm_conserved_quantity_totals[i, ...])
+                    self.tracer_totals.append(ar)
 
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
@@ -365,14 +371,19 @@ class Simulation(_pygetm.Simulation):
 
     def report_domain_integrals(self):
         """Write totals of selected variables over the global domain (those in list self.tracer_totals) to the log."""
-        first = True
+        total_volume = (self.domain.T.D * self.domain.T.area).global_sum(where=self.domain.T.mask != 0)
+        if total_volume is not None:
+            self.logger.info('Integrals over global domain:')
+            self.logger.info('  volume: %15e m3' % total_volume)
+        if self.fabm_model:
+            self.fabm_model.get_conserved_quantities(out=self.fabm_conserved_quantity_totals)
         for var in self.tracer_totals:
-            total = (var * var.grid.hn * var.grid.area).global_sum(where=var.grid.mask != 0)
+            total = var * var.grid.area
+            if total.ndim == 3:
+                total.all_values[...] *= var.grid.hn.all_values
+            total = total.global_sum(where=var.grid.mask != 0)
             if total is not None:
-                if first:
-                    self.logger.info('Integrals over global domain:')
-                    first = False
-                self.logger.info('  %s: %.15e' % (var.name, total))
+                self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
     def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         # compute velocities at time=n-1/2
