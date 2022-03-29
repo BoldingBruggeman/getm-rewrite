@@ -233,8 +233,6 @@ class Simulation(_pygetm.Simulation):
             for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                 variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
 
-            self.update_fabm_sources()
-
         if self.runtype == BAROCLINIC:
             # ensure density is in sync with initial T & S
             if self.rho.saved:
@@ -248,6 +246,10 @@ class Simulation(_pygetm.Simulation):
         self.airsea(self.time, self.sst)
         if self.runtype == BAROCLINIC:
             assert self.airsea.qe.require_set(self.logger) * self.airsea.qh.require_set(self.logger) * self.airsea.ql.require_set(self.logger)
+        self.update_radiation()
+
+        if self.fabm_model:
+            self.update_fabm_sources()
 
         self.output_manager.start(save=save)
 
@@ -371,7 +373,7 @@ class Simulation(_pygetm.Simulation):
         self.output_manager.close()
 
     def update_fabm_sources(self):
-        """Update FABM sources, vertical velocities, ad diagnostics. This does not update the state variables themselves; that is done by update_fabm"""
+        """Update FABM sources, vertical velocities, and diagnostics. This does not update the state variables themselves; that is done by update_fabm"""
         self.fabm_model.get_sources(out=(self.fabm_sources_interior, self.fabm_sources_surface, self.fabm_sources_bottom))
         self.fabm_model.get_vertical_movement(self.fabm_vertical_velocity)
 
