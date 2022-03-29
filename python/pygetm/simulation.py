@@ -36,7 +36,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'tracers', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
@@ -100,6 +100,7 @@ class Simulation(_pygetm.Simulation):
         self.vva3d = dom.VV.array(fill=numpy.nan, z=CENTERS)
 
         self.tracers = []
+        self.tracer_totals = []
 
         self.fabm_model = None
 
@@ -154,6 +155,7 @@ class Simulation(_pygetm.Simulation):
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
             self.add_tracer(self.temp, source=self.temp_source, source_scale=1. / (RHO0 * CP))
             self.add_tracer(self.salt, source=self.salt_source)
+            self.tracer_totals.append(self.salt)
 
             self.density = density or pygetm.density.Density()
 
@@ -330,6 +332,8 @@ class Simulation(_pygetm.Simulation):
                 # Update source terms of biogeochemistry, using the new tracer concentrations
                 if self.fabm_model:
                     self.update_fabm_sources()
+                
+                self.report_domain_integrals()
 
             # Reset depth-integrated transports that will be incremented over subsequent 3D timestep.
             self.Ui.all_values[...] = 0
@@ -349,13 +353,26 @@ class Simulation(_pygetm.Simulation):
         self.output_manager.close()
 
     def update_fabm_sources(self):
+        """Update FABM sources, vertical velocities, ad diagnostics. This does not update the state variables themselves; that is done by update_fabm"""
         self.fabm_model.get_sources(out=(self.fabm_sources_interior, self.fabm_sources_surface, self.fabm_sources_bottom))
         self.fabm_model.get_vertical_movement(self.fabm_vertical_velocity)
 
     def update_fabm(self, timestep: float):
+        """Time-integrate source terms of all FABM state variables (3D pelagic tracers as well as bottom- and surface-attached variables)"""
         self.fabm_model.interior_state += self.fabm_sources_interior * timestep
         self.fabm_model.surface_state += self.fabm_sources_surface * timestep
         self.fabm_model.bottom_state += self.fabm_sources_bottom * timestep
+
+    def report_domain_integrals(self):
+        """Write totals of selected variables over the global domain (those in list self.tracer_totals) to the log."""
+        first = True
+        for var in self.tracer_totals:
+            total = (var * var.grid.hn * var.grid.area).global_sum(where=var.grid.mask != 0)
+            if total is not None:
+                if first:
+                    self.logger.info('Integrals over global domain:')
+                    first = False
+                self.logger.info('  %s: %.15e' % (var.name, total))
 
     def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         # compute velocities at time=n-1/2
