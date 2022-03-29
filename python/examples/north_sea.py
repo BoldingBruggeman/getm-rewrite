@@ -32,7 +32,7 @@ if sim.runtype > pygetm.BAROTROPIC_2D:
     output.request(('uk', 'vk', 'ww', 'SS', 'fpk', 'fqk', 'advpk', 'advqk', 'nuh',))
     output.request(('med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
 if sim.runtype == pygetm.BAROCLINIC:
-    output.request(('temp', 'salt', 'rho', 'NN', 'sst', 'hnt'))
+    output.request(('temp', 'salt', 'rho', 'NN', 'sst', 'hnt', 'rad', 'par'))
 
 sim.logger.info('Setting up ERA meteorological forcing')
 era_kwargs = {'preprocess': lambda ds: ds.isel(time=slice(4, -4))}
@@ -57,7 +57,6 @@ if domain.open_boundaries:
 
 if sim.runtype > pygetm.BAROTROPIC_2D:
     sim.logger.info('Setting up FABM dependencies that GETM does not provide')
-    sim.get_fabm_dependency('downwelling_photosynthetic_radiative_flux').set(0)
     sim.get_fabm_dependency('bottom_stress').set(0)
     if sim.runtype == pygetm.BAROTROPIC_3D:
         sim.get_fabm_dependency('temperature').set(5.)
