@@ -291,10 +291,11 @@ class Simulation(_pygetm.Simulation):
         self.update_depth()
 
         self.istep += 1
+        macro_active = self.istep % self.split_factor == 0
         if self.report != 0 and self.istep % self.report == 0:
             self.logger.info(self.time)
 
-        if self.runtype > BAROTROPIC_2D and self.istep % self.split_factor == 0:
+        if self.runtype > BAROTROPIC_2D and macro_active:
             # Depth-integrated transports have been summed over all microtimesteps. Now average them.
             self.Ui.all_values[...] /= self.split_factor
             self.Vi.all_values[...] /= self.split_factor
@@ -360,6 +361,7 @@ class Simulation(_pygetm.Simulation):
             self.Vi.all_values[...] = 0
 
         self.output_manager.save()
+        return macro_active
 
     def finish(self):
         if self._profile:
