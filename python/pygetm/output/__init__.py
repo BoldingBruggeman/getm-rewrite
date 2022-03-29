@@ -17,8 +17,8 @@ class FieldManager:
         self.fields[array.name] = array
 
 class File(operators.FieldCollection):
-    def __init__(self, field_manager: FieldManager, interval: int=1, path: Optional[str]=None):
-        super().__init__(field_manager)
+    def __init__(self, field_manager: FieldManager, interval: int=1, path: Optional[str]=None, default_dtype: Optional[numpy.typing.DTypeLike]=None):
+        super().__init__(field_manager, default_dtype=default_dtype)
         self.wait = interval
         self.interval = interval
         self.path = path

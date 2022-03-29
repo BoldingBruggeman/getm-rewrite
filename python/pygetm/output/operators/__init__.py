@@ -29,10 +29,11 @@ class Base:
         raise NotImplementedError
 
 class FieldCollection:
-    def __init__(self, field_manager):
+    def __init__(self, field_manager, default_dtype: Optional[numpy.typing.DTypeLike]=None):
         self.fields: MutableMapping[str, Base] = collections.OrderedDict()
         self.expression2name = {}
         self.field_manager = field_manager
+        self.default_dtype = default_dtype
 
     def request(self, name: Union[str, Iterable[str]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False, generate_unique_name: bool=False):
         if not isinstance(name, str):
@@ -55,8 +56,9 @@ class FieldCollection:
 
         array = self.field_manager.fields[name]
         array.saved = True
-        dtype = dtype or array.dtype
-        field = Field(array, self)
+        if dtype is None and array.dtype == float:
+            dtype = self.default_dtype
+        field = Field(array, self, dtype=dtype)
         if mask:
             field = Mask(field, self)
         self.fields[output_name] = field
@@ -70,7 +72,7 @@ class FieldCollection:
         return self.request(expression, generate_unique_name=True)
 
 class Field(Base):
-    def __init__(self, array: pygetm.core.Array, collection: FieldCollection):
+    def __init__(self, array: pygetm.core.Array, collection: FieldCollection, dtype: Optional[numpy.typing.DTypeLike]=None):
         atts = {}
         if array.units is not None:
             atts['units'] = array.units
@@ -82,7 +84,7 @@ class Field(Base):
         global_domain = array.grid.domain.glob
         if global_domain and array.constant:
             self.global_array = global_domain.field_manager.fields.get(array.name)
-        super().__init__(array.ndim, array.dtype, array.grid, array.fill_value, array.constant, atts)
+        super().__init__(array.ndim, dtype or array.dtype, array.grid, array.fill_value, array.constant, atts)
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
         if sub:
