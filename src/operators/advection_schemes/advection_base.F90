@@ -61,7 +61,8 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
    integer, intent(in) :: halo(2)
 #define _2D_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
 #define _3D_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2),0:kmax
-   real(real64), intent(in) :: w(_3D_), w_var(_3D_)
+   real(real64), intent(in) :: w(_3D_)
+   real(real64), intent(in) :: w_var(_3D_)
    integer, intent(in) :: tmask(_2D_)
    real(real64), intent(in) :: dt
    real(real64), target, intent(inout) :: h(imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2),1:kmax)
