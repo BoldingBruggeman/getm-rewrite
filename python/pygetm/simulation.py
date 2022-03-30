@@ -38,7 +38,7 @@ class Simulation(_pygetm.Simulation):
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _parameters = 'A', 'g1', 'g2'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'rad', 'par', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays + _parameters
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays + _parameters
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
@@ -59,6 +59,11 @@ class Simulation(_pygetm.Simulation):
         assert not dom.initialized
         _pygetm.Simulation.__init__(self, dom, runtype, apply_bottom_friction)
         self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
+        dom.T.hn.fabm_standard_name = 'cell_thickness'
+        if dom.T.lon is not None:
+            dom.T.lon.fabm_standard_name = 'longitude'
+        if dom.T.lat is not None:
+            dom.T.lat.fabm_standard_name = 'latitude'
 
         array_args = {
             'uk': dict(units='m s-1', long_name='velocity in Eastward direction', fill_value=FILL_VALUE),
@@ -159,11 +164,13 @@ class Simulation(_pygetm.Simulation):
         if runtype == BAROCLINIC:
             self.temp = dom.T.array(fill=numpy.nan, z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE)
             self.salt = dom.T.array(fill=numpy.nan, z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE)
+            self.pres = dom.T.array(fill=numpy.nan, z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
             self.temp.fill(5.)
             self.salt.fill(35.)
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
             self.rad = dom.T.array(fill=numpy.nan, z=INTERFACES, name='rad', units='W m-2', long_name='shortwave radiation', fabm_standard_name='downwelling_shortwave_flux', fill_value=FILL_VALUE)
             self.par = dom.T.array(fill=numpy.nan, z=CENTERS, name='par', units='W m-2', long_name='photosynthetically active radiation', fabm_standard_name='downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
+            self.par0 = dom.T.array(fill=numpy.nan, name='par0', units='W m-2', long_name='surface photosynthetically active radiation', fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
             self.temp_source = dom.T.array(fill=0., z=CENTERS, units='W m-2')
             self.salt_source = dom.T.array(fill=0., z=CENTERS)
             self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
@@ -173,7 +180,7 @@ class Simulation(_pygetm.Simulation):
 
             self.density = density or pygetm.density.Density()
 
-    def get_fabm_dependency(self, name):
+    def get_fabm_dependency(self, name: str):
         variable = self.fabm_model.dependencies.find(name)
         if len(variable.shape) == 0:
             return variable
@@ -221,6 +228,12 @@ class Simulation(_pygetm.Simulation):
                     field.saved = True
                     variable.link(field.all_values)
 
+            try:
+                self._yearday = self.fabm_model.dependencies.find('number_of_days_since_start_of_the_year')
+                self._yearday.value = (self.time - datetime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
+            except KeyError:
+                self._yearday = None
+
             # Start FABM. This verifies whether all dependencies are fulfilled and freezes the set of dsiagsntoics that will be saved.
             assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
 
@@ -236,7 +249,7 @@ class Simulation(_pygetm.Simulation):
         if self.runtype == BAROCLINIC:
             # ensure density is in sync with initial T & S
             if self.rho.saved:
-                self.density.get_density(self.salt, self.temp, out=self.rho)
+                self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
             self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
 
         # Update all input fields
@@ -313,7 +326,7 @@ class Simulation(_pygetm.Simulation):
 
             if self.runtype == BAROCLINIC:
                 # Buoyancy frequency and turbulence (T grid - interfaces)
-                self.density.get_buoyancy_frequency(self.salt, self.temp, out=self.NN)
+                self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
                 self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(RHO0)
                 self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
@@ -345,7 +358,7 @@ class Simulation(_pygetm.Simulation):
                 # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
                 # Therefore, it is computed only if needed for output (or as input for biogeochemistry)
                 if self.rho.saved:
-                    self.density.get_density(self.salt, self.temp, out=self.rho)
+                    self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
 
                 # From conservative temperature to in-situ sea surface temperature, needed to compute heat/momentum fluxes at the surface
                 self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), out=self.sst)
@@ -376,6 +389,8 @@ class Simulation(_pygetm.Simulation):
 
     def update_fabm_sources(self):
         """Update FABM sources, vertical velocities, and diagnostics. This does not update the state variables themselves; that is done by update_fabm"""
+        if self._yearday:
+            self._yearday.value = (self.time - datetime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
         self.fabm_model.get_sources(out=(self.fabm_sources_interior, self.fabm_sources_surface, self.fabm_sources_bottom))
         self.fabm_model.get_vertical_movement(self.fabm_vertical_velocity)
 
@@ -515,6 +530,9 @@ class Simulation(_pygetm.Simulation):
         self.domain.VV.hn.all_values[:, :-1, :] = h_half[:, 1:, :]
         self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
 
+        # Update pressure based on new depths
+        self.pres.all_values[...] = -self.domain.T.zc.all_values[...]
+
     def update_depth(self):
         """Use surface elevation on T grid to update elevations on U,V,X grids and subsequently update total water depth D on all grids."""
         # Halo exchange for sea level on T grid
@@ -570,6 +588,8 @@ class Simulation(_pygetm.Simulation):
         if self.par.saved:
             self.par.values[...] = (1. - self.A) * numpy.exp((k2 * 0.5) * (work[:-1, ...] + work[1:, ...]))
             self.par.values[...] *= self.airsea.swr.values
+        if self.par0.saved:
+            self.par0.values[...] = (1. - self.A) * self.airsea.swr.values
 
 for membername in Simulation._all_fortran_arrays:
     setattr(Simulation, membername[1:], property(operator.attrgetter(membername)))

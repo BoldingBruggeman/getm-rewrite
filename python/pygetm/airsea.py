@@ -21,7 +21,7 @@ class Fluxes:
         self.qh = domain.T.array(name='qh', long_name='latent heat flux', units='W m-2', fill_value=FILL_VALUE)
         self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill_value=FILL_VALUE)
         self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill_value=FILL_VALUE)
-        self.swr = domain.T.array(name='swr', long_name='net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux')
+        self.swr = domain.T.array(name='swr', long_name='surface net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_shortwave_flux')
 
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
         self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
