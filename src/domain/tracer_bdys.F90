@@ -42,10 +42,10 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (zero_gradient)
                f(i,j,:)=f(i+1,j,:)
             case (clamped)
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
             case (sponge)
 !KB - update
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
          end select
          k= k+1
       end do
@@ -60,10 +60,10 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (zero_gradient)
                f(i,j,:)=f(i,j-1,:)
             case (clamped)
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
             case (sponge)
 !KB - update
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
          end select
          k=k+1
       end do
@@ -78,10 +78,10 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (zero_gradient)
                f(i,j,:)=f(i-1,j,:)
             case (clamped)
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
             case (sponge)
 !KB - update
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
          end select
          k=k+1
       end do
@@ -96,10 +96,10 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (zero_gradient)
                f(i,j,:)=f(i,j+1,:)
             case (clamped)
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
             case (sponge)
 !KB - update
-               f(i,j,:)=bdy(k,:)
+               f(i,j,:)=bdy(:,k)
          end select
          k=k+1
       end do
