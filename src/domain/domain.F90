@@ -65,6 +65,14 @@ MODULE getm_domain
       ENUMERATOR :: XGRID=4
    END ENUM
 
+   ENUM, BIND(C)
+      ENUMERATOR :: zero_gradient=1
+      ENUMERATOR :: sommerfeld=2
+      ENUMERATOR :: clamped=3
+      ENUMERATOR :: flather_elev=4
+      ENUMERATOR :: sponge=5
+   END ENUM
+
    type, public :: type_grid_config
       !! author: Karsten Bolding
       !! version: v0.1
@@ -209,6 +217,8 @@ MODULE getm_domain
       procedure :: imetrics => imetrics
       procedure :: register => register
       procedure :: uvx_depths => uvx_depths
+!KB      procedure :: tracer_bdy_2d => tracer_bdy_2d
+      procedure :: tracer_bdy_3d => tracer_bdy_3d
       procedure :: mirror_bdy_2d => mirror_bdy_2d
       procedure :: mirror_bdy_3d => mirror_bdy_3d
       generic   :: mirror_bdys => mirror_bdy_2d, mirror_bdy_3d
@@ -246,6 +256,14 @@ MODULE getm_domain
       module subroutine update_depths(self)
          class(type_getm_domain), intent(inout) :: self
       end subroutine update_depths
+
+      module subroutine tracer_bdy_3d(self,g,f,bdytype,bdy)
+         class(type_getm_domain), intent(inout) :: self
+         class(type_getm_grid), intent(in) :: g
+         real(real64), dimension(:,:,:), intent(inout) :: f(g%l(1):,g%l(2):,g%l(3):)
+         integer, intent(in) :: bdytype
+         real(real64), intent(in), optional :: bdy(g%l(3):,:)
+      end subroutine tracer_bdy_3d
 
       module subroutine mirror_bdy_2d(self,grid,f)
          class(type_getm_domain), intent(inout) :: self

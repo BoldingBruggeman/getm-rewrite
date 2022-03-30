@@ -5,6 +5,7 @@ add_library( getm_domain
     imetrics.F90
     register.F90
     uvx_depths.F90
+    tracer_bdys.F90
     mirror_bdys.F90
     cfl_check.F90
     update_depths.F90
