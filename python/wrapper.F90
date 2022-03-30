@@ -312,6 +312,26 @@ contains
       call domain%update_depths()
    end subroutine
 
+   subroutine domain_tracer_bdy(pdomain, pgrid, nz, pfield, bdytype, pbdy) bind(c)
+      type(c_ptr),  intent(in), value :: pdomain, pgrid, pfield, pbdy
+      integer, value                  :: nz, bdytype
+
+      type (type_getm_domain), pointer :: domain
+      type (type_getm_grid),   pointer :: grid
+      real(real64), contiguous, pointer, dimension(:,:,:) :: field
+      real(real64), contiguous, pointer, dimension(:,:) :: bdy
+
+      call c_f_pointer(pdomain, domain)
+      call c_f_pointer(pgrid, grid)
+      call c_f_pointer(pfield, field, (/grid%u(1) - grid%l(1) + 1, grid%u(2) - grid%l(2) + 1, nz/))
+      if (c_associated(pbdy)) then
+         call c_f_pointer(pbdy, bdy, (/nz, domain%nbdyp/))
+         call domain%tracer_bdy_3d(grid, field, bdytype, bdy)
+      else
+         call domain%tracer_bdy_3d(grid, field, bdytype)
+      end if
+   end subroutine
+
    function vertical_diffusion_create(ptgrid) result(pdiffusion) bind(c)
       type(c_ptr),    intent(in), value :: ptgrid
       type(c_ptr) :: pdiffusion

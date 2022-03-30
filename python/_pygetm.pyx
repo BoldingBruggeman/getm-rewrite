@@ -17,6 +17,7 @@ cdef extern void domain_initialize(void* grid, int runtype, double Dmin, double*
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain) nogil
+cdef extern void domain_tracer_bdy(void* domain, void* grid, int nz, double* field, int bdytype, double* bdy)
 cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
 cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* target, int joffset) nogil
 cdef extern void grid_interp_z(int nx, int ny, int nz1, int nz2, double* source, double* target, int koffset) nogil
@@ -118,6 +119,9 @@ cdef class Array:
         self.all_values = data
         self.p = self.all_values.data
         self.finish_initialization()
+
+    def update_boundary(self, int bdytype, Array bdy=None):
+        domain_tracer_bdy(self.grid.domain.p, self.grid.p, 1 if self.ndim == 2 else self.all_values.shape[0], <double*>self.p, bdytype, NULL if bdy is None else <double*>bdy.p)
 
 cdef class Grid:
     cdef void* p
