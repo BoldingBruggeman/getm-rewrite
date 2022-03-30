@@ -136,7 +136,9 @@ class Simulation(_pygetm.Simulation):
                     ar.register()
                     return ar
 
-                self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=self.domain.T.hn.all_values.shape, libname='fabm_c')
+                shape = self.domain.T.hn.all_values.shape
+                self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=shape, libname='fabm_c',
+                    start=(0, self.domain.halo, self.domain.halo), stop=(shape[0], shape[1] - self.domain.halo, shape[2] - self.domain.halo))
                 self.fabm_sources_interior = numpy.empty_like(self.fabm_model.interior_state)
                 self.fabm_sources_surface = numpy.empty_like(self.fabm_model.surface_state)
                 self.fabm_sources_bottom = numpy.empty_like(self.fabm_model.bottom_state)
