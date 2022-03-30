@@ -139,10 +139,10 @@ class Simulation(_pygetm.Simulation):
                 shape = self.domain.T.hn.all_values.shape
                 self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=shape, libname='fabm_c',
                     start=(0, self.domain.halo, self.domain.halo), stop=(shape[0], shape[1] - self.domain.halo, shape[2] - self.domain.halo))
-                self.fabm_sources_interior = numpy.empty_like(self.fabm_model.interior_state)
-                self.fabm_sources_surface = numpy.empty_like(self.fabm_model.surface_state)
-                self.fabm_sources_bottom = numpy.empty_like(self.fabm_model.bottom_state)
-                self.fabm_vertical_velocity = numpy.empty_like(self.fabm_model.interior_state)
+                self.fabm_sources_interior = numpy.zeros_like(self.fabm_model.interior_state)
+                self.fabm_sources_surface = numpy.zeros_like(self.fabm_model.surface_state)
+                self.fabm_sources_bottom = numpy.zeros_like(self.fabm_model.bottom_state)
+                self.fabm_vertical_velocity = numpy.zeros_like(self.fabm_model.interior_state)
                 for i, variable in enumerate(self.fabm_model.interior_state_variables):
                     ar = fabm_variable_to_array(variable, send_data=True)
                     ar_w = core.Array(grid=self.domain.T)
@@ -190,13 +190,13 @@ class Simulation(_pygetm.Simulation):
         variable.link(arr.all_values)
         return arr
 
-    def add_tracer(self, array: core.Array, source: Optional[core.Array]=None, source_scale: float=1., w: Optional[core.Array]=None):
+    def add_tracer(self, array: core.Array, source: Optional[core.Array]=None, source_scale: float=1., w: Optional[core.Array]=None, boundary_type: int=ZERO_GRADIENT):
         """Add a tracer that will be subject to advection and diffusion.
         The optional source array must after multiplication with source_scale have tracer units per time, multiplied by layer thickness."""
         assert array.grid is self.domain.T
         assert source is None or source.grid is self.domain.T
         assert w is None or (w.grid is self.domain.T and w.z == CENTERS)
-        self.tracers.append((array, source, source_scale, w))
+        self.tracers.append((array, source, source_scale, w, boundary_type))
 
     def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
@@ -340,13 +340,14 @@ class Simulation(_pygetm.Simulation):
                 self.temp_source.all_values[0, ...] += self.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
 
                 # Use previous source terms for biogeochemistry to update tracers
-                # This should be done before the tracer concentrations change due to transport processes
+                # This should be done before the tracer concentrations change due to transport processes,
+                # as the source terms are only valid for the current tracer concentrations.
                 if self.fabm_model:
                     self.update_fabm(self.macrotimestep)
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None
-                for array, source, source_scale, w in self.tracers:
+                for array, source, source_scale, w, boundary_type in self.tracers:
                     if source is not None:
                         source.values[...] *= self.macrotimestep * source_scale
                     if w is not None:
@@ -355,6 +356,8 @@ class Simulation(_pygetm.Simulation):
                         w = w_if
                     self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, array, w_var=w)
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=source)
+                    if self.domain.open_boundaries:
+                        array.update_boundary(boundary_type)
 
                 # Update density to keep it in sync with T and S.
                 # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
