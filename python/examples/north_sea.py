@@ -42,7 +42,7 @@ sim.airsea.d2m.set(pygetm.input.from_nc(era_path, 'd2m', **era_kwargs) - 273.15)
 sim.airsea.sp.set(pygetm.input.from_nc(era_path, 'sp', **era_kwargs))
 sim.airsea.u10.set(pygetm.input.from_nc(era_path, 'u10', **era_kwargs))
 sim.airsea.v10.set(pygetm.input.from_nc(era_path, 'v10', **era_kwargs))
-if sim.runtype <= pygetm.BAROCLINIC:
+if sim.runtype < pygetm.BAROCLINIC:
     sim.sst = sim.airsea.t2m
     sim.turbulence.num[...]=1e-2
 
