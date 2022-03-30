@@ -42,7 +42,7 @@ class GOTM(Turbulence):
         loc_L = self.mix.L
         for j in range(self.domain.T.ny):
             for i in range(self.domain.T.nx):
-                if self.domain.T.mask[j, i] != 0:
+                if self.domain.T.mask[j, i] == 1:   # skip boundary points (mask=2) as SS is not defined there
                     loc_tke[:] = self.tke[:, j, i]
                     #loc_tkeo[:] = self.tkeo[:, j, i]
                     loc_eps[:] = self.eps[:, j, i]
@@ -59,3 +59,8 @@ class GOTM(Turbulence):
                     self.L[:, j, i] = loc_L
                     self.nuh[:, j, i] = self.mix.nuh
                     self.num[:, j, i] = self.mix.num
+
+        # Take viscosity at open boundary from nearest interior point
+        # Viscosity (at T points) needs to be valid at open boundary points to so it can be interpolated to inward-adjacent U/V points.
+        # However, it cannot be computed as the shear frequency SS is not available at the boundary.
+        self.num.update_boundary(ZERO_GRADIENT)
