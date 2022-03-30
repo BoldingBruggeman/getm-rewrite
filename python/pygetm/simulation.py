@@ -1,6 +1,6 @@
 from glob import glob1
 import operator
-from typing import Union, Optional, Type
+from typing import Union, Optional, Type, Mapping
 import itertools
 import logging
 import datetime
@@ -30,6 +30,27 @@ P2_PDM = 3
 SPLMAX13 = 4
 SUPERBEE = 5
 UPSTREAM = 6 
+
+class Tracer:
+    __slots__ = 'array', 'source', 'source_scale', 'vertical_velocity', '_boundary_type', 'boundary_values'
+    def __init__(self, array: core.Array, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None):
+        assert source is None or (source.grid is array.grid and source.z == CENTERS)
+        assert vertical_velocity is None or (vertical_velocity.grid is array.grid and vertical_velocity.z == CENTERS)
+        self.array = array
+        self.source = source
+        self.source_scale = source_scale
+        self.vertical_velocity = vertical_velocity
+        self._boundary_type = ZERO_GRADIENT
+        self.boundary_values = None
+
+    @property
+    def boundary_type(self) -> int:
+        return self._boundary_type
+
+    @boundary_type.setter
+    def boundary_type(self, value: int):
+        self._boundary_type = value
+        self.boundary_values = None if self._boundary_type == ZERO_GRADIENT else self.array.grid.array(z=CENTERS, on_boundary=True)
 
 class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk'
@@ -110,7 +131,7 @@ class Simulation(_pygetm.Simulation):
         self.g1 = g1
         self.g2 = g2
 
-        self.tracers = []
+        self.tracers: Mapping[str, Tracer] = {}
         self.tracer_totals = []
 
         self.fabm_model = None
@@ -147,7 +168,7 @@ class Simulation(_pygetm.Simulation):
                     ar = fabm_variable_to_array(variable, send_data=True)
                     ar_w = core.Array(grid=self.domain.T)
                     ar_w.wrap_ndarray(self.fabm_vertical_velocity[i, ...])
-                    self.add_tracer(ar, w=ar_w)
+                    self.add_tracer(ar, vertical_velocity=ar_w)
                 for variable in itertools.chain(self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                     ar = fabm_variable_to_array(variable, send_data=True)
                 self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
@@ -190,13 +211,11 @@ class Simulation(_pygetm.Simulation):
         variable.link(arr.all_values)
         return arr
 
-    def add_tracer(self, array: core.Array, source: Optional[core.Array]=None, source_scale: float=1., w: Optional[core.Array]=None, boundary_type: int=ZERO_GRADIENT):
+    def add_tracer(self, array: core.Array, **kwargs):
         """Add a tracer that will be subject to advection and diffusion.
         The optional source array must after multiplication with source_scale have tracer units per time, multiplied by layer thickness."""
-        assert array.grid is self.domain.T
-        assert source is None or source.grid is self.domain.T
-        assert w is None or (w.grid is self.domain.T and w.z == CENTERS)
-        self.tracers.append((array, source, source_scale, w, boundary_type))
+        assert array.grid is self.domain.T and array.z == CENTERS
+        self.tracers[array.name] = Tracer(array, **kwargs)
 
     def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
@@ -347,17 +366,18 @@ class Simulation(_pygetm.Simulation):
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None
-                for array, source, source_scale, w, boundary_type in self.tracers:
-                    if source is not None:
-                        source.values[...] *= self.macrotimestep * source_scale
-                    if w is not None:
-                        w_if = w.interp(w_if or self.domain.T.array(fill=0., z=INTERFACES))
+                for tracer in self.tracers.values():
+                    if tracer.source is not None:
+                        tracer.source.values[...] *= self.macrotimestep * tracer.source_scale
+                    w = self.ww
+                    if tracer.vertical_velocity is not None:
+                        w_if = tracer.vertical_velocity.interp(w_if or self.domain.T.array(fill=0., z=INTERFACES))
                         w_if.all_values[...] += self.ww.all_values
                         w = w_if
-                    self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, array, w_var=w)
-                    self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, array, ea4=source)
+                    self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, tracer.array, w_var=w)
+                    self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer.array, ea4=tracer.source)
                     if self.domain.open_boundaries:
-                        array.update_boundary(boundary_type)
+                        tracer.array.update_boundary(tracer.boundary_type, tracer.boundary_values)
 
                 # Update density to keep it in sync with T and S.
                 # Unlike buoyancy frequency, density does not influence hydrodynamics directly.

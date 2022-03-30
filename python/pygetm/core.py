@@ -113,26 +113,26 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return sum / count
 
     @staticmethod
-    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, z: Literal[None, True, False, CENTERS, INTERFACES]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, **kwargs) -> 'Array':
+    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, z: Literal[None, True, False, CENTERS, INTERFACES]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, on_boundary: bool=False, **kwargs) -> 'Array':
         ar = Array(grid=grid, **kwargs)
         if fill is None and ar.fill_value is not None:
             fill = ar.fill_value
         if fill is not None:
             fill = numpy.asarray(fill)
-            if z is None:
+            if z is None and not on_boundary:
                 z = False if fill.ndim != 3 else (INTERFACES if fill.shape[0] == grid.nz_ + 1 else CENTERS)
         if dtype is None:
             dtype = float if fill is None else fill.dtype
-        shape = (grid.ny_, grid.nx_)
+        shape = [grid.nbdyp] if on_boundary else [grid.ny_, grid.nx_]
         if z:
-            shape = (grid.nz_ + 1 if z == INTERFACES else grid.nz_,) + shape
+            shape.insert(1 if on_boundary else 0, grid.nz_ + 1 if z == INTERFACES else grid.nz_,)
         if copy or fill is None:
             data = numpy.empty(shape, dtype=dtype)
             if fill is not None:
                 data[...] = fill
         else:
             data = numpy.broadcast_to(fill, shape)
-        ar.wrap_ndarray(data)
+        ar.wrap_ndarray(data, on_boundary=on_boundary)
         ar.register()
         return ar
 

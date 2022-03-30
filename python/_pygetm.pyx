@@ -78,7 +78,13 @@ cdef class Array:
         if self.p == NULL:
             return
         self.grid = domain.grids[grid_type]
-        if sub_type == 1:
+        if sub_type == 0:
+            # Horizontal-only array on normal grid
+            if data_type == 0:
+                self.all_values = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+            else:
+                self.all_values = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+        elif sub_type == 1:
             # Horizontal-only array on open boundaries
             if data_type == 0:
                 self.all_values = numpy.asarray(<double[:self.grid.nbdyp:1]> self.p)
@@ -98,12 +104,13 @@ cdef class Array:
             else:
                 self.all_values = numpy.asarray(<int[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
         else:
-            # Horizontal-only array on normal grid
-            assert sub_type == 0, 'Subtypes other than 0,1,2,3 not yet implemented'
+            # Depth-explicit array on open boundaries, layer centers
+            assert sub_type == 4, 'Subtypes other than 0,1,2,3,4 not yet implemented'
             if data_type == 0:
-                self.all_values = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self.all_values = numpy.asarray(<double[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
             else:
-                self.all_values = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self.all_values = numpy.asarray(<int[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
+            self.on_boundary = True
         if self._fill_value is None:
             self._fill_value = self.all_values.flat[0]
         else:
@@ -112,10 +119,16 @@ cdef class Array:
         self.register()
         return self
 
-    def wrap_ndarray(self, numpy.ndarray data not None):
-        assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
-        assert self.on_boundary or (data.shape[data.ndim - 1] == self.grid.nx_ and data.shape[data.ndim - 2] == self.grid.ny_), 'Incorrect horizontal extent: expected (ny=%i,nx=%i), got (ny=%i,nx=%i)' % (self.grid.ny_, self.grid.nx_, data.shape[data.ndim - 2], data.shape[data.ndim - 1])
-        assert data.ndim == 2 or data.shape[0] == self.grid.nz_ or data.shape[0] == self.grid.nz_ + 1, 'Incorrect vertical extent: expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[0])
+    def wrap_ndarray(self, numpy.ndarray data not None, on_boundary=False):
+        self.on_boundary = on_boundary
+        if self.on_boundary:
+            assert data.ndim in (1, 2) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
+            assert data.shape[0] == self.grid.nbdyp, 'Incorrect shape of first dimension (number of boundary points): expected %i, got %i' % (self.grid.nbdyp, data.shape[0])
+            assert data.ndim == 1 or data.shape[1] == self.grid.nz_, 'Incorrect shape of second dimension (number of layers): expected %i, got %i' % (self.grid.nz_, data.shape[1])
+        else:
+            assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
+            assert data.shape[data.ndim - 1] == self.grid.nx_ and data.shape[data.ndim - 2] == self.grid.ny_, 'Incorrect horizontal extent: expected (ny=%i,nx=%i), got (ny=%i,nx=%i)' % (self.grid.ny_, self.grid.nx_, data.shape[data.ndim - 2], data.shape[data.ndim - 1])
+            assert data.ndim == 2 or data.shape[0] == self.grid.nz_ or data.shape[0] == self.grid.nz_ + 1, 'Incorrect vertical extent: expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[0])
         self.all_values = data
         self.p = self.all_values.data
         self.finish_initialization()
