@@ -584,10 +584,10 @@ class Simulation(_pygetm.Simulation):
         self.domain.T.hn.values.cumsum(axis=0, out=work[1:, ...])                                    # distance between interface and bottom (positive)
         work -= work[-1, ...]                                                                        # distance from surface (negative)
         self.rad.values[...] = self.A * numpy.exp(k1 * work) + (1. - self.A) * numpy.exp(k2 * work)  # fraction of total surface radiation at each interface
-        self.rad.values[...] *= self.airsea.swr.values
+        self.rad.values *= self.airsea.swr.values
         if self.par.saved:
             self.par.values[...] = (1. - self.A) * numpy.exp((k2 * 0.5) * (work[:-1, ...] + work[1:, ...]))
-            self.par.values[...] *= self.airsea.swr.values
+            self.par.values *= self.airsea.swr.values
         if self.par0.saved:
             self.par0.values[...] = (1. - self.A) * self.airsea.swr.values
 
