@@ -285,6 +285,10 @@ class Simulation(_pygetm.Simulation):
         if self.fabm_model:
             self.update_fabm_sources()
 
+        if self.domain.open_boundaries:
+            for tracer in self.tracers.values():
+                tracer.array.update_boundary(tracer.boundary_type, tracer.boundary_values)
+
         self.output_manager.start(save=save)
 
         self._start_time = timeit.default_timer()
