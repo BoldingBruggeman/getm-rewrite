@@ -130,7 +130,7 @@ class Simulation(_pygetm.Simulation):
 
             if fabm:
                 def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
-                    ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
+                    ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_path, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
                     if send_data:
                         ar.wrap_ndarray(variable.data)
                     ar.register()
