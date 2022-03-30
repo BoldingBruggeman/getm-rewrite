@@ -530,8 +530,9 @@ class Simulation(_pygetm.Simulation):
         self.domain.VV.hn.all_values[:, :-1, :] = h_half[:, 1:, :]
         self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
 
-        # Update pressure based on new depths
-        self.pres.all_values[...] = -self.domain.T.zc.all_values[...]
+        if self.runtype == BAROCLINIC:
+            # Update pressure based on new depths
+            self.pres.all_values[...] = -self.domain.T.zc.all_values[...]
 
     def update_depth(self):
         """Use surface elevation on T grid to update elevations on U,V,X grids and subsequently update total water depth D on all grids."""
