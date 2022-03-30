@@ -19,6 +19,7 @@ cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain) nogil
 cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
 cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* target, int joffset) nogil
+cdef extern void grid_interp_z(int nx, int ny, int nz1, int nz2, double* source, double* target, int koffset) nogil
 cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, double* source, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
@@ -142,6 +143,9 @@ cdef class Grid:
 
     def interp_y(self, Array source not None, Array target not None, int offset):
         grid_interp_y(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
+
+    def interp_z(self, Array source not None, Array target not None, int offset):
+        grid_interp_z(source.all_values.shape[2], source.all_values.shape[1], source.all_values.shape[0], target.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
 
     def interp_xy(self, Array source not None, Array target not None, int ioffset, int joffset):
         grid_interp_xy(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], target.all_values.shape[target.all_values.ndim - 1], target.all_values.shape[target.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, ioffset, joffset)

@@ -256,6 +256,22 @@ contains
       end do
    end subroutine
 
+   subroutine grid_interp_z(nx, ny, nz1, nz2, source, target, koffset) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz1, nz2, koffset
+      real(real64),   intent(in)        :: source(nx, ny, nz1)
+      real(real64),   intent(inout)     :: target(nx, ny, nz2)
+
+      integer :: i, j, k
+
+      do k = 1, nz1 - 1
+         do j = 1, ny
+            do i = 1, nx
+               target(i, j, k + koffset) = 0.5_real64 * (source(i, j, k) + source(i, j, k + 1))
+            end do
+         end do
+      end do
+   end subroutine
+
    subroutine grid_interp_xy(nx1, ny1, nx2, ny2, nz, source, target, ioffset, joffset) bind(c)
       integer(c_int), intent(in), value :: nx1, ny1, nx2, ny2, nz, ioffset, joffset
       real(real64),   intent(in)        :: source(nx1, ny1, nz)
