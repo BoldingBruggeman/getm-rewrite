@@ -30,7 +30,7 @@ def find_interfaces(c: numpy.ndarray):
 
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
-    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
+    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'idx', 'idy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
     __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp', 'overlap')
 
@@ -55,6 +55,8 @@ class Grid(_pygetm.Grid):
             'lat': dict(units='degrees_east', long_name='latitude', constant=True, fill_value=FILL_VALUE),
             'dx': dict(units='m', constant=True, fill_value=FILL_VALUE),
             'dy': dict(units='m', constant=True, fill_value=FILL_VALUE),
+            'idx': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
+            'idy': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
             'dlon': dict(units='degrees_north', constant=True, fill_value=FILL_VALUE),
             'dlat': dict(units='degrees_east', constant=True, fill_value=FILL_VALUE),
             'H': dict(units='m', long_name='water depth at rest', constant=True, fill_value=FILL_VALUE),
@@ -104,6 +106,8 @@ class Grid(_pygetm.Grid):
                     values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
                     setattr(self, '_%si_' % name, values_i)
                     setattr(self, '_%si' % name, values_i[self.halo:-self.halo, self.halo:-self.halo])
+        self._idx.all_values[...] = 1. / self._dx.all_values
+        self._idy.all_values[...] = 1. / self._dy.all_values
 
     def rotate(self, u: numpy.typing.ArrayLike, v: numpy.typing.ArrayLike, to_grid: bool= True) -> Tuple[numpy.typing.ArrayLike, numpy.typing.ArrayLike]:
         if self._sin_rot is None:
