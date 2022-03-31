@@ -1,12 +1,13 @@
 from glob import glob1
 import operator
-from typing import Union, Optional, Type, Mapping
+from typing import Union, Optional, Type, List
 import itertools
 import logging
 import datetime
 import timeit
 
 import numpy
+import numpy.typing
 
 from .constants import *
 from . import _pygetm
@@ -31,26 +32,39 @@ SPLMAX13 = 4
 SUPERBEE = 5
 UPSTREAM = 6 
 
-class Tracer:
-    __slots__ = 'array', 'source', 'source_scale', 'vertical_velocity', '_boundary_type', 'boundary_values'
-    def __init__(self, array: core.Array, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None):
-        assert source is None or (source.grid is array.grid and source.z == CENTERS)
-        assert vertical_velocity is None or (vertical_velocity.grid is array.grid and vertical_velocity.z == CENTERS)
-        self.array = array
+class Boundaries:
+    __slots__ = '_tracer', '_type', 'values'
+    def __init__(self, tracer: 'Tracer'):
+        self._tracer = tracer
+        self._type = ZERO_GRADIENT
+        self.values = None
+
+    @property
+    def type(self) -> int:
+        return self._type
+
+    @type.setter
+    def type(self, value: int):
+        self._type = value
+        self.values = None if self._type == ZERO_GRADIENT else self._tracer.grid.array(z=CENTERS, on_boundary=True)
+
+    def update(self):
+        self._tracer.update_boundary(self._type, self.values)
+
+class Tracer(core.Array):
+    __slots__ = 'source', 'source_scale', 'vertical_velocity', 'boundaries'
+    def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, **kwargs):
+        super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
+        if data is None:
+            data = numpy.full_like(grid.hn.all_values, numpy.nan)
+        self.wrap_ndarray(data)
+        self.register()
+        assert source is None or (source.grid is self.grid and source.z == CENTERS)
+        assert vertical_velocity is None or (vertical_velocity.grid is self.grid and vertical_velocity.z == CENTERS)
         self.source = source
         self.source_scale = source_scale
         self.vertical_velocity = vertical_velocity
-        self._boundary_type = ZERO_GRADIENT
-        self.boundary_values = None
-
-    @property
-    def boundary_type(self) -> int:
-        return self._boundary_type
-
-    @boundary_type.setter
-    def boundary_type(self, value: int):
-        self._boundary_type = value
-        self.boundary_values = None if self._boundary_type == ZERO_GRADIENT else self.array.grid.array(z=CENTERS, on_boundary=True)
+        self.boundaries = Boundaries(self)
 
 class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk'
@@ -59,7 +73,7 @@ class Simulation(_pygetm.Simulation):
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _parameters = 'A', 'g1', 'g2'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'temp_source', 'salt_source', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays + _parameters
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays + _parameters
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
@@ -131,7 +145,7 @@ class Simulation(_pygetm.Simulation):
         self.g1 = g1
         self.g2 = g2
 
-        self.tracers: Mapping[str, Tracer] = {}
+        self.tracers: List[Tracer] = []
         self.tracer_totals = []
 
         self.fabm_model = None
@@ -165,10 +179,9 @@ class Simulation(_pygetm.Simulation):
                 self.fabm_sources_bottom = numpy.zeros_like(self.fabm_model.bottom_state)
                 self.fabm_vertical_velocity = numpy.zeros_like(self.fabm_model.interior_state)
                 for i, variable in enumerate(self.fabm_model.interior_state_variables):
-                    ar = fabm_variable_to_array(variable, send_data=True)
                     ar_w = core.Array(grid=self.domain.T)
                     ar_w.wrap_ndarray(self.fabm_vertical_velocity[i, ...])
-                    self.add_tracer(ar, vertical_velocity=ar_w)
+                    self.create_tracer(data=variable.data, vertical_velocity=ar_w, name=variable.output_name, units=variable.units, long_name=variable.long_path, fill_value=variable.missing_value)
                 for variable in itertools.chain(self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                     ar = fabm_variable_to_array(variable, send_data=True)
                 self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
@@ -185,8 +198,8 @@ class Simulation(_pygetm.Simulation):
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
         if runtype == BAROCLINIC:
-            self.temp = dom.T.array(fill=numpy.nan, z=CENTERS, name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE)
-            self.salt = dom.T.array(fill=numpy.nan, z=CENTERS, name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE)
+            self.temp = self.create_tracer(name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS, units='W m-2'), source_scale=1. / (RHO0 * CP))
+            self.salt = self.create_tracer(name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS))
             self.pres = dom.T.array(fill=numpy.nan, z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
             self.temp.fill(5.)
             self.salt.fill(35.)
@@ -194,11 +207,7 @@ class Simulation(_pygetm.Simulation):
             self.rad = dom.T.array(fill=numpy.nan, z=INTERFACES, name='rad', units='W m-2', long_name='shortwave radiation', fabm_standard_name='downwelling_shortwave_flux', fill_value=FILL_VALUE)
             self.par = dom.T.array(fill=numpy.nan, z=CENTERS, name='par', units='W m-2', long_name='photosynthetically active radiation', fabm_standard_name='downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
             self.par0 = dom.T.array(fill=numpy.nan, name='par0', units='W m-2', long_name='surface photosynthetically active radiation', fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
-            self.temp_source = dom.T.array(fill=0., z=CENTERS, units='W m-2')
-            self.salt_source = dom.T.array(fill=0., z=CENTERS)
-            self.shf = self.temp_source.isel(z=-1, name='shf', long_name='surface heat flux')
-            self.add_tracer(self.temp, source=self.temp_source, source_scale=1. / (RHO0 * CP))
-            self.add_tracer(self.salt, source=self.salt_source)
+            self.shf = self.temp.source.isel(z=-1, name='shf', long_name='surface heat flux')
             self.tracer_totals.append(self.salt)
 
             self.density = density or pygetm.density.Density()
@@ -211,11 +220,12 @@ class Simulation(_pygetm.Simulation):
         variable.link(arr.all_values)
         return arr
 
-    def add_tracer(self, array: core.Array, **kwargs):
+    def create_tracer(self, **kwargs):
         """Add a tracer that will be subject to advection and diffusion.
         The optional source array must after multiplication with source_scale have tracer units per time, multiplied by layer thickness."""
-        assert array.grid is self.domain.T and array.z == CENTERS
-        self.tracers[array.name] = Tracer(array, **kwargs)
+        tracer = Tracer(grid=self.domain.T, **kwargs)
+        self.tracers.append(tracer)
+        return tracer
 
     def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
@@ -286,8 +296,8 @@ class Simulation(_pygetm.Simulation):
             self.update_fabm_sources()
 
         if self.domain.open_boundaries:
-            for tracer in self.tracers.values():
-                tracer.array.update_boundary(tracer.boundary_type, tracer.boundary_values)
+            for tracer in self.tracers:
+                tracer.boundaries.update()
 
         self.output_manager.start(save=save)
 
@@ -359,8 +369,8 @@ class Simulation(_pygetm.Simulation):
                 self.update_radiation()
                 self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
                 self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-                self.temp_source.all_values[...] += self.rad.all_values[1:, ...] - self.rad.all_values[:-1, ...]
-                self.temp_source.all_values[0, ...] += self.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
+                self.temp.source.all_values[...] += self.rad.all_values[1:, ...] - self.rad.all_values[:-1, ...]
+                self.temp.source.all_values[0, ...] += self.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
 
                 # Use previous source terms for biogeochemistry to update tracers
                 # This should be done before the tracer concentrations change due to transport processes,
@@ -370,7 +380,7 @@ class Simulation(_pygetm.Simulation):
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None
-                for tracer in self.tracers.values():
+                for tracer in self.tracers:
                     if tracer.source is not None:
                         tracer.source.values[...] *= self.macrotimestep * tracer.source_scale
                     w = self.ww
@@ -378,10 +388,10 @@ class Simulation(_pygetm.Simulation):
                         w_if = tracer.vertical_velocity.interp(w_if or self.domain.T.array(fill=0., z=INTERFACES))
                         w_if.all_values[...] += self.ww.all_values
                         w = w_if
-                    self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, tracer.array, w_var=w)
-                    self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer.array, ea4=tracer.source)
+                    self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, tracer, w_var=w)
+                    self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
                     if self.domain.open_boundaries:
-                        tracer.array.update_boundary(tracer.boundary_type, tracer.boundary_values)
+                        tracer.boundaries.update()
 
                 # Update density to keep it in sync with T and S.
                 # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
