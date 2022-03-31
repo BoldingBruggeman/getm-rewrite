@@ -49,8 +49,8 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (sponge)
                do nn=1,4
                   ii=i-1+nn
-                  if (g%mask(ii,j) == 1) &
-                     f(ii,j,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(ii,j,:))
+                  if (g%mask(ii,j) > 0) &
+                     f(ii,j,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn))*f(ii,j,:)
                end do
          end select
          k= k+1
@@ -70,8 +70,8 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (sponge)
                do nn=1,4
                   jj=j+1-nn
-                  if (g%mask(i,jj) == 1) &
-                     f(i,jj,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(i,jj,:))
+                  if (g%mask(i,jj) > 0) &
+                     f(i,jj,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn))*f(i,jj,:)
                end do
          end select
          k=k+1
@@ -91,8 +91,8 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (sponge)
                do nn=1,4
                   ii=i+1-nn
-                  if (g%mask(ii,j) == 1) &
-                     f(ii,j,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(ii,j,:))
+                  if (g%mask(ii,j) > 0) &
+                     f(ii,j,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn))*f(ii,j,:)
                end do
          end select
          k=k+1
@@ -112,8 +112,8 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (sponge)
                do nn=1,4
                   jj=j-1+nn
-                  if (g%mask(i,jj) == 1) &
-                     f(i,jj,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(i,jj,:))
+                  if (g%mask(i,jj) > 0) &
+                     f(i,jj,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn))*f(i,jj,:)
                end do
          end select
          k=k+1
