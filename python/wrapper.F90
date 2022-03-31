@@ -155,6 +155,8 @@ contains
          case ('y'); p = c_loc(grid%y)
          case ('dx'); p = c_loc(grid%dx)
          case ('dy'); p = c_loc(grid%dy)
+         case ('idx'); p = c_loc(grid%idx)
+         case ('idy'); p = c_loc(grid%idy)
          case ('lon'); p = c_loc(grid%lon)
          case ('lat'); p = c_loc(grid%lat)
          case ('dlon'); p = c_loc(grid%dlon)
