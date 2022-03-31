@@ -477,7 +477,7 @@ class InputManager:
 
     def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
         if array.all_values is None or array.all_values.size == 0:
-            self._logger.warning('Ignoring asssignment to array %s because it has no associated data.' % self.name)
+            self._logger.warning('Ignoring asssignment to array %s because it has no associated data.' % array.name)
             return
 
         if isinstance(value, (numbers.Number, numpy.ndarray)):
