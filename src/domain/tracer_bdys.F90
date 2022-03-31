@@ -3,6 +3,8 @@
 !! Update open boundaries - either via externally provided
 !! boundary data - or as 0-gradient.
 
+!! Potentially update with Bjarnes time varying coefficients
+
 SUBMODULE (getm_domain) tracer_bdys_smod
 
 !---------------------------------------------------------------------------
@@ -30,6 +32,7 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
    real(real64), parameter :: sp(4)=(/1._real64, 0.5625_real64, &
                                       0.25_real64, 0.0625_real64/)
    integer :: i,j,k,l,n
+   integer :: ii,jj,nn
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('tracer_bdy_3d()',level=2)
    l=0
@@ -44,8 +47,11 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (clamped)
                f(i,j,:)=bdy(:,k)
             case (sponge)
-!KB - update
-               f(i,j,:)=bdy(:,k)
+               do nn=1,4
+                  ii=i-1+nn
+                  if (g%mask(ii,j) == 1) &
+                     f(ii,j,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(ii,j,:))
+               end do
          end select
          k= k+1
       end do
@@ -62,8 +68,11 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (clamped)
                f(i,j,:)=bdy(:,k)
             case (sponge)
-!KB - update
-               f(i,j,:)=bdy(:,k)
+               do nn=1,4
+                  jj=j+1-nn
+                  if (g%mask(i,jj) == 1) &
+                     f(i,jj,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(i,jj,:))
+               end do
          end select
          k=k+1
       end do
@@ -80,8 +89,11 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (clamped)
                f(i,j,:)=bdy(:,k)
             case (sponge)
-!KB - update
-               f(i,j,:)=bdy(:,k)
+               do nn=1,4
+                  ii=i+1-nn
+                  if (g%mask(ii,j) == 1) &
+                     f(ii,j,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(ii,j,:))
+               end do
          end select
          k=k+1
       end do
@@ -98,8 +110,11 @@ module SUBROUTINE tracer_bdy_3d(self,g,f,bdytype,bdy)
             case (clamped)
                f(i,j,:)=bdy(:,k)
             case (sponge)
-!KB - update
-               f(i,j,:)=bdy(:,k)
+               do nn=1,4
+                  jj=j-1+nn
+                  if (g%mask(i,jj) == 1) &
+                     f(i,jj,:)=sp(nn)*bdy(:,k)+(1._real64-sp(nn)*f(i,jj,:))
+               end do
          end select
          k=k+1
       end do
