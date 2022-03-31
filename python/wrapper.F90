@@ -414,11 +414,11 @@ contains
       select case (direction)
          case (1)
             call advection%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
-                    ugrid%mask,ugrid%dx,ugrid%dy,hu,u, &
+                    ugrid%mask,ugrid%idx,ugrid%dy,hu,u, &
                     tgrid%mask,tgrid%iarea,Ah,timestep,h,var)
          case (2)
             call advection%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
-                    ugrid%mask,ugrid%dx,ugrid%dy,hu,u, &
+                    ugrid%mask,ugrid%dx,ugrid%idy,hu,u, &
                     tgrid%mask,tgrid%iarea,Ah,timestep,h,var)
       end select
    end subroutine

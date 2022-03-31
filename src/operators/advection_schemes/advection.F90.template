@@ -20,13 +20,13 @@ contains
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
+SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,idxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
    integer, intent(in) :: umask(_A_)
-   real(real64), intent(in) :: dxu(_A_)
+   real(real64), intent(in) :: idxu(_A_)
    real(real64), intent(in) :: dyu(_A_)
    real(real64), intent(in) :: hu(_A_)
    real(real64), intent(in) :: u(_A_)
@@ -73,7 +73,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
       do i=imin-1,imax
          QU(i,j) = u(i,j) * hu(i,j) * dyu(i,j)
          if (umask(i,j) == 1 .or. umask(i,j) == 2) then
-            cfl = abs(u(i,j)*dt/dxu(i,j))
+            cfl = abs(u(i,j)*dt*idxu(i,j))
             if (u(i,j) .gt. 0) then
                fu  = f(i,j)
                fuu = fu
@@ -97,7 +97,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
 #include "limiters.h"
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
-            flux(i,j) = QU(i,j)*fu - lAh*hu(i,j)*(f(i+1,j)-f(i,j))/dxu(i,j)
+            flux(i,j) = QU(i,j)*fu - lAh*hu(i,j)*(f(i+1,j)-f(i,j))*idxu(i,j)
          else
             flux(i,j) = 0._real64
          end if
@@ -127,14 +127,14 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
 !#endif
 END SUBROUTINE u2d
 
-SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
+SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,idyv,hv,v,tmask,iA,Ah,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
    integer, intent(in) :: vmask(_A_)
    real(real64), intent(in) :: dxv(_A_)
-   real(real64), intent(in) :: dyv(_A_)
+   real(real64), intent(in) :: idyv(_A_)
    real(real64), intent(in) :: hv(_A_)
    real(real64), intent(in) :: v(_A_)
    integer, intent(in) :: tmask(_A_)
@@ -180,7 +180,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
       do i=imin,imax
          QV(i,j) = v(i,j) * hv(i,j) * dxv(i,j)
          if (vmask(i,j) == 1 .or. vmask(i,j) == 2) then
-            cfl = abs(v(i,j)*dt/dyv(i,j))
+            cfl = abs(v(i,j)*dt*idyv(i,j))
             if (v(i,j) .gt. 0) then
                fu  = f(i,j)
                fuu = fu
@@ -204,7 +204,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
 #include "limiters.h"
                fu = fu + 0.5*limiter*(1-cfl)*deltaf
             end if
-            flux(i,j) = QV(i,j)*fu - lAh*hv(i,j)*(f(i,j+1)-f(i,j))/dyv(i,j)
+            flux(i,j) = QV(i,j)*fu - lAh*hv(i,j)*(f(i,j+1)-f(i,j))*idyv(i,j)
          else
             flux(i,j) = 0._real64
          end if

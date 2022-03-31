@@ -14,14 +14,14 @@ module advection_base
    end type
 
    interface
-SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
+SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,idxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
    import real64
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
    integer, intent(in) :: halo(2)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
    integer, intent(in) :: umask(_A_)
-   real(real64), intent(in) :: dxu(_A_)
+   real(real64), intent(in) :: idxu(_A_)
    real(real64), intent(in) :: dyu(_A_)
    real(real64), intent(in) :: hu(_A_)
    real(real64), intent(in) :: u(_A_)
@@ -34,7 +34,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,dxu,dyu,hu,u,tmask,iA,Ah,dt,h,f)
 #undef _A_
 END SUBROUTINE
 
-SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
+SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,idyv,hv,v,tmask,iA,Ah,dt,h,f)
    import real64
    ! Subroutine arguments
    integer, intent(in) :: imin,imax,jmin,jmax
@@ -42,7 +42,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,dyv,hv,v,tmask,iA,Ah,dt,h,f)
 #define _A_  imin-halo(1):imax+halo(1),jmin-halo(2):jmax+halo(2)
    integer, intent(in) :: vmask(_A_)
    real(real64), intent(in) :: dxv(_A_)
-   real(real64), intent(in) :: dyv(_A_)
+   real(real64), intent(in) :: idyv(_A_)
    real(real64), intent(in) :: hv(_A_)
    real(real64), intent(in) :: v(_A_)
    integer, intent(in) :: tmask(_A_)
