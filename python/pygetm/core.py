@@ -44,8 +44,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self._fill_value = numpy.array(self._fill_value, dtype=self._dtype)
         if self.on_boundary:
             # boundary array
-            return
-        self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
+            self.values = self.all_values[...]
+        else:
+            self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]
         self._shape = self.values.shape
         self._size = self.values.size
 
@@ -217,7 +218,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def z(self):
-        return False if self._ndim != 3 else (INTERFACES if self._shape[0] == self.grid.nz_ + 1 else CENTERS)
+        if self._ndim != (2 if self.on_boundary else 3):
+            return False
+        nz = self._shape[1 if self.on_boundary else 0] 
+        return INTERFACES if nz == self.grid.nz_ + 1 else CENTERS
 
     @property
     def size(self):
@@ -276,9 +280,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return self.create(self.grid, result)
 
     def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
+        """Link this array to a field or value managed by the input manager. This will perform temporal and spatial interpolation as required."""
         self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos)
 
     def require_set(self, logger: Optional[logging.Logger]=None):
+        """Assess whether all non-masked cells of this field have been set. If not, an error message is written to the log and False is returned."""
         valid = True
         if self._fill_value is not None:
             invalid = self.ma == self._fill_value

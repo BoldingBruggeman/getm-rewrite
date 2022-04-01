@@ -1,4 +1,4 @@
-from typing import Iterable, List, Mapping, Union, Optional, Mapping, Sequence
+from typing import Iterable, List, Mapping, Union, Optional, Mapping, Sequence, Tuple
 import glob
 import numbers
 import logging
@@ -10,6 +10,7 @@ import xarray
 import cftime
 
 import pygetm.util.interpolate
+from pygetm.constants import CENTERS
 
 @xarray.register_dataarray_accessor('getm')
 class GETMAccessor:
@@ -285,6 +286,37 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
     coords[source_lat.name] = target_lat
     return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs, name='limit_region(%s, minlon=%s, maxlon=%s, minlat=%s, maxlat=%s)' % (source.name, minlon, maxlon, minlat, maxlat))
 
+
+def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice], verbose=False) -> xarray.DataArray:
+    assert idim < source.ndim
+    assert all([isinstance(s, slice) for s in slices])
+    shape = list(source.shape)
+    shape[idim] = sum([s.stop - s.start for s in slices])
+    shape = tuple(shape)
+    if verbose:
+        print('final shape: %s' % (shape,))
+
+    data = LimitedRegionArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim])
+
+    istart = 0
+    strslices = ''
+    for s in slices:
+        n = s.stop - s.start
+        source_slice = [slice(None)] * source.ndim
+        target_slice = [slice(None)] * source.ndim
+        source_slice[idim] = s
+        target_slice[idim] = slice(istart, istart + n)
+        strslices += '[%i:%i],' % (s.start, s.stop)
+        data._slices.append((tuple(source_slice), tuple(target_slice)))
+        istart += 1
+
+    coords = {}
+    for name, c in source.coords.items():
+        if source.dims[idim] not in c.dims:
+            coords[name] = c
+    return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs, name='concatenate_slices(%s, slices=(%s))' % (source.name, strslices))
+
+
 def horizontal_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
     assert source.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.name
     assert source.getm.latitude is not None, 'Variable %s does not have a valid latitude coordinate.' % source.name
@@ -353,36 +385,48 @@ class SpatialInterpolation(UnaryOperatorResult):
         result = self._ip(source.values)
         return result[tuple(tgt_slice)]
 
-def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray) -> xarray.DataArray:
+def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, itargetdim: int=0) -> xarray.DataArray:
     source_z = source.getm.z
     assert source_z is not None, 'Variable %s does not have a valid depth coordinate.' % source.name
     assert source_z.ndim == 1
     izdim = source.dims.index(source_z.dims[0])
-    assert source.ndim - izdim == 3
-    assert source.shape[izdim + 1:izdim + 3] == target_z.shape[1:], '%s vs %s' % (source.shape[izdim + 1:izdim + 3], target_z.shape[1:])
+    #assert source.ndim - izdim == target_z.ndim
+    #assert source.shape[izdim + 1:izdim + 3] == target_z.shape[1:], '%s vs %s' % (source.shape[izdim + 1:izdim + 3], target_z.shape[1:])
+    target2sourcedim = {}
+    isourcedim = 0
+    for i, l in enumerate(target_z.shape):
+        if i == itargetdim:
+            isourcedim = izdim
+        else:
+            while isourcedim != izdim and isourcedim < source.ndim and l != source.shape[isourcedim]:
+                isourcedim += 1
+            assert isourcedim != izdim, 'Dimension with length %i should precede depth dimension %i in %s, which has shape %s' % (l, izdim, source.name, source.shape)
+            assert isourcedim < source.ndim, 'Dimension with length %i expected after depth dimension %i in %s, which has shape %s' % (l, izdim, source.name, source.shape)
+        target2sourcedim[i] = isourcedim
     coords = {}
     for n, c in source.coords.items():
         if n == source.dims[izdim]:
-            coords[n + '_'] = (source.dims[-3:], target_z)
+            coords[n + '_'] = ([source.dims[target2sourcedim[i]] for i in range(target_z.ndim)], target_z)
         else:
             coords[n] = c
-    return xarray.DataArray(VerticalInterpolation(source, target_z), dims=source.dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
+    return xarray.DataArray(VerticalInterpolation(source, target_z, itargetdim), dims=source.dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
 
 class VerticalInterpolation(UnaryOperatorResult):
-    def __init__(self, source: xarray.DataArray, z: numpy.ndarray):
+    def __init__(self, source: xarray.DataArray, z: numpy.ndarray, axis: int=0):
         source_z = source.getm.z
         self.izdim = source.dims.index(source_z.dims[0])
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
         shape = list(source.shape)
-        shape[self.izdim] = z.shape[0]
+        shape[self.izdim] = z.shape[axis]
         UnaryOperatorResult.__init__(self, source, shape=shape, passthrough=passthrough)
         self.z = z
+        self.axis = axis
         self.source_z = source_z.values
         if (self.source_z >= 0.).all():
             self.source_z = -self.source_z
 
     def apply(self, source, dtype=None) -> numpy.ndarray:
-        return pygetm.util.interpolate.interp_1d(self.z, self.source_z, source, axis=0)
+        return pygetm.util.interpolate.interp_1d(self.z, self.source_z, source, axis=self.axis)
 
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     time_coord = source.getm.time
@@ -477,10 +521,13 @@ class InputManager:
 
     def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
         if array.all_values is None or array.all_values.size == 0:
+            # The target variable does not contain data. Typically this is because it specifies information on the open boundaries,
+            # of which the current (sub)domain does not have any.
             self._logger.warning('Ignoring asssignment to array %s because it has no associated data.' % array.name)
             return
 
         if isinstance(value, (numbers.Number, numpy.ndarray)):
+            # Constant-in-time fill value. Set it, then forget about the array as it will not require further updating.
             array.fill(value)
             return
 
@@ -488,28 +535,43 @@ class InputManager:
         assert isinstance(value.variable.data, LazyArray), 'If value is an xarray.DataArray, its underlying type should be a LazyArray, but it is %s (type %s).' % (value.variable.data, type(value.variable.data))
 
         if include_halos is None:
-            include_halos = array.values is None
+            include_halos = array.on_boundary
 
         grid = array.grid
         if not on_grid:
             # interpolate horizontally to local array INCLUDING halos
-            target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2)
+            target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2, exclude_global_halos=True)
             lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
             value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
             value = horizontal_interpolation(value, lon, lat)
         else:
-            # we need to map from global domain to subdomain
-            if array.ndim >= 2:
-                # source is global array EXCLUDING halos, but subdoain does include halos (i.e., no halos exchange needed after assignment)
+            # the input is already on-grid, but we may need to map from global domain to subdomain
+            if array.on_boundary:
+                # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
+                # or for only the open boundary points that fall within the local subdomain. Determine which of these.
+                target_slice = (Ellipsis,)
+                idim = value.ndim - (2 if array.z else 1)
+                if value.shape[idim] != grid.nbdyp:
+                    # The source array covers all open boundaries (global domain).
+                    # Slice out only the points that fall wihin the current subdomain
+                    if value.shape[idim] != grid.domain.nbdyp_glob:
+                        self._logger.error('Dimension %i of %s does not have expected extent %i (number of open boundary points in the global domain). Its actual extent is %i' % (idim, value.name, grid.domain.nbdyp_glob, value.shape[idim]))
+                    if grid.domain.local_to_global_ob:
+                        value = concatenate_slices(value, idim, [slice(start, stop) for (start, stop) in grid.domain.local_to_global_ob])
+            else:
+                # source is global array EXCLUDING halos, but subdomain that we assign to does include halos (i.e., no halo exchange needed after assignment)
                 target_slice, global_slice, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2)
                 value = value[global_slice]
-            else:
-                # open boundary - todo: slice local boundary out of global array
-                # for now assume source is local array including halos
-                target_slice = (Ellipsis,)
 
-        if array.ndim == 3:
-            value = vertical_interpolation(value, grid.zc.all_values[target_slice])
+        if array.z:
+            # The target is a depth-explicit array.
+            # The source must be defined on z coordinates and interpolated to our [potentially time-varying] depths
+            if array.on_boundary:
+                z_coordinate = grid.domain.zc_bdy if array.z == CENTERS else grid.domain.zf_bdy
+            else:
+                z_coordinate = grid.zc if array.z == CENTERS else grid.zf
+            z_coordinate.saved = True
+            value = vertical_interpolation(value, z_coordinate.all_values[target_slice], itargetdim=1 if array.on_boundary else 0)
         if value.getm.time is not None:
             if value.getm.time.size > 1:
                 value = temporal_interpolation(value)

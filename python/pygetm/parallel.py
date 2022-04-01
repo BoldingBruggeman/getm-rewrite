@@ -144,7 +144,7 @@ class Tiling:
     def wrap(self, *args, **kwargs) -> 'DistributedArray':
         return DistributedArray(self, *args, **kwargs)
 
-    def subdomain2slices(self, irow: Optional[int]=None, icol: Optional[int]=None, halo_sub: int=0, halo_glob: int=0, scale: int=1, share: int=0, exclude_halos: bool=True) -> Tuple[Tuple[Any, slice, slice], Tuple[Any, slice, slice], Tuple[int, int], Tuple[int, int]]:
+    def subdomain2slices(self, irow: Optional[int]=None, icol: Optional[int]=None, halo_sub: int=0, halo_glob: int=0, scale: int=1, share: int=0, exclude_halos: bool=True, exclude_global_halos: bool=False) -> Tuple[Tuple[Any, slice, slice], Tuple[Any, slice, slice], Tuple[int, int], Tuple[int, int]]:
         if irow is None:
             irow = self.irow
         if icol is None:
@@ -180,10 +180,11 @@ class Tiling:
 
         # Calculate offsets based on limits of the global domain
         extra_offset = halo_sub if exclude_halos else 0
-        xstart_offset = max(xstart_glob + extra_offset, 0              ) - xstart_glob
-        xstop_offset  = min(xstop_glob  - extra_offset, global_shape[1]) - xstop_glob
-        ystart_offset = max(ystart_glob + extra_offset, 0              ) - ystart_glob
-        ystop_offset  = min(ystop_glob  - extra_offset, global_shape[0]) - ystop_glob
+        margin_glob = halo_glob if exclude_global_halos else 0
+        xstart_offset = max(xstart_glob + extra_offset, margin_glob                  ) - xstart_glob
+        xstop_offset  = min(xstop_glob  - extra_offset, global_shape[1] - margin_glob) - xstop_glob
+        ystart_offset = max(ystart_glob + extra_offset, margin_glob                  ) - ystart_glob
+        ystop_offset  = min(ystop_glob  - extra_offset, global_shape[0] - margin_glob) - ystop_glob
         assert xstart_offset >= 0 and xstop_offset <= 0
         assert ystart_offset >= 0 and ystop_offset <= 0
 

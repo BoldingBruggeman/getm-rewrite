@@ -124,7 +124,7 @@ cdef class Array:
         if self.on_boundary:
             assert data.ndim in (1, 2) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
             assert data.shape[0] == self.grid.nbdyp, 'Incorrect shape of first dimension (number of boundary points): expected %i, got %i' % (self.grid.nbdyp, data.shape[0])
-            assert data.ndim == 1 or data.shape[1] == self.grid.nz_, 'Incorrect shape of second dimension (number of layers): expected %i, got %i' % (self.grid.nz_, data.shape[1])
+            assert data.ndim == 1 or data.shape[1] == self.grid.nz_ or data.shape[1] == self.grid.nz_ + 1, 'Incorrect shape of second dimension (number of layers): expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[1])
         else:
             assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
             assert data.shape[data.ndim - 1] == self.grid.nx_ and data.shape[data.ndim - 2] == self.grid.ny_, 'Incorrect horizontal extent: expected (ny=%i,nx=%i), got (ny=%i,nx=%i)' % (self.grid.ny_, self.grid.nx_, data.shape[data.ndim - 2], data.shape[data.ndim - 1])
@@ -134,6 +134,8 @@ cdef class Array:
         self.finish_initialization()
 
     def update_boundary(self, int bdytype, Array bdy=None):
+        assert not self.on_boundary, 'update_boundary cannot be called on boundary arrays.'
+        assert self.ndim == 2 or bdy is None or self.all_values.shape[0] == bdy.all_values.shape[1]
         domain_tracer_bdy(self.grid.domain.p, self.grid.p, 1 if self.ndim == 2 else self.all_values.shape[0], <double*>self.p, bdytype, NULL if bdy is None else <double*>bdy.p)
 
 cdef class Grid:

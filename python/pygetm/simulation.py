@@ -37,7 +37,7 @@ class Boundaries:
     def __init__(self, tracer: 'Tracer'):
         self._tracer = tracer
         self._type = ZERO_GRADIENT
-        self.values = None
+        self.values: Optional[core.Array] = None
 
     @property
     def type(self) -> int:
@@ -508,19 +508,22 @@ class Simulation(_pygetm.Simulation):
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
+        # Use updated velocities (uk, vk) to compute shear frequency (SS)
         self.update_shear_frequency(viscosity)
 
+        # Interpolate 3D velocities to advection grids.
+        # This needs to be done before uk/vk are changed by the advection operator (apply_3d).
         self.uk.interp(self.uua3d)
         self.vk.interp(self.uva3d)
         self.uk.interp(self.vua3d)
         self.vk.interp(self.vva3d)
 
-        # Advect 3D u velocity using velocities interpolated to its own advection grids
+        # Advect 3D u velocity from time=n-1/2 to n+1/2 using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk, new_h=True, skip_initial_halo_exchange=True)
         self.advpk.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
 
-        # Advect 3D v velocity using velocities interpolated to its own advection grids
+        # Advect 3D v velocity from time=n-1/2 to n+1/2 using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk, new_h=True, skip_initial_halo_exchange=True)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
@@ -532,6 +535,7 @@ class Simulation(_pygetm.Simulation):
     def start_3d(self):
         """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step."""
         # Halo exchange for sea level on T grid
+        # JB TODO T.z should already be up to date by exchange at end of 2D time step, but verify this before removing!
         self.domain.T.z.update_halos()
 
         self.domain.T.zio.all_values[...] = self.domain.T.zin.all_values[...]
@@ -553,6 +557,8 @@ class Simulation(_pygetm.Simulation):
         self.domain.X.zin.all_values.clip(min=-self.domain.X.H + self.domain.Dmin, out=self.domain.X.zin.all_values)
 
         # Halo exchange for sea level on U, V, X grids
+        # JB TODO these may not be needed, as these points likely need to be valid at the innermost halo points only,
+        # which should be ensured by T.zin exchange. But verify before removing!
         self.domain.U.zin.update_halos()
         self.domain.V.zin.update_halos()
         self.domain.X.zin.update_halos()
@@ -576,6 +582,10 @@ class Simulation(_pygetm.Simulation):
             # Update pressure based on new depths
             self.pres.all_values[...] = -self.domain.T.zc.all_values[...]
 
+        if self.domain.zc_bdy.saved:
+            # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
+            self.domain.zc_bdy.all_values[...] = self.domain.T.zc.all_values[:, self.domain.bdy_j, self.domain.bdy_i].T
+
     def update_depth(self):
         """Use surface elevation on T grid to update elevations on U,V,X grids and subsequently update total water depth D on all grids."""
         # Halo exchange for sea level on T grid
@@ -593,6 +603,8 @@ class Simulation(_pygetm.Simulation):
         z_T_half.all_values.clip(min=-self.domain.T.H + self.domain.Dmin, out=z_T_half.all_values)
 
         # Halo exchange for sea level on U, V, X grids
+        # JB TODO these may not be needed, as these points likely need to be valid at the innermost halo points only,
+        # which should be ensured by T.zin exchange. But verify before removing!
         self.domain.U.z.update_halos()
         self.domain.V.z.update_halos()
         self.domain.X.z.update_halos()
@@ -629,9 +641,11 @@ class Simulation(_pygetm.Simulation):
         self.rad.values[...] = self.A * numpy.exp(k1 * work) + (1. - self.A) * numpy.exp(k2 * work)  # fraction of total surface radiation at each interface
         self.rad.values *= self.airsea.swr.values
         if self.par.saved:
+            # Visible part of shortwave radiation at layer centers, often used by biogeochemistry
             self.par.values[...] = (1. - self.A) * numpy.exp((k2 * 0.5) * (work[:-1, ...] + work[1:, ...]))
             self.par.values *= self.airsea.swr.values
         if self.par0.saved:
+            # Visible part of shortwave radiation just below sea surface (i.e., reflection/albedo already accounted for)
             self.par0.values[...] = (1. - self.A) * self.airsea.swr.values
 
 for membername in Simulation._all_fortran_arrays:

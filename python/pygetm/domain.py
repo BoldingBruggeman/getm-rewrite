@@ -13,7 +13,7 @@ from . import core
 from . import parallel
 from . import output
 from . import input
-from .constants import FILL_VALUE
+from .constants import FILL_VALUE, CENTERS, INTERFACES
 
 WEST  = 1
 NORTH = 2
@@ -515,25 +515,28 @@ class Domain(_pygetm.Domain):
         # We also limit the indices to the range valid for the current subdomain.
         HALO = 2
         if side in (WEST, EAST):
-            l = HALO + l - self.tiling.xoffset
-            mstart = min(max(0, HALO + mstart - self.tiling.yoffset), self.T.ny_)
-            mstop = min(max(0, HALO + mstop - self.tiling.yoffset), self.T.ny_)
-            lmax = self.T.nx_
+            l_offset, m_offset, l_max, m_max = self.tiling.xoffset, self.tiling.yoffset, self.T.nx_, self.T.ny_
         else:
-            l = HALO + l - self.tiling.yoffset
-            mstart = min(max(0, HALO + mstart - self.tiling.xoffset), self.T.nx_)
-            mstop = min(max(0, HALO + mstop - self.tiling.xoffset), self.T.nx_)
-            lmax = self.T.ny_
-        if l >= 0 and l < lmax and mstop > mstart:
+            l_offset, m_offset, l_max, m_max = self.tiling.yoffset, self.tiling.xoffset, self.T.ny_, self.T.nx_
+        l_loc = HALO + l - l_offset
+        mstart_loc = min(max(0, HALO + mstart - m_offset), m_max)
+        mstop_loc = min(max(0, HALO + mstop - m_offset), m_max)
+        if l_loc >= 0 and l_loc < l_max and mstop_loc > mstart_loc:
             # Boundary lies at least partially within current subdomain
             if side in (WEST, EAST):
-                mask = self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2]
+                mask = self.mask_[1 + 2 * mstart_loc:2 * mstop_loc:2, 1 + l_loc * 2]
             else:
-                mask = self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2]
+                mask = self.mask_[1 + l_loc * 2, 1 + 2 * mstart_loc:2 * mstop_loc:2]
             if (mask == 0).any():
-                self.logger.error('%i of %i points of this open boundary are on land' % ((mask == 0).sum(), mstop - mstart))
+                self.logger.error('%i of %i points of this open boundary are on land' % ((mask == 0).sum(), mstop_loc - mstart_loc))
                 raise Exception()
-            self.open_boundaries.setdefault(side, []).append((l, mstart, mstop, type_2d, type_3d))
+            m_skip = mstart_loc - (HALO + mstart - m_offset)
+            assert m_skip >= 0
+        else:
+            # Boundary lies completely outside current subdomain. Record it anyway, so we can later set up a
+            # global -> local map of open bounfary points
+            l_loc, mstart_loc, mstop_loc, m_skip = None, None, None, mstop - mstart
+        self.open_boundaries.setdefault(side, []).append((l_loc, mstart_loc, mstop_loc, m_skip, mstop - mstart, type_2d, type_3d))
 
     def initialize(self, runtype: int, field_manager: Optional[output.FieldManager]=None):
         assert not self.initialized, 'Domain has already been initialized'
@@ -550,38 +553,63 @@ class Domain(_pygetm.Domain):
 
         HALO = 2
         nbdyp = 0
+        nbdyp_glob = 0
         bdyinfo, bdy_i, bdy_j = [], [], []
         side2count = {}
+        self.local_to_global_ob = []
         for side in (WEST, NORTH, EAST, SOUTH):
             bounds = self.open_boundaries.get(side, [])
-            side2count[side] = len(bounds)
-            for l, mstart, mstop, type_2d, type_3d in bounds:
-                # Note that bdyinfo needs indices into the T grid EXCLUDING halos
-                bdyinfo.append(numpy.array((l - HALO, mstart - HALO, mstop - HALO, type_2d, type_3d, nbdyp), dtype=numpy.intc))
-                nbdyp += mstop - mstart
-                if side == WEST:
-                    self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
-                    self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
-                elif side == EAST:
-                    self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
-                    self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
-                elif side == SOUTH:
-                    self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
-                    self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
-                elif side == NORTH:
-                    self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
-                    self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
+            kept_bounds = []
+            for l, mstart, mstop, mskip, len_glob, type_2d, type_3d in bounds:
+                if l is not None:
+                    # Note that bdyinfo needs indices into the T grid EXCLUDING halos
+                    bdyinfo.append(numpy.array((l - HALO, mstart - HALO, mstop - HALO, type_2d, type_3d, nbdyp), dtype=numpy.intc))
+                    nbdyp += mstop - mstart
+                    if side == WEST:
+                        self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
+                        self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
+                    elif side == EAST:
+                        self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
+                        self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
+                    elif side == SOUTH:
+                        self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
+                        self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
+                    elif side == NORTH:
+                        self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
+                        self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
 
-                if side in (WEST, EAST):
-                    bdy_i.append(numpy.repeat(l, mstop - mstart))
-                    bdy_j.append(numpy.arange(mstart, mstop))
-                else:
-                    bdy_i.append(numpy.arange(mstart, mstop))
-                    bdy_j.append(numpy.repeat(l, mstop - mstart))
+                    if side in (WEST, EAST):
+                        bdy_i.append(numpy.repeat(l, mstop - mstart))
+                        bdy_j.append(numpy.arange(mstart, mstop))
+                    else:
+                        bdy_i.append(numpy.arange(mstart, mstop))
+                        bdy_j.append(numpy.repeat(l, mstop - mstart))
+                    if self.local_to_global_ob and self.local_to_global_ob[-1][1] == nbdyp_glob + mskip:
+                        # attach to previous boundary
+                        self.local_to_global_ob[-1][1] += mstop - mstart
+                    else:
+                        # gap; add new slice
+                        self.local_to_global_ob.append([nbdyp_glob + mskip, nbdyp_glob + mskip + mstop - mstart])
+                    kept_bounds.append(bounds)
+                nbdyp_glob += len_glob
+            side2count[side] = len(kept_bounds)
+            if not kept_bounds:
+                # No open boundaries on this side fall within the current subdomain
+                # Delete any reference to that side from our open_boundaries list.
+                self.open_boundaries.pop(side, None)
+            else:
+                # Replace the list of open boundaries on this side with only those that fall within the current subdomain
+                self.open_boundaries[side] = kept_bounds
         self.bdy_i = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_i, dtype=numpy.intc)
         self.bdy_j = numpy.empty((0,), dtype=numpy.intc) if nbdyp == 0 else numpy.concatenate(bdy_j, dtype=numpy.intc)
+        self.nbdyp_glob = nbdyp_glob
         self.logger.info('%i open boundaries (%i West, %i North, %i East, %i South)' % (len(bdyinfo), side2count[WEST], side2count[NORTH], side2count[EAST], side2count[SOUTH]))
         if nbdyp > 0:
+            if nbdyp == nbdyp_glob:
+                assert len(self.local_to_global_ob) == 1 and self.local_to_global_ob[0][0] == 0 and self.local_to_global_ob[0][1] == nbdyp_glob
+                self.local_to_global_ob = None
+            else:
+                self.logger.info('global-to-local open boundary map: %s' % (self.local_to_global_ob,))
             bdyinfo = numpy.stack(bdyinfo, axis=-1)
             self.initialize_open_boundaries(nwb=side2count[WEST], nnb=side2count[NORTH], neb=side2count[EAST], nsb=side2count[SOUTH], nbdyp=nbdyp, bdy_i=self.bdy_i - HALO, bdy_j=self.bdy_j - HALO, bdy_info=bdyinfo)
 
@@ -604,6 +632,9 @@ class Domain(_pygetm.Domain):
         self.UV.mask.all_values[:-1, :][numpy.logical_and(self.U.mask.all_values[:-1, :], self.U.mask.all_values[1:,:])] = 1
         self.VU.mask.all_values[:, :-1][numpy.logical_and(self.V.mask.all_values[:, :-1], self.V.mask.all_values[:,1:])] = 1
         self.VV.mask.all_values[:-1, :][numpy.logical_and(self.V.mask.all_values[:-1, :], self.V.mask.all_values[1:,:])] = 1
+
+        self.zc_bdy = self.T.array(z = CENTERS, on_boundary=True)
+        self.zf_bdy = self.T.array(z = INTERFACES, on_boundary=True)
 
         self.logger.info('Number of unmasked points excluding halos: %i on T grid, %i on U grid, %i on V grid, %i on X grid' % ((self.T.mask.values > 0).sum(), (self.U.mask.values > 0).sum(), (self.V.mask.values > 0).sum(), (self.X.mask.values > 0).sum()))
 
