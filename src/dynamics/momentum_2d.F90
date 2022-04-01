@@ -187,10 +187,11 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
 !  Local constants
 
 !  Local variables
-   real(real64) :: Slr
+   real(real64) :: Slr, rho0i
    integer :: i,j
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('u_2d()',level=3)
+   rho0i=1._real64/rho0
    UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
@@ -202,7 +203,7 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
             end if
             ! [GETM Scientific Report: eqs. 2.14, 2.16]
             self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! note SxF is multiplied by alpha
-                        +UG%alpha(i,j)*(-tausx(i,j)/rho0-self%fV(i,j) &
+                        +UG%alpha(i,j)*(-tausx(i,j)*rho0i-self%fV(i,j) &
 #ifndef _APPLY_ADV_DIFF_
                         -self%advU(i,j)-self%diffu1(i,j)-self%dampU(i,j) &
 #endif
@@ -237,10 +238,11 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
 !  Local constants
 
 !  Local variables
-   real(real64) :: Slr
+   real(real64) :: Slr,rho0i
    integer :: i,j
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('v_2d()',level=3)
+   rho0i=1._real64/rho0
    VGrid: associate( VG => self%domain%V )
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
@@ -252,7 +254,7 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
             end if
             ! [GETM Scientific Report: eqs. 2.15, 2.17]
             self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! note SyF is multiplied by alpha
-                        +VG%alpha(i,j)*(-tausy(i,j)/rho0+self%fU(i,j) &
+                        +VG%alpha(i,j)*(-tausy(i,j)*rho0i+self%fU(i,j) &
 #ifndef _APPLY_ADV_DIFF_
                         -self%advV(i,j)-self%diffv1(i,j)-self%dampV(i,j) &
 #endif

@@ -167,9 +167,11 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 
 !  Local variables
    integer :: i,j,k
+   real(real64) :: rho0i
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('pk_3d()',level=3)
    UGrid: associate( UG => self%domain%U )
+   rho0i=1._real64/rho0
    do k=UG%kmin,UG%kmax
       do j=UG%jmin,UG%jmax
          do i=UG%imin,UG%imax
@@ -200,7 +202,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             ! surface stress
             k=UG%kmax
-            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*UG%alpha(i,j)*tausx(i,j)/rho0
+            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*UG%alpha(i,j)*tausx(i,j)*rho0i
 
             ! bottom friction
             k=UG%kmin
@@ -269,9 +271,11 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 
 !  Local variables
    integer :: i,j,k
+   real(real64) :: rho0i
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('qk_3d()',level=3)
    VGrid: associate( VG => self%domain%V )
+   rho0i=1._real64/rho0
    do k=VG%kmin,VG%kmax
       do j=VG%jmin,VG%jmax
          do i=VG%imin,VG%imax
@@ -303,7 +307,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             ! surface stress
             k=VG%kmax
-            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*VG%alpha(i,j)*tausy(i,j)/rho0
+            self%ea4(i,j,k)=self%ea4(i,j,k)+dt*VG%alpha(i,j)*tausy(i,j)*rho0i
 
             ! bottom friction
             k=VG%kmin
