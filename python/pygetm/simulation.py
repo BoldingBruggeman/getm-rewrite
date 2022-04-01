@@ -499,10 +499,10 @@ class Simulation(_pygetm.Simulation):
         # This is needed to advect quantities defined on the T grid, as this requires velocities at the boundaries of every T cell
         # of the subdomain interior; this includes cells at the very Western and Southern boundary, which for U and V grids lie within the halo
         # Moreover, the velocities will also be interpolated to the advection grids for momentum (UU, UV, VU, VV), which again requires halos values.
-        # It is for the latter that we need to interpolate the vertical velocity.
+        # The vertical velocity is already computed at all points surrounding U and V points, so no further halo exchange of w is needed
+        # to support interpolation to U and V grids later on.
         self.pk.update_halos()
         self.qk.update_halos()
-        self.ww.update_halos()
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
@@ -533,11 +533,9 @@ class Simulation(_pygetm.Simulation):
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
     def start_3d(self):
-        """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step."""
-        # Halo exchange for sea level on T grid
-        # JB TODO T.z should already be up to date by exchange at end of 2D time step, but verify this before removing!
-        self.domain.T.z.update_halos()
-
+        """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step.
+        Note: this uses sea level on T grid as computed by the 2D time step. This has to be up to date in the halos too!
+        """
         self.domain.T.zio.all_values[...] = self.domain.T.zin.all_values[...]
         self.domain.U.zio.all_values[...] = self.domain.U.zin.all_values[...]
         self.domain.V.zio.all_values[...] = self.domain.V.zin.all_values[...]
@@ -552,9 +550,9 @@ class Simulation(_pygetm.Simulation):
         zi_T_half.interp(self.domain.V.zin)
         zi_T_half.interp(self.domain.X.zin)
 
-        self.domain.U.zin.all_values.clip(min=-self.domain.U.H + self.domain.Dmin, out=self.domain.U.zin.all_values)
-        self.domain.V.zin.all_values.clip(min=-self.domain.V.H + self.domain.Dmin, out=self.domain.V.zin.all_values)
-        self.domain.X.zin.all_values.clip(min=-self.domain.X.H + self.domain.Dmin, out=self.domain.X.zin.all_values)
+        self.domain.U.zin.all_values.clip(min=-self.domain.U.H.all_values + self.domain.Dmin, out=self.domain.U.zin.all_values)
+        self.domain.V.zin.all_values.clip(min=-self.domain.V.H.all_values + self.domain.Dmin, out=self.domain.V.zin.all_values)
+        self.domain.X.zin.all_values.clip(min=-self.domain.X.H.all_values + self.domain.Dmin, out=self.domain.X.zin.all_values)
 
         # Halo exchange for sea level on U, V, X grids
         # JB TODO these may not be needed, as these points likely need to be valid at the innermost halo points only,

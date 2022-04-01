@@ -370,8 +370,8 @@ MODULE SUBROUTINE w_momentum_3d(self,dt)
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
    do k=TG%l(3),TG%u(3)-1
-      do j=TG%l(2),TG%u(2)
-         do i=TG%l(1),TG%u(1)
+      do j=TG%jmin,TG%jmax+1
+         do i=TG%imin,TG%imax+1
             if (TG%mask(i,j) == 1) then
                   self%ww(i,j,k) = self%ww(i,j,k-1)-(TG%hn(i,j,k)-TG%ho(i,j,k))*dtm1 &
                               -(self%pk(i,j,k)*UG%dy(i,j)-self%pk(i-1,j  ,k)*UG%dy(i-1,j) &
