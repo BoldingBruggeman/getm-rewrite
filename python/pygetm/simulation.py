@@ -554,21 +554,23 @@ class Simulation(_pygetm.Simulation):
         self.domain.V.zin.all_values.clip(min=-self.domain.V.H.all_values + self.domain.Dmin, out=self.domain.V.zin.all_values)
         self.domain.X.zin.all_values.clip(min=-self.domain.X.H.all_values + self.domain.Dmin, out=self.domain.X.zin.all_values)
 
-        # Halo exchange for sea level on U, V, X grids
-        # JB TODO these may not be needed, as these points likely need to be valid at the innermost halo points only,
-        # which should be ensured by T.zin exchange. But verify before removing!
+        # Halo exchange for elevation on U, V grids
+        # This is needed to later compute velocities from transports
+        # (by dividing by layer thickness, which are computed from elevation)
+        # These velocities will be advected, and therefore need to be valid througout the halos.
+        # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
+        # at the innermost halo point only, which is ensured by T.zin exchange.
         self.domain.U.zin.update_halos()
         self.domain.V.zin.update_halos()
-        self.domain.X.zin.update_halos()
 
         # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
         # This routine also sets ho to the previous value of hn
-        # All points (interior and halo) are processed, so ho and hn will be valid in halos after this completes.
-        # This does require that halo exchanges for zin on every grid were done beforehand.
+        # All points (interior and halo) are processed, so ho and hn will be valid in halos after this completes,
+        # provided zin was valid in the halo beforehand.
         self.domain.do_vertical()
 
-        # Update thicknesses on advection grids. These must be at time=n+1/2 (whereas the tracer grid is now at t=n+1)
-        # That's already the case for the X grid, but for the T grid we explicitly compute and use thicknesses at time=n+1/2.
+        # Update thicknesses on advection grids. These must be at time=n+1/2
+        # That's already the case for the X grid, but for the T grid (now at t=n+1) we explicitly compute thicknesses at time=n+1/2.
         # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
         # fortunately these values are not needed for advection.
         h_half = self.domain.T.ho.all_values + self.domain.T.hn.all_values
@@ -600,12 +602,14 @@ class Simulation(_pygetm.Simulation):
         self.domain.X.z.all_values.clip(min=-self.domain.X.H + self.domain.Dmin, out=self.domain.X.z.all_values)
         z_T_half.all_values.clip(min=-self.domain.T.H + self.domain.Dmin, out=z_T_half.all_values)
 
-        # Halo exchange for sea level on U, V, X grids
-        # JB TODO these may not be needed, as these points likely need to be valid at the innermost halo points only,
-        # which should be ensured by T.zin exchange. But verify before removing!
+        # Halo exchange for elevation on U, V grids
+        # This is needed to later compute velocities from transports
+        # (by dividing by column height, which is computed from elevation)
+        # These velocities will be advected, and therefore need to be valid througout the halos.
+        # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
+        # at the innermost halo point only, which is ensured by T.zin exchange.
         self.domain.U.z.update_halos()
         self.domain.V.z.update_halos()
-        self.domain.X.z.update_halos()
 
         # Update total water depth D on T, U, V, X grids
         # This also processes the halos; no further halo exchange needed.
