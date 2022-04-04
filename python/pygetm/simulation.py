@@ -196,12 +196,14 @@ class Simulation(_pygetm.Simulation):
                     ar.wrap_ndarray(self.fabm_conserved_quantity_totals[i, ...])
                     self.tracer_totals.append(ar)
 
+            self.pres = dom.T.array(fill=numpy.nan, z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
+
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
         if runtype == BAROCLINIC:
             self.temp = self.create_tracer(name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS, units='W m-2'), source_scale=1. / (RHO0 * CP))
             self.salt = self.create_tracer(name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS))
-            self.pres = dom.T.array(fill=numpy.nan, z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
+            self.pres.saved = True
             self.temp.fill(5.)
             self.salt.fill(35.)
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
@@ -291,7 +293,7 @@ class Simulation(_pygetm.Simulation):
         self.airsea(self.time, self.sst)
         if self.runtype == BAROCLINIC:
             assert self.airsea.qe.require_set(self.logger) * self.airsea.qh.require_set(self.logger) * self.airsea.ql.require_set(self.logger)
-        self.update_radiation()
+            self.update_radiation()
 
         if self.fabm_model:
             self.update_fabm_sources()
@@ -408,8 +410,8 @@ class Simulation(_pygetm.Simulation):
                 # Update source terms of biogeochemistry, using the new tracer concentrations
                 if self.fabm_model:
                     self.update_fabm_sources()
-                
-                self.report_domain_integrals()
+
+            self.report_domain_integrals()
 
             # Reset depth-integrated transports that will be incremented over subsequent 3D timestep.
             self.Ui.all_values[...] = 0
@@ -453,7 +455,7 @@ class Simulation(_pygetm.Simulation):
         total_volume = (self.domain.T.D * self.domain.T.area).global_sum(where=self.domain.T.mask != 0)
         if total_volume is not None:
             self.logger.info('Integrals over global domain:')
-            self.logger.info('  volume: %15e m3' % total_volume)
+            self.logger.info('  volume: %.15e m3' % total_volume)
         if self.fabm_model:
             self.fabm_model.get_conserved_quantities(out=self.fabm_conserved_quantity_totals)
         for var in self.tracer_totals:
@@ -584,7 +586,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.VV.hn.all_values[:, :-1, :] = h_half[:, 1:, :]
         self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
 
-        if self.runtype == BAROCLINIC:
+        if self.pres.saved:
             # Update pressure based on new depths
             self.pres.all_values[...] = -self.domain.T.zc.all_values[...]
 
