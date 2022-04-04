@@ -119,16 +119,14 @@ class Simulation(_pygetm.Simulation):
             self.vk.all_values.fill(0.)
             self.ww.all_values.fill(0.)
 
-        if self.ww is not None:
-            self.ww.all_values[...] = 0.
-
         self.update_depth()
 
         airsea = airsea or pygetm.airsea.FluxesFromMeteo
         assert issubclass(airsea, pygetm.airsea.Fluxes)
         self.airsea = airsea(self.domain, self.logger)
 
-        self.fwf = dom.T.array(fill=0., name='fwf', units='m s-1', long_name='freshwater flux', fill_value=FILL_VALUE)
+        self.fwf = dom.T.array(name='fwf', units='m s-1', long_name='freshwater flux', fill_value=FILL_VALUE)
+        self.fwf.fill(0.)
         self.uadv = _pygetm.Advection(dom.U, scheme=advection_scheme)
         self.vadv = _pygetm.Advection(dom.V, scheme=advection_scheme)
 
@@ -414,8 +412,8 @@ class Simulation(_pygetm.Simulation):
             self.report_domain_integrals()
 
             # Reset depth-integrated transports that will be incremented over subsequent 3D timestep.
-            self.Ui.all_values[...] = 0
-            self.Vi.all_values[...] = 0
+            self.Ui.all_values.fill(0.)
+            self.Vi.all_values.fill(0.)
 
         self.output_manager.save()
         return macro_active
