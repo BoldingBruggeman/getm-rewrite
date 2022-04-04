@@ -444,6 +444,9 @@ def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     return xarray.DataArray(result, dims=dims, coords=coords, attrs=source.attrs, name='temporal_interpolation(%s)' % source.name)
 
 class TemporalInterpolationResult(UnaryOperatorResult):
+    last_time: Optional[cftime.datetime] = None
+    last_numtimes = {}
+
     def __init__(self, source: xarray.DataArray):
         time_coord = source.getm.time
         shape = list(source.shape)
@@ -456,9 +459,8 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._current = numpy.empty(shape, dtype=source.dtype)
 
         self._numtimes = time_coord.values
-        self._time_units = time_coord.attrs['units']
-        self._time_calendar = time_coord.attrs.get('calendar', 'standard')
-        self._timecoord = xarray.DataArray(cftime.num2date(self._numtimes[0], self._time_units, self._time_calendar))
+        self._cftime_args = (time_coord.attrs['units'], time_coord.attrs.get('calendar', 'standard'))
+        self._timecoord = xarray.DataArray(cftime.num2date(self._numtimes[0], *self._cftime_args))
 
         self._numnow = None
         self._numnext = 0.
@@ -475,7 +477,13 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
     def update(self, time: cftime.datetime) -> bool:
         # Convert the time into a numerical value matching units and calendar of the variable's time coordinate
-        numtime = cftime.date2num(time, self._time_units, self._time_calendar)
+        # This is expensive, so cache previous results
+        if TemporalInterpolationResult.last_time is not time:
+            TemporalInterpolationResult.last_time = time
+            TemporalInterpolationResult.last_numtimes = {}
+        numtime = TemporalInterpolationResult.last_numtimes.get(self._cftime_args)
+        if not numtime:
+            numtime = TemporalInterpolationResult.last_numtimes[self._cftime_args] = cftime.date2num(time, *self._cftime_args)
 
         if numtime == self._numnow:
             return False
