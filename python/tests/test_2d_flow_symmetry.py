@@ -88,7 +88,7 @@ def test(name: str, periodic_x: bool=False, periodic_y: bool=False, tau_x: float
         # Energy input due to wind stress (per unit area!)
         E_input += (tau_x * (u_T_old + u_T) + tau_y * (v_T_old + v_T)) * 0.5 * timestep
 
-        sim.update_sealevel(timestep, sim.U, sim.V)
+        sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
         sim.update_depth()
         sim.output_manager.save()
 

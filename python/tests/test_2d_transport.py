@@ -51,7 +51,7 @@ def test(name, periodic_x: bool=False, periodic_y: bool=False, tau_x: float=0., 
         sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
         sim.U.update_halos()
         sim.V.update_halos()
-        sim.update_sealevel(timestep, sim.U, sim.V)
+        sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
         sim.update_depth()
 
     success = check_range('U', sim.U, target_value=None if apply_bottom_friction else ntime * timestep * tau_x / RHO0)
