@@ -9,10 +9,10 @@ getm_setups_dir = '../../../getm-setups'
 igotm_data_dirs = ('/server/data', '../../../igotm/data')
 
 igotm_data_dir = next(filter(os.path.isdir, igotm_data_dirs))
-era_path = os.path.join(igotm_data_dir, 'ERA-interim/2016.nc')
 
 domain = pygetm.legacy.domain_from_topo(os.path.join(getm_setups_dir, 'NorthSea/Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001)
 pygetm.legacy.load_bdyinfo(domain, os.path.join(getm_setups_dir, 'NorthSea/bdyinfo.dat'))
+pygetm.legacy.load_riverinfo(domain, os.path.join(getm_setups_dir, 'NorthSea/riverinfo.dat'))
 sim = pygetm.Simulation(domain, runtype=pygetm.BAROCLINIC, advection_scheme=pygetm.HSIMT,
     gotm=os.path.join(getm_setups_dir, 'NorthSea/gotmturb.nml'),
     fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
@@ -35,13 +35,13 @@ if sim.runtype == pygetm.BAROCLINIC:
     output.request(('temp', 'salt', 'rho', 'NN', 'sst', 'hnt', 'rad', 'par'))
 
 sim.logger.info('Setting up ERA meteorological forcing')
-era_kwargs = {'preprocess': lambda ds: ds.isel(time=slice(4, -4))}
-sim.airsea.tcc.set(pygetm.input.from_nc(era_path, 'tcc', **era_kwargs))
-sim.airsea.t2m.set(pygetm.input.from_nc(era_path, 't2m', **era_kwargs) - 273.15)
-sim.airsea.d2m.set(pygetm.input.from_nc(era_path, 'd2m', **era_kwargs) - 273.15)
-sim.airsea.sp.set(pygetm.input.from_nc(era_path, 'sp', **era_kwargs))
-sim.airsea.u10.set(pygetm.input.from_nc(era_path, 'u10', **era_kwargs))
-sim.airsea.v10.set(pygetm.input.from_nc(era_path, 'v10', **era_kwargs))
+met_path = os.path.join(getm_setups_dir, 'NorthSea/Forcing/Meteo/CFSR.daymean.2006.nc')
+sim.airsea.tcc.set(pygetm.input.from_nc(met_path, 'tcc'))
+sim.airsea.t2m.set(pygetm.input.from_nc(met_path, 't2'))
+sim.airsea.d2m.set(pygetm.input.from_nc(met_path, 'sh'))
+sim.airsea.sp.set(pygetm.input.from_nc(met_path, 'slp'))
+sim.airsea.u10.set(pygetm.input.from_nc(met_path, 'u10'))
+sim.airsea.v10.set(pygetm.input.from_nc(met_path, 'v10'))
 if sim.runtype < pygetm.BAROCLINIC:
     sim.sst = sim.airsea.t2m
     sim.turbulence.num[...]=1e-2
@@ -54,17 +54,23 @@ if domain.open_boundaries:
     sim.zbdy.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=tpxo_dir), on_grid=True)
     sim.bdyu.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='u', root=tpxo_dir), on_grid=True)
     sim.bdyv.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='v', root=tpxo_dir), on_grid=True)
+    sim.temp.boundaries.type = pygetm.SPONGE
+    sim.temp.boundaries.values.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/3D/bound_3D.CFSR.2006.nc'), 'temp'), on_grid=True)
+    sim.salt.boundaries.type = pygetm.SPONGE
+    sim.salt.boundaries.values.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/3D/bound_3D.CFSR.2006.nc'), 'salt'), on_grid=True)
 
-if sim.runtype > pygetm.BAROTROPIC_2D:
+for name, river in domain.rivers.items():
+    river.flow.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/River/rivers.nc'), name))
+
+if sim.fabm_model:
     sim.logger.info('Setting up FABM dependencies that GETM does not provide')
     sim.get_fabm_dependency('bottom_stress').set(0)
     if sim.runtype == pygetm.BAROTROPIC_3D:
         sim.get_fabm_dependency('temperature').set(5.)
         sim.get_fabm_dependency('practical_salinity').set(35.)
 
-sim.start(datetime.datetime(2016, 1, 1), timestep=60., split_factor=30)
-
-while sim.time < datetime.datetime(2016, 1, 5):
+sim.start(datetime.datetime(2006, 2, 1), timestep=60., split_factor=30) #, profile='north_sea')
+while sim.time < datetime.datetime(2007, 1, 1):
     sim.advance()
 
 sim.finish()

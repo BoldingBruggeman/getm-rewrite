@@ -40,7 +40,7 @@ cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) no
 cdef extern void* pressure_create(int runtype, void* pdomain) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
-cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV) nogil
+cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
 #cdef extern void sealevel_update_uvx(void* sealevel) nogil
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
 
@@ -125,7 +125,7 @@ cdef class Array:
             assert data.ndim in (1, 2) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
             assert data.shape[0] == self.grid.nbdyp, 'Incorrect shape of first dimension (number of boundary points): expected %i, got %i' % (self.grid.nbdyp, data.shape[0])
             assert data.ndim == 1 or data.shape[1] == self.grid.nz_ or data.shape[1] == self.grid.nz_ + 1, 'Incorrect shape of second dimension (number of layers): expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[1])
-        else:
+        elif data.ndim != 0:
             assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
             assert data.shape[data.ndim - 1] == self.grid.nx_ and data.shape[data.ndim - 2] == self.grid.ny_, 'Incorrect horizontal extent: expected (ny=%i,nx=%i), got (ny=%i,nx=%i)' % (self.grid.ny_, self.grid.nx_, data.shape[data.ndim - 2], data.shape[data.ndim - 1])
             assert data.ndim == 2 or data.shape[0] == self.grid.nz_ or data.shape[0] == self.grid.nz_ + 1, 'Incorrect vertical extent: expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[0])
@@ -395,10 +395,10 @@ cdef class Simulation:
         assert sp.grid is self.domain.T
         pressure_surface(self.ppressure, <double *>z.p, <double *>sp.p)
 
-    def update_sealevel(self, double timestep, Array U not None, Array V not None):
+    def update_sealevel(self, double timestep, Array U not None, Array V not None, Array fwf not None):
         assert U.grid is self.domain.U
         assert V.grid is self.domain.V
-        sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p)
+        sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p, <double *>fwf.p)
 
     #def update_sealevel_uvx(self):
     #    sealevel_update_uvx(self.psealevel)

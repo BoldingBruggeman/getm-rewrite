@@ -141,7 +141,7 @@ SUBROUTINE sealevel_t(self,dt,U,V,fwf)
       !! Y transports
 #undef _V2_
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-   real(real64), intent(in), optional :: fwf(_T2_)
+   real(real64), intent(in) :: fwf(_T2_)
       !! surface fresh water sources
 #undef _T2_
 
@@ -166,9 +166,8 @@ SUBROUTINE sealevel_t(self,dt,U,V,fwf)
             TG%z(i,j)=TG%z(i,j) & ! [GETM Scientific Report: eq. 4.28]
                      -dt*((U(i,j)*UG%dy(i,j)-U(i-1,j  )*UG%dy(i-1,j)) &
                          +(V(i,j)*VG%dx(i,j)-V(i  ,j-1)*VG%dx(i,j-1))) &
-                         *TG%iarea(i,j)
-!                         *TG%inv_area(i,j) &
-!                         +dt*fwf(i,j)
+                         *TG%iarea(i,j) &
+                         +dt*fwf(i,j)
          end if
       end do
    end do

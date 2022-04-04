@@ -73,7 +73,7 @@ class Simulation(_pygetm.Simulation):
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _parameters = 'A', 'g1', 'g2'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays + _parameters
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays + _parameters
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
@@ -128,6 +128,7 @@ class Simulation(_pygetm.Simulation):
         assert issubclass(airsea, pygetm.airsea.Fluxes)
         self.airsea = airsea(self.domain, self.logger)
 
+        self.fwf = dom.T.array(fill=0., name='fwf', units='m s-1', long_name='freshwater flux', fill_value=FILL_VALUE)
         self.uadv = _pygetm.Advection(dom.U, scheme=advection_scheme)
         self.vadv = _pygetm.Advection(dom.V, scheme=advection_scheme)
 
@@ -334,8 +335,10 @@ class Simulation(_pygetm.Simulation):
         self.U.update_halos()
         self.V.update_halos()
 
+        self.update_freshwater_fluxes()
+
         # Update sea level on T grid, and from that calculate sea level and water depth on all grids
-        self.update_sealevel(self.timestep, self.U, self.V)
+        self.update_sealevel(self.timestep, self.U, self.V, self.fwf)
         self.update_depth()
 
         self.istep += 1
@@ -425,6 +428,9 @@ class Simulation(_pygetm.Simulation):
                 ps.print_stats()
         self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
         self.output_manager.close()
+
+    def update_freshwater_fluxes(self):
+        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = self.domain.rivers.flow * self.domain.rivers.iarea
 
     def update_fabm_sources(self):
         """Update FABM sources, vertical velocities, and diagnostics. This does not update the state variables themselves; that is done by update_fabm"""

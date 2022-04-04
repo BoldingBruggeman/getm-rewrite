@@ -620,18 +620,19 @@ contains
       psealevel = c_loc(sealevel)
    end function
 
-   subroutine sealevel_update(psealevel, timestep, pU, pV) bind(c)
+   subroutine sealevel_update(psealevel, timestep, pU, pV, pfwf) bind(c)
       type(c_ptr), intent(in),    value :: psealevel
       real(c_double), intent(in), value :: timestep
-      type(c_ptr), intent(in),    value :: pU, pV
+      type(c_ptr), intent(in),    value :: pU, pV, pfwf
 
       type (type_getm_sealevel), pointer :: sealevel
-      real(real64), contiguous, pointer, dimension(:,:) :: U, V
+      real(real64), contiguous, pointer, dimension(:,:) :: U, V, fwf
 
       call c_f_pointer(psealevel, sealevel)
-      call c_f_pointer(pU, U, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
-      call c_f_pointer(pV, V, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
-      call sealevel%t(timestep, U, V)
+      call c_f_pointer(pU, U, sealevel%domain%U%u(1:2) - sealevel%domain%U%l(1:2) + 1)
+      call c_f_pointer(pV, V, sealevel%domain%V%u(1:2) - sealevel%domain%V%l(1:2) + 1)
+      call c_f_pointer(pfwf, fwf, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
+      call sealevel%t(timestep, U, V, fwf)
    end subroutine
 
    subroutine sealevel_update_uvx(psealevel) bind(c)

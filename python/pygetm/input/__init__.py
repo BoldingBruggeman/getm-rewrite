@@ -51,17 +51,22 @@ class GETMAccessor:
                     self._coordinates['z'] = coord
         return self._coordinates
 
+open_nc_files = {}
 def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=False, **kwargs) -> xarray.DataArray:
-    kwargs['decode_times'] = False
-    kwargs['cache'] = cache
-    if isinstance(paths, str):
-        paths = glob.glob(paths)
-    if len(paths) == 1:
-        ds = xarray.open_dataset(paths[0], **kwargs)
-        if preprocess:
-            ds = preprocess(ds)
-    else:
-        ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
+    key = (paths, preprocess, cache, frozenset(kwargs.items()))
+    ds = open_nc_files.get(key, None)
+    if ds is None:
+        kwargs['decode_times'] = False
+        kwargs['cache'] = cache
+        if isinstance(paths, str):
+            paths = glob.glob(paths)
+        if len(paths) == 1:
+            ds = xarray.open_dataset(paths[0], **kwargs)
+            if preprocess:
+                ds = preprocess(ds)
+        else:
+            ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
+        open_nc_files[key] = ds
     array = ds[name]
     return xarray.DataArray(WrappedArray(array), dims=array.dims, coords=array.coords, attrs=array.attrs, name='from_nc(%s, %s)' % (paths, name))
 
@@ -538,41 +543,47 @@ class InputManager:
             include_halos = array.on_boundary
 
         grid = array.grid
-        if not on_grid:
-            # interpolate horizontally to local array INCLUDING halos
-            target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2, exclude_global_halos=True)
-            lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
-            value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
-            value = horizontal_interpolation(value, lon, lat)
-        else:
-            # the input is already on-grid, but we may need to map from global domain to subdomain
-            if array.on_boundary:
-                # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
-                # or for only the open boundary points that fall within the local subdomain. Determine which of these.
-                target_slice = (Ellipsis,)
-                idim = value.ndim - (2 if array.z else 1)
-                if value.shape[idim] != grid.nbdyp:
-                    # The source array covers all open boundaries (global domain).
-                    # Slice out only the points that fall wihin the current subdomain
-                    if value.shape[idim] != grid.domain.nbdyp_glob:
-                        self._logger.error('Dimension %i of %s does not have expected extent %i (number of open boundary points in the global domain). Its actual extent is %i' % (idim, value.name, grid.domain.nbdyp_glob, value.shape[idim]))
-                    if grid.domain.local_to_global_ob:
-                        value = concatenate_slices(value, idim, [slice(start, stop) for (start, stop) in grid.domain.local_to_global_ob])
+
+        target_slice = (Ellipsis,)
+        if array.on_boundary:
+            # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
+            # or for only the open boundary points that fall within the local subdomain. Determine which of these.
+            idim = value.ndim - (2 if array.z else 1)
+            if value.shape[idim] != grid.nbdyp:
+                # The source array covers all open boundaries (global domain).
+                # Slice out only the points that fall wihin the current subdomain
+                if value.shape[idim] != grid.domain.nbdyp_glob:
+                    self._logger.error('Dimension %i of %s does not have expected extent %i (number of open boundary points in the global domain). Its actual extent is %i' % (idim, value.name, grid.domain.nbdyp_glob, value.shape[idim]))
+                if grid.domain.local_to_global_ob:
+                    value = concatenate_slices(value, idim, [slice(start, stop) for (start, stop) in grid.domain.local_to_global_ob])
+        elif array.ndim != 0:
+            # The target is a normal 2D (horizontal-only) or 3D (depth-explicit) array
+            # The source data can either be on the native model grid, or at an arbitrary lon, lat grid.
+            # In the latter case, we interpolate in space.
+            if not on_grid:
+                # interpolate horizontally to local array INCLUDING halos
+                target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2, exclude_global_halos=True)
+                lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
+                value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
+                value = horizontal_interpolation(value, lon, lat)
             else:
+                # the input is already on-grid, but we may need to map from global domain to subdomain
                 # source is global array EXCLUDING halos, but subdomain that we assign to does include halos (i.e., no halo exchange needed after assignment)
                 target_slice, global_slice, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2)
                 value = value[global_slice]
 
         if array.z:
             # The target is a depth-explicit array.
-            # The source must be defined on z coordinates and interpolated to our [potentially time-varying] depths
+            # The source must be defined on z coordinates and interpolated to our [time-varying] depths
             if array.on_boundary:
                 z_coordinate = grid.domain.zc_bdy if array.z == CENTERS else grid.domain.zf_bdy
             else:
                 z_coordinate = grid.zc if array.z == CENTERS else grid.zf
             z_coordinate.saved = True
             value = vertical_interpolation(value, z_coordinate.all_values[target_slice], itargetdim=1 if array.on_boundary else 0)
+
         if value.getm.time is not None:
+            # The source data is time-dependent; during the simulation it will be interpolated in time.
             if value.getm.time.size > 1:
                 value = temporal_interpolation(value)
             else:
@@ -583,16 +594,16 @@ class InputManager:
         target = array.all_values[target_slice]
         assert value.shape == target.shape, 'Source shape %s does not match target shape %s' % (value.shape, target.shape)
         if isinstance(value.variable.data, LazyArray) and value.variable.data.is_time_varying():
-            self._logger.debug('%s will be updated dynamically from %s' % (array.name, value.name))
+            self._logger.info('%s will be updated dynamically from %s' % (array.name, value.name))
             self.fields.append((array.name, value.data, target))
         else:
             target[...] = value
-            unmasked = numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
+            unmasked = True if array.ndim == 0 else numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
             finite = numpy.isfinite(target)
             if not finite.all(where=unmasked):
                 n_unmasked = unmasked.sum()
                 self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in %i of %i unmasked points.' % (array.name, value.name, n_unmasked - finite.sum(where=unmasked), n_unmasked))
-            self._logger.debug('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
+            self._logger.info('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
 
     def update(self, time):
         for name, source, target in self.fields:

@@ -42,8 +42,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if self._fill_value is not None:
             # Cast fill value to dtype of the array
             self._fill_value = numpy.array(self._fill_value, dtype=self._dtype)
-        if self.on_boundary:
-            # boundary array
+        if self.on_boundary or self._ndim == 0:
+            # boundary array or scalar
             self.values = self.all_values[...]
         else:
             self.values = self.all_values[..., self.grid.domain.haloy:-self.grid.domain.haloy, self.grid.domain.halox:-self.grid.domain.halox]

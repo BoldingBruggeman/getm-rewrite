@@ -1,7 +1,8 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 import operator
 import logging
 import os.path
+import collections
 
 import numpy
 import numpy.typing
@@ -258,6 +259,60 @@ def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, 
     ny = int(numpy.ceil((maxlat - minlat) / dlat)) + 1
     return create_spherical(numpy.linspace(minlon, maxlon, nx), numpy.linspace(minlat, maxlat, ny), nz=nz, interfaces=True, **kwargs)
 
+class River:
+    def __init__(self, dom: 'Domain', name: str, i: int, j: int, zl: Optional[float]=None, zu: Optional[float]=None):
+        self.name = name
+        self.i_glob = i
+        self.j_glob = j
+        self.zl = zl
+        self.zu = zu
+
+        HALO = 2
+        self.i, self.j =  i - dom.tiling.xoffset, j - dom.tiling.yoffset
+        if self.i < 0 or self.j < 0 or self.i >= dom.T.nx or self.j >= dom.T.ny:
+            self.i, self.j = None, None
+        else:
+            # Convert to indices into array that includes halos
+            self.i += HALO
+            self.j += HALO
+
+    def initialize(self, grid: Grid, flow: numpy.ndarray):
+        self.flow = core.Array(grid=grid, name='river_' + self.name + '_flow', units='m3 s-1', long_name='inflow from %s' % self.name)
+        self.flow.wrap_ndarray(flow)
+
+class Rivers(collections.Mapping):
+    def __init__(self, grid: Grid):
+        self.grid = grid
+        self._rivers: List[River] = []
+
+    def add(self, *args, **kwargs):
+        river = River(self.grid.domain, *args, **kwargs)
+        if river.i is not None:
+            self._rivers.append(river)
+
+    def initialize(self):
+        self.flow = numpy.zeros((len(self._rivers),))
+        self.i = numpy.empty((len(self._rivers),), dtype=int)
+        self.j = numpy.empty((len(self._rivers),), dtype=int)
+        self.iarea = numpy.empty((len(self._rivers),))
+        for iriver, river in enumerate(self._rivers):
+            river.initialize(self.grid, self.flow[..., iriver])
+            self.i[iriver] = river.i
+            self.j[iriver] = river.j
+            self.iarea[iriver] = self.grid.iarea.all_values[river.j, river.i]
+
+    def __getitem__(self, key):
+        for river in self._rivers:
+            if key == river.name:
+                return river
+        raise KeyError()
+
+    def __len__(self):
+        return len(self._rivers)
+
+    def __iter__(self):
+        return iter([r.name for r in self._rivers])
+
 class Domain(_pygetm.Domain):
     @staticmethod
     def partition(tiling: parallel.Tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, logger: Optional[logging.Logger]=None, **kwargs):
@@ -277,7 +332,7 @@ class Domain(_pygetm.Domain):
             coordinates['lat'] = 'lat'
         for name, att in coordinates.items():
             c = numpy.empty((2 * tiling.ny_sub + share, 2 * tiling.nx_sub + share))
-            scatterer = parallel.Scatter(tiling, c, halo=0, share=share, scale=2)
+            scatterer = parallel.Scatter(tiling, c, halo=0, share=share, scale=2, fill_value=numpy.nan)
             scatterer(None if global_domain is None else getattr(global_domain, att))
             kwargs[name] = c
 
@@ -507,9 +562,10 @@ class Domain(_pygetm.Domain):
 
         self.initialized = False
         self.open_boundaries = {}
+        self.rivers = Rivers(self.T)
 
     def add_open_boundary(self, side: int, l: int, mstart: int, mstop: int, type_2d: int, type_3d: int):
-        """Note that l, mstart, mstop are 0-based indices in the global domain.
+        """Note that l, mstart, mstop are 0-based indices of a T point in the global domain.
         mstop indicates the upper limit of the boundary - it is the first index that is EXcluded."""
         # NB below we convert to indices in the T grid of the current subdomain INCLUDING halos
         # We also limit the indices to the range valid for the current subdomain.
@@ -646,6 +702,8 @@ class Domain(_pygetm.Domain):
 
         _pygetm.Domain.initialize(self, runtype, Dmin=self.Dmin)
 
+        self.rivers.initialize()
+
         self.initialized = True
 
     def set_bathymetry(self, depth, scale_factor=None):
@@ -675,7 +733,7 @@ class Domain(_pygetm.Domain):
         if ymax is not None: selected = numpy.logical_and(selected, y <= ymax)
         self.mask[selected] = value
 
-    def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, editable: bool=False):
+    def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, show_rivers: bool=True, editable: bool=False):
         import matplotlib.pyplot
         import matplotlib.collections
         import matplotlib.widgets
@@ -683,12 +741,26 @@ class Domain(_pygetm.Domain):
             fig, ax = matplotlib.pyplot.subplots(figsize=(0.15 * self.nx, 0.15 * self.ny))
         else:
             ax = fig.gca()
+
         x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
+
+        local_slice, _, _, _ = self.tiling.subdomain2slices(halo_sub=0, halo_glob=4, scale=2, share=1, exclude_global_halos=True)
         if show_H:
-            c = ax.pcolormesh(x, y, numpy.ma.array(self.H, mask=self.mask==0), alpha=0.5 if show_mesh else 1, shading='auto')
+            import cmocean
+            cm = cmocean.cm.deep
+            cm.set_bad('gray')
+            c = ax.pcolormesh(x[local_slice], y[local_slice], numpy.ma.array(self.H[local_slice], mask=self.mask[local_slice]==0), alpha=0.5 if show_mesh else 1, shading='auto', cmap=cm)
             #c = ax.contourf(x, y, numpy.ma.array(self.H, mask=self.mask==0), 20, alpha=0.5 if show_mesh else 1)
             cb = fig.colorbar(c)
             cb.set_label('undisturbed water depth (m)')
+
+        if show_rivers:
+            for river in self.rivers.values():
+                iloc, jloc = 1 + river.i * 2, 1 + river.j * 2
+                lon = self.lon_[jloc, iloc]
+                lat = self.lat_[jloc, iloc]
+                ax.plot([lon], [lat], '.r')
+                ax.text(lon, lat, river.name, color='r')
 
         def plot_mesh(ax, x, y, **kwargs):
             segs1 = numpy.stack((x, y), axis=2)
@@ -706,8 +778,8 @@ class Domain(_pygetm.Domain):
         ax.set_ylabel('latitude (degrees North)' if self.spherical else 'y (m)')
         if not self.spherical:
             ax.axis('equal')
-        xmin, xmax = x.min(), x.max()
-        ymin, ymax = y.min(), y.max()
+        xmin, xmax = numpy.nanmin(x), numpy.nanmax(x)
+        ymin, ymax = numpy.nanmin(y), numpy.nanmax(y)
         xmargin = 0.05 * (xmax - xmin)
         ymargin = 0.05 * (ymax - ymin)
         ax.set_xlim(xmin - xmargin, xmax + xmargin)

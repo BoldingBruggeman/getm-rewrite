@@ -44,22 +44,50 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
             raise NotImplementedError('Unknown grid_type %i found' % grid_type)
     return global_domain
 
-def load_bdyinfo(dom: domain.Domain, path: str, type_2d: Optional[int]=None, type_3d: Optional[int]=None):
-    with open(path) as f:
-        def get_line() -> str:
-            while True:
-                l = f.readline()
-                assert l != '', 'End-of-file reached in %s while trying to read next line.' % path
-                l = l.rstrip()
-                if l and not (l.startswith('!') or l.startswith('#')):
-                    return l
+class DatFile:
+    """Support for reading GETM dat files with comments indicated by ! or #.
+    Whitespace-only lines are skipped."""
+    def __init__(self, path: str):
+        self.path = path
+        self.f = open(path)
 
+    def get_line(self) -> str:
+        """Return next non-empty line"""
+        l = None
+        while not l:
+            l = self.f.readline()
+            assert l != '', 'End-of-file reached in %s while trying to read next line.' % self.path
+            l = l.split('#', 1)[0].split('!', 1)[0].strip()
+        return l
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.f.close()
+
+def load_bdyinfo(dom: domain.Domain, path: str, type_2d: Optional[int]=None, type_3d: Optional[int]=None):
+    """Add open boundaries from bdyinfo.dat to domain"""
+    with DatFile(path) as f:
         for side in (domain.WEST, domain.NORTH, domain.EAST, domain.SOUTH):
-            n = int(get_line())
+            n = int(f.get_line())
             for _ in range(n):
                 # Note: for Western and Eastern boundaries, l and m are indices in x and y dimensions, respectively, 
                 # but that is the other way around (y and x, respectively) for Northern and Southern boundaries.
                 # Note that indices are 1-based as in Fortran. We convert to the Python convention: 0-based indices,
                 # with the upper bound being the first index that is EXcluded.
-                l, mstart, mstop, type_2d_, type_3d_ = map(int, get_line().split())
+                l, mstart, mstop, type_2d_, type_3d_ = map(int, f.get_line().split())
                 dom.add_open_boundary(side, l - 1, mstart - 1, mstop, type_2d_ if type_2d is None else type_2d, type_3d_ if type_3d is None else type_3d)
+
+def load_riverinfo(dom: domain.Domain, path: str):
+    """Add rivers from riverinfo.dat to domain"""
+    with DatFile(path) as f:
+        n = int(f.get_line())
+        for _ in range(n):
+            items = f.get_line().split()
+            assert len(items) in (3, 5)
+            i, j, name = int(items[0]), int(items[1]), items[2]
+            zl, zu = None, None
+            if len(items) == 5:
+                zl, zu = float(items[3]), float(items[4])
+            dom.rivers.add(name, i - 1, j - 1, zl, zu)   # Note: we convert from 1-based indices to 0-based indices!
