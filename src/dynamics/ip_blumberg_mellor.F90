@@ -59,7 +59,6 @@ MODULE SUBROUTINE blumberg_mellor(self,buoy)
    U_time=U_time+U_stop-U_start
    end block UBlock
    end associate UGrid
-return
 
    VGrid: associate( VG => self%domain%V )
    Vblock: block
@@ -90,7 +89,7 @@ return
    end block Vblock
    end associate VGrid
    end associate TGrid
-   write(33,*) U_time,V_time
+!KB   write(33,*) U_time,V_time
    end subroutine blumberg_mellor
 
 !---------------------------------------------------------------------------
