@@ -260,11 +260,19 @@ def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, 
     return create_spherical(numpy.linspace(minlon, maxlon, nx), numpy.linspace(minlat, maxlat, ny), nz=nz, interfaces=True, **kwargs)
 
 class RiverTracer(core.Array):
-    _slots_ = 'follow'
-    def __init__(self, grid, river_name: str, tracer_name: str, units: str, value: numpy.ndarray, follow: bool):
+    _slots_ = '_follow'
+    def __init__(self, grid, river_name: str, tracer_name: str, units: str, value: numpy.ndarray, follow: numpy.ndarray):
         super().__init__(grid=grid, name=tracer_name + '_in_river_' + river_name, units=units, long_name='%s in river %s' % (tracer_name, river_name))
         self.wrap_ndarray(value)
-        self.follow = follow
+        self._follow = follow
+
+    @property
+    def follow(self) -> bool:
+        return self._follow
+
+    @follow.setter
+    def follow(self, value: bool):
+        self._follow[...] = value
 
 class River:
     def __init__(self, dom: 'Domain', name: str, i: int, j: int, zl: Optional[float]=None, zu: Optional[float]=None):
@@ -314,9 +322,7 @@ class Rivers(collections.Mapping):
     def add_tracer(self, name: str, units: str, follow_target_cell: bool=False):
         assert self._frozen, 'Tracers can be added only after the river collection has been initialized.'
         values = numpy.zeros((len(self._rivers),))
-        follow = numpy.zeros((len(self._rivers),), dtype=bool)
-        if follow_target_cell:
-            follow[:] = True
+        follow = numpy.full((len(self._rivers),), follow_target_cell, dtype=bool)
         self._tracers.append((values, follow))
         river_tracers = []
         for iriver, river in enumerate(self._rivers):

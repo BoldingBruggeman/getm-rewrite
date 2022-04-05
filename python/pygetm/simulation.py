@@ -444,7 +444,7 @@ class Simulation(_pygetm.Simulation):
         h = self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
         river_active = numpy.ones(h.shape, dtype=bool)
         # JB TODO: customize river_active by flagging layers where the river does not go with False
-        river_depth = h.sum(where=river_active)
+        river_depth = h.sum(where=river_active, axis=0)
         for tracer, (river_values, river_follow) in zip(self.tracers, self.domain.rivers._tracers):
             if not river_follow.all():
                 tracer_old = tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
