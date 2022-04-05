@@ -359,6 +359,13 @@ class Simulation(_pygetm.Simulation):
             self.Ui.all_values[...] /= self.split_factor
             self.Vi.all_values[...] /= self.split_factor
 
+            # Use previous source terms for biogeochemistry to update tracers
+            # This should be done before the tracer concentrations change due to transport or rivers,
+            # as the source terms are only valid for the current tracer concentrations.
+            if self.fabm_model:
+                self.update_fabm(self.macrotimestep)
+
+            # Update of layer thicknesses and tracer concentrations to account for river inflow over the past macrotimestep.
             self.add_rivers_3d()
 
             # Update 3D elevations and layer thicknesses. New elevation on T grid will match elevation at end of 2D timestep,
@@ -384,12 +391,6 @@ class Simulation(_pygetm.Simulation):
                 self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
                 self.temp.source.all_values[...] += self.rad.all_values[1:, ...] - self.rad.all_values[:-1, ...]
                 self.temp.source.all_values[0, ...] += self.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
-
-                # Use previous source terms for biogeochemistry to update tracers
-                # This should be done before the tracer concentrations change due to transport processes,
-                # as the source terms are only valid for the current tracer concentrations.
-                if self.fabm_model:
-                    self.update_fabm(self.macrotimestep)
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None
