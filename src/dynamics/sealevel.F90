@@ -163,11 +163,11 @@ SUBROUTINE sealevel_t(self,dt,U,V,fwf)
       do i=TG%imin,TG%imax
 #endif
          if (TG%mask(i,j) == 1) then
-            TG%z(i,j)=TG%z(i,j) & ! [GETM Scientific Report: eq. 4.28]
-                     -dt*((U(i,j)*UG%dy(i,j)-U(i-1,j  )*UG%dy(i-1,j)) &
-                         +(V(i,j)*VG%dx(i,j)-V(i  ,j-1)*VG%dx(i,j-1))) &
-                         *TG%iarea(i,j) &
-                         +dt*fwf(i,j)
+            TG%z(i,j) = TG%z(i,j) & ! [GETM Scientific Report: eq. 4.28]
+                        + dt * ((  U(i-1,j  ) * UG%dy(i-1,j) - U(i,j) * UG%dy(i,j)  &
+                                 + V(i  ,j-1) * VG%dx(i,j-1) - V(i,j) * VG%dx(i,j)) &
+                                * TG%iarea(i,j) &
+                                + fwf(i,j))
          end if
       end do
    end do
