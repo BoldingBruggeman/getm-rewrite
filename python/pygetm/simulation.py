@@ -218,11 +218,14 @@ class Simulation(_pygetm.Simulation):
 
             self.density = density or pygetm.density.Density()
 
+    def __getitem__(self, key: str) -> core.Array:
+        return self.output_manager.fields[key]
+
     def get_fabm_dependency(self, name: str):
         variable = self.fabm_model.dependencies.find(name)
         if len(variable.shape) == 0:
             return variable
-        arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_name, z=len(variable.shape) == 3)
+        arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_path, z=len(variable.shape) == 3)
         variable.link(arr.all_values)
         return arr
 
