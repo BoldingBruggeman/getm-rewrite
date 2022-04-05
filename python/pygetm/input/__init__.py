@@ -188,7 +188,7 @@ class WrappedArray(OperatorResult):
     def update(self, time: cftime.datetime) -> bool:
         return False
 
-class LimitedRegionArray(UnaryOperatorResult):
+class ConcatenatedSliceArray(UnaryOperatorResult):
     def __array__(self, dtype=None) -> numpy.ndarray:
         data = numpy.empty(self.shape, dtype or self.dtype)
         for src_slice, tgt_slice in self._slices:
@@ -279,7 +279,7 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
     if verbose:
         print('final shape: %s' % (shape,))
 
-    data = LimitedRegionArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)])
+    data = ConcatenatedSliceArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)])
     data._slices.append((center_source, center_target))
     if left_target:
         data._slices.append((left_source, left_target))
@@ -301,7 +301,7 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
     if verbose:
         print('final shape: %s' % (shape,))
 
-    data = LimitedRegionArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim])
+    data = ConcatenatedSliceArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim])
 
     istart = 0
     strslices = ''
@@ -522,6 +522,7 @@ class InputManager:
         self._logger = logging.getLogger()
 
     def debug_nc_reads(self):
+        """Hook into xarray so that every read from a NetCDF file is written to the log."""
         import xarray.backends.netCDF4_
         class NetCDF4ArrayWrapper2(xarray.backends.netCDF4_.NetCDF4ArrayWrapper):
             __slots__ = ()
@@ -533,6 +534,9 @@ class InputManager:
         xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
 
     def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
+        """Link an array to the provided input. If this input is constant in time, the value of the array will be set immediately.
+        If the input is time-dependent, the array and its linked input will be registered with the input manager; the array
+        will then be updated to the current time when InputManager.update is called."""
         if array.all_values is None or array.all_values.size == 0:
             # The target variable does not contain data. Typically this is because it specifies information on the open boundaries,
             # of which the current (sub)domain does not have any.
@@ -614,6 +618,7 @@ class InputManager:
             self._logger.info('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
 
     def update(self, time):
+        """Update all arrays linked to time-dependent inputs to the current time."""
         for name, source, target in self.fields:
             self._logger.debug('updating %s' % name)
             source.update(time)
