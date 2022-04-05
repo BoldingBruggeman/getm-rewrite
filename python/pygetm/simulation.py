@@ -160,10 +160,10 @@ class Simulation(_pygetm.Simulation):
             # Turbulence and associated fields
             self.turbulence = turbulence or pygetm.mixing.GOTM(self.domain, nml_path=gotm)
             self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
-            self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='surface shear velocity', fill_value=FILL_VALUE)
-            self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='bottom shear velocity', fill_value=FILL_VALUE)
-            self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic surface roughness', fill_value=FILL_VALUE)
-            self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE)
+            self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='shear velocity (surface)', fill_value=FILL_VALUE)
+            self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='shear velocity (bottom)', fill_value=FILL_VALUE)
+            self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic roughness (surface)', fill_value=FILL_VALUE)
+            self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic roughness (bottom)', fill_value=FILL_VALUE)
 
             self.vertical_diffusion = _pygetm.VerticalDiffusion(dom.T, cnpar=1.)
 
