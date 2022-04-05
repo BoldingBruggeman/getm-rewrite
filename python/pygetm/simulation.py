@@ -359,6 +359,8 @@ class Simulation(_pygetm.Simulation):
             self.Ui.all_values[...] /= self.split_factor
             self.Vi.all_values[...] /= self.split_factor
 
+            self.add_rivers_3d()
+
             # Update 3D elevations and layer thicknesses. New elevation on T grid will match elevation at end of 2D timestep,
             # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 macrotimestep behind. Old
             # elevations and thicknesses will be one macrotimestep behind new elevations aand thicknesses.
@@ -403,7 +405,6 @@ class Simulation(_pygetm.Simulation):
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
                     if self.domain.open_boundaries:
                         tracer.boundaries.update()
-                self.update_river_tracers()
 
                 # Update density to keep it in sync with T and S.
                 # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
@@ -443,7 +444,8 @@ class Simulation(_pygetm.Simulation):
         self._cum_river_height_increase[...] += height_increase_rate * timestep
         self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = height_increase_rate
 
-    def update_river_tracers(self):
+    def add_rivers_3d(self):
+        """Update layer thicknesses and tracer concentrations to account for river inflow."""
         h = self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
         river_active = numpy.ones(h.shape, dtype=bool)
         # JB TODO: customize river_active by flagging layers where the river does not go with False
@@ -454,6 +456,8 @@ class Simulation(_pygetm.Simulation):
                 river_values = numpy.where(river_follow, tracer_old, river_values)
                 tracer_new = (tracer_old * river_depth + river_values * self._cum_river_height_increase) / (river_depth + self._cum_river_height_increase)
                 tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = numpy.where(river_active, tracer_new, tracer_old)
+        self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = numpy.where(river_active, h * (1. + self._cum_river_height_increase / river_depth), h)
+        self.domain.T.zin.all_values[self.domain.rivers.j, self.domain.rivers.i] += self._cum_river_height_increase
         self._cum_river_height_increase.fill(0.)
 
     def update_fabm_sources(self):
