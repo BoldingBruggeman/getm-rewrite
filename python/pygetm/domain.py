@@ -284,18 +284,22 @@ class Rivers(collections.Mapping):
     def __init__(self, grid: Grid):
         self.grid = grid
         self._rivers: List[River] = []
+        self._frozen = False
 
     def add(self, *args, **kwargs):
+        assert not self._frozen, 'The river collection has already been initialized and can no longer be modified.'
         river = River(self.grid.domain, *args, **kwargs)
         if river.i is not None:
             self._rivers.append(river)
 
     def initialize(self):
+        self._frozen = True
         self.flow = numpy.zeros((len(self._rivers),))
         self.i = numpy.empty((len(self._rivers),), dtype=int)
         self.j = numpy.empty((len(self._rivers),), dtype=int)
         self.iarea = numpy.empty((len(self._rivers),))
         for iriver, river in enumerate(self._rivers):
+            assert self.grid.mask.all_values[river.j, river.i] == 1, 'River %s is located at i=%i, j=%i, which is not water (it has mask value %i).' % (river.name, river.i, river.j, self.grid.mask.all_values[river.j, river.i])
             river.initialize(self.grid, self.flow[..., iriver])
             self.i[iriver] = river.i
             self.j[iriver] = river.j
