@@ -52,8 +52,8 @@ class Boundaries:
         self._tracer.update_boundary(self._type, self.values)
 
 class Tracer(core.Array):
-    __slots__ = 'source', 'source_scale', 'vertical_velocity', 'boundaries'
-    def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, **kwargs):
+    __slots__ = 'source', 'source_scale', 'vertical_velocity', 'boundaries', 'river_values', 'river_follow', 'rivers'
+    def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, rivers_follow_target_cell: bool=False, **kwargs):
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
         if data is None:
             data = numpy.full_like(grid.hn.all_values, numpy.nan)
@@ -65,6 +65,10 @@ class Tracer(core.Array):
         self.source_scale = source_scale
         self.vertical_velocity = vertical_velocity
         self.boundaries = Boundaries(self)
+        self.river_values, self.river_follow, river_tracers = grid.domain.rivers.add_tracer(self.name, self.units, rivers_follow_target_cell)
+        self.rivers = {}
+        for river_name, river_tracer in zip(grid.domain.rivers, river_tracers):
+            self.rivers[river_name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk'
@@ -73,7 +77,7 @@ class Simulation(_pygetm.Simulation):
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _parameters = 'A', 'g1', 'g2'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_start_time', '_profile') + _time_arrays + _parameters
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile') + _time_arrays + _parameters
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
@@ -120,6 +124,7 @@ class Simulation(_pygetm.Simulation):
             self.ww.all_values.fill(0.)
 
         self.update_depth()
+        self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
         airsea = airsea or pygetm.airsea.FluxesFromMeteo
         assert issubclass(airsea, pygetm.airsea.Fluxes)
@@ -199,7 +204,7 @@ class Simulation(_pygetm.Simulation):
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
         if runtype == BAROCLINIC:
-            self.temp = self.create_tracer(name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS, units='W m-2'), source_scale=1. / (RHO0 * CP))
+            self.temp = self.create_tracer(name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS, units='W m-2'), source_scale=1. / (RHO0 * CP), rivers_follow_target_cell=True)
             self.salt = self.create_tracer(name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS))
             self.pres.saved = True
             self.temp.fill(5.)
@@ -335,7 +340,7 @@ class Simulation(_pygetm.Simulation):
         self.U.update_halos()
         self.V.update_halos()
 
-        self.update_freshwater_fluxes()
+        self.update_freshwater_fluxes(self.timestep)
 
         # Update sea level on T grid, and from that calculate sea level and water depth on all grids
         self.update_sealevel(self.timestep, self.U, self.V, self.fwf)
@@ -395,6 +400,7 @@ class Simulation(_pygetm.Simulation):
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
                     if self.domain.open_boundaries:
                         tracer.boundaries.update()
+                self.update_river_tracers()
 
                 # Update density to keep it in sync with T and S.
                 # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
@@ -429,8 +435,23 @@ class Simulation(_pygetm.Simulation):
         self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
         self.output_manager.close()
 
-    def update_freshwater_fluxes(self):
-        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = self.domain.rivers.flow * self.domain.rivers.iarea
+    def update_freshwater_fluxes(self, timestep: float):
+        height_increase_rate = self.domain.rivers.flow * self.domain.rivers.iarea
+        self._cum_river_height_increase[...] += height_increase_rate * timestep
+        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = height_increase_rate
+
+    def update_river_tracers(self):
+        h = self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
+        river_active = numpy.ones(h.shape, dtype=bool)
+        # JB TODO: customize river_active by flagging layers where the river does not go with False
+        river_depth = h.sum(where=river_active)
+        for tracer, (river_values, river_follow) in zip(self.tracers, self.domain.rivers._tracers):
+            if not river_follow.all():
+                tracer_old = tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
+                river_values = numpy.where(river_follow, tracer_old, river_values)
+                tracer_new = (tracer_old * river_depth + river_values * self._cum_river_height_increase) / (river_depth + self._cum_river_height_increase)
+                tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = numpy.where(river_active, tracer_new, tracer_old)
+        self._cum_river_height_increase.fill(0.)
 
     def update_fabm_sources(self):
         """Update FABM sources, vertical velocities, and diagnostics. This does not update the state variables themselves; that is done by update_fabm"""
