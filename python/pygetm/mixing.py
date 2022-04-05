@@ -33,32 +33,12 @@ class GOTM(Turbulence):
         assert z0b.grid is self.domain.T and z0b.ndim == 2
         assert NN.grid is self.domain.T and NN.z == INTERFACES
         assert SS.grid is self.domain.T and SS.z == INTERFACES
-        loc_h = numpy.empty((self.domain.T.hn.shape[0] + 1,), dtype=self.domain.T.hn.dtype)
-        loc_NN = numpy.empty((NN.shape[0],), dtype=NN.dtype)
-        loc_SS = numpy.empty((SS.shape[0],), dtype=SS.dtype)
-        loc_tke = self.mix.tke
-        loc_tkeo = self.mix.tkeo
-        loc_eps = self.mix.eps
-        loc_L = self.mix.L
-        for j in range(self.domain.T.ny):
-            for i in range(self.domain.T.nx):
-                if self.domain.T.mask[j, i] == 1:   # skip boundary points (mask=2) as SS is not defined there
-                    loc_tke[:] = self.tke[:, j, i]
-                    #loc_tkeo[:] = self.tkeo[:, j, i]
-                    loc_eps[:] = self.eps[:, j, i]
-                    loc_L[:] = self.L[:, j, i]
-                    loc_h[1:] = self.domain.T.hn[:, j, i]
-                    loc_NN[:] = NN[:, j, i]
-                    loc_SS[:] = SS[:, j, i]
-                    self.mix.nuh[:] = self.nuh[:, j, i]
-                    self.mix.num[:] = self.num[:, j, i]
-                    self.mix.turbulence(timestep, loc_h, self.domain.T.D[j, i], u_taus[j, i], u_taub[j, i], z0s[j, i], z0b[j, i], loc_NN, loc_SS)
-                    self.tke[:, j, i] = loc_tke
-                    #self.tkeo[:, j, i] = loc_tkeo
-                    self.eps[:, j, i] = loc_eps
-                    self.L[:, j, i] = loc_L
-                    self.nuh[:, j, i] = self.mix.nuh
-                    self.num[:, j, i] = self.mix.num
+
+        nz, ny, nx = self.domain.T.hn.all_values.shape
+        self.mix.turbulence_3d(nx, ny, nz, 2, nx - 2, 2, ny - 2, timestep, self.domain.T.mask.all_values,
+            self.domain.T.hn.all_values, self.domain.T.D.all_values, u_taus.all_values, u_taub.all_values,
+            z0s.all_values, z0b.all_values, NN.all_values, SS.all_values,
+            self.tke.all_values, self.tkeo.all_values, self.eps.all_values, self.L.all_values, self.num.all_values, self.nuh.all_values)
 
         # Take viscosity at open boundary from nearest interior point
         # Viscosity (at T points) needs to be valid at open boundary points to so it can be interpolated to inward-adjacent U/V points.

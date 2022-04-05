@@ -50,6 +50,40 @@ contains
       call do_turbulence(nlev, dt, D, u_taus, u_taub, z0s, z0b, h, NN, SS)
    end subroutine
 
+   subroutine calculate_3d(nx, ny, nz, istart, istop, jstart, jstop, dt, mask, h3d, D, u_taus, u_taub, z0s, z0b, NN, SS, tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d) bind(c)
+      integer(c_int), intent(in), value                        :: nx, ny, nz, istart, istop, jstart, jstop
+      real(c_double), intent(in), value                        :: dt
+      integer(c_int), intent(in),    dimension(nx, ny)         :: mask
+      real(c_double), intent(in),    dimension(nx, ny)         :: D, u_taus, u_taub, z0s, z0b
+      real(c_double), intent(in),    dimension(nx, ny, nz)     :: h3d
+      real(c_double), intent(in),    dimension(nx, ny, nz + 1) :: SS, NN
+      real(c_double), intent(inout), dimension(nx, ny, nz + 1) :: tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d
+
+      real(c_double) :: h(0:nz)
+
+      integer i, j
+      do j = jstart, jstop
+         do i = istart, istop
+            if (mask(i, j) == 1) then
+               tke(:) = tke3d(i, j, :)
+               tkeo(:) = tkeo3d(i, j, :)
+               eps(:) = eps3d(i, j, :)
+               L(:) = L3d(i, j, :)
+               num(:) = num3d(i, j, :)
+               nuh(:) = nuh3d(i, j, :)
+               h(1:nz) = h3d(i, j, :)
+               call do_turbulence(nz, dt, D(i, j), u_taus(i, j), u_taub(i, j), z0s(i, j), z0b(i, j), h, NN(i, j, :), SS(i, j, :))
+               tke3d(i, j, :) = tke(:)
+               tkeo3d(i, j, :) = tkeo(:)
+               eps3d(i, j, :) = eps(:)
+               L3d(i, j, :) = L(:)
+               num3d(i, j, :) = num(:)
+               nuh3d(i, j, :) = nuh(:)
+            end if
+         end do
+      end do
+   end subroutine
+
    subroutine diff(nlev, dt, cnpar, posconc, h, Bcup, Bcdw, Yup, Ydw, nuY, Lsour, Qsour, Taur, Yobs, Y) bind(c)
       integer(c_int), value,             intent(in) :: nlev, posconc, Bcup, Bcdw
       real(c_double), value,             intent(in) :: dt, cnpar, Yup, Ydw

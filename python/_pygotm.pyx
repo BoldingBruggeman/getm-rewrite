@@ -8,6 +8,7 @@ import numpy
 
 cdef extern void initialize(int nlev, const char* inputdir, double** ptke, double** ptkeo, double** peps, double** pL, double** pnum, double** pnuh) nogil
 cdef extern void calculate(int nlev, double dt, double* h, double D, double taus, double taub, double z0s, double z0b, double* SS, double* NN) nogil
+cdef extern void calculate_3d(int nx, int nz, int nz, int istart, int istop, int jstart, int jstop, double dt, int* mask, double* h3d, double* D, double* u_taus, double* u_taub, double* z0s, double* z0b, double* NN, double* SS, double* tke, double* tkeo, double* eps, double* L, double* num, double* nuh)
 cdef extern void diff(int nlev, double dt, double cnpar, int posconc, double* h, int Bcup, int Bcdw, double Yup, double Ydw, double* nuY, double* Lsour, double* Qsour, double* Taur, double* Yobs, double* Y)
 
 cdef class Mixing:
@@ -34,6 +35,13 @@ cdef class Mixing:
         assert SS.shape[0] == NN.shape[0], 'Length of NN (%i) and SS (%i) should be identical.' % (NN.shape[0], SS.shape[0])
         assert h.shape[0] == NN.shape[0], 'Length of h (%i) should match that of NN and SS (%i).' % (h.shape[0], SS.shape[0])
         calculate(h.shape[0] - 1, dt, &h[0], D, u_taus, u_taub, z0s, z0b, &SS[0], &NN[0])
+
+    def turbulence_3d(self, int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, double dt, const int[:, ::1] mask not None,
+                      const double[:, :, ::1] h not None, const double[:, ::1] D not None, const double[:, ::1] u_taus not None, const double[:, ::1] u_taub not None,
+                      const double[:, ::1] z0s not None, const double[:, ::1] z0b not None,  const double[:, :, ::1] NN not None,  const double[:, :, ::1] SS not None,
+                      double[:, :, ::1] tke not None,  double[:, :, ::1] tkeo not None, double[:, :, ::1] eps not None,  double[:, :, ::1] L not None, double[:, :, ::1] num not None,  double[:, :, ::1] nuh not None):
+        calculate_3d(nx, ny, nz, istart, istop, jstart, jstop, dt, &mask[0,0], &h[0,0,0], &D[0,0], &u_taus[0,0], &u_taub[0,0], &z0s[0,0], &z0b[0,0], &NN[0,0,0], &SS[0,0,0],
+                     &tke[0,0,0], &tkeo[0,0,0], &eps[0,0,0], &L[0,0,0], &num[0,0,0], &nuh[0,0,0])
 
     def diffuse(self, double dt, const double[::1] h not None, double[::1] Y not None):
         cdef double[::1] Lsour, Qsour, Taur, Yobs
