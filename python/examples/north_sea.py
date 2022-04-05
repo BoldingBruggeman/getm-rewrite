@@ -61,6 +61,7 @@ if domain.open_boundaries:
 
 for name, river in domain.rivers.items():
     river.flow.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/River/rivers.nc'), name))
+    river['salt'].set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/River/rivers.nc'), '%s_salt' % name))
 
 if sim.fabm_model:
     sim.logger.info('Setting up FABM dependencies that GETM does not provide')
