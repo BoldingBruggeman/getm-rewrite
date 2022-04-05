@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Mapping
 import operator
 import logging
 import os.path
@@ -267,11 +267,11 @@ class RiverTracer(core.Array):
         self._follow = follow
 
     @property
-    def follow(self) -> bool:
+    def follow_target_cell(self) -> bool:
         return self._follow
 
-    @follow.setter
-    def follow(self, value: bool):
+    @follow_target_cell.setter
+    def follow_target_cell(self, value: bool):
         self._follow[...] = value
 
 class River:
@@ -291,13 +291,13 @@ class River:
             self.i += HALO
             self.j += HALO
 
-        self._tracers = {}
+        self._tracers: Mapping[str, RiverTracer] = {}
 
     def initialize(self, grid: Grid, flow: numpy.ndarray):
         self.flow = core.Array(grid=grid, name='river_' + self.name + '_flow', units='m3 s-1', long_name='inflow from %s' % self.name)
         self.flow.wrap_ndarray(flow)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> RiverTracer:
         return self._tracers[key]
 
     def __len__(self):
@@ -319,12 +319,12 @@ class Rivers(collections.Mapping):
         if river.i is not None:
             self._rivers.append(river)
 
-    def add_tracer(self, name: str, units: str, follow_target_cell: bool=False):
+    def add_tracer(self, name: str, units: str, follow_target_cell: bool=False) -> Tuple[numpy.ndarray, numpy.ndarray, List[RiverTracer]]:
         assert self._frozen, 'Tracers can be added only after the river collection has been initialized.'
         values = numpy.zeros((len(self._rivers),))
         follow = numpy.full((len(self._rivers),), follow_target_cell, dtype=bool)
         self._tracers.append((values, follow))
-        river_tracers = []
+        river_tracers: List[RiverTracer] = []
         for iriver, river in enumerate(self._rivers):
             river_tracer = RiverTracer(self.grid, river.name, name, units, values[..., iriver], follow[..., iriver])
             river_tracers.append(river_tracer)
@@ -344,7 +344,7 @@ class Rivers(collections.Mapping):
             self.j[iriver] = river.j
             self.iarea[iriver] = self.grid.iarea.all_values[river.j, river.i]
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> River:
         for river in self._rivers:
             if key == river.name:
                 return river
