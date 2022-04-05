@@ -50,7 +50,8 @@ contains
       call do_turbulence(nlev, dt, D, u_taus, u_taub, z0s, z0b, h, NN, SS)
    end subroutine
 
-   subroutine calculate_3d(nx, ny, nz, istart, istop, jstart, jstop, dt, mask, h3d, D, u_taus, u_taub, z0s, z0b, NN, SS, tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d) bind(c)
+   subroutine calculate_3d(nx, ny, nz, istart, istop, jstart, jstop, dt, mask, h3d, D, u_taus, u_taub, z0s, z0b, NN, SS, &
+         tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d) bind(c)
       integer(c_int), intent(in), value                        :: nx, ny, nz, istart, istop, jstart, jstop
       real(c_double), intent(in), value                        :: dt
       integer(c_int), intent(in),    dimension(nx, ny)         :: mask
