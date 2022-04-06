@@ -1,5 +1,5 @@
 # cython: language_level=3
-### cython: profile=True
+# cython: profile=True
 
 cimport cython
 
@@ -64,13 +64,21 @@ cpdef enum:
 
 cdef class Array:
     cdef void* p
-    cdef readonly numpy.ndarray all_values
+    cdef numpy.ndarray _array
     cdef readonly Grid grid
     cdef readonly int on_boundary
 
     def __init__(self, Grid grid=None):
         if grid is not None:
             self.grid = grid
+
+    @property
+    def all_values(self):
+        return self._array
+
+    @all_values.setter
+    def all_values(self, value):
+        assert value is self._array
 
     cdef wrap_c_array(self, Domain domain, int source, void* obj, bytes name):
         cdef int grid_type
@@ -84,40 +92,40 @@ cdef class Array:
         if sub_type == 0:
             # Horizontal-only array on normal grid
             if data_type == 0:
-                self.all_values = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
-                self.all_values = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
         elif sub_type == 1:
             # Horizontal-only array on open boundaries
             if data_type == 0:
-                self.all_values = numpy.asarray(<double[:self.grid.nbdyp:1]> self.p)
+                self._array = numpy.asarray(<double[:self.grid.nbdyp:1]> self.p)
             else:
-                self.all_values = numpy.asarray(<int[:self.grid.nbdyp:1]> self.p)
+                self._array = numpy.asarray(<int[:self.grid.nbdyp:1]> self.p)
             self.on_boundary = True
         elif sub_type == 2:
             # Depth-explicit array on normal grid, layer centers
             if data_type == 0:
-                self.all_values = numpy.asarray(<double[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<double[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
-                self.all_values = numpy.asarray(<int[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<int[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
         elif sub_type == 3:
             # Depth-explicit array on normal grid, layer interfaces
             if data_type == 0:
-                self.all_values = numpy.asarray(<double[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<double[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
-                self.all_values = numpy.asarray(<int[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<int[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
         else:
             # Depth-explicit array on open boundaries, layer centers
             assert sub_type == 4, 'Subtypes other than 0,1,2,3,4 not yet implemented'
             if data_type == 0:
-                self.all_values = numpy.asarray(<double[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
+                self._array = numpy.asarray(<double[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
             else:
-                self.all_values = numpy.asarray(<int[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
+                self._array = numpy.asarray(<int[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
             self.on_boundary = True
         if self._fill_value is None:
-            self._fill_value = self.all_values.flat[0]
+            self._fill_value = self._array.flat[0]
         else:
-            self.all_values[...] = self._fill_value
+            self._array[...] = self._fill_value
         self.finish_initialization()
         self.register()
         return self
@@ -132,14 +140,14 @@ cdef class Array:
             assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
             assert data.shape[data.ndim - 1] == self.grid.nx_ and data.shape[data.ndim - 2] == self.grid.ny_, 'Incorrect horizontal extent: expected (ny=%i,nx=%i), got (ny=%i,nx=%i)' % (self.grid.ny_, self.grid.nx_, data.shape[data.ndim - 2], data.shape[data.ndim - 1])
             assert data.ndim == 2 or data.shape[0] == self.grid.nz_ or data.shape[0] == self.grid.nz_ + 1, 'Incorrect vertical extent: expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[0])
-        self.all_values = data
-        self.p = self.all_values.data
+        self._array = data
+        self.p = self._array.data
         self.finish_initialization()
 
     def update_boundary(self, int bdytype, Array bdy=None):
         assert not self.on_boundary, 'update_boundary cannot be called on boundary arrays.'
-        assert self.ndim == 2 or bdy is None or self.all_values.shape[0] == bdy.all_values.shape[1]
-        domain_tracer_bdy(self.grid.domain.p, self.grid.p, 1 if self.ndim == 2 else self.all_values.shape[0], <double*>self.p, bdytype, NULL if bdy is None else <double*>bdy.p)
+        assert self.ndim == 2 or bdy is None or self._array.shape[0] == bdy._array.shape[1]
+        domain_tracer_bdy(self.grid.domain.p, self.grid.p, 1 if self.ndim == 2 else self._array.shape[0], <double*>self.p, bdytype, NULL if bdy is None else <double*>bdy.p)
 
 cdef class Grid:
     cdef void* p
@@ -161,16 +169,16 @@ cdef class Grid:
         return ar.wrap_c_array(self.domain, 0, self.p, name)
 
     def interp_x(self, Array source not None, Array target not None, int offset):
-        grid_interp_x(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
+        grid_interp_x(source._array.shape[source._array.ndim - 1], source._array.shape[source._array.ndim - 2], 1 if source._array.ndim == 2 else source._array.shape[0], <double *>source.p, <double *>target.p, offset)
 
     def interp_y(self, Array source not None, Array target not None, int offset):
-        grid_interp_y(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
+        grid_interp_y(source._array.shape[source._array.ndim - 1], source._array.shape[source._array.ndim - 2], 1 if source._array.ndim == 2 else source._array.shape[0], <double *>source.p, <double *>target.p, offset)
 
     def interp_z(self, Array source not None, Array target not None, int offset):
-        grid_interp_z(source.all_values.shape[2], source.all_values.shape[1], source.all_values.shape[0], target.all_values.shape[0], <double *>source.p, <double *>target.p, offset)
+        grid_interp_z(source._array.shape[2], source._array.shape[1], source._array.shape[0], target._array.shape[0], <double *>source.p, <double *>target.p, offset)
 
     def interp_xy(self, Array source not None, Array target not None, int ioffset, int joffset):
-        grid_interp_xy(source.all_values.shape[source.all_values.ndim - 1], source.all_values.shape[source.all_values.ndim - 2], target.all_values.shape[target.all_values.ndim - 1], target.all_values.shape[target.all_values.ndim - 2], 1 if source.all_values.ndim == 2 else source.all_values.shape[0], <double *>source.p, <double *>target.p, ioffset, joffset)
+        grid_interp_xy(source._array.shape[source._array.ndim - 1], source._array.shape[source._array.ndim - 2], target._array.shape[target._array.ndim - 1], target._array.shape[target._array.ndim - 2], 1 if source._array.ndim == 2 else source._array.shape[0], <double *>source.p, <double *>target.p, ioffset, joffset)
 
 cdef class Domain:
     cdef void* p
@@ -272,17 +280,17 @@ cdef class Advection:
         self.h_work[:,:,:] = h
         if not skip_initial_halo_exchange:
             var.update_halos(LEFT_RIGHT)
-        for k in range(var.all_values.shape[0]):
+        for k in range(var._array.shape[0]):
             advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
         var.update_halos(TOP_BOTTOM)
-        for k in range(var.all_values.shape[0]):
+        for k in range(var._array.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
         advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, <double *>w_var.p, timestep, &self.h_work[0,0,0], <double *>var.p)
         var.update_halos(TOP_BOTTOM)
-        for k in range(var.all_values.shape[0]):
+        for k in range(var._array.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
         var.update_halos(LEFT_RIGHT)
-        for k in range(var.all_values.shape[0]):
+        for k in range(var._array.shape[0]):
             advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
 
 cdef class VerticalDiffusion:

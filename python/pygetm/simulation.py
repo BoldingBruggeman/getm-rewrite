@@ -350,8 +350,8 @@ class Simulation(_pygetm.Simulation):
 
         if self.runtype > BAROTROPIC_2D and macro_active:
             # Depth-integrated transports have been summed over all microtimesteps. Now average them.
-            self.Ui.all_values[...] /= self.split_factor
-            self.Vi.all_values[...] /= self.split_factor
+            self.Ui.all_values *= 1. / self.split_factor
+            self.Vi.all_values *= 1. / self.split_factor
 
             # Use previous source terms for biogeochemistry to update tracers
             # This should be done before the tracer concentrations change due to transport or rivers,
@@ -383,18 +383,18 @@ class Simulation(_pygetm.Simulation):
                 self.radiation(self.airsea.swr)
                 self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
                 self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-                self.temp.source.all_values[...] -= numpy.diff(self.radiation.rad.all_values, axis=0)
+                self.temp.source.all_values -= numpy.diff(self.radiation.rad.all_values, axis=0)
                 self.temp.source.all_values[0, ...] += self.radiation.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None
                 for tracer in self.tracers:
                     if tracer.source is not None:
-                        tracer.source.values[...] *= self.macrotimestep * tracer.source_scale
+                        tracer.source.all_values *= self.macrotimestep * tracer.source_scale
                     w = self.ww
                     if tracer.vertical_velocity is not None:
                         w_if = tracer.vertical_velocity.interp(w_if or self.domain.T.array(fill=0., z=INTERFACES))
-                        w_if.all_values[...] += self.ww.all_values
+                        w_if.all_values += self.ww.all_values
                         w = w_if
                     self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, tracer, w_var=w)
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
@@ -436,7 +436,7 @@ class Simulation(_pygetm.Simulation):
 
     def update_freshwater_fluxes(self, timestep: float):
         height_increase_rate = self.domain.rivers.flow * self.domain.rivers.iarea
-        self._cum_river_height_increase[...] += height_increase_rate * timestep
+        self._cum_river_height_increase += height_increase_rate * timestep
         self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = height_increase_rate
 
     def add_rivers_3d(self):
@@ -485,7 +485,7 @@ class Simulation(_pygetm.Simulation):
         for var in self.tracer_totals:
             total = var * var.grid.area
             if total.ndim == 3:
-                total.all_values[...] *= var.grid.hn.all_values
+                total.all_values *= var.grid.hn.all_values
             total = total.global_sum(where=var.grid.mask != 0)
             if total is not None:
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
@@ -500,16 +500,16 @@ class Simulation(_pygetm.Simulation):
         # Advect U using velocities interpolated to its own advection grids
         self.U.interp(self.uua)
         self.V.interp(self.uva)
-        self.uua.all_values[...] /= self.domain.UU.D.all_values
-        self.uva.all_values[...] /= self.domain.UV.D.all_values
+        self.uua.all_values /= self.domain.UU.D.all_values
+        self.uva.all_values /= self.domain.UV.D.all_values
         self.uadv(self.uua, self.uva, timestep, self.u1)
         self.advU.all_values[...] = (self.u1.all_values * self.uadv.D - self.U.all_values) * itimestep
 
         # Advect V using velocities interpolated to its own advection grids
         self.U.interp(self.vua)
         self.V.interp(self.vva)
-        self.vua.all_values[...] /= self.domain.VU.D.all_values
-        self.vva.all_values[...] /= self.domain.VV.D.all_values
+        self.vua.all_values /= self.domain.VU.D.all_values
+        self.vva.all_values /= self.domain.VV.D.all_values
         self.vadv(self.vua, self.vva, timestep, self.v1)
         self.advV.all_values[...] = (self.v1.all_values * self.vadv.D - self.V.all_values) * itimestep
 
