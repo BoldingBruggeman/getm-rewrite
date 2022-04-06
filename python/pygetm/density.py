@@ -19,7 +19,7 @@ class Density:
         if p is None:
             p = -SA.grid.zc
         assert p.grid is SA.grid
-        pygsw.nsquared(SA.grid.hn.all_values, SA.all_values, ct.all_values, p.all_values, SA.grid.lat.all_values, out.all_values[1:-1, :, :])
+        pygsw.nsquared(SA.grid.mask.all_values, SA.grid.hn.all_values, SA.all_values, ct.all_values, p.all_values, SA.grid.lat.all_values, out.all_values[1:-1, :, :])
         return out
 
     def get_density(self, SA: core.Array, ct: core.Array, p: core.Array=None, out: core.Array=None) -> core.Array:
