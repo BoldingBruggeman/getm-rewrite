@@ -51,13 +51,14 @@ tpxo_dir = os.path.join(igotm_data_dir, 'TPXO9')
 bdy_lon = domain.T.lon.all_values[domain.bdy_j, domain.bdy_i]
 bdy_lat = domain.T.lat.all_values[domain.bdy_j, domain.bdy_i]
 if domain.open_boundaries:
-    sim.zbdy.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=tpxo_dir), on_grid=True)
-    sim.bdyu.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='u', root=tpxo_dir), on_grid=True)
-    sim.bdyv.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='v', root=tpxo_dir), on_grid=True)
-    sim.temp.boundaries.type = pygetm.SPONGE
-    sim.temp.boundaries.values.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/3D/bound_3D.CFSR.2006.nc'), 'temp'), on_grid=True)
-    sim.salt.boundaries.type = pygetm.SPONGE
-    sim.salt.boundaries.values.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/3D/bound_3D.CFSR.2006.nc'), 'salt'), on_grid=True)
+    sim.zbdy.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/2D/bdy.2d.2006.nc'), 'elev'), on_grid=True)
+    sim.bdyu.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/2D/bdy.2d.2006.nc'), 'u'), on_grid=True)
+    sim.bdyv.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/2D/bdy.2d.2006.nc'), 'v'), on_grid=True)
+    if sim.runtype == pygetm.BAROCLINIC:
+        sim.temp.boundaries.type = pygetm.SPONGE
+        sim.temp.boundaries.values.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/3D/bound_3D.CFSR.2006.nc'), 'temp'), on_grid=True)
+        sim.salt.boundaries.type = pygetm.SPONGE
+        sim.salt.boundaries.values.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/3D/bound_3D.CFSR.2006.nc'), 'salt'), on_grid=True)
 
 for name, river in domain.rivers.items():
     river.flow.set(pygetm.input.from_nc(os.path.join(getm_setups_dir, 'NorthSea/Forcing/River/rivers.nc'), name))

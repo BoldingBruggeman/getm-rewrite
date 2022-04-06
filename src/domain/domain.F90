@@ -70,6 +70,7 @@ MODULE getm_domain
       ENUMERATOR :: sommerfeld=2
       ENUMERATOR :: clamped=3
       ENUMERATOR :: flather_elev=4
+      ENUMERATOR :: flather_elev_transport=-4
       ENUMERATOR :: sponge=5
    END ENUM
 

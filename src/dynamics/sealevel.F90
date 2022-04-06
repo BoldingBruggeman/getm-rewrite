@@ -52,6 +52,7 @@ MODULE getm_sealevel
       ENUMERATOR :: sommerfeld=2
       ENUMERATOR :: clamped=3
       ENUMERATOR :: flather_elev=4
+      ENUMERATOR :: flather_elev_transport=-4
    END ENUM
 
 !---------------------------------------------------------------------------
@@ -305,11 +306,10 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
             case (clamped)
                TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
-#ifndef USE_TRANSPORTS
                a= sqrt(UG%D(i,j)/g)*(U(i,j)/UG%D(i,j)-bdyu(k))
-#else
+               TG%z(i,j)=max(fac*(self%zbdy(k)-a),-TG%H(i,j)+domain%Dmin)
+            case (flather_elev_transport)
                a=1._real64/sqrt(g*UG%D(i,j))*(U(i,j)-bdyu(k)) ! bdyu must be transport
-#endif
                TG%z(i,j)=max(fac*(self%zbdy(k)-a),-TG%H(i,j)+domain%Dmin)
          end select
          k= k+1
@@ -331,12 +331,10 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
             case (clamped)
                TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
-#ifndef USE_TRANSPORTS
-!KB               a=sqrt(VG%D(i,j)/g)*(V(i,j-1)/VG%D(i,j-1)-bdyv(k))
                a=sqrt(VG%D(i,j-1)/g)*(V(i,j-1)/VG%D(i,j-1)-bdyv(k))
-#else
+               TG%z(i,j)=max(fac*(self%zbdy(k)+a),-TG%H(i,j)+domain%Dmin)
+            case (flather_elev_transport)
                a=1._real64/sqrt(g*VG%D(i,j-1))*(V(i,j-1)-bdyv(k)) ! bdyv must be transport
-#endif
                TG%z(i,j)=max(fac*(self%zbdy(k)+a),-TG%H(i,j)+domain%Dmin)
          end select
          k=k+1
@@ -358,12 +356,11 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
             case (clamped)
                TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
-#ifndef USE_TRANSPORTS
 !KB               a=sqrt(UG%D(i,j)/g)*(U(i-1,j)/UG%D(i-1,j)-bdyu(k))
                a=sqrt(UG%D(i-1,j)/g)*(U(i-1,j)/UG%D(i-1,j)-bdyu(k))
-#else
+               TG%z(i,j)=max(fac*(self%zbdy(k)+a),-TG%H(i,j)+domain%Dmin)
+            case (flather_elev_transport)
                a=1._real64/sqrt(g*UG%D(i-1,j))*(U(i-1,j)-bdyu(k)) ! bdyu must be transport
-#endif
                TG%z(i,j)=max(fac*(self%zbdy(k)+a),-TG%H(i,j)+domain%Dmin)
          end select
          k=k+1
@@ -385,11 +382,10 @@ SUBROUTINE sealevel_boundaries(self,dt,U,V,bdyu,bdyv)
             case (clamped)
                TG%z(i,j)=max(fac*self%zbdy(k),-TG%H(i,j)+domain%Dmin)
             case (flather_elev)
-#ifndef USE_TRANSPORTS
                a=sqrt(VG%D(i,j)/g)*(V(i,j)/VG%D(i,j)-bdyv(k))
-#else
+               TG%z(i,j)=max(fac*(self%zbdy(k)-a),-TG%H(i,j)+domain%Dmin)
+            case (flather_elev_transport)
                a=1._real64/sqrt(g*VG%D(i,j))*(V(i,j)-bdyv(k)) ! bdyv must be transport
-#endif
                TG%z(i,j)=max(fac*(self%zbdy(k)-a),-TG%H(i,j)+domain%Dmin)
          end select
          k=k+1
