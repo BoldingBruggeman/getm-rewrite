@@ -1,5 +1,5 @@
 # cython: language_level=3
-# cython: profile=True
+### cython: profile=True
 
 cimport cython
 
@@ -43,6 +43,9 @@ cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
 #cdef extern void sealevel_update_uvx(void* sealevel) nogil
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
+cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
+cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
+cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* top, double* out) nogil
 
 cpdef enum:
     TGRID = 1
@@ -417,6 +420,29 @@ cdef class Simulation:
         elif (source == 3):
             obj = self.psealevel
         return ar.wrap_c_array(self.domain, source, obj, name)
+
+def exponential_profile_1band_interfaces(Array mask not None, Array h not None, Array k not None, Array top not None, Array out=None):
+    assert mask.grid is h.grid and h.z == CENTERS
+    assert mask.grid is k.grid and not k.z
+    assert mask.grid is top.grid and not top.z
+    assert mask.grid is out.grid and out.z == INTERFACES
+    c_exponential_profile_1band_interfaces(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>k.p, <double *>top.p, <double *>out.p)
+
+def exponential_profile_1band_centers(Array mask not None, Array h not None, Array k not None, Array top not None, Array out=None):
+    assert mask.grid is h.grid and h.z == CENTERS
+    assert mask.grid is k.grid and not k.z
+    assert mask.grid is top.grid and not top.z
+    assert mask.grid is out.grid and out.z == CENTERS
+    c_exponential_profile_1band_centers(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>k.p, <double *>top.p, <double *>out.p)
+
+def exponential_profile_2band_interfaces(Array mask not None, Array h not None, Array f not None, Array k1 not None, Array k2 not None, Array top not None, Array out=None):
+    assert mask.grid is h.grid and h.z == CENTERS
+    assert mask.grid is f.grid and not f.z
+    assert mask.grid is k1.grid and not k1.z
+    assert mask.grid is k2.grid and not k2.z
+    assert mask.grid is top.grid and not top.z
+    assert mask.grid is out.grid and out.z == INTERFACES
+    c_exponential_profile_2band_interfaces(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>f.p, <double *>k1.p, <double *>k2.p, <double *>top.p, <double *>out.p)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

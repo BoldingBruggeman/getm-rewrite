@@ -18,6 +18,7 @@ from . import pyfabm
 import pygetm.mixing
 import pygetm.density
 import pygetm.airsea
+import pygetm.radiation
 
 BAROTROPIC = BAROTROPIC_2D = 1
 BAROTROPIC_3D = 2
@@ -75,9 +76,8 @@ class Simulation(_pygetm.Simulation):
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
-    _parameters = 'A', 'g1', 'g2'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile') + _time_arrays + _parameters
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
@@ -145,10 +145,6 @@ class Simulation(_pygetm.Simulation):
         self.vua3d = dom.VU.array(fill=numpy.nan, z=CENTERS)
         self.vva3d = dom.VV.array(fill=numpy.nan, z=CENTERS)
 
-        self.A = A
-        self.g1 = g1
-        self.g2 = g2
-
         self.tracers: List[Tracer] = []
         self.tracer_totals = []
 
@@ -210,12 +206,10 @@ class Simulation(_pygetm.Simulation):
             self.temp.fill(5.)
             self.salt.fill(35.)
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
-            self.rad = dom.T.array(fill=numpy.nan, z=INTERFACES, name='rad', units='W m-2', long_name='shortwave radiation', fabm_standard_name='downwelling_shortwave_flux', fill_value=FILL_VALUE)
-            self.par = dom.T.array(fill=numpy.nan, z=CENTERS, name='par', units='W m-2', long_name='photosynthetically active radiation', fabm_standard_name='downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
-            self.par0 = dom.T.array(fill=numpy.nan, name='par0', units='W m-2', long_name='surface photosynthetically active radiation', fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
             self.shf = self.temp.source.isel(z=-1, name='shf', long_name='surface heat flux')
             self.tracer_totals.append(self.salt)
 
+            self.radiation = pygetm.radiation.Radiation(dom.T)
             self.density = density or pygetm.density.Density()
 
     def __getitem__(self, key: str) -> core.Array:
@@ -299,7 +293,7 @@ class Simulation(_pygetm.Simulation):
         self.airsea(self.time, self.sst)
         if self.runtype == BAROCLINIC:
             assert self.airsea.qe.require_set(self.logger) * self.airsea.qh.require_set(self.logger) * self.airsea.ql.require_set(self.logger)
-            self.update_radiation()
+            self.radiation(self.airsea.swr)
 
         if self.fabm_model:
             self.update_fabm_sources()
@@ -386,11 +380,11 @@ class Simulation(_pygetm.Simulation):
                 self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
                 # Temperature and salinity (T grid - centers)
-                self.update_radiation()
+                self.radiation(self.airsea.swr)
                 self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
                 self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-                self.temp.source.all_values[...] += self.rad.all_values[1:, ...] - self.rad.all_values[:-1, ...]
-                self.temp.source.all_values[0, ...] += self.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
+                self.temp.source.all_values[...] -= numpy.diff(self.radiation.rad.all_values, axis=0)
+                self.temp.source.all_values[0, ...] += self.radiation.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None
@@ -672,23 +666,6 @@ class Simulation(_pygetm.Simulation):
         V = self.V.interp(dom.T)
         vel2_D2 = U**2 + V**2
         return 0.5 * rho0 * dom.T.area * vel2_D2 / dom.T.D
-
-    def update_radiation(self):
-        """Compute downwelling shortwave radiation throughout the water column"""
-        k1 = 1. / self.g1
-        k2 = 1. / self.g2
-        work = numpy.zeros_like(self.rad)
-        self.domain.T.hn.values.cumsum(axis=0, out=work[1:, ...])                                    # distance between interface and bottom (positive)
-        work -= work[-1, ...]                                                                        # distance from surface (negative)
-        self.rad.values[...] = self.A * numpy.exp(k1 * work) + (1. - self.A) * numpy.exp(k2 * work)  # fraction of total surface radiation at each interface
-        self.rad.values *= self.airsea.swr.values
-        if self.par.saved:
-            # Visible part of shortwave radiation at layer centers, often used by biogeochemistry
-            self.par.values[...] = (1. - self.A) * numpy.exp((k2 * 0.5) * (work[:-1, ...] + work[1:, ...]))
-            self.par.values *= self.airsea.swr.values
-        if self.par0.saved:
-            # Visible part of shortwave radiation just below sea surface (i.e., reflection/albedo already accounted for)
-            self.par0.values[...] = (1. - self.A) * self.airsea.swr.values
 
 for membername in Simulation._all_fortran_arrays:
     setattr(Simulation, membername[1:], property(operator.attrgetter(membername)))

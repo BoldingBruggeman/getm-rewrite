@@ -656,4 +656,55 @@ contains
       call sealevel%boundaries(timestep, momentum%U, momentum%V, momentum%bdyu, momentum%bdyv)
    end subroutine
 
+   subroutine c_exponential_profile_1band_centers(nx, ny, nz, istart, istop, jstart, jstop, mask, h, kc, top, out) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
+      integer(c_int), intent(in)        :: mask(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz), kc(nx, ny), top(nx, ny)
+      real(c_double), intent(inout)     :: out(nx, ny, nz)
+
+      integer :: k
+      real(c_double) :: cumh(nx, ny)
+
+      where (mask /= 0) out(:,:,nz) = top * exp(-0.5_c_double * kc * h(:,:,nz))
+      cumh = 0._c_double
+      do k=nz-1,1,-1
+         cumh = cumh + 0.5_c_double * (h(:,:,k) + h(:,:,k+1))
+         where (mask /= 0) out(:,:,k) = top * exp(-kc * cumh)
+      end do
+   end subroutine
+
+   subroutine c_exponential_profile_1band_interfaces(nx, ny, nz, istart, istop, jstart, jstop, mask, h, kc, top, out) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
+      integer(c_int), intent(in)        :: mask(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz), kc(nx, ny), top(nx, ny)
+      real(c_double), intent(inout)     :: out(nx, ny, 0:nz)
+
+      integer :: k
+      real(c_double) :: cumh(nx, ny)
+
+      where (mask /= 0) out(:,:,nz) = top
+      cumh = 0._c_double
+      do k=nz-1,0,-1
+         cumh = cumh + h(:,:,k+1)
+         where (mask /= 0) out(:,:,k) = top * exp(-kc * cumh)
+      end do
+   end subroutine
+
+   subroutine c_exponential_profile_2band_interfaces(nx, ny, nz, istart, istop, jstart, jstop, mask, h, f1, kc1, kc2, top, out) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
+      integer(c_int), intent(in)        :: mask(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz), f1(nx, ny), kc1(nx, ny), kc2(nx, ny), top(nx, ny)
+      real(c_double), intent(inout)     :: out(nx, ny, 0:nz)
+
+      integer :: k
+      real(c_double) :: cumh(nx, ny)
+
+      where (mask /= 0) out(:,:,nz) = top
+      cumh = 0._c_double
+      do k=nz-1,0,-1
+         cumh = cumh + h(:,:,k+1)
+         where (mask /= 0) out(:,:,k) = top * (f1  * exp(-kc1 * cumh) + (1._c_double - f1) * exp(-kc2 * cumh))
+      end do
+   end subroutine
+
 end module
