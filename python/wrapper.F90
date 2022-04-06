@@ -690,7 +690,8 @@ contains
       end do
    end subroutine
 
-   subroutine c_exponential_profile_2band_interfaces(nx, ny, nz, istart, istop, jstart, jstop, mask, h, f1, kc1, kc2, top, out) bind(c)
+   subroutine c_exponential_profile_2band_interfaces(nx, ny, nz, istart, istop, jstart, jstop, mask, &
+      h, f1, kc1, kc2, top, out) bind(c)
       integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
       integer(c_int), intent(in)        :: mask(nx, ny)
       real(c_double), intent(in)        :: h(nx, ny, nz), f1(nx, ny), kc1(nx, ny), kc2(nx, ny), top(nx, ny)
