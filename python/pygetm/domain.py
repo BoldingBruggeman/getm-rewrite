@@ -260,7 +260,7 @@ def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, 
     return create_spherical(numpy.linspace(minlon, maxlon, nx), numpy.linspace(minlat, maxlat, ny), nz=nz, interfaces=True, **kwargs)
 
 class RiverTracer(core.Array):
-    _slots_ = '_follow'
+    __slots__ = ('_follow',)
     def __init__(self, grid, river_name: str, tracer_name: str, units: str, value: numpy.ndarray, follow: numpy.ndarray):
         super().__init__(grid=grid, name=tracer_name + '_in_river_' + river_name, units=units, long_name='%s in river %s' % (tracer_name, river_name))
         self.wrap_ndarray(value)
@@ -321,6 +321,7 @@ class Rivers(collections.Mapping):
 
     def add_tracer(self, name: str, units: str, follow_target_cell: bool=False) -> Tuple[numpy.ndarray, numpy.ndarray, List[RiverTracer]]:
         assert self._frozen, 'Tracers can be added only after the river collection has been initialized.'
+        assert name not in self._tracers, 'A tracer with name %s has already been added.' % name
         values = numpy.zeros((len(self._rivers),))
         follow = numpy.full((len(self._rivers),), follow_target_cell, dtype=bool)
         self._tracers.append((values, follow))
@@ -350,11 +351,11 @@ class Rivers(collections.Mapping):
                 return river
         raise KeyError()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._rivers)
 
     def __iter__(self):
-        return iter([r.name for r in self._rivers])
+        return map(operator.attrgetter('name'), self._rivers)
 
 class Domain(_pygetm.Domain):
     @staticmethod

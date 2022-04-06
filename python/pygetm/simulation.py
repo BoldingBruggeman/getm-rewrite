@@ -451,13 +451,16 @@ class Simulation(_pygetm.Simulation):
         river_active = numpy.ones(h.shape, dtype=bool)
         # JB TODO: customize river_active by flagging layers where the river does not go with False
         river_depth = h.sum(where=river_active, axis=0)
+        withdrawal = self._cum_river_height_increase < 0.
+        h_increase = numpy.where(river_active, h * self._cum_river_height_increase / river_depth, 0.)
         for tracer, (river_values, river_follow) in zip(self.tracers, self.domain.rivers._tracers):
+            river_follow = numpy.logical_or(river_follow, withdrawal)
             if not river_follow.all():
                 tracer_old = tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
                 river_values = numpy.where(river_follow, tracer_old, river_values)
                 tracer_new = (tracer_old * river_depth + river_values * self._cum_river_height_increase) / (river_depth + self._cum_river_height_increase)
                 tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = numpy.where(river_active, tracer_new, tracer_old)
-        self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = numpy.where(river_active, h * (1. + self._cum_river_height_increase / river_depth), h)
+        self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = h + h_increase
         self.domain.T.zin.all_values[self.domain.rivers.j, self.domain.rivers.i] += self._cum_river_height_increase
         self._cum_river_height_increase.fill(0.)
 
