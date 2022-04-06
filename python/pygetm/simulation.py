@@ -1,4 +1,3 @@
-from glob import glob1
 import operator
 from typing import Union, Optional, Type, List
 import itertools
@@ -13,6 +12,7 @@ from .constants import *
 from . import _pygetm
 from . import core
 from . import domain
+from . import parallel
 from . import output
 from . import pyfabm
 import pygetm.mixing
@@ -592,14 +592,15 @@ class Simulation(_pygetm.Simulation):
         self.domain.V.zin.all_values.clip(min=-self.domain.V.H.all_values + self.domain.Dmin, out=self.domain.V.zin.all_values)
         self.domain.X.zin.all_values.clip(min=-self.domain.X.H.all_values + self.domain.Dmin, out=self.domain.X.zin.all_values)
 
-        # Halo exchange for elevation on U, V grids
-        # This is needed to later compute velocities from transports
-        # (by dividing by layer thickness, which are computed from elevation)
+        # Halo exchange for elevation on U, V grids, needed because the very last points in the halos
+        # (x=-1 for U, y=-1 for V) are not valid after interpolating from the T grid above.
+        # These elevations are needed to later compute velocities from transports
+        # (by dividing by layer thicknesses, which are computed from elevation)
         # These velocities will be advected, and therefore need to be valid througout the halos.
         # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
         # at the innermost halo point only, which is ensured by T.zin exchange.
-        self.domain.U.zin.update_halos()
-        self.domain.V.zin.update_halos()
+        self.domain.U.zin.update_halos(parallel.LEFT_RIGHT)
+        self.domain.V.zin.update_halos(parallel.TOP_BOTTOM)
 
         # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
         # This routine also sets ho to the previous value of hn
@@ -640,14 +641,15 @@ class Simulation(_pygetm.Simulation):
         self.domain.X.z.all_values.clip(min=-self.domain.X.H + self.domain.Dmin, out=self.domain.X.z.all_values)
         z_T_half.all_values.clip(min=-self.domain.T.H + self.domain.Dmin, out=z_T_half.all_values)
 
-        # Halo exchange for elevation on U, V grids
-        # This is needed to later compute velocities from transports
-        # (by dividing by column height, which is computed from elevation)
+        # Halo exchange for elevation on U, V grids, needed because the very last points in the halos
+        # (x=-1 for U, y=-1 for V) are not valid after interpolating from the T grid above.
+        # These elevations are needed to later compute velocities from transports
+        # (by dividing by layer thicknesses, which are computed from elevation)
         # These velocities will be advected, and therefore need to be valid througout the halos.
         # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
         # at the innermost halo point only, which is ensured by T.zin exchange.
-        self.domain.U.z.update_halos()
-        self.domain.V.z.update_halos()
+        self.domain.U.z.update_halos(parallel.LEFT_RIGHT)
+        self.domain.V.z.update_halos(parallel.TOP_BOTTOM)
 
         # Update total water depth D on T, U, V, X grids
         # This also processes the halos; no further halo exchange needed.
