@@ -606,8 +606,9 @@ class InputManager:
         target = array.all_values[target_slice]
         assert value.shape == target.shape, 'Source shape %s does not match target shape %s' % (value.shape, target.shape)
         if isinstance(value.variable.data, LazyArray) and value.variable.data.is_time_varying():
-            self._logger.info('%s will be updated dynamically from %s' % (array.name, value.name))
-            self.fields.append((array.name, value.data, target))
+            _3d_only = array.attrs.get('_3d_only', False)
+            self._logger.info('%s will be updated dynamically from %s%s' % (array.name, value.name, ' on macrotimestep' if _3d_only else ''))
+            self.fields.append((array.name, value.data, target, not _3d_only))
         else:
             target[...] = value
             unmasked = True if array.ndim == 0 else numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
@@ -617,12 +618,13 @@ class InputManager:
                 self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in %i of %i unmasked points.' % (array.name, value.name, n_unmasked - finite.sum(where=unmasked), n_unmasked))
             self._logger.info('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
 
-    def update(self, time):
+    def update(self, time, include_3d: bool):
         """Update all arrays linked to time-dependent inputs to the current time."""
-        for name, source, target in self.fields:
-            self._logger.debug('updating %s' % name)
-            source.update(time)
-            target[...] = source
+        for name, source, target, update_always in self.fields:
+            if include_3d or update_always:
+                self._logger.debug('updating %s' % name)
+                source.update(time)
+                target[...] = source
 
     @property
     def logger(self) -> logging.Logger:

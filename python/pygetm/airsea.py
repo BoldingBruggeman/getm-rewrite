@@ -17,11 +17,11 @@ class Fluxes:
 
         self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill_value=FILL_VALUE)
         self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill_value=FILL_VALUE)
-        self.qe = domain.T.array(name='qe', long_name='sensible heat flux', units='W m-2', fill_value=FILL_VALUE)
-        self.qh = domain.T.array(name='qh', long_name='latent heat flux', units='W m-2', fill_value=FILL_VALUE)
-        self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill_value=FILL_VALUE)
+        self.qe = domain.T.array(name='qe', long_name='sensible heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+        self.qh = domain.T.array(name='qh', long_name='latent heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+        self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
         self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill_value=FILL_VALUE)
-        self.swr = domain.T.array(name='swr', long_name='surface net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_shortwave_flux')
+        self.swr = domain.T.array(name='swr', long_name='surface net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_shortwave_flux', attrs={'_3d_only': True})
 
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
         self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
@@ -46,14 +46,14 @@ class FluxesFromMeteo(Fluxes):
         self.qa = domain.T.array(name='qa', long_name='specific humidity', units='kg kg-1', fill_value=FILL_VALUE)
         self.rhoa = domain.T.array(name='rhoa', long_name='air density', units='kg m-3', fill_value=FILL_VALUE)
 
-        self.zen = domain.T.array(name='zen', long_name='zenith angle', units='degrees', fill_value=FILL_VALUE)
-        self.albedo = domain.T.array(name='albedo', long_name='albedo', units='1', fill_value=FILL_VALUE)
+        self.zen = domain.T.array(name='zen', long_name='zenith angle', units='degrees', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+        self.albedo = domain.T.array(name='albedo', long_name='albedo', units='1', fill_value=FILL_VALUE, attrs={'_3d_only': True})
 
         self.t2m = domain.T.array(name='t2m', long_name='air temperature @ 2 m', units='degrees_Celsius', fill_value=FILL_VALUE)
         self.d2m = domain.T.array(name='d2m', long_name='dewpoint temperature @ 2 m', units='degrees_Celsius', fill_value=FILL_VALUE)
         self.u10 = domain.T.array(name='u10', long_name='wind speed in Eastward direction @ 10 m', units='m s-1', fill_value=FILL_VALUE)
         self.v10 = domain.T.array(name='v10', long_name='wind speed in Northward direction @ 10 m', units='m s-1', fill_value=FILL_VALUE)
-        self.tcc = domain.T.array(name='tcc', long_name='total cloud cover', units='1', fill_value=FILL_VALUE)
+        self.tcc = domain.T.array(name='tcc', long_name='total cloud cover', units='1', fill_value=FILL_VALUE, attrs={'_3d_only': True})
 
         self.w = domain.T.array(name='w', long_name='wind speed', units='m s-1', fabm_standard_name='wind_speed', fill_value=FILL_VALUE)
 
@@ -96,7 +96,7 @@ class FluxesFromMeteo(Fluxes):
         self.qe.all_values[...] = -self.cd_sensible.all_values * CPA * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
         self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
 
-    def __call__(self, time: cftime.datetime, sst: core.Array) -> None:
+    def __call__(self, time: cftime.datetime, sst: core.Array, do_3d: bool) -> None:
         if not self._ready:
             assert (self.t2m.require_set(self.logger) * self.d2m.require_set(self.logger)
                   * self.u10.require_set(self.logger) * self.v10.require_set(self.logger)
@@ -104,8 +104,9 @@ class FluxesFromMeteo(Fluxes):
 
         self.humidity(sst)
         self.fluxes(sst)
-        self.longwave_radiation(sst)
-        if self.compute_swr:
-            self.shortwave_radiation(time)
+        if do_3d:
+            self.longwave_radiation(sst)
+            if self.compute_swr:
+                self.shortwave_radiation(time)
         super().__call__(time, sst)
 

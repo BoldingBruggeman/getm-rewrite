@@ -287,10 +287,10 @@ class Simulation(_pygetm.Simulation):
             self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
 
         # Update all input fields
-        self.domain.input_manager.update(time)
+        self.domain.input_manager.update(time, include_3d=True)
 
         # Ensure heat and momentum fluxes have sensible values
-        self.airsea(self.time, self.sst)
+        self.airsea(self.time, self.sst, do_3d=True)
         if self.runtype == BAROCLINIC:
             assert self.airsea.qe.require_set(self.logger) * self.airsea.qh.require_set(self.logger) * self.airsea.ql.require_set(self.logger)
             self.radiation(self.airsea.swr)
@@ -315,12 +315,14 @@ class Simulation(_pygetm.Simulation):
 
     def advance(self):
         self.time += self.timedelta
+        self.istep += 1
+        macro_active = self.istep % self.split_factor == 0
 
         # Update all inputs (todo: separate 2D and 3D inputs, as the latter are needed much less frequently)
-        self.domain.input_manager.update(self.time)
+        self.domain.input_manager.update(self.time, include_3d=macro_active)
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
-        self.airsea(self.time, self.sst)
+        self.airsea(self.time, self.sst, do_3d=macro_active)
 
         # Update elevation at the open boundaries
         self.update_sealevel_boundaries(self.timestep)
@@ -343,8 +345,6 @@ class Simulation(_pygetm.Simulation):
         self.update_sealevel(self.timestep, self.U, self.V, self.fwf)
         self.update_depth()
 
-        self.istep += 1
-        macro_active = self.istep % self.split_factor == 0
         if self.report != 0 and self.istep % self.report == 0:
             self.logger.info(self.time)
 

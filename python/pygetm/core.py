@@ -1,5 +1,5 @@
 import numbers
-from typing import Optional, Union, Tuple, Literal
+from typing import Optional, Union, Tuple, Literal, Mapping, Any
 import logging
 
 import numpy, numpy.lib.mixins, numpy.typing
@@ -10,9 +10,9 @@ from . import parallel
 from .constants import *
 
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
-    __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', '_units', '_long_name', '_fill_value', '_ma', 'mapped_field', 'saved', '_shape', '_ndim', '_size', '_dtype')
+    __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', 'attrs', '_fill_value', '_ma', 'mapped_field', 'saved', '_shape', '_ndim', '_size', '_dtype')
 
-    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None, fabm_standard_name: Optional[str]=None, constant: bool=False):
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None, fabm_standard_name: Optional[str]=None, constant: bool=False, attrs: Mapping[str, Any]={}):
         _pygetm.Array.__init__(self, grid)
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
@@ -20,8 +20,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._dist: Optional[parallel.DistributedArray] = None
         assert fill_value is None or numpy.ndim(fill_value) == 0, 'fill_value must be a scalar value'
         self._name = name
-        self._units = units
-        self._long_name = long_name
+        self.attrs = attrs.copy()
+        if units:
+            self.attrs['units'] = units
+        if long_name:
+            self.attrs['long_name'] = long_name
         self._fill_value = fill_value if fill_value is None or dtype is None else numpy.array(fill_value, dtype=dtype)
         self._ma = None
         self.mapped_field: Optional[xarray.DataArray] = None
@@ -195,8 +198,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def isel(self, z: int, **kwargs):
         if self._ndim != 3:
             raise NotImplementedError
-        kwargs.setdefault('units', self._units)
-        kwargs.setdefault('long_name', self._long_name if self._long_name is None else '%s @ k=%i' % (self._long_name, z))
+        if self.units is not None:
+            kwargs.setdefault('units', self.units)
+        if self.long_name is not None:
+            kwargs.setdefault('long_name', '%s @ k=%i' % (self.long_name, z))
         ar = Array(grid=self.grid, **kwargs)
         ar.wrap_ndarray(self.all_values[z, ...])
         ar.register()
@@ -237,11 +242,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def units(self) -> Optional[str]:
-        return self._units
+        return self.attrs.get('units')
 
     @property
     def long_name(self) -> Optional[str]:
-        return self._long_name
+        return self.attrs.get('long_name')
 
     @property
     def fill_value(self) -> Optional[Union[int, float]]:

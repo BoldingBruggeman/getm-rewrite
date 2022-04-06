@@ -261,8 +261,8 @@ def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, 
 
 class RiverTracer(core.Array):
     __slots__ = ('_follow',)
-    def __init__(self, grid, river_name: str, tracer_name: str, units: str, value: numpy.ndarray, follow: numpy.ndarray):
-        super().__init__(grid=grid, name=tracer_name + '_in_river_' + river_name, units=units, long_name='%s in river %s' % (tracer_name, river_name))
+    def __init__(self, grid, river_name: str, tracer_name: str, value: numpy.ndarray, follow: numpy.ndarray, **kwargs):
+        super().__init__(grid=grid, name=tracer_name + '_in_river_' + river_name, long_name='%s in river %s' % (tracer_name, river_name), **kwargs)
         self.wrap_ndarray(value)
         self._follow = follow
 
@@ -327,7 +327,7 @@ class Rivers(collections.Mapping):
         self._tracers.append((values, follow))
         river_tracers: List[RiverTracer] = []
         for iriver, river in enumerate(self._rivers):
-            river_tracer = RiverTracer(self.grid, river.name, name, units, values[..., iriver], follow[..., iriver])
+            river_tracer = RiverTracer(self.grid, river.name, name, values[..., iriver], follow[..., iriver], units=units, attrs={'_3d_only': True})
             river_tracers.append(river_tracer)
             river._tracers[name] = river_tracer
         return values, follow, river_tracers
