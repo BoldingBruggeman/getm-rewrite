@@ -90,4 +90,4 @@ def load_riverinfo(dom: domain.Domain, path: str):
             zl, zu = None, None
             if len(items) == 5:
                 zl, zu = float(items[3]), float(items[4])
-            dom.rivers.add(name, i - 1, j - 1, zl, zu)   # Note: we convert from 1-based indices to 0-based indices!
+            dom.rivers.add_by_index(name, i - 1, j - 1, zl=zl, zu=zu)   # Note: we convert from 1-based indices to 0-based indices!

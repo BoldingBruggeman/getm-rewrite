@@ -31,9 +31,39 @@ def find_interfaces(c: numpy.ndarray):
 
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
-    _fortran_arrays = _coordinate_arrays + ('dx', 'dy', 'idx', 'idy', 'dlon', 'dlat', 'H', 'D', 'mask', 'z', 'zo', 'area', 'iarea', 'cor', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
+    _readonly_arrays = _coordinate_arrays + ('dx', 'dy', 'idx', 'idy', 'dlon', 'dlat', 'area', 'iarea', 'cor')
+    _fortran_arrays = _readonly_arrays + ('H', 'D', 'mask', 'z', 'zo', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
     __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp', 'overlap')
+
+    array_args = {
+        'x': dict(units='m', constant=True, fill_value=FILL_VALUE),
+        'y': dict(units='m', constant=True, fill_value=FILL_VALUE),
+        'lon': dict(units='degrees_north', long_name='longitude', constant=True, fill_value=FILL_VALUE),
+        'lat': dict(units='degrees_east', long_name='latitude', constant=True, fill_value=FILL_VALUE),
+        'dx': dict(units='m', constant=True, fill_value=FILL_VALUE),
+        'dy': dict(units='m', constant=True, fill_value=FILL_VALUE),
+        'idx': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
+        'idy': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
+        'dlon': dict(units='degrees_north', constant=True, fill_value=FILL_VALUE),
+        'dlat': dict(units='degrees_east', constant=True, fill_value=FILL_VALUE),
+        'H': dict(units='m', long_name='water depth at rest', constant=True, fill_value=FILL_VALUE),
+        'D': dict(units='m', long_name='water depth', fill_value=FILL_VALUE),
+        'mask': dict(constant=True, fill_value=0),
+        'z': dict(units='m', long_name='elevation', fill_value=FILL_VALUE),
+        'zo': dict(units='m', long_name='elevation at previous time step', fill_value=FILL_VALUE),
+        'zin': dict(units='m', long_name='elevation at 3d time step', fill_value=FILL_VALUE),
+        'zio': dict(units='m', long_name='elevation at previous 3d time step', fill_value=FILL_VALUE),
+        'area': dict(units='m2', long_name='grid cell area', constant=True, fill_value=FILL_VALUE),
+        'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True, fill_value=FILL_VALUE),
+        'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=FILL_VALUE),
+        'ho': dict(units='m', long_name='layer heights at previous time step', fill_value=FILL_VALUE),
+        'hn': dict(units='m', long_name='layer heights', fill_value=FILL_VALUE),
+        'zc': dict(units='m', long_name='depth', fill_value=FILL_VALUE),
+        'zf': dict(units='m', long_name='interface depth', fill_value=FILL_VALUE),
+        'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE),
+        'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=FILL_VALUE),
+    }
 
     def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, overlap: int=0, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
         _pygetm.Grid.__init__(self, domain, grid_type)
@@ -48,67 +78,51 @@ class Grid(_pygetm.Grid):
         self._sin_rot: Optional[numpy.ndarray] = None
         self._cos_rot: Optional[numpy.ndarray] = None
 
+        for name in self._readonly_arrays:
+            self.setup_array(name, register=False)
+        self._iarea.all_values[...] = 1. / self._area.all_values
+        self._idx.all_values[...] = 1. / self._dx.all_values
+        self._idy.all_values[...] = 1. / self._dy.all_values
+        for name in self._readonly_arrays:
+            getattr(self, name).all_values.flags.writeable = True
+
     def initialize(self, nbdyp: int):
-        array_args = {
-            'x': dict(units='m', constant=True, fill_value=FILL_VALUE),
-            'y': dict(units='m', constant=True, fill_value=FILL_VALUE),
-            'lon': dict(units='degrees_north', long_name='longitude', constant=True, fill_value=FILL_VALUE),
-            'lat': dict(units='degrees_east', long_name='latitude', constant=True, fill_value=FILL_VALUE),
-            'dx': dict(units='m', constant=True, fill_value=FILL_VALUE),
-            'dy': dict(units='m', constant=True, fill_value=FILL_VALUE),
-            'idx': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
-            'idy': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
-            'dlon': dict(units='degrees_north', constant=True, fill_value=FILL_VALUE),
-            'dlat': dict(units='degrees_east', constant=True, fill_value=FILL_VALUE),
-            'H': dict(units='m', long_name='water depth at rest', constant=True, fill_value=FILL_VALUE),
-            'D': dict(units='m', long_name='water depth', fill_value=FILL_VALUE),
-            'mask': dict(constant=True, fill_value=0),
-            'z': dict(units='m', long_name='elevation', fill_value=FILL_VALUE),
-            'zo': dict(units='m', long_name='elevation at previous time step', fill_value=FILL_VALUE),
-            'zin': dict(units='m', long_name='elevation at 3d time step', fill_value=FILL_VALUE),
-            'zio': dict(units='m', long_name='elevation at previous 3d time step', fill_value=FILL_VALUE),
-            'area': dict(units='m2', long_name='grid cell area', constant=True, fill_value=FILL_VALUE),
-            'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True, fill_value=FILL_VALUE),
-            'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=FILL_VALUE),
-            'ho': dict(units='m', long_name='layer heights at previous time step', fill_value=FILL_VALUE),
-            'hn': dict(units='m', long_name='layer heights', fill_value=FILL_VALUE),
-            'zc': dict(units='m', long_name='depth', fill_value=FILL_VALUE),
-            'zf': dict(units='m', long_name='interface depth', fill_value=FILL_VALUE),
-            'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE),
-            'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=FILL_VALUE),
-        }
         for name in self._fortran_arrays:
-            array = core.Array(name=name + self.postfix, **array_args[name])
-            setattr(self, '_%s' % name, self.wrap(array, name.encode('ascii')))
+            if name in self._readonly_arrays:
+                getattr(self, name).register()
+            else:
+                self.setup_array(name)
+        self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
+        self.setup_array(name, self.rotation)
         self.zc.all_values.fill(0.)
         self.zf.all_values.fill(0.)
-        self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
-        self.fill()
         self.z0b.all_values[...] = self.z0b_min.all_values
         self.nbdyp = nbdyp
 
-    def fill(self):
-        read_only = ('dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'rotation', 'z0b_min')
-        nj, ni = self.H.all_values.shape
+    def setup_array(self, name: str, array: Optional[core.Array]=None, register: bool=True):
+        if array is None:
+            # No array provided, so it must live in Fortran; retrieve it
+            array = core.Array(name=name + self.postfix, **self.array_args[name])
+            setattr(self, '_%s' % name, self.wrap(array, name.encode('ascii'), register=register))
+
+        # Obtain corresponding array on the supergrid. If this does not exist, we are done
+        source = getattr(self.domain, name + '_', None)
+        if source is None:
+            return
+
+        nj, ni = self.ny_, self.nx_
         has_bounds = self.ioffset > 0 and self.joffset > 0 and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
         valid = self.domain.mask_[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2] > 0
-        for name in ('H', 'mask', 'dx', 'dy', 'lon', 'lat', 'x', 'y', 'cor', 'area', 'z', 'zo', 'rotation', 'z0b_min'):
-            source = getattr(self.domain, name + '_')
-            if source is not None:
-                target = getattr(self, name).all_values
-                values = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
-                target.fill(numpy.nan)
-                slc = valid if name in ('z', 'zo',  'z0b_min') else (Ellipsis,)
-                target[:values.shape[0], :values.shape[1]][slc] = values[slc]
-                target.flags.writeable = name not in read_only
-                if has_bounds and name in self._coordinate_arrays:
-                    # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
-                    # The interface coordinates are slices that point to the supergrid data; they thus do not consume additional memory.
-                    values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
-                    setattr(self, '_%si_' % name, values_i)
-                    setattr(self, '_%si' % name, values_i[self.halo:-self.halo, self.halo:-self.halo])
-        self._idx.all_values[...] = 1. / self._dx.all_values
-        self._idy.all_values[...] = 1. / self._dy.all_values
+        values = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
+        array.all_values.fill(numpy.nan)
+        slc = valid if name in ('z', 'zo',  'z0b_min') else (Ellipsis,)
+        array.all_values[:values.shape[0], :values.shape[1]][slc] = values[slc]
+        if has_bounds and name in self._coordinate_arrays:
+            # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
+            # The interface coordinates are slices that point to the supergrid data; they thus do not consume additional memory.
+            values_i = source[self.joffset - 1:self.joffset + 2 * nj + 1:2, self.ioffset - 1:self.ioffset + 2 * ni + 1:2]
+            setattr(self, '_%si_' % name, values_i)
+            setattr(self, '_%si' % name, values_i[self.halo:-self.halo, self.halo:-self.halo])
 
     def rotate(self, u: numpy.typing.ArrayLike, v: numpy.typing.ArrayLike, to_grid: bool= True) -> Tuple[numpy.typing.ArrayLike, numpy.typing.ArrayLike]:
         if self._sin_rot is None:
@@ -139,6 +153,22 @@ class Grid(_pygetm.Grid):
         save('mask')
         save('area', 'm2')
         save('cor', 's-1', 'Coriolis parameter')
+
+    def nearest_point(self, x: float, y: float, mask: Optional[Tuple[int]]=None) -> Optional[Tuple[int, int]]:
+        """Return index (i,j) of point nearest to specified coordinate."""
+        if not self.domain.contains(x, y):
+            return None
+        allx, ally = (self.lon, self.lat) if self.domain.spherical else (self.x, self.y)
+        dist = (allx.values - x)**2 + (ally.values - y)**2
+        if mask is not None:
+            if isinstance(mask, int):
+                mask = (mask,)
+            invalid = numpy.ones(dist.shape, dtype=bool)
+            for mask_value in mask:
+                invalid = numpy.logical_and(invalid, self.mask.values != mask_value)
+            dist[invalid] = numpy.inf
+        idx = numpy.nanargmin(dist)
+        return numpy.unravel_index(idx, dist.shape)
 
 for membername in Grid._all_arrays:
     setattr(Grid, membername[1:], property(operator.attrgetter(membername)))
@@ -275,25 +305,29 @@ class RiverTracer(core.Array):
         self._follow[...] = value
 
 class River:
-    def __init__(self, dom: 'Domain', name: str, i: int, j: int, zl: Optional[float]=None, zu: Optional[float]=None):
+    def __init__(self, name: str, i: int, j: int, zl: Optional[float]=None, zu: Optional[float]=None, x: Optional[float]=None, y: Optional[float]=None):
         self.name = name
-        self.i_glob = i
-        self.j_glob = j
+        self.i = i
+        self.j = j
+        self.x = x
+        self.y = y
         self.zl = zl
         self.zu = zu
-
-        HALO = 2
-        self.i, self.j =  i - dom.tiling.xoffset, j - dom.tiling.yoffset
-        if self.i < 0 or self.j < 0 or self.i >= dom.T.nx or self.j >= dom.T.ny:
-            self.i, self.j = None, None
-        else:
-            # Convert to indices into array that includes halos
-            self.i += HALO
-            self.j += HALO
-
+        self.active = True
         self._tracers: Mapping[str, RiverTracer] = {}
 
+    def locate(self,  grid: Grid):
+        if self.x is not None:
+            ind = grid.nearest_point(self.x, self.y, mask=1)
+            if ind is None:
+                self.active = False
+            else:
+                self.i = ind[1] + grid.domain.halox
+                self.j = ind[0] + grid.domain.haloy
+        return self.active
+
     def initialize(self, grid: Grid, flow: numpy.ndarray):
+        assert self.active
         self.flow = core.Array(grid=grid, name='river_' + self.name + '_flow', units='m3 s-1', long_name='inflow from %s' % self.name)
         self.flow.wrap_ndarray(flow)
 
@@ -313,11 +347,27 @@ class Rivers(collections.Mapping):
         self._tracers = []
         self._frozen = False
 
-    def add(self, *args, **kwargs):
+    def add_by_index(self, name: str, i: int, j: int, **kwargs):
+        """Add a river at a location specified by the indices of a tracer point"""
         assert not self._frozen, 'The river collection has already been initialized and can no longer be modified.'
-        river = River(self.grid.domain, *args, **kwargs)
-        if river.i is not None:
+
+        i_loc, j_loc =  i - self.grid.domain.tiling.xoffset, j - self.grid.domain.tiling.yoffset
+
+        #if self.grid.domain.glob is not None and self.grid.domain is not self.grid.domain.glob:
+        #    self.grid.domain.glob.rivers.add_by_index(name, i, j, **kwargs)
+
+        if i_loc >= 0 and j_loc >= 0 and i_loc < self.grid.domain.T.nx and j_loc < self.grid.domain.T.ny:
+            river = River(name, i_loc + self.grid.domain.halox, j_loc + self.grid.domain.haloy, **kwargs)
             self._rivers.append(river)
+            return river
+
+    def add_by_location(self, name: str, x: float, y: float, **kwargs):
+        """Add a river at a location specified by the nearest coordinates (longitude and latitide on a spherical grid)"""
+        #if self.grid.domain.glob is not None and self.grid.domain is not self.grid.domain.glob:
+        #    self.grid.domain.glob.rivers.add_by_location(name, x, y, **kwargs)
+        river = River(name, None, None, x=x, y=y, **kwargs)
+        self._rivers.append(river)
+        return river
 
     def add_tracer(self, name: str, units: str, follow_target_cell: bool=False) -> Tuple[numpy.ndarray, numpy.ndarray, List[RiverTracer]]:
         assert self._frozen, 'Tracers can be added only after the river collection has been initialized.'
@@ -333,7 +383,9 @@ class Rivers(collections.Mapping):
         return values, follow, river_tracers
 
     def initialize(self):
+        assert not self._frozen
         self._frozen = True
+        self._rivers = [river for river in self._rivers if river.locate(self.grid)]
         self.flow = numpy.zeros((len(self._rivers),))
         self.i = numpy.empty((len(self._rivers),), dtype=int)
         self.j = numpy.empty((len(self._rivers),), dtype=int)
@@ -887,3 +939,19 @@ class Domain(_pygetm.Domain):
             self.U.add_to_netcdf(nc, postfix='u')
             self.V.add_to_netcdf(nc, postfix='v')
             self.X.add_to_netcdf(nc, postfix='x')
+
+    def contains(self, x: float, y: float):
+        allx, ally = (self.lon, self.lat) if self.spherical else (self.x, self.y)
+        ny, nx = allx.shape
+
+        # Determine whether point falls within current subdomain
+        # based on https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html
+        x_bnd = numpy.concatenate((allx[0, :-1], allx[:-1, -1], allx[-1, nx-1:0:-1], allx[ny-1:0:-1, 0]))
+        y_bnd = numpy.concatenate((ally[0, :-1], ally[:-1, -1], ally[-1, nx-1:0:-1], ally[ny-1:0:-1, 0]))
+        assert x_bnd.size == 2 * ny + 2 * nx - 4
+        inside = False
+        for i, (vertxi, vertyi) in enumerate(zip(x_bnd, y_bnd)):
+            vertxj, vertyj = x_bnd[i - 1], y_bnd[i - 1]
+            if (vertyi > y) != (vertyj > y) and x < (vertxj - vertxi) * (y - vertyi) / (vertyj - vertyi) + vertxi:
+                inside = not inside
+        return inside

@@ -81,7 +81,7 @@ cdef class Array:
     def all_values(self, value):
         assert value is self._array
 
-    cdef wrap_c_array(self, Domain domain, int source, void* obj, bytes name):
+    cdef wrap_c_array(self, Domain domain, int source, void* obj, bytes name, register=True):
         cdef int grid_type
         cdef int sub_type
         cdef int data_type
@@ -128,7 +128,8 @@ cdef class Array:
         else:
             self._array[...] = self._fill_value
         self.finish_initialization()
-        self.register()
+        if register:
+            self.register()
         return self
 
     def wrap_ndarray(self, numpy.ndarray data not None, on_boundary=False):
@@ -166,8 +167,8 @@ cdef class Grid:
         self.nx_, self.ny_, self.nz_ = self.nx + 2 * domain.halox, self.ny + 2 * domain.haloy, self.nz + 2 * domain.haloz
         domain.grids[grid_type] = self
 
-    def wrap(self, Array ar, bytes name):
-        return ar.wrap_c_array(self.domain, 0, self.p, name)
+    def wrap(self, Array ar, bytes name, register=True):
+        return ar.wrap_c_array(self.domain, 0, self.p, name, register)
 
     def interp_x(self, Array source not None, Array target not None, int offset):
         grid_interp_x(source._array.shape[source._array.ndim - 1], source._array.shape[source._array.ndim - 2], 1 if source._array.ndim == 2 else source._array.shape[0], <double *>source.p, <double *>target.p, offset)
