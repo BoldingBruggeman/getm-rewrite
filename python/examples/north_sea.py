@@ -57,6 +57,8 @@ sim.airsea.v10.set(pygetm.input.from_nc(met_path, 'v10'))
 if sim.runtype < pygetm.BAROCLINIC:
     sim.sst = sim.airsea.t2m
     sim.turbulence.num[...]=1e-2
+if sim.runtype == pygetm.BAROCLINIC:
+    sim.temp.set(10.)
 
 sim.logger.info('Setting up TPXO tidal boundary forcing')
 tpxo_dir = os.path.join(igotm_data_dir, 'TPXO9')
