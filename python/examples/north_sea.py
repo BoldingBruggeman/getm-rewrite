@@ -5,7 +5,9 @@ import pygetm
 import pygetm.legacy
 import pygetm.input.tpxo
 
+getm_setups_dir = '/data/kb/getm-setups.SF'
 getm_setups_dir = '../../../getm-setups'
+
 igotm_data_dirs = ('/server/data', '../../../igotm/data')
 
 igotm_data_dir = next(filter(os.path.isdir, igotm_data_dirs))
@@ -15,24 +17,26 @@ pygetm.legacy.load_bdyinfo(domain, os.path.join(getm_setups_dir, 'NorthSea/bdyin
 pygetm.legacy.load_riverinfo(domain, os.path.join(getm_setups_dir, 'NorthSea/riverinfo.dat'))
 sim = pygetm.Simulation(domain, runtype=pygetm.BAROCLINIC, advection_scheme=pygetm.HSIMT,
     gotm=os.path.join(getm_setups_dir, 'NorthSea/gotmturb.nml'),
-    fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
+#    fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
 )
 
 #sim.input_manager.debug_nc_reads()
 
-sim.logger.info('Setting up output')
-output = sim.output_manager.add_netcdf_file('north_sea.nc', interval=60)
-output.request(('u10', 'v10', 'sp', 't2m', 'd2m', 'tcc'))
-#output.request(('qe', 'qh', 'ql', 'swr', 'albedo', 'zen'))
-output.request(('U', 'V'), mask=True)
-output.request(('zt', 'Dt', 'Du', 'Dv', 'masku', 'maskv'))
-output.request(('dpdx', 'dpdy', 'tausxu', 'tausyv', 'z0bu', 'z0bv', 'z0bt'))   #, 'u_taus'
-output.request(('ru', 'rru', 'rv', 'rrv'))
-if sim.runtype > pygetm.BAROTROPIC_2D:
-    output.request(('uk', 'vk', 'ww', 'SS', 'fpk', 'fqk', 'advpk', 'advqk', 'nuh',))
-    output.request(('med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
-if sim.runtype == pygetm.BAROCLINIC:
-    output.request(('temp', 'salt', 'rho', 'NN', 'sst', 'hnt', 'rad', 'par'))
+if True:
+    sim.logger.info('Setting up output')
+    output = sim.output_manager.add_netcdf_file('north_sea.nc', interval=60, sync_interval=200000)
+    output.request(('u10', 'v10', 'sp', 't2m', 'd2m', 'tcc'))
+    #output.request(('qe', 'qh', 'ql', 'swr', 'albedo', 'zen'))
+    output.request(('U', 'V'), mask=True)
+    output.request(('zt', 'Dt', 'Du', 'Dv', 'masku', 'maskv'))
+    output.request(('dpdx', 'dpdy', 'tausxu', 'tausyv', 'z0bu', 'z0bv', 'z0bt'))   #, 'u_taus'
+    output.request(('ru', 'rru', 'rv', 'rrv'))
+    if sim.runtype > pygetm.BAROTROPIC_2D:
+        output.request(('uk', 'vk', 'ww', 'SS', 'fpk', 'fqk', 'advpk', 'advqk', 'nuh',))
+    if False and sim.do_fabm:
+        output.request(('med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
+    if sim.runtype == pygetm.BAROCLINIC:
+        output.request(('temp', 'salt', 'rho', 'NN', 'sst', 'hnt', 'rad', 'par'))
 
 sim.logger.info('Setting up ERA meteorological forcing')
 met_path = os.path.join(getm_setups_dir, 'NorthSea/Forcing/Meteo/CFSR.daymean.2006.nc')
@@ -71,8 +75,9 @@ if sim.fabm_model:
         sim.get_fabm_dependency('temperature').set(5.)
         sim.get_fabm_dependency('practical_salinity').set(35.)
 
+#sim.start(datetime.datetime(2006, 2, 1), timestep=60., split_factor=30, profile='north_sea') #, profile='north_sea')
 sim.start(datetime.datetime(2006, 2, 1), timestep=60., split_factor=30) #, profile='north_sea')
-while sim.time < datetime.datetime(2007, 1, 1):
+while sim.time < datetime.datetime(2006, 2, 2):
     sim.advance()
 
 sim.finish()
