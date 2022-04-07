@@ -320,6 +320,8 @@ class River:
         if self.x is not None:
             ind = grid.nearest_point(self.x, self.y, mask=1)
             if ind is None:
+                if grid.domain is grid.domain.glob:
+                    raise Exception('River %s is located at x=%s, y=%s, which does not fall within the global model domain' % (self.name, self.x, self.y))
                 self.active = False
             else:
                 self.i = ind[1] + grid.domain.halox
