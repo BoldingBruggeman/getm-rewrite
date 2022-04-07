@@ -5,11 +5,10 @@ import pygetm
 import pygetm.legacy
 import pygetm.input.tpxo
 
-getm_setups_dir = '/data/kb/getm-setups.SF'
-getm_setups_dir = '../../../getm-setups'
+getm_setups_dirs = ('/data/kb/getm-setups.SF', '../../../getm-setups')
+getm_setups_dir = next(filter(os.path.isdir, getm_setups_dirs))
 
 igotm_data_dirs = ('/server/data', '../../../igotm/data')
-
 igotm_data_dir = next(filter(os.path.isdir, igotm_data_dirs))
 
 domain = pygetm.legacy.domain_from_topo(os.path.join(getm_setups_dir, 'NorthSea/Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001)
