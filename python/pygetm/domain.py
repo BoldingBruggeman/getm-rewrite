@@ -353,8 +353,8 @@ class Rivers(collections.Mapping):
 
         i_loc, j_loc =  i - self.grid.domain.tiling.xoffset, j - self.grid.domain.tiling.yoffset
 
-        #if self.grid.domain.glob is not None and self.grid.domain is not self.grid.domain.glob:
-        #    self.grid.domain.glob.rivers.add_by_index(name, i, j, **kwargs)
+        if self.grid.domain.glob is not None and self.grid.domain.glob is not self.grid.domain:
+            self.grid.domain.glob.rivers.add_by_index(name, i, j, **kwargs)
 
         if i_loc >= 0 and j_loc >= 0 and i_loc < self.grid.domain.T.nx and j_loc < self.grid.domain.T.ny:
             river = River(name, i_loc + self.grid.domain.halox, j_loc + self.grid.domain.haloy, **kwargs)
@@ -362,14 +362,15 @@ class Rivers(collections.Mapping):
             return river
 
     def add_by_location(self, name: str, x: float, y: float, **kwargs):
-        """Add a river at a location specified by the nearest coordinates (longitude and latitide on a spherical grid)"""
-        #if self.grid.domain.glob is not None and self.grid.domain is not self.grid.domain.glob:
-        #    self.grid.domain.glob.rivers.add_by_location(name, x, y, **kwargs)
+        """Add a river at a location specified by the nearest coordinates (longitude and latitude on a spherical grid)"""
+        if self.grid.domain.glob is not None and self.grid.domain.glob is not self.grid.domain:
+            self.grid.domain.glob.rivers.add_by_location(name, x, y, **kwargs)
         river = River(name, None, None, x=x, y=y, **kwargs)
         self._rivers.append(river)
         return river
 
     def add_tracer(self, name: str, units: str, follow_target_cell: bool=False) -> Tuple[numpy.ndarray, numpy.ndarray, List[RiverTracer]]:
+        """Register a tracer that can be present in river water."""
         assert self._frozen, 'Tracers can be added only after the river collection has been initialized.'
         assert name not in self._tracers, 'A tracer with name %s has already been added.' % name
         values = numpy.zeros((len(self._rivers),))
@@ -383,7 +384,8 @@ class Rivers(collections.Mapping):
         return values, follow, river_tracers
 
     def initialize(self):
-        assert not self._frozen
+        """Freeze the river collection. Drop those outside the current subdomain and verify the remaining ones are on unmasked T points."""
+        assert not self._frozen, 'The river collection has already been initialized'
         self._frozen = True
         self._rivers = [river for river in self._rivers if river.locate(self.grid)]
         self.flow = numpy.zeros((len(self._rivers),))
@@ -391,7 +393,8 @@ class Rivers(collections.Mapping):
         self.j = numpy.empty((len(self._rivers),), dtype=int)
         self.iarea = numpy.empty((len(self._rivers),))
         for iriver, river in enumerate(self._rivers):
-            assert self.grid.mask.all_values[river.j, river.i] == 1, 'River %s is located at i=%i, j=%i, which is not water (it has mask value %i).' % (river.name, river.i, river.j, self.grid.mask.all_values[river.j, river.i])
+            if self.grid.mask.all_values[river.j, river.i] != 1:
+                raise Exception('River %s is located at i=%i, j=%i, which is not water (it has mask value %i).' % (river.name, river.i, river.j, self.grid.mask.all_values[river.j, river.i]))
             river.initialize(self.grid, self.flow[..., iriver])
             self.i[iriver] = river.i
             self.j[iriver] = river.j
@@ -414,7 +417,6 @@ class Domain(_pygetm.Domain):
     def partition(tiling: parallel.Tiling, nx: int, ny: int, nz: int, global_domain: Optional['Domain'], halo: int=2, has_xy: bool=True, has_lonlat: bool=True, logger: Optional[logging.Logger]=None, **kwargs):
         assert nx == tiling.nx_glob and ny == tiling.ny_glob, 'Extent of global domain (%i, %i) does not match that of tiling (%i, %i).' % (ny, nx, tiling.ny_glob, tiling.nx_glob)
         assert tiling.n == tiling.comm.Get_size(), 'Number of active cores in subdomain decompositon (%i) does not match available number of cores (%i).' % (tiling.n, tiling.comm.Get_size())
-        assert global_domain is None or global_domain.initialized
 
         halo = 4   # coordinates are scattered without their halo - Domain object will update halos upon creation
         share = 1  # one X point overlap in both directions between subdomains for variables on the supergrid
@@ -513,10 +515,6 @@ class Domain(_pygetm.Domain):
         # If there is only one node, return the global domain immediately
         if tiling.n == 1:
             return global_domain
-
-        # If on root, initialize the global domain [JB 2021-11-23 Why? Is this really needed?]
-        if global_domain is not None:
-            global_domain.initialize(runtype=runtype)
 
         # Create the subdomain, and (if on root) attach a pointer to the global domain
         subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, logger=logger)
@@ -692,6 +690,9 @@ class Domain(_pygetm.Domain):
 
     def initialize(self, runtype: int, field_manager: Optional[output.FieldManager]=None):
         assert not self.initialized, 'Domain has already been initialized'
+        if self.glob is not None and self.glob is not self:
+            self.glob.initialize(runtype)
+
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained by the domain to be used for e.g. plotting
         tmask = self.mask_[1::2, 1::2]
         self.mask_[2:-2:2, 1::2][numpy.logical_and(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
