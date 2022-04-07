@@ -206,10 +206,10 @@ class Simulation(_pygetm.Simulation):
             self.temp.fill(5.)
             self.salt.fill(35.)
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
-            self.shf = self.temp.source.isel(z=-1, name='shf', long_name='surface heat flux')
+            self.shf = dom.T.array(name='shf', units='W m-2', long_name='surface heat flux', fill_value=FILL_VALUE)
             self.tracer_totals.append(self.salt)
 
-            self.radiation = pygetm.radiation.Radiation(dom.T)
+            self.radiation = pygetm.radiation.TwoBand(dom.T)
             self.density = density or pygetm.density.Density()
 
     def __getitem__(self, key: str) -> core.Array:
@@ -381,10 +381,10 @@ class Simulation(_pygetm.Simulation):
 
                 # Temperature and salinity (T grid - centers)
                 self.radiation(self.airsea.swr)
+                self.temp.source.all_values[...] = self.radiation.swr_abs.all_values
                 self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
-                self.shf.all_values[...] = numpy.where(self.sst.all_values > -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values, self.shf.all_values.clip(min=0.))
-                self.temp.source.all_values -= numpy.diff(self.radiation.rad.all_values, axis=0)
-                self.temp.source.all_values[0, ...] += self.radiation.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
+                self.shf.all_values[numpy.logical_and(self.sst.all_values < -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values < 0)] = 0.
+                self.temp.source.all_values[-1, ...] += self.shf.all_values
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None

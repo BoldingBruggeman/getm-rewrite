@@ -8,7 +8,15 @@ import numpy
 class Radiation:
     def __init__(self, grid: domain.Grid):
         self.grid = grid
+        self.swr_abs = grid.array(name='swr_abs', units='W m-2', long_name='heating due to shortwave absorption (layer-integrated)', z=CENTERS, fill_value=FILL_VALUE)
 
+    def __call__(self, swr: core.Array):
+        """Compute heating due to shortwave radiation throughout the water column"""
+        pass
+
+class TwoBand(Radiation):
+    def __init__(self, grid: domain.Grid):
+        super().__init__(grid)
         self.A = grid.array(name='A', units='1', long_name='non-visible fraction of shortwave radiation', fill_value=FILL_VALUE)
         self.kc1 = grid.array(name='kc1', units='m-1', long_name='attenuation of non-visible fraction of shortwave radiation', fill_value=FILL_VALUE)
         self.kc2 = grid.array(name='kc2', units='1', long_name='attenuation of visible fraction of shortwave radiation', fill_value=FILL_VALUE)
@@ -22,7 +30,7 @@ class Radiation:
         self.par0 = grid.array(name='par0', units='W m-2', long_name='surface photosynthetically active radiation', fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
 
     def __call__(self, swr: core.Array):
-        """Compute downwelling shortwave radiation throughout the water column"""
+        """Compute heating due to shortwave radiation throughout the water column"""
         assert swr.grid is self.grid and not swr.z
         _pygetm.exponential_profile_2band_interfaces(self.grid.mask, self.grid.hn, self.A, self.kc1, self.kc2, top=swr, out=self.rad)
 
@@ -32,3 +40,6 @@ class Radiation:
         if self.par.saved:
             # Visible part of shortwave radiation at layer centers, often used by biogeochemistry
             _pygetm.exponential_profile_1band_centers(self.grid.mask, self.grid.hn, self.kc2, top=self.par0, out=self.par)
+
+        self.swr_abs.all_values[...] = numpy.diff(self.rad.all_values, axis=0)
+        self.swr_abs.all_values[0, ...] += self.rad.all_values[0, ...]     # all remaining radiation is absorbed at the bottom and injected in the water layer above it
