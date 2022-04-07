@@ -22,20 +22,29 @@ sim = pygetm.Simulation(domain, runtype=pygetm.BAROCLINIC, advection_scheme=pyge
 #sim.input_manager.debug_nc_reads()
 
 if True:
+    debug_output = False
     sim.logger.info('Setting up output')
-    output = sim.output_manager.add_netcdf_file('north_sea.nc', interval=60, sync_interval=200000)
+    output = sim.output_manager.add_netcdf_file('meteo.nc', interval=60, sync_interval=200000)
     output.request(('u10', 'v10', 'sp', 't2m', 'd2m', 'tcc'))
     #output.request(('qe', 'qh', 'ql', 'swr', 'albedo', 'zen'))
+    output = sim.output_manager.add_netcdf_file('north_sea_2d.nc', interval=60, sync_interval=200000)
     output.request(('U', 'V'), mask=True)
-    output.request(('zt', 'Dt', 'Du', 'Dv', 'masku', 'maskv'))
-    output.request(('dpdx', 'dpdy', 'tausxu', 'tausyv', 'z0bu', 'z0bv', 'z0bt'))   #, 'u_taus'
-    output.request(('ru', 'rru', 'rv', 'rrv'))
+    output.request(('zt', 'Dt', 'tausxu', 'tausyv', ))
+    if debug_output:
+        output.request(('maskt', 'masku', 'maskv', ))   #, 'u_taus'
+        output.request(('Du', 'Dv', 'dpdx', 'dpdy', 'z0bu', 'z0bv', 'z0bt'))   #, 'u_taus'
+        output.request(('ru', 'rru', 'rv', 'rrv'))
     if sim.runtype > pygetm.BAROTROPIC_2D:
-        output.request(('uk', 'vk', 'ww', 'SS', 'fpk', 'fqk', 'advpk', 'advqk', 'nuh',))
-    if False and sim.do_fabm:
-        output.request(('med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
+        output = sim.output_manager.add_netcdf_file('north_sea_3d.nc', interval=360, sync_interval=200000)
+        output.request(('uk', 'vk', 'ww', 'SS', 'num',))
+        if debug_output:
+            output.request(('fpk', 'fqk', 'advpk', 'advqk',))
     if sim.runtype == pygetm.BAROCLINIC:
-        output.request(('temp', 'salt', 'rho', 'NN', 'sst', 'hnt', 'rad', 'par'))
+        output.request(('temp', 'salt', 'rho', 'NN', 'rad', 'sst', 'hnt', 'nuh',))
+        if debug_output:
+            output.request(( ))
+        if sim.fabm_model:
+            output.request(('par', 'med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
 
 sim.logger.info('Setting up ERA meteorological forcing')
 met_path = os.path.join(getm_setups_dir, 'NorthSea/Forcing/Meteo/CFSR.daymean.2006.nc')
