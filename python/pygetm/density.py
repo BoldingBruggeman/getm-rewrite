@@ -1,6 +1,7 @@
 import numpy
 
 from . import core
+from . import _pygetm
 from .constants import *
 import pygsw
 
@@ -17,7 +18,7 @@ class Density:
             out = SA.grid.array(z=INTERFACES)
         assert out.grid is SA.grid and out.z == INTERFACES
         if p is None:
-            p = -SA.grid.zc
+            p = _pygetm.thickness2center_depth(SA.grid.mask, SA.grid.hn)
         assert p.grid is SA.grid
         pygsw.nsquared(SA.grid.mask.all_values, SA.grid.hn.all_values, SA.all_values, ct.all_values, p.all_values, SA.grid.lat.all_values, out.all_values[1:-1, :, :])
         return out
@@ -29,7 +30,7 @@ class Density:
             out = SA.grid.array(z=SA.z)
         assert out.grid is SA.grid
         if p is None:
-            p = -SA.grid.zc
+            p = _pygetm.thickness2center_depth(SA.grid.mask, SA.grid.hn)
         assert p.grid is SA.grid
         pygsw.rho(SA.all_values.ravel(), ct.all_values.ravel(), p.all_values.ravel(), out.all_values.ravel())
         return out
@@ -49,7 +50,7 @@ class Density:
         The conversion happens in-place."""
         assert sp.grid is pt.grid
         if p is None:
-            p = -sp.grid.zc
+            p = _pygetm.thickness2center_depth(sp.grid.mask, sp.grid.hn)
         assert p.grid is sp.grid
         out = numpy.empty_like(sp.all_values)
         lon = numpy.broadcast_to(sp.grid.lon.all_values, out.shape)

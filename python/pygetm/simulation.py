@@ -195,7 +195,7 @@ class Simulation(_pygetm.Simulation):
                     ar.wrap_ndarray(self.fabm_conserved_quantity_totals[i, ...])
                     self.tracer_totals.append(ar)
 
-            self.pres = dom.T.array(fill=numpy.nan, z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
+            self.pres = dom.T.array(z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
 
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
@@ -318,7 +318,7 @@ class Simulation(_pygetm.Simulation):
         self.istep += 1
         macro_active = self.istep % self.split_factor == 0
 
-        # Update all inputs (todo: separate 2D and 3D inputs, as the latter are needed much less frequently)
+        # Update all inputs
         self.domain.input_manager.update(self.time, include_3d=macro_active)
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
@@ -568,20 +568,23 @@ class Simulation(_pygetm.Simulation):
         """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step.
         Note: this uses sea level on T grid as computed by the 2D time step. This has to be up to date in the halos too!
         """
-        self.domain.T.zio.all_values[...] = self.domain.T.zin.all_values[...]
-        self.domain.U.zio.all_values[...] = self.domain.U.zin.all_values[...]
-        self.domain.V.zio.all_values[...] = self.domain.V.zin.all_values[...]
-        self.domain.X.zio.all_values[...] = self.domain.X.zin.all_values[...]
+        # Store current elevations as previous elevations (on the 3D time step)
+        self.domain.T.zio.all_values[...] = self.domain.T.zin.all_values
+        self.domain.U.zio.all_values[...] = self.domain.U.zin.all_values
+        self.domain.V.zio.all_values[...] = self.domain.V.zin.all_values
+        self.domain.X.zio.all_values[...] = self.domain.X.zin.all_values
 
-        self.domain.T.zin.all_values[...] = self.domain.T.z.all_values[...]
+        # Synchronize new elevations on the 3D time step to those of the 2D time step that has just completed.
+        self.domain.T.zin.all_values[...] = self.domain.T.z.all_values
 
-        # Compute sea level on U, V, X grids.
-        # Note that this must be at time=n+1/2, whereas sea level on T grid is now at time=n+1.
+        # Compute elevations on U, V, X grids.
+        # Note that this must be at time=n+1/2, whereas elevations on the T grid is now at time=n+1.
         zi_T_half = 0.5 * (self.domain.T.zio + self.domain.T.zin)
         zi_T_half.interp(self.domain.U.zin)
         zi_T_half.interp(self.domain.V.zin)
         zi_T_half.interp(self.domain.X.zin)
 
+        # Clip newly inferred elevations to ensure the minimum depth is respected.
         self.domain.U.zin.all_values.clip(min=-self.domain.U.H.all_values + self.domain.Dmin, out=self.domain.U.zin.all_values)
         self.domain.V.zin.all_values.clip(min=-self.domain.V.H.all_values + self.domain.Dmin, out=self.domain.V.zin.all_values)
         self.domain.X.zin.all_values.clip(min=-self.domain.X.H.all_values + self.domain.Dmin, out=self.domain.X.zin.all_values)
@@ -612,8 +615,8 @@ class Simulation(_pygetm.Simulation):
         self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
 
         if self.pres.saved:
-            # Update pressure based on new depths
-            self.pres.all_values[...] = -self.domain.T.zc.all_values[...]
+            # Update pressure (dbar) at layer centers, assuming it is equal to depth in m
+            _pygetm.thickness2center_depth(self.domain.T.mask, self.domain.T.hn, self.pres)
 
         if self.domain.zc_bdy.saved:
             # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
@@ -630,10 +633,10 @@ class Simulation(_pygetm.Simulation):
         z_T_half.interp(self.domain.U.z)
         z_T_half.interp(self.domain.V.z)
         z_T_half.interp(self.domain.X.z)
-        self.domain.U.z.all_values.clip(min=-self.domain.U.H + self.domain.Dmin, out=self.domain.U.z.all_values)
-        self.domain.V.z.all_values.clip(min=-self.domain.V.H + self.domain.Dmin, out=self.domain.V.z.all_values)
-        self.domain.X.z.all_values.clip(min=-self.domain.X.H + self.domain.Dmin, out=self.domain.X.z.all_values)
-        z_T_half.all_values.clip(min=-self.domain.T.H + self.domain.Dmin, out=z_T_half.all_values)
+        self.domain.U.z.all_values.clip(min=-self.domain.U.H.all_values + self.domain.Dmin, out=self.domain.U.z.all_values)
+        self.domain.V.z.all_values.clip(min=-self.domain.V.H.all_values + self.domain.Dmin, out=self.domain.V.z.all_values)
+        self.domain.X.z.all_values.clip(min=-self.domain.X.H.all_values + self.domain.Dmin, out=self.domain.X.z.all_values)
+        z_T_half.all_values.clip(min=-self.domain.T.H.all_values + self.domain.Dmin, out=z_T_half.all_values)
 
         # Halo exchange for elevation on U, V grids, needed because the very last points in the halos
         # (x=-1 for U, y=-1 for V) are not valid after interpolating from the T grid above.

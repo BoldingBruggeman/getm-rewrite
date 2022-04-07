@@ -46,6 +46,7 @@ cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double time
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* top, double* out) nogil
+cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
 
 cpdef enum:
     TGRID = 1
@@ -451,6 +452,13 @@ def exponential_profile_2band_interfaces(Array mask not None, Array h not None, 
     assert mask.grid is top.grid and not top.z
     assert mask.grid is out.grid and out.z == INTERFACES
     c_exponential_profile_2band_interfaces(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>f.p, <double *>k1.p, <double *>k2.p, <double *>top.p, <double *>out.p)
+
+def thickness2center_depth(Array mask not None, Array h not None, Array out=None):
+    assert mask.grid is h.grid and h.z == CENTERS
+    if out is None:
+        out = h.grid.create(z == CENTERS)
+    assert mask.grid is out.grid and out.z == CENTERS
+    c_thickness2center_depth(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>out.p)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

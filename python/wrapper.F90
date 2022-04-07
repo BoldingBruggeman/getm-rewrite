@@ -665,8 +665,8 @@ contains
       integer :: k
       real(c_double) :: cumh(nx, ny)
 
-      where (mask /= 0) out(:,:,nz) = top * exp(-0.5_c_double * kc * h(:,:,nz))
-      cumh = 0._c_double
+      cumh = 0.5_c_double * h(:,:,nz)
+      where (mask /= 0) out(:,:,nz) = top * exp(-kc * cumh)
       do k=nz-1,1,-1
          cumh = cumh + 0.5_c_double * (h(:,:,k) + h(:,:,k+1))
          where (mask /= 0) out(:,:,k) = top * exp(-kc * cumh)
@@ -705,6 +705,20 @@ contains
       do k=nz-1,0,-1
          cumh = cumh + h(:,:,k+1)
          where (mask /= 0) out(:,:,k) = top * (f1  * exp(-kc1 * cumh) + (1._c_double - f1) * exp(-kc2 * cumh))
+      end do
+   end subroutine
+
+   subroutine c_thickness2center_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
+      integer(c_int), intent(in)        :: mask(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz)
+      real(c_double), intent(inout)     :: out(nx, ny, nz)
+
+      integer :: k
+
+      where (mask /= 0) out(:,:,nz) = 0.5_c_double * h(:,:,nz)
+      do k=nz-1,1,-1
+         where (mask /= 0) out(:,:,k) = out(:,:,k+1) + 0.5_c_double * (h(:,:,k) + h(:,:,k+1))
       end do
    end subroutine
 
