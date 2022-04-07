@@ -181,7 +181,8 @@ class Simulation(_pygetm.Simulation):
                 for i, variable in enumerate(self.fabm_model.interior_state_variables):
                     ar_w = core.Array(grid=self.domain.T)
                     ar_w.wrap_ndarray(self.fabm_vertical_velocity[i, ...])
-                    self.create_tracer(data=variable.data, vertical_velocity=ar_w, name=variable.output_name, units=variable.units, long_name=variable.long_path, fill_value=variable.missing_value)
+                    self.create_tracer(data=variable.data, vertical_velocity=ar_w, name=variable.output_name, units=variable.units, long_name=variable.long_path, 
+                        fill_value=variable.missing_value, rivers_follow_target_cell=variable.no_river_dilution)
                 for variable in itertools.chain(self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                     ar = fabm_variable_to_array(variable, send_data=True)
                 self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
