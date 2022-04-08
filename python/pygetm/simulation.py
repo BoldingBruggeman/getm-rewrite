@@ -66,10 +66,13 @@ class Tracer(core.Array):
         self.source_scale = source_scale
         self.vertical_velocity = vertical_velocity
         self.boundaries = Boundaries(self)
-        self.river_values, self.river_follow, river_tracers = grid.domain.rivers.add_tracer(self.name, self.units, rivers_follow_target_cell)
+        self.river_values = numpy.zeros((len(grid.domain.rivers),))
+        self.river_follow = numpy.full((len(grid.domain.rivers),), rivers_follow_target_cell, dtype=bool)
         self.rivers = {}
-        for river_name, river_tracer in zip(grid.domain.rivers, river_tracers):
-            self.rivers[river_name] = river_tracer
+        for iriver, river in enumerate(grid.domain.rivers.values()):
+            river_tracer = domain.RiverTracer(grid, river.name, self.name, self.river_values[..., iriver], self.river_follow[..., iriver], units=self.units, attrs={'_3d_only': True})
+            river._tracers[self.name] = river_tracer
+            self.rivers[river.name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk'
@@ -451,11 +454,11 @@ class Simulation(_pygetm.Simulation):
         river_depth = h.sum(where=river_active, axis=0)
         withdrawal = self._cum_river_height_increase < 0.
         h_increase = numpy.where(river_active, h * self._cum_river_height_increase / river_depth, 0.)
-        for tracer, (river_values, river_follow) in zip(self.tracers, self.domain.rivers._tracers):
-            river_follow = numpy.logical_or(river_follow, withdrawal)
+        for tracer in self.tracers:
+            river_follow = numpy.logical_or(tracer.river_follow, withdrawal)
             if not river_follow.all():
                 tracer_old = tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
-                river_values = numpy.where(river_follow, tracer_old, river_values)
+                river_values = numpy.where(river_follow, tracer_old, tracer.river_values)
                 tracer_new = (tracer_old * river_depth + river_values * self._cum_river_height_increase) / (river_depth + self._cum_river_height_increase)
                 tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = numpy.where(river_active, tracer_new, tracer_old)
         self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = h + h_increase

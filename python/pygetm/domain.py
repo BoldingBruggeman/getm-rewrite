@@ -375,20 +375,6 @@ class Rivers(collections.Mapping):
         self._rivers.append(river)
         return river
 
-    def add_tracer(self, name: str, units: str, follow_target_cell: bool=False) -> Tuple[numpy.ndarray, numpy.ndarray, List[RiverTracer]]:
-        """Register a tracer that can be present in river water."""
-        assert self._frozen, 'Tracers can be added only after the river collection has been initialized.'
-        assert name not in self._tracers, 'A tracer with name %s has already been added.' % name
-        values = numpy.zeros((len(self._rivers),))
-        follow = numpy.full((len(self._rivers),), follow_target_cell, dtype=bool)
-        self._tracers.append((values, follow))
-        river_tracers: List[RiverTracer] = []
-        for iriver, river in enumerate(self._rivers):
-            river_tracer = RiverTracer(self.grid, river.name, name, values[..., iriver], follow[..., iriver], units=units, attrs={'_3d_only': True})
-            river_tracers.append(river_tracer)
-            river._tracers[name] = river_tracer
-        return values, follow, river_tracers
-
     def initialize(self):
         """Freeze the river collection. Drop those outside the current subdomain and verify the remaining ones are on unmasked T points."""
         assert not self._frozen, 'The river collection has already been initialized'
