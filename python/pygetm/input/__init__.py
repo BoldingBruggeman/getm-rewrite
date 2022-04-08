@@ -418,7 +418,7 @@ def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, it
     return xarray.DataArray(VerticalInterpolation(source, target_z, itargetdim), dims=source.dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
 
 class VerticalInterpolation(UnaryOperatorResult):
-    def __init__(self, source: xarray.DataArray, z: numpy.ndarray, axis: int=0):
+    def __init__(self, source: xarray.DataArray, z: numpy.ndarray, axis: int=0, z_depends_on_time: bool=True):
         source_z = source.getm.z
         self.izdim = source.dims.index(source_z.dims[0])
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
@@ -430,9 +430,13 @@ class VerticalInterpolation(UnaryOperatorResult):
         self.source_z = source_z.values
         if (self.source_z >= 0.).all():
             self.source_z = -self.source_z
+        self.z_depends_on_time = z_depends_on_time
 
     def apply(self, source, dtype=None) -> numpy.ndarray:
         return pygetm.util.interpolate.interp_1d(self.z, self.source_z, source, axis=self.axis)
+
+    def is_time_varying(self) -> bool:
+        return self.z_depends_on_time or self._source.is_time_varying()
 
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     time_coord = source.getm.time
@@ -587,6 +591,15 @@ class InputManager:
                 target_slice, global_slice, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2)
                 value = value[global_slice]
 
+        if value.getm.time is not None:
+            # The source data is time-dependent; during the simulation it will be interpolated in time.
+            if value.getm.time.size > 1:
+                value = temporal_interpolation(value)
+            else:
+                self._logger.warning('%s is set to %s, which has only one time point. The value from this time will be used now. %s will not be further updated by the input manager at runtime.' % (array.name, value.name, array.name))
+                itimedim = value.dims.index(value.getm.time.dims[0])
+                value = value[tuple([0 if idim == itimedim else slice(None) for idim in range(value.ndim)])]
+
         if array.z:
             # The target is a depth-explicit array.
             # The source must be defined on z coordinates and interpolated to our [time-varying] depths
@@ -597,15 +610,6 @@ class InputManager:
             z_coordinate.saved = True
             value = vertical_interpolation(value, z_coordinate.all_values[target_slice], itargetdim=1 if array.on_boundary else 0)
 
-        if value.getm.time is not None:
-            # The source data is time-dependent; during the simulation it will be interpolated in time.
-            if value.getm.time.size > 1:
-                value = temporal_interpolation(value)
-            else:
-                self._logger.warning('%s is set to %s, which has only one time point. The value from this time will be used now. %s will not be further updated by the input manager at runtime.' % (array.name, value.name, array.name))
-                itimedim = value.dims.index(value.getm.time.dims[0])
-                value = value[tuple([0 if idim == itimedim else slice(None) for idim in range(value.ndim)])]
-
         target = array.all_values[target_slice]
         assert value.shape == target.shape, 'Source shape %s does not match target shape %s' % (value.shape, target.shape)
         if isinstance(value.variable.data, LazyArray) and value.variable.data.is_time_varying():
@@ -614,7 +618,7 @@ class InputManager:
             self.fields.append((array.name, value.data, target, not _3d_only))
         else:
             target[...] = value
-            unmasked = True if array.ndim == 0 else numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
+            unmasked = True if (array.ndim == 0 or array.on_boundary) else numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
             finite = numpy.isfinite(target)
             if not finite.all(where=unmasked):
                 n_unmasked = unmasked.sum()

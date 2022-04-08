@@ -47,7 +47,7 @@ class Boundaries:
     @type.setter
     def type(self, value: int):
         self._type = value
-        self.values = None if self._type == ZERO_GRADIENT else self._tracer.grid.array(name='%s_bdy' % self._tracer.name, z=CENTERS, on_boundary=True)
+        self.values = None if self._type == ZERO_GRADIENT else self._tracer.grid.array(name='%s_bdy' % self._tracer.name, z=CENTERS, on_boundary=True, attrs={'_3d_only': True})
 
     def update(self):
         self._tracer.update_boundary(self._type, self.values)
