@@ -132,7 +132,7 @@ class OperatorResult(LazyArray):
             passthrough = range(len(shape))
         self.passthrough = frozenset(passthrough)
         assert all([isinstance(dim, int) for dim in self.passthrough]), 'Invalid passthrough: %s. All entries should be of type int' % (self.passthrough,)
-        super().__init__(shape, float)
+        super().__init__(shape, dtype or float)
 
     def update(self, time: cftime.datetime) -> bool:
         updated = False
@@ -180,7 +180,7 @@ class UFuncResult(OperatorResult):
 class WrappedArray(OperatorResult):
     def __init__(self, source: xarray.DataArray):
         assert not isinstance(source.variable._data, LazyArray)
-        super().__init__(source, passthrough=True)
+        super().__init__(source, passthrough=True, dtype=source.dtype)
 
     def apply(self, source, dtype=None) -> numpy.ndarray:
         return source
@@ -301,7 +301,7 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
     if verbose:
         print('final shape: %s' % (shape,))
 
-    data = ConcatenatedSliceArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim])
+    data = ConcatenatedSliceArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim], dtype=source.dtype)
 
     istart = 0
     strslices = ''
@@ -313,7 +313,8 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
         target_slice[idim] = slice(istart, istart + n)
         strslices += '[%i:%i],' % (s.start, s.stop)
         data._slices.append((tuple(source_slice), tuple(target_slice)))
-        istart += 1
+        istart += n
+    assert istart == shape[idim]
 
     coords = {}
     for name, c in source.coords.items():
@@ -447,18 +448,18 @@ class TemporalInterpolationResult(UnaryOperatorResult):
     last_time: Optional[cftime.datetime] = None
     last_numtimes = {}
 
-    def __init__(self, source: xarray.DataArray):
+    def __init__(self, source: xarray.DataArray, dtype=float):
         time_coord = source.getm.time
         shape = list(source.shape)
         self._itimedim = source.dims.index(time_coord.dims[0])
         assert shape[self._itimedim] > 1, 'Cannot interpolate %s in time because its time dimension has length %i.' % (source.name, shape[self._itimedim])
         shape.pop(self._itimedim)
 
-        super().__init__(source, shape=shape)
+        super().__init__(source, shape=shape, dtype=dtype)
 
-        self._current = numpy.empty(shape, dtype=source.dtype)
+        self._current = numpy.empty(shape, dtype=self.dtype)
 
-        self._numtimes = time_coord.values
+        self._numtimes = numpy.asarray(time_coord.values, self.dtype)
         self._cftime_args = (time_coord.attrs['units'], time_coord.attrs.get('calendar', 'standard'))
         self._timecoord = xarray.DataArray(cftime.num2date(self._numtimes[0], *self._cftime_args))
 
@@ -504,7 +505,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
                 raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, numtime, self._numtimes[self._inext - 1]))
             old, numold = self._next, self._numnext
             self.slices[self._itimedim] = self._inext
-            self._next = self._source[tuple(self.slices)].values
+            self._next = numpy.asarray(self._source[tuple(self.slices)].values, dtype=self.dtype)
             self._numnext = self._numtimes[self._inext]
             self._slope = (self._next - old) / (self._numnext - numold)
 
@@ -563,7 +564,7 @@ class InputManager:
             idim = value.ndim - (2 if array.z else 1)
             if value.shape[idim] != grid.nbdyp:
                 # The source array covers all open boundaries (global domain).
-                # Slice out only the points that fall wihin the current subdomain
+                # Slice out only the points that fall within the current subdomain
                 if value.shape[idim] != grid.domain.nbdyp_glob:
                     self._logger.error('Dimension %i of %s does not have expected extent %i (number of open boundary points in the global domain). Its actual extent is %i' % (idim, value.name, grid.domain.nbdyp_glob, value.shape[idim]))
                 if grid.domain.local_to_global_ob:
@@ -576,6 +577,8 @@ class InputManager:
                 # interpolate horizontally to local array INCLUDING halos
                 target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2, exclude_global_halos=True)
                 lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
+                assert not numpy.isnan(lon).any()
+                assert not numpy.isnan(lat).any()
                 value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
                 value = horizontal_interpolation(value, lon, lat)
             else:

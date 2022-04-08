@@ -47,7 +47,7 @@ class Boundaries:
     @type.setter
     def type(self, value: int):
         self._type = value
-        self.values = None if self._type == ZERO_GRADIENT else self._tracer.grid.array(z=CENTERS, on_boundary=True)
+        self.values = None if self._type == ZERO_GRADIENT else self._tracer.grid.array(name='%s_bdy' % self._tracer.name, z=CENTERS, on_boundary=True)
 
     def update(self):
         self._tracer.update_boundary(self._type, self.values)
@@ -295,6 +295,9 @@ class Simulation(_pygetm.Simulation):
         if self.runtype == BAROCLINIC:
             assert self.airsea.qe.require_set(self.logger) * self.airsea.qh.require_set(self.logger) * self.airsea.ql.require_set(self.logger)
             self.radiation(self.airsea.swr)
+
+        # Update elevation at the open boundaries
+        self.update_sealevel_boundaries(self.timestep)
 
         if self.fabm_model:
             self.update_fabm_sources()

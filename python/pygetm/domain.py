@@ -154,21 +154,23 @@ class Grid(_pygetm.Grid):
         save('area', 'm2')
         save('cor', 's-1', 'Coriolis parameter')
 
-    def nearest_point(self, x: float, y: float, mask: Optional[Tuple[int]]=None) -> Optional[Tuple[int, int]]:
+    def nearest_point(self, x: float, y: float, mask: Optional[Tuple[int]]=None, include_halos: bool=False) -> Optional[Tuple[int, int]]:
         """Return index (i,j) of point nearest to specified coordinate."""
-        if not self.domain.contains(x, y):
+        if not self.domain.contains(x, y, include_halos=include_halos):
             return None
+        local_slice, _, _, _ = self.domain.tiling.subdomain2slices(halo_sub=self.halo, halo_glob=self.halo, share=self.overlap, exclude_halos=not include_halos, exclude_global_halos=True)
         allx, ally = (self.lon, self.lat) if self.domain.spherical else (self.x, self.y)
-        dist = (allx.values - x)**2 + (ally.values - y)**2
+        dist = (allx.all_values[local_slice] - x)**2 + (ally.all_values[local_slice] - y)**2
         if mask is not None:
             if isinstance(mask, int):
                 mask = (mask,)
             invalid = numpy.ones(dist.shape, dtype=bool)
             for mask_value in mask:
-                invalid = numpy.logical_and(invalid, self.mask.values != mask_value)
+                invalid = numpy.logical_and(invalid, self.mask.all_values[local_slice] != mask_value)
             dist[invalid] = numpy.inf
         idx = numpy.nanargmin(dist)
-        return numpy.unravel_index(idx, dist.shape)
+        j, i = numpy.unravel_index(idx, dist.shape)
+        return j + local_slice[-2].start, i + local_slice[-1].start
 
 for membername in Grid._all_arrays:
     setattr(Grid, membername[1:], property(operator.attrgetter(membername)))
@@ -316,16 +318,17 @@ class River:
         self.active = True
         self._tracers: Mapping[str, RiverTracer] = {}
 
-    def locate(self,  grid: Grid):
+    def locate(self, grid: Grid):
         if self.x is not None:
-            ind = grid.nearest_point(self.x, self.y, mask=1)
+            ind = grid.nearest_point(self.x, self.y, mask=1, include_halos=True)
             if ind is None:
+                grid.domain.logger.info('River %s at x=%s, y=%s not present in this subdomain' % (self.name, self.x, self.y))
                 if grid.domain is grid.domain.glob:
                     raise Exception('River %s is located at x=%s, y=%s, which does not fall within the global model domain' % (self.name, self.x, self.y))
                 self.active = False
             else:
-                self.i = ind[1] + grid.domain.halox
-                self.j = ind[0] + grid.domain.haloy
+                self.j, self.i = ind
+                grid.domain.logger.info('River %s at x=%s, y=%s is located at i=%i, j=%i in this subdomain' % (self.name, self.x, self.y, self.i, self.j))
         return self.active
 
     def initialize(self, grid: Grid, flow: numpy.ndarray):
@@ -353,13 +356,14 @@ class Rivers(collections.Mapping):
         """Add a river at a location specified by the indices of a tracer point"""
         assert not self._frozen, 'The river collection has already been initialized and can no longer be modified.'
 
-        i_loc, j_loc =  i - self.grid.domain.tiling.xoffset, j - self.grid.domain.tiling.yoffset
+        i_loc = i - self.grid.domain.tiling.xoffset + self.grid.domain.halox
+        j_loc = j - self.grid.domain.tiling.yoffset + self.grid.domain.haloy
 
         if self.grid.domain.glob is not None and self.grid.domain.glob is not self.grid.domain:
             self.grid.domain.glob.rivers.add_by_index(name, i, j, **kwargs)
 
-        if i_loc >= 0 and j_loc >= 0 and i_loc < self.grid.domain.T.nx and j_loc < self.grid.domain.T.ny:
-            river = River(name, i_loc + self.grid.domain.halox, j_loc + self.grid.domain.haloy, **kwargs)
+        if i_loc >= 0 and j_loc >= 0 and i_loc < self.grid.nx_ and j_loc < self.grid.ny_:
+            river = River(name, i_loc, j_loc, **kwargs)
             self._rivers.append(river)
             return river
 
@@ -422,6 +426,7 @@ class Domain(_pygetm.Domain):
 
         halo = 4   # coordinates are scattered without their halo - Domain object will update halos upon creation
         share = 1  # one X point overlap in both directions between subdomains for variables on the supergrid
+        local_slice, _, _, _ = tiling.subdomain2slices(halo_sub=4, halo_glob=4, scale=2, share=1, exclude_halos=False, exclude_global_halos=True)
 
         coordinates = {'f': 'cor'}
         if has_xy:
@@ -431,9 +436,10 @@ class Domain(_pygetm.Domain):
             coordinates['lon'] = 'lon'
             coordinates['lat'] = 'lat'
         for name, att in coordinates.items():
-            c = numpy.empty((2 * tiling.ny_sub + share, 2 * tiling.nx_sub + share))
-            scatterer = parallel.Scatter(tiling, c, halo=0, share=share, scale=2, fill_value=numpy.nan)
-            scatterer(None if global_domain is None else getattr(global_domain, att))
+            c = numpy.empty((2 * tiling.ny_sub + 2 * halo + share, 2 * tiling.nx_sub + 2 * halo + share))
+            scatterer = parallel.Scatter(tiling, c, halo=halo, share=share, scale=2, fill_value=numpy.nan)
+            scatterer(None if global_domain is None else getattr(global_domain, att + '_'))
+            assert not numpy.isnan(c[local_slice]).any(), 'Subdomain %s contains NaN after initial scatter'
             kwargs[name] = c
 
         domain = Domain(tiling.nx_sub, tiling.ny_sub, nz, tiling=tiling, logger=logger, **kwargs)
@@ -453,10 +459,19 @@ class Domain(_pygetm.Domain):
 
         halo = 2
         superhalo = 2 * halo
+        valid_before = numpy.logical_not(numpy.isnan(data))
 
         # Expand the data array one each side
         data_ext = numpy.full((data.shape[0] + 2, data.shape[1] + 2), fill_value, dtype=data.dtype)
         data_ext[1:-1, 1:-1] = data
+        data_ext[             :superhalo,                    : superhalo    ] = data[:superhalo,              : superhalo]
+        data_ext[             :superhalo,       superhalo + 1:-superhalo - 1] = data[:superhalo,   superhalo  :-superhalo]
+        data_ext[             :superhalo,      -superhalo    :              ] = data[:superhalo,  -superhalo  :          ]
+        data_ext[superhalo + 1:-superhalo - 1,               : superhalo    ] = data[ superhalo:  -superhalo, :superhalo]
+        data_ext[superhalo + 1:-superhalo - 1, -superhalo    :              ] = data[ superhalo:  -superhalo, -superhalo:]
+        data_ext[-superhalo:,                                : superhalo    ] = data[-superhalo:,             : superhalo]
+        data_ext[-superhalo:,                   superhalo + 1:-superhalo - 1] = data[-superhalo:,  superhalo  :-superhalo]
+        data_ext[-superhalo:,                      -superhalo:              ] = data[-superhalo:, -superhalo  :          ]
         self.tiling.wrap(data_ext, superhalo + 1).update_halos()
 
         # For values in the halo, compute their difference with the outer boundary of the subdomain we exchanged with (now the innermost halo point).
@@ -471,14 +486,19 @@ class Domain(_pygetm.Domain):
 
         # Since subdomains share the outer boundary, that boundary will be replicated in the outermost interior point and in the innermost halo point
         # We move the outer part of the halos (all but their innermost point) one point inwards to eliminate that overlapping point
-        data[:superhalo,              : superhalo] = data_ext[             :superhalo,                    : superhalo    ]
-        data[:superhalo,   superhalo  :-superhalo] = data_ext[             :superhalo,       superhalo + 1:-superhalo - 1]
-        data[:superhalo,  -superhalo  :          ] = data_ext[             :superhalo,      -superhalo    :              ]
-        data[ superhalo:  -superhalo, :superhalo]  = data_ext[superhalo + 1:-superhalo - 1,               : superhalo    ]
-        data[ superhalo:  -superhalo, -superhalo:] = data_ext[superhalo + 1:-superhalo - 1, -superhalo    :              ]
-        data[-superhalo:,             : superhalo] = data_ext[-superhalo:,                                : superhalo    ]
-        data[-superhalo:,  superhalo  :-superhalo] = data_ext[-superhalo:,                   superhalo + 1:-superhalo - 1]
-        data[-superhalo:, -superhalo  :          ] = data_ext[-superhalo:,                      -superhalo:              ]
+        # Where we do not have a subdomain neighbor, we keep the original values.
+        if self.tiling.bottomleft  != -1: data[:superhalo,              : superhalo] = data_ext[             :superhalo,                    : superhalo    ]
+        if self.tiling.bottom      != -1: data[:superhalo,   superhalo  :-superhalo] = data_ext[             :superhalo,       superhalo + 1:-superhalo - 1]
+        if self.tiling.bottomright != -1: data[:superhalo,  -superhalo  :          ] = data_ext[             :superhalo,      -superhalo    :              ]
+        if self.tiling.left        != -1: data[ superhalo:  -superhalo, :superhalo]  = data_ext[superhalo + 1:-superhalo - 1,               : superhalo    ]
+        if self.tiling.right       != -1: data[ superhalo:  -superhalo, -superhalo:] = data_ext[superhalo + 1:-superhalo - 1, -superhalo    :              ]
+        if self.tiling.topleft     != -1: data[-superhalo:,             : superhalo] = data_ext[-superhalo:,                                : superhalo    ]
+        if self.tiling.top         != -1: data[-superhalo:,  superhalo  :-superhalo] = data_ext[-superhalo:,                   superhalo + 1:-superhalo - 1]
+        if self.tiling.topright    != -1: data[-superhalo:, -superhalo  :          ] = data_ext[-superhalo:,                      -superhalo:              ]
+
+        valid_after = numpy.logical_not(numpy.isnan(data))
+        still_ok = numpy.where(valid_before, valid_after, True)
+        assert still_ok.all(), 'exchange_metric corrupted data: %s.' % (still_ok,)
 
     @staticmethod
     def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
@@ -555,16 +575,19 @@ class Domain(_pygetm.Domain):
             data = numpy.full(shape_, fill_value, dtype)
             data_int = data[superhalo:-superhalo, superhalo:-superhalo]
             if source is not None:
-                try:
-                    # First try if data has been provided on the supergrid
-                    data_int[...] = source
-                except ValueError:
+                if numpy.shape(source) == data.shape:
+                    data[...] = source
+                else:
                     try:
-                        # Now try if data has been provided on the X (corners) grid
-                        source_on_X = numpy.broadcast_to(source, (ny + 1, nx + 1))
-                        interfaces_to_supergrid_2d(source_on_X, out=data_int)
+                        # First try if data has been provided on the supergrid
+                        data_int[...] = source
                     except ValueError:
-                        raise Exception('Cannot array broadcast to supergrid (%i x %i) or X grid (%i x %i)' % ((ny * 2 + 1, nx * 2 + 1, ny + 1, nx + 1)))
+                        try:
+                            # Now try if data has been provided on the X (corners) grid
+                            source_on_X = numpy.broadcast_to(source, (ny + 1, nx + 1))
+                            interfaces_to_supergrid_2d(source_on_X, out=data_int)
+                        except ValueError:
+                            raise Exception('Cannot array broadcast to supergrid (%i x %i) or X grid (%i x %i)' % ((ny * 2 + 1, nx * 2 + 1, ny + 1, nx + 1)))
                 self.exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
             data.flags.writeable = data_int.flags.writeable = writeable
             return data_int, data
@@ -943,14 +966,18 @@ class Domain(_pygetm.Domain):
             self.V.add_to_netcdf(nc, postfix='v')
             self.X.add_to_netcdf(nc, postfix='x')
 
-    def contains(self, x: float, y: float):
-        allx, ally = (self.lon, self.lat) if self.spherical else (self.x, self.y)
+    def contains(self, x: float, y: float, include_halos: bool=False):
+        local_slice, _, _, _ = self.tiling.subdomain2slices(halo_sub=4, halo_glob=4, scale=2, share=1, exclude_halos=not include_halos, exclude_global_halos=True)
+        allx, ally = (self.lon_, self.lat_) if self.spherical else (self.x_, self.y_)
+        allx, ally = allx[local_slice], ally[local_slice]
         ny, nx = allx.shape
 
         # Determine whether point falls within current subdomain
         # based on https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html
         x_bnd = numpy.concatenate((allx[0, :-1], allx[:-1, -1], allx[-1, nx-1:0:-1], allx[ny-1:0:-1, 0]))
         y_bnd = numpy.concatenate((ally[0, :-1], ally[:-1, -1], ally[-1, nx-1:0:-1], ally[ny-1:0:-1, 0]))
+        assert not numpy.isnan(x_bnd).any(), 'Invalid x boundary: %s.' % (x_bnd,)
+        assert not numpy.isnan(y_bnd).any(), 'Invalid y boundary: %s.' % (y_bnd,)
         assert x_bnd.size == 2 * ny + 2 * nx - 4
         inside = False
         for i, (vertxi, vertyi) in enumerate(zip(x_bnd, y_bnd)):
