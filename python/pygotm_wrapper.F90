@@ -60,7 +60,7 @@ contains
       real(c_double), intent(in),    dimension(nx, ny, nz + 1) :: SS, NN
       real(c_double), intent(inout), dimension(nx, ny, nz + 1) :: tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d
 
-      real(c_double) :: h(0:nz)
+      real(c_double) :: h(0:nz), NN_loc(0:nz), SS_loc(0:nz)
 
       integer i, j
       do j = jstart, jstop
@@ -73,7 +73,9 @@ contains
                num(:) = num3d(i, j, :)
                nuh(:) = nuh3d(i, j, :)
                h(1:nz) = h3d(i, j, :)
-               call do_turbulence(nz, dt, D(i, j), u_taus(i, j), u_taub(i, j), z0s(i, j), z0b(i, j), h, NN(i, j, :), SS(i, j, :))
+               NN_loc(:) = NN(i, j, :)
+               SS_loc(:) = SS(i, j, :)
+               call do_turbulence(nz, dt, D(i, j), u_taus(i, j), u_taub(i, j), z0s(i, j), z0b(i, j), h, NN_loc, SS_loc)
                tke3d(i, j, :) = tke(:)
                tkeo3d(i, j, :) = tkeo(:)
                eps3d(i, j, :) = eps(:)
