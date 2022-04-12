@@ -80,10 +80,10 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'shf', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
-        turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[Type[pygetm.airsea.Fluxes]]=None, density: Optional[pygetm.density.Density]=None,
+        turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
         logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, A=0.7, g1=1., g2=15.):
 
         self.logger = dom.root_logger
@@ -129,9 +129,9 @@ class Simulation(_pygetm.Simulation):
         self.update_depth()
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
-        airsea = airsea or pygetm.airsea.FluxesFromMeteo
-        assert issubclass(airsea, pygetm.airsea.Fluxes)
-        self.airsea = airsea(self.domain, self.logger)
+        self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
+        assert isinstance(self.airsea, pygetm.airsea.Fluxes)
+        self.airsea.initialize(self.domain)
 
         self.fwf = dom.T.array(name='fwf', units='m s-1', long_name='freshwater flux', fill_value=FILL_VALUE)
         self.fwf.fill(0.)
@@ -210,11 +210,13 @@ class Simulation(_pygetm.Simulation):
             self.temp.fill(5.)
             self.salt.fill(35.)
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
-            self.shf = dom.T.array(name='shf', units='W m-2', long_name='surface heat flux', fill_value=FILL_VALUE)
             self.tracer_totals.append(self.salt)
+            self.sss = self.salt.isel(-1)
 
             self.radiation = pygetm.radiation.TwoBand(dom.T)
             self.density = density or pygetm.density.Density()
+        else:
+            self.sss = None
 
     def __getitem__(self, key: str) -> core.Array:
         return self.output_manager.fields[key]
@@ -294,9 +296,9 @@ class Simulation(_pygetm.Simulation):
         self.domain.input_manager.update(time, include_3d=True)
 
         # Ensure heat and momentum fluxes have sensible values
-        self.airsea(self.time, self.sst, do_3d=True)
+        self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=self.runtype == BAROCLINIC)
         if self.runtype == BAROCLINIC:
-            assert self.airsea.qe.require_set(self.logger) * self.airsea.qh.require_set(self.logger) * self.airsea.ql.require_set(self.logger)
+            assert self.airsea.shf.require_set(self.logger)
             self.radiation(self.airsea.swr)
 
         # Update elevation at the open boundaries
@@ -329,7 +331,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.input_manager.update(self.time, include_3d=macro_active)
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
-        self.airsea(self.time, self.sst, do_3d=macro_active)
+        self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=macro_active)
 
         # Update elevation at the open boundaries
         self.update_sealevel_boundaries(self.timestep)
@@ -389,9 +391,7 @@ class Simulation(_pygetm.Simulation):
                 # Temperature and salinity (T grid - centers)
                 self.radiation(self.airsea.swr)
                 self.temp.source.all_values[...] = self.radiation.swr_abs.all_values
-                self.shf.all_values[...] = self.airsea.qe.all_values + self.airsea.qh.all_values + self.airsea.ql.all_values
-                self.shf.all_values[numpy.logical_and(self.sst.all_values < -0.0575 * self.salt.all_values[-1, :, :], self.shf.all_values < 0)] = 0.
-                self.temp.source.all_values[-1, ...] += self.shf.all_values
+                self.temp.source.all_values[-1, ...] += self.airsea.shf.all_values
 
                 # Transport of passive tracers (including biogeochemical ones)
                 w_if = None
