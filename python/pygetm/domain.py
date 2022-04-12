@@ -443,6 +443,9 @@ class Domain(_pygetm.Domain):
         if not self.tiling:
             return
 
+        expected_shape = (1 + 2 * (self.ny + 2 * self.haloy), 1 + 2 * (self.nx + 2 * self.halox))
+        assert data.shape == expected_shape, 'Wrong shape: got %s, expected %s.' % (data.shape, expected_shape)
+
         halo = 2
         superhalo = 2 * halo
         valid_before = numpy.logical_not(numpy.isnan(data))
@@ -484,7 +487,7 @@ class Domain(_pygetm.Domain):
 
         valid_after = numpy.logical_not(numpy.isnan(data))
         still_ok = numpy.where(valid_before, valid_after, True)
-        assert still_ok.all(), 'exchange_metric corrupted data: %s.' % (still_ok,)
+        assert still_ok.all(), 'Rank %i: exchange_metric corrupted %i values: %s.' % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok)
 
     @staticmethod
     def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
@@ -543,6 +546,12 @@ class Domain(_pygetm.Domain):
         self.glob: Optional['Domain'] = self
 
         self.logger.info('Domain size (T grid): %i x %i (%i cells)' % (nx, ny, nx * ny))
+
+        self.imin, self.imax = 1, nx
+        self.jmin, self.jmax = 1, ny
+        self.kmin, self.kmax = 1, nz
+
+        super().__init__(self.imin, self.imax, self.jmin, self.jmax, self.kmin, self.kmax)
 
         halo = 2
 
@@ -630,7 +639,7 @@ class Domain(_pygetm.Domain):
         else:
             # Rotation with respect to y axis - assumes y axis always point to true North (can be valid on for infinitesimally small domain)
             self.rotation_[1:-1,1:-1] = supergrid_rotation(self.x_, self.y_)
-        self.exchange_metric(self.rotation)
+        self.exchange_metric(self.rotation_)
         self.rotation.flags.writeable = False
 
         self.area, self.area_ = setup_metric(self.dx * self.dy, writeable=False)
@@ -643,11 +652,6 @@ class Domain(_pygetm.Domain):
         self.x_is_1d = self.x is not None and (self.x[:1, :] == self.x[:, :]).all()
         self.y_is_1d = self.y is not None and (self.y[:, :1] == self.y[:, :]).all()
 
-        self.imin, self.imax = 1, nx
-        self.jmin, self.jmax = 1, ny
-        self.kmin, self.kmax = 1, nz
-
-        _pygetm.Domain.__init__(self, self.imin, self.imax, self.jmin, self.jmax, self.kmin, self.kmax)
         self.halo = self.halox
         self.shape = (nz, ny + 2 * self.halo, nx + 2 * self.halo)
 
@@ -680,8 +684,10 @@ class Domain(_pygetm.Domain):
         else:
             l_offset, m_offset, l_max, m_max = self.tiling.yoffset, self.tiling.xoffset, self.T.ny_, self.T.nx_
         l_loc = HALO + l - l_offset
-        mstart_loc = min(max(0, HALO + mstart - m_offset), m_max)
-        mstop_loc = min(max(0, HALO + mstop - m_offset), m_max)
+        mstart_loc_ = HALO + mstart - m_offset
+        mstop_loc_ = HALO + mstop - m_offset
+        mstart_loc = min(max(0, mstart_loc_), m_max)
+        mstop_loc = min(max(0, mstop_loc_), m_max)
         if l_loc >= 0 and l_loc < l_max and mstop_loc > mstart_loc:
             # Boundary lies at least partially within current subdomain
             if side in (WEST, EAST):
@@ -691,13 +697,11 @@ class Domain(_pygetm.Domain):
             if (mask == 0).any():
                 self.logger.error('%i of %i points of this open boundary are on land' % ((mask == 0).sum(), mstop_loc - mstart_loc))
                 raise Exception()
-            m_skip = mstart_loc - (HALO + mstart - m_offset)
-            assert m_skip >= 0
         else:
             # Boundary lies completely outside current subdomain. Record it anyway, so we can later set up a
             # global -> local map of open bounfary points
-            l_loc, mstart_loc, mstop_loc, m_skip = None, None, None, mstop - mstart
-        self.open_boundaries.setdefault(side, []).append((l_loc, mstart_loc, mstop_loc, m_skip, mstop - mstart, type_2d, type_3d))
+            l_loc, mstart_loc, mstop_loc = None, None, None
+        self.open_boundaries.setdefault(side, []).append((l_loc, mstart_loc, mstop_loc, mstart_loc_, mstop_loc_, type_2d, type_3d))
 
     def initialize(self, runtype: int, field_manager: Optional[output.FieldManager]=None):
         assert not self.initialized, 'Domain has already been initialized'
@@ -724,30 +728,28 @@ class Domain(_pygetm.Domain):
         for side in (WEST, NORTH, EAST, SOUTH):
             bounds = self.open_boundaries.get(side, [])
             kept_bounds = []
-            for l, mstart, mstop, mskip, len_glob, type_2d, type_3d in bounds:
+            for l, mstart, mstop, mstart_, mstop_, type_2d, type_3d in bounds:
                 if l is not None:
+                    mskip = mstart - mstart_
+                    assert mskip >= 0
                     # Note that bdyinfo needs indices into the T grid EXCLUDING halos
                     bdyinfo.append(numpy.array((l - HALO, mstart - HALO, mstop - HALO, type_2d, type_3d, nbdyp), dtype=numpy.intc))
                     nbdyp += mstop - mstart
-                    if side == WEST:
-                        self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
-                        self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
-                    elif side == EAST:
-                        self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
-                        self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
-                    elif side == SOUTH:
-                        self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
-                        self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
-                    elif side == NORTH:
-                        self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
-                        self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
 
+                    # In the mask assignment below, mask=3 points are always in between mask=2 points.
+                    # This will not be correct if the boundary only partially falls within this subdomain (i.e., it starts outside),
+                    # but as this only affects points at the outer edge of the halo zone, it will be solved by the halo exchange of the mask later on.
                     if side in (WEST, EAST):
+                        self.mask_[1 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 2
+                        self.mask_[2 + 2 * mstart:2 * mstop:2, 1 + l * 2] = 3
                         bdy_i.append(numpy.repeat(l, mstop - mstart))
                         bdy_j.append(numpy.arange(mstart, mstop))
                     else:
+                        self.mask_[1 + l * 2, 1 + 2 * mstart:2 * mstop:2] = 2
+                        self.mask_[1 + l * 2, 2 + 2 * mstart:2 * mstop:2] = 3
                         bdy_i.append(numpy.arange(mstart, mstop))
                         bdy_j.append(numpy.repeat(l, mstop - mstart))
+
                     if self.local_to_global_ob and self.local_to_global_ob[-1][1] == nbdyp_glob + mskip:
                         # attach to previous boundary
                         self.local_to_global_ob[-1][1] += mstop - mstart
@@ -755,7 +757,7 @@ class Domain(_pygetm.Domain):
                         # gap; add new slice
                         self.local_to_global_ob.append([nbdyp_glob + mskip, nbdyp_glob + mskip + mstop - mstart])
                     kept_bounds.append(bounds)
-                nbdyp_glob += len_glob
+                nbdyp_glob += mstop_ - mstart_
             side2count[side] = len(kept_bounds)
             if not kept_bounds:
                 # No open boundaries on this side fall within the current subdomain

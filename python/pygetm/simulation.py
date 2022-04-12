@@ -449,9 +449,9 @@ class Simulation(_pygetm.Simulation):
     def add_rivers_3d(self):
         """Update layer thicknesses and tracer concentrations to account for river inflow."""
         h = self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
-        river_active = numpy.ones(h.shape, dtype=bool)
+        river_active = numpy.full(h.shape, True)
         # JB TODO: customize river_active by flagging layers where the river does not go with False
-        river_depth = h.sum(where=river_active, axis=0)
+        river_depth = (h * river_active).copy(order='F').sum(axis=0)   # ensure pairwise summation also for more than 1 river - needed for reproducibility for different divisions!
         withdrawal = self._cum_river_height_increase < 0.
         h_increase = numpy.where(river_active, h * self._cum_river_height_increase / river_depth, 0.)
         for tracer in self.tracers:

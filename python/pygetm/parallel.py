@@ -214,6 +214,7 @@ class Tiling:
                 else:
                     ax.plot([x[j], x[j + 1]], [y[i], y[i + 1]], '-k')
                     ax.plot([x[j], x[j + 1]], [y[i + 1], y[i]], '-k')
+        return ax
 
     def get_work_array(self, shape: Tuple[int, ...], dtype: numpy.typing.DTypeLike, fill_value=None):
         key = (shape, dtype, fill_value)
@@ -251,13 +252,13 @@ class DistributedArray:
                     inner_cache, outer_cache = numpy.empty_like(inner), numpy.empty_like(outer)
                 owncaches.append((inner_cache, outer_cache))
                 send_req = tiling.comm.Send_init(inner_cache, neighbor, sendtag)
-                rev_req = tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
+                recv_req = tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
                 self.halo2name[id(outer)] = name
                 for group in groups:
                     send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
                     send_reqs.append(send_req)
                     send_data.append((inner, inner_cache))
-                    recv_reqs.append(rev_req)
+                    recv_reqs.append(recv_req)
                     recv_data.append((outer, outer_cache))
 
         in_start = halo + overlap
@@ -407,23 +408,37 @@ def test_scaling_command():
     parser.add_argument('setup_script', help='path to Python script that starts the simulation')
     parser.add_argument('--nmin', type=int, default=1, help='minimum number of CPUs to test with')
     parser.add_argument('--nmax', type=int, help='maximum number of CPUs to test with')
+    parser.add_argument('--plot', action='store_true', help='whether to create scaling plot')
     parser.add_argument('--out', help='path to write scaling figure to')
+    parser.add_argument('--compare', help='Path of NetCDF file to compare across simulations')
     args, leftover_args = parser.parse_known_args()
-    test_scaling(args.setup_script, args.nmax, args.nmin, extra_args=leftover_args, out=args.out)
+    test_scaling(args.setup_script, args.nmax, args.nmin, extra_args=leftover_args, plot=args.plot, out=args.out, compare=args.compare)
 
-def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra_args: Iterable[str]=[], out: Optional[str]=None):
+def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra_args: Iterable[str]=[], plot: bool=True, out: Optional[str]=None, compare: Optional[str]=None):
     import subprocess
     import sys
     import os
     import re
+    import tempfile
+    import shutil
+    from .util import compare_nc
     if nmax is None:
         nmax = os.cpu_count()
     ncpus = []
     durations = []
-    for n in range(nmax, nmin - 1, -1):
+    returncode = 0
+    refname = None
+    ntest = list(range(nmin, nmax + 1))
+    if nmin > 1 and compare:
+        ntest.insert(0, 1)
+    for n in ntest:
         print('Running %s with %i CPUs... ' % (os.path.basename(setup_script), n), end='', flush=True)
         p = subprocess.run(['mpiexec', '-n', str(n), sys.executable, setup_script] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         if p.returncode != 0:
+            if n == ntest[0]:
+                print('First simulation failed - quitting. Last result:')
+                print(p.stdout)
+                sys.exit(1)
             log_path = 'scaling-%03i.log' % n
             with open(log_path, 'w') as f:
                 f.write(p.stdout)
@@ -434,14 +449,34 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
         print('%.3f s in main loop' % (duration,))
         ncpus.append(n)
         durations.append(duration)
-    from matplotlib import pyplot
-    fig, ax = pyplot.subplots()
-    ax.plot(ncpus, durations, '.')
-    ax.grid()
-    ax.set_xlabel('number of CPUs')
-    ax.set_ylabel('duration of %s' % os.path.basename(setup_script))
-    ax.set_ylim(0, None)
-    if out:
-        fig.savefig(out, dpi=300)
-    else:
-        pyplot.show()
+        if compare:
+            if n == 1:
+                print('  copying reference %s to temporary file... ' % compare, end='', flush=True)
+                with open(compare, 'rb') as fin, tempfile.NamedTemporaryFile(suffix='.nc', delete=False) as fout:
+                    shutil.copyfileobj(fin, fout)
+                    refname = fout.name
+                print('done.')
+            else:
+                print('  comparing %s wih reference produced with 1 CPUs... ' % (compare,), flush=True)
+                if not compare_nc.compare(compare, refname):
+                    returncode = 1
+
+    if refname is not None:
+        print('Deleting reference result %s... ' % refname, end='')
+        os.remove(refname)
+        print('done.')
+
+    if plot:
+        from matplotlib import pyplot
+        fig, ax = pyplot.subplots()
+        ax.plot(ncpus, durations, '.')
+        ax.grid()
+        ax.set_xlabel('number of CPUs')
+        ax.set_ylabel('duration of %s' % os.path.basename(setup_script))
+        ax.set_ylim(0, None)
+        if out:
+            fig.savefig(out, dpi=300)
+        else:
+            pyplot.show()
+
+    sys.exit(returncode)

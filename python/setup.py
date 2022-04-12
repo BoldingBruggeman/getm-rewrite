@@ -13,6 +13,7 @@ setup(
         'console_scripts': [
             'pygetm-subdiv = pygetm.subdiv:main',
             'pygetm-test-scaling = pygetm.parallel:test_scaling_command',
+            'pygetm-compare-nc = pygetm.util.compare_nc:compare_command',
         ],
     }
 )
