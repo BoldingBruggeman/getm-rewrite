@@ -77,8 +77,8 @@ class FluxesFromMeteo(Fluxes):
         self.lon = domain.T.lon
         self.lat = domain.T.lat
 
-        self.qe = domain.T.array(name='qe', long_name='sensible heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
-        self.qh = domain.T.array(name='qh', long_name='latent heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+        self.qe = domain.T.array(name='qe', long_name='latent heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+        self.qh = domain.T.array(name='qh', long_name='sensible heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
         self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
 
         self.cd_mom = domain.T.array()
@@ -109,7 +109,7 @@ class FluxesFromMeteo(Fluxes):
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
         self.w.all_values[...] = numpy.sqrt(self.u10.all_values**2 + self.v10.all_values**2)
-        pyairsea.transfer_coefficients(1, sst_K, t2m_K, self.w.all_values, self.cd_mom.all_values, self.cd_latent.all_values, self.cd_sensible.all_values)
+        pyairsea.transfer_coefficients(1, sst_K, t2m_K, self.w.all_values, self.cd_mom.all_values, self.cd_sensible.all_values, self.cd_latent.all_values)
 
     def __call__(self, time: cftime.datetime, sst: core.Array, sss: core.Array, calculate_heat_flux: bool) -> None:
         if not self._ready:
@@ -126,11 +126,11 @@ class FluxesFromMeteo(Fluxes):
 
         if calculate_heat_flux:
             L = 2.5e6 - 0.00234e6 * sst.all_values   # latent heat of vaporization (J/kg) at sea surface, note SST must be in degrees Celsius
-            self.qe.all_values[...] = -self.cd_sensible.all_values * CPA * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
-            self.qh.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
+            self.qh.all_values[...] = -self.cd_sensible.all_values * CPA * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
+            self.qe.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
             self.update_longwave_radiation(sst)
-            self.shf.all_values[...] = self.qe.all_values + self.qh.all_values + self.ql.all_values
-            self.shf.all_values[numpy.logical_and(sst.all_values < -0.0575 * sss.all_values[:, :], self.shf.all_values < 0)] = 0.
+            self.shf.all_values[...] = self.qh.all_values + self.qe.all_values + self.ql.all_values
+            self.shf.all_values[numpy.logical_and(sst.all_values < -0.0575 * sss.all_values, self.shf.all_values < 0)] = 0.
             if self.calculate_swr:
                 self.update_shortwave_radiation(time)
 

@@ -127,13 +127,13 @@ contains
       end select
    end subroutine
 
-   subroutine transfer_coefficients_2d(nx, ny, istart, istop, jstart, jstop, method, tw, ta, w, cd_mom, cd_latent, cd_sensible) &
+   subroutine transfer_coefficients_2d(nx, ny, istart, istop, jstart, jstop, method, tw, ta, w, cd_mom, cd_sensible, cd_latent) &
       bind(c)
       integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, method
       real(rk), intent(in),    dimension(nx, ny) :: tw, ta, w
       real(rk), intent(inout), dimension(nx, ny) :: cd_mom, cd_latent, cd_sensible
       call kondo(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), w(istart:istop, jstart:jstop), &
-         cd_mom(istart:istop, jstart:jstop), cd_latent(istart:istop, jstart:jstop), cd_sensible(istart:istop, jstart:jstop))
+         cd_mom(istart:istop, jstart:jstop), cd_sensible(istart:istop, jstart:jstop), cd_latent(istart:istop, jstart:jstop))
    end subroutine
 
 end module
