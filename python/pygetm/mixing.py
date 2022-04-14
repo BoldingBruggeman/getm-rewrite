@@ -1,9 +1,9 @@
 from typing import Optional
-from . import core
-from . import domain
 
 import numpy
 
+from . import core
+from . import domain
 from . import _pygotm
 from .constants import *
 
