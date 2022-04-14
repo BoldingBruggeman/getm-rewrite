@@ -58,10 +58,10 @@ cpdef enum:
     UVGRID = -3
     VUGRID = -4
 
-# JB: for now, this is copy of the constants in parallel. Values must saty in sync
+# JB: for now, this is copy of the constants in parallel. Values must stay in sync
 cpdef enum:
-    TOP_BOTTOM = 1
-    LEFT_RIGHT = 2
+    TOP_AND_BOTTOM = 9
+    LEFT_AND_RIGHT = 10
 
 cdef class Array:
     cdef void* p
@@ -253,11 +253,11 @@ cdef class Advection:
         assert var.grid is self.tgrid
         self.h_work[0,:,:] = self.D_ref
         if not skip_initial_halo_exchange:
-            var.update_halos(TOP_BOTTOM)
+            var.update_halos(TOP_AND_BOTTOM)
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
-        var.update_halos(LEFT_RIGHT)
+        var.update_halos(LEFT_AND_RIGHT)
         advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self.h_work[0,0,0], &self.DU[0,0], <double *>var.p)
-        var.update_halos(TOP_BOTTOM)
+        var.update_halos(TOP_AND_BOTTOM)
         advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
 
     @cython.initializedcheck(False)
@@ -281,17 +281,17 @@ cdef class Advection:
         h = (self.tgrid.hn if new_h else self.tgrid.ho).all_values
         self.h_work[:,:,:] = h
         if not skip_initial_halo_exchange:
-            var.update_halos(LEFT_RIGHT)
+            var.update_halos(LEFT_AND_RIGHT)
         for k in range(var._array.shape[0]):
             advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
-        var.update_halos(TOP_BOTTOM)
+        var.update_halos(TOP_AND_BOTTOM)
         for k in range(var._array.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
         advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, <double *>w_var.p, timestep, &self.h_work[0,0,0], <double *>var.p)
-        var.update_halos(TOP_BOTTOM)
+        var.update_halos(TOP_AND_BOTTOM)
         for k in range(var._array.shape[0]):
             advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
-        var.update_halos(LEFT_RIGHT)
+        var.update_halos(LEFT_AND_RIGHT)
         for k in range(var._array.shape[0]):
             advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
 

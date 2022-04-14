@@ -4,6 +4,7 @@ import cftime
 import pyairsea
 import pygetm.domain
 from . import core
+from . import parallel
 from .constants import FILL_VALUE
 
 CPA = 1008.
@@ -34,9 +35,9 @@ class Fluxes:
         if not self._ready:
             assert self.taux.require_set(self.logger) * self.tauy.require_set(self.logger) * self.sp.require_set(self.logger)
             self._ready = True
-        self.taux.update_halos()
+        self.taux.update_halos(parallel.RIGHT)
         self.taux.interp(self.taux_U)
-        self.tauy.update_halos()
+        self.tauy.update_halos(parallel.TOP)
         self.tauy.interp(self.tauy_V)
 
 class FluxesFromMeteo(Fluxes):

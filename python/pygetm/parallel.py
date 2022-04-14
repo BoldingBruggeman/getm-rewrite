@@ -224,22 +224,38 @@ class Tiling:
                 self.caches[key].fill(fill_value)
         return self.caches[key]
 
+BOTTOMLEFT = 1
+BOTTOM = 2
+BOTTOMRIGHT = 3
+LEFT = 4
+RIGHT = 5
+TOPLEFT = 6
+TOP = 7
+TOPRIGHT = 8
+
 ALL = 0
-TOP_BOTTOM = 1
-LEFT_RIGHT = 2
+TOP_AND_BOTTOM = 9
+LEFT_AND_RIGHT = 10
+TOP_AND_RIGHT = 11
+
+GROUP2PARTS = {
+    TOP_AND_BOTTOM: (TOP, BOTTOM),
+    LEFT_AND_RIGHT: (LEFT, RIGHT),
+    TOP_AND_RIGHT: (TOP, RIGHT),
+}
 
 class DistributedArray:
     __slots__ = ['rank', 'group2task', 'halo2name']
     def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, overlap: int=0):
         self.rank = tiling.rank
-        self.group2task = {ALL: ([], [], [], []), TOP_BOTTOM: ([], [], [], []), LEFT_RIGHT: ([], [], [], [])}
+        self.group2task = [([], [], [], []) for _ in range(12)]
         self.halo2name = {}
 
         key = (field.shape, halo, overlap, field.dtype)
         caches = tiling.caches.get(key)
         owncaches = []
 
-        def add_task(name: str, sendtag: int, recvtag: int, inner: numpy.ndarray, outer: numpy.ndarray, groups: Tuple[int, ...]):
+        def add_task(name: str, recvtag: int, sendtag: int, outer: numpy.ndarray, inner: numpy.ndarray):
             neighbor = getattr(tiling, name)
             assert isinstance(neighbor, int), 'Wrong type for neighbor %s: %s (type %s)' % (name, neighbor, type(neighbor))
             assert inner.shape == outer.shape
@@ -254,23 +270,25 @@ class DistributedArray:
                 send_req = tiling.comm.Send_init(inner_cache, neighbor, sendtag)
                 recv_req = tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
                 self.halo2name[id(outer)] = name
-                for group in groups:
+                for group in [ALL, sendtag] + [group for (group, parts) in GROUP2PARTS.items() if sendtag in parts]:
                     send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
                     send_reqs.append(send_req)
                     send_data.append((inner, inner_cache))
+                for group in [ALL, recvtag] + [group for (group, parts) in GROUP2PARTS.items() if recvtag in parts]:
+                    send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
                     recv_reqs.append(recv_req)
                     recv_data.append((outer, outer_cache))
 
         in_start = halo + overlap
         in_stop = in_start + halo
-        add_task('bottomleft',  6, 5, field[...,  in_start: in_stop,  in_start: in_stop ], field[...,      :halo,       :halo ], groups=(ALL,))
-        add_task('bottom',      3, 2, field[...,  in_start: in_stop,  halo    :-halo    ], field[...,      :halo,   halo:-halo], groups=(ALL, TOP_BOTTOM))
-        add_task('bottomright', 7, 4, field[...,  in_start: in_stop, -in_stop :-in_start], field[...,      :halo,  -halo:     ], groups=(ALL,))
-        add_task('left',        0, 1, field[...,  halo    :-halo,     in_start: in_stop ], field[...,  halo:-halo,      :halo ], groups=(ALL, LEFT_RIGHT))
-        add_task('right',       1, 0, field[...,  halo    :-halo,    -in_stop :-in_start], field[...,  halo:-halo, -halo:     ], groups=(ALL, LEFT_RIGHT))
-        add_task('topleft',     4, 7, field[..., -in_stop :-in_start, in_start: in_stop ], field[..., -halo:,           :halo ], groups=(ALL,))
-        add_task('top',         2, 3, field[..., -in_stop :-in_start, halo    :-halo    ], field[..., -halo:,       halo:-halo], groups=(ALL, TOP_BOTTOM))
-        add_task('topright',    5, 6, field[..., -in_stop :-in_start,-in_stop :-in_start], field[..., -halo:,      -halo:     ], groups=(ALL,))
+        add_task('bottomleft',  BOTTOMLEFT,  TOPRIGHT,    field[...,      :halo,       :halo ], field[...,  in_start: in_stop,  in_start: in_stop ])
+        add_task('bottom',      BOTTOM,      TOP,         field[...,      :halo,   halo:-halo], field[...,  in_start: in_stop,  halo    :-halo    ])
+        add_task('bottomright', BOTTOMRIGHT, TOPLEFT,     field[...,      :halo,  -halo:     ], field[...,  in_start: in_stop, -in_stop :-in_start])
+        add_task('left',        LEFT,        RIGHT,       field[...,  halo:-halo,      :halo ], field[...,  halo    :-halo,     in_start: in_stop ])
+        add_task('right',       RIGHT,       LEFT,        field[...,  halo:-halo, -halo:     ], field[...,  halo    :-halo,    -in_stop :-in_start])
+        add_task('topleft',     TOPLEFT,     BOTTOMRIGHT, field[..., -halo:,           :halo ], field[..., -in_stop :-in_start, in_start: in_stop ])
+        add_task('top',         TOP,         BOTTOM,      field[..., -halo:,       halo:-halo], field[..., -in_stop :-in_start, halo    :-halo    ])
+        add_task('topright',    TOPRIGHT,    BOTTOMLEFT,  field[..., -halo:,      -halo:     ], field[..., -in_stop :-in_start,-in_stop :-in_start])
         if caches is None:
             tiling.caches[key] = owncaches
 
