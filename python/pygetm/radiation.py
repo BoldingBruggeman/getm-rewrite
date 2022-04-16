@@ -57,7 +57,7 @@ class TwoBand(Radiation):
     def __call__(self, swr: core.Array):
         """Compute heating due to shortwave radiation throughout the water column"""
         if self._first:
-            assert self.A.require_set(self.logger) and self.kc1.require_set(self.logger) and self.kc2.require_set(self.logger)
+            assert self.A.require_set(self.logger) * self.kc1.require_set(self.logger) * self.kc2.require_set(self.logger)
             self._first = False
 
         assert swr.grid is self.grid and not swr.z
