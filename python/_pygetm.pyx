@@ -527,7 +527,7 @@ cdef int get_from_map(const int[:, ::1] map, int row, int col) nogil:
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int get_cost(const int[:, ::1] map, int nx, int ny) nogil:
+cdef int get_cost(const int[:, ::1] map, int nx, int ny, int weight_unmasked, int weight_any, int weight_halo) nogil:
     cdef int row, col, nint, nout, max_cost
     cdef int halo = 2
     max_cost = 0
@@ -539,14 +539,15 @@ cdef int get_cost(const int[:, ::1] map, int nx, int ny) nogil:
             if get_from_map(map, row + 1, col - 1) > 0: nout += halo * halo
             if get_from_map(map, row - 1, col + 1) > 0: nout += halo * halo
             if get_from_map(map, row + 1, col + 1) > 0: nout += halo * halo
-            if get_from_map(map, row - 1, col) > 0: nout += halo * ny
-            if get_from_map(map, row + 1, col) > 0: nout += halo * ny
-            if get_from_map(map, row, col - 1) > 0: nout += halo * nx
-            if get_from_map(map, row, col + 1) > 0: nout += halo * nx
-            max_cost = max(max_cost, nint + 10 * nout)  # for now assume halo cells are 10x as expensive as interior cells
-    return max_cost + nx * ny     # add an overhead for all cells - unmasked or not
+            if get_from_map(map, row - 1, col) > 0: nout += halo * nx
+            if get_from_map(map, row + 1, col) > 0: nout += halo * nx
+            if get_from_map(map, row, col - 1) > 0: nout += halo * ny
+            if get_from_map(map, row, col + 1) > 0: nout += halo * ny
+            max_cost = max(max_cost, weight_unmasked * nint + weight_halo * nout)
+    if nx % 4 != 0: max_cost *= 2  # penalize non-alignment
+    return max_cost + weight_any * nx * ny     # add an overhead for all cells - unmasked or not
 
-def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus):
+def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus, int weight_unmasked, int weight_any, int weight_halo):
     cdef int[:, ::1] map
     cost = -1
     solution = None
@@ -554,7 +555,7 @@ def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int n
         for xoffset in range(1 - nx, 1):
             if decomposition_is_valid(mask, nx, ny, xoffset, yoffset, ncpus):
                 map = get_map(mask, nx, ny, xoffset, yoffset)
-                current_cost = get_cost(map, nx, ny)
+                current_cost = get_cost(map, nx, ny, weight_unmasked, weight_any, weight_halo)
                 if cost == -1 or current_cost < cost:
                     cost = current_cost
                     solution = (xoffset, yoffset, cost, numpy.asarray(map))
