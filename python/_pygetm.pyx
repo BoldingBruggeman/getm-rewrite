@@ -24,7 +24,7 @@ cdef extern void grid_interp_z(int nx, int ny, int nz1, int nz2, double* source,
 cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, double* source, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
-cdef extern void advection_2d_calculate(int direction, void* advection, void* tgrid, void* ugrid, double* pu, double Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
+cdef extern void advection_uv_calculate(int direction, int nk, void* advection, void* tgrid, void* ugrid, double* pu, double Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
@@ -231,7 +231,7 @@ cdef class Advection:
         self.p = advection_create(scheme, self.tgrid.p)
 
         # Work array for layer heights that change during 3d advection
-        # This is shared by the temeprary column height that evolves similarly during 2d advection
+        # This is shared by the temporary column height that evolves similarly during 2d advection
         self.h = numpy.empty((self.tgrid.nz_, self.tgrid.ny_, self.tgrid.nx_))
         self.D = self.h[0,...]
 
@@ -254,11 +254,11 @@ cdef class Advection:
         self.h_work[0,:,:] = self.D_ref
         if not skip_initial_halo_exchange:
             var.update_halos(TOP_AND_BOTTOM)
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
+        advection_uv_calculate(2, 1, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
         var.update_halos(LEFT_AND_RIGHT)
-        advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self.h_work[0,0,0], &self.DU[0,0], <double *>var.p)
+        advection_uv_calculate(1, 1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self.h_work[0,0,0], &self.DU[0,0], <double *>var.p)
         var.update_halos(TOP_AND_BOTTOM)
-        advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
+        advection_uv_calculate(2, 1, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -273,27 +273,19 @@ cdef class Advection:
         assert w_var.z == INTERFACES, 'grid mismatch for w_var: expected values at layer interfaces'
         assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
         assert var.ndim == 3 and var.z != INTERFACES, 'grid mismatch for advected quantity: expected 3D variable defined at layer centers'
-        cdef double[:, :, ::1] avar, au, av, h
-        cdef int k
-        avar = <double[:var.grid.nz_, :var.grid.ny_, :var.grid.nx_:1]> var.p
-        au = <double[:u.grid.nz_, :u.grid.ny_, :u.grid.nx_:1]> u.p
-        av = <double[:v.grid.nz_, :v.grid.ny_, :v.grid.nx_:1]> v.p
+        cdef double[:, :, ::1] h
         h = (self.tgrid.hn if new_h else self.tgrid.ho).all_values
         self.h_work[:,:,:] = h
         if not skip_initial_halo_exchange:
             var.update_halos(LEFT_AND_RIGHT)
-        for k in range(var._array.shape[0]):
-            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
+        advection_uv_calculate(1, var._array.shape[0], self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hu[0,0,0], <double *>var.p)
         var.update_halos(TOP_AND_BOTTOM)
-        for k in range(var._array.shape[0]):
-            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
+        advection_uv_calculate(2, var._array.shape[0], self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hv[0,0,0], <double *>var.p)
         advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, <double *>w_var.p, timestep, &self.h_work[0,0,0], <double *>var.p)
         var.update_halos(TOP_AND_BOTTOM)
-        for k in range(var._array.shape[0]):
-            advection_2d_calculate(2, self.p, self.tgrid.p, self.vgrid.p, &av[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hv[k,0,0], &avar[k,0,0])
+        advection_uv_calculate(2, var._array.shape[0], self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hv[0,0,0], <double *>var.p)
         var.update_halos(LEFT_AND_RIGHT)
-        for k in range(var._array.shape[0]):
-            advection_2d_calculate(1, self.p, self.tgrid.p, self.ugrid.p, &au[k,0,0], Ah, 0.5 * timestep, &self.h_work[k,0,0], &self.hu[k,0,0], &avar[k,0,0])
+        advection_uv_calculate(1, var._array.shape[0], self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hu[0,0,0], <double *>var.p)
 
 cdef class VerticalDiffusion:
     cdef void* p
@@ -324,10 +316,9 @@ cdef class Simulation:
     cdef void* ppressure
     cdef void* psealevel
     cdef readonly int nx, ny
-    cdef int apply_bottom_friction
-    cdef int ufirst, u3dfirst
+    cdef readonly int apply_bottom_friction
 
-    def __init__(self, Domain domain, int runtype, int apply_bottom_friction, int ufirst=False):
+    def __init__(self, Domain domain, int runtype, int apply_bottom_friction):
         self.domain = domain
         domain.initialize(runtype)
         self.runtype = runtype
@@ -336,61 +327,50 @@ cdef class Simulation:
         self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
         self.apply_bottom_friction = apply_bottom_friction
-        self.ufirst = ufirst
-        self.u3dfirst = ufirst
 
-    def uv_momentum_2d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None):
+    def u_2d(self, double timestep, Array tausx not None, Array dpdx not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
-        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
         assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
-        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
-        if self.apply_bottom_friction:
-            momentum_bottom_friction_2d(self.pmomentum, self.runtype)
-        if self.ufirst:
-            momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
-            self.U.update_halos()
-            momentum_uv_coriolis(1, self.pmomentum)
-            momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
-            self.V.update_halos()
-            momentum_uv_coriolis(2, self.pmomentum)
-        else:
-            momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
-            self.V.update_halos()
-            momentum_uv_coriolis(2, self.pmomentum)
-            momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
-            self.U.update_halos()
-            momentum_uv_coriolis(1, self.pmomentum)
-        self.ufirst = not self.ufirst
+        momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
 
-    def uvw_momentum_3d(self, double timestep, Array tausx not None, Array tausy not None, Array dpdx not None, Array dpdy not None, Array idpdx not None, Array idpdy not None, Array viscosity_u not None, Array viscosity_v not None):
-        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
+    def v_2d(self, double timestep, Array tausy not None, Array dpdy not None):
         assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
-        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
         assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
+        momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
+
+    def coriolis_fu(self):
+        momentum_uv_coriolis(1, self.pmomentum)
+
+    def coriolis_fv(self):
+        momentum_uv_coriolis(2, self.pmomentum)
+
+    def pk_3d(self, double timestep, Array tausx not None, Array dpdx not None, Array idpdx not None, Array viscosity_u not None):
+        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
+        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
         assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
-        assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
         assert viscosity_u.grid is self.domain.U and viscosity_u.z == INTERFACES, 'grid mismatch for viscosity_u: expected %s, got %s' % (self.domain.U.postfix, viscosity_u.grid.postfix)
+        momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
+
+    def qk_3d(self, double timestep, Array tausy not None, Array dpdy not None, Array idpdy not None, Array viscosity_v not None):
+        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
+        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
+        assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
         assert viscosity_v.grid is self.domain.V and viscosity_v.z == INTERFACES, 'grid mismatch for viscosity_v: expected %s, got %s' % (self.domain.V.postfix, viscosity_v.grid.postfix)
+        momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
 
-        if self.apply_bottom_friction:
-            momentum_bottom_friction_3d(self.pmomentum)
+    def coriolis_fpk(self):
+        momentum_uv_coriolis_3d(1, self.pmomentum)
 
-        if self.u3dfirst:
-            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
-            self.pk.update_halos()
-            momentum_uv_coriolis_3d(1, self.pmomentum)
-            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
-            self.qk.update_halos()
-            momentum_uv_coriolis_3d(2, self.pmomentum)
-        else:
-            momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
-            self.qk.update_halos()
-            momentum_uv_coriolis_3d(2, self.pmomentum)
-            momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
-            self.pk.update_halos()
-            momentum_uv_coriolis_3d(1, self.pmomentum)
-        self.ufirst = not self.u3dfirst
+    def coriolis_fqk(self):
+        momentum_uv_coriolis_3d(2, self.pmomentum)
 
+    def bottom_friction_2d(self):
+        momentum_bottom_friction_2d(self.pmomentum, self.runtype)
+
+    def bottom_friction_3d(self):
+        momentum_bottom_friction_3d(self.pmomentum)
+
+    def w_3d(self, double timestep):
         momentum_w_3d(self.pmomentum, timestep)
 
 #   call self%velocities_3d()

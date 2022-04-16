@@ -393,33 +393,38 @@ contains
       !phn = c_loc(advection%hn)
    end function
 
-   subroutine advection_2d_calculate(direction, padvection, ptgrid, pugrid, pu, Ah, timestep, ph, phu, pvar) bind(c)
-      integer(c_int), intent(in), value :: direction
+   subroutine advection_uv_calculate(direction, nk, padvection, ptgrid, pugrid, pu, Ah, timestep, ph, phu, pvar) bind(c)
+      integer(c_int), intent(in), value :: direction, nk
       real(c_double), intent(in), value :: Ah
       real(c_double), intent(in), value :: timestep
       type(c_ptr),    intent(in), value :: padvection, ptgrid, pugrid, pu, ph, phu, pvar
 
-      type (type_advection),    pointer                 :: advection
-      type (type_getm_grid),  pointer                   :: tgrid, ugrid
-      real(real64), contiguous, pointer, dimension(:,:) :: u, h, hu, var
+      type (type_advection),    pointer                   :: advection
+      type (type_getm_grid),  pointer                     :: tgrid, ugrid
+      real(real64), contiguous, pointer, dimension(:,:,:) :: u, h, hu, var
+      integer                                             :: k
 
       call c_f_pointer(padvection, advection)
       if (.not. allocated(advection%op)) return
       call c_f_pointer(ptgrid, tgrid)
       call c_f_pointer(pugrid, ugrid)
-      call c_f_pointer(pu, u, ugrid%u(1:2) - ugrid%l(1:2) + 1)
-      call c_f_pointer(ph, h, tgrid%u(1:2) - tgrid%l(1:2) + 1)
-      call c_f_pointer(phu, hu, ugrid%u(1:2) - ugrid%l(1:2) + 1)
-      call c_f_pointer(pvar, var, tgrid%u(1:2) - tgrid%l(1:2) + 1)
+      call c_f_pointer(pu, u, (/ugrid%u(1) - ugrid%l(1) + 1, ugrid%u(2) - ugrid%l(2) + 1, nk/))
+      call c_f_pointer(ph, h, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, nk/))
+      call c_f_pointer(phu, hu, (/ugrid%u(1) - ugrid%l(1) + 1, ugrid%u(2) - ugrid%l(2) + 1, nk/))
+      call c_f_pointer(pvar, var, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, nk/))
       select case (direction)
          case (1)
-            call advection%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
-                    ugrid%mask,ugrid%idx,ugrid%dy,hu,u, &
-                    tgrid%mask,tgrid%iarea,Ah,timestep,h,var)
+            do k = 1, nk
+               call advection%op%u2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                       ugrid%mask,ugrid%idx,ugrid%dy,hu(:,:,k),u(:,:,k), &
+                       tgrid%mask,tgrid%iarea,Ah,timestep,h(:,:,k),var(:,:,k))
+            end do
          case (2)
-            call advection%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
-                    ugrid%mask,ugrid%dx,ugrid%idy,hu,u, &
-                    tgrid%mask,tgrid%iarea,Ah,timestep,h,var)
+            do k = 1, nk
+               call advection%op%v2d(tgrid%imin,tgrid%imax,tgrid%jmin,tgrid%jmax,tgrid%halo, &
+                       ugrid%mask,ugrid%dx,ugrid%idy,hu(:,:,k),u(:,:,k), &
+                       tgrid%mask,tgrid%iarea,Ah,timestep,h(:,:,k),var(:,:,k))
+            end do
       end select
    end subroutine
 

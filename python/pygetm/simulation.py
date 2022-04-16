@@ -80,7 +80,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -150,6 +150,9 @@ class Simulation(_pygetm.Simulation):
 
         self.tracers: List[Tracer] = []
         self.tracer_totals = []
+
+        self._ufirst = False
+        self._u3dfirst = False
 
         self.fabm_model = None
 
@@ -342,11 +345,7 @@ class Simulation(_pygetm.Simulation):
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
 
         # Update momentum using surface stresses and pressure gradients. Inputs and outputs on U and V grids.
-        self.uv_momentum_2d(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
-
-        # Update halos of U and V as the sea level update below requires valid transports within the halos
-        self.U.update_halos()
-        self.V.update_halos()
+        self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
 
         self.update_freshwater_fluxes(self.timestep)
 
@@ -380,7 +379,7 @@ class Simulation(_pygetm.Simulation):
             self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.sp)
 
             # JB: at what time should airsea.taux_U and airsea.tauy_V formally be defined? Start of the macrotimestep like dpdx/dpdy? TODO
-            self.uvw_momentum_3d(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
+            self.update_3d_momentum(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
 
             if self.runtype == BAROCLINIC:
                 # Buoyancy frequency and turbulence (T grid - interfaces)
@@ -497,7 +496,8 @@ class Simulation(_pygetm.Simulation):
             if total is not None:
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
-    def uv_momentum_2d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
+    def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
+        """Update depth-integrated transports (U, V) and depth-averaged velocities (u1, v1). This will also update their halos."""
         # compute velocities at time=n-1/2
         self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values
         self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
@@ -524,30 +524,71 @@ class Simulation(_pygetm.Simulation):
         self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values
         self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
 
-        _pygetm.Simulation.uv_momentum_2d(self, timestep, tausx, tausy, dpdx, dpdy)
+        if self.apply_bottom_friction:
+            self.bottom_friction_2d()
 
-    def uvw_momentum_3d(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
+        if self._ufirst:
+            self.u_2d(timestep, tausx, dpdx)
+            self.U.update_halos()
+            self.coriolis_fu()
+            self.v_2d(timestep, tausy, dpdy)
+            self.V.update_halos()
+            self.coriolis_fv()
+        else:
+            self.v_2d(timestep, tausy, dpdy)
+            self.V.update_halos()
+            self.coriolis_fv()
+            self.u_2d(timestep, tausx, dpdx)
+            self.U.update_halos()
+            self.coriolis_fu()
+        self._ufirst = not self._ufirst
+
+    def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
+        """Update depth-explicit transports (pk, qk) and velocities (uk, vk). This will also update their halos."""
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids. For that, information from the halos is used.
         viscosity.update_halos(parallel.TOP_AND_RIGHT)
 
-        _pygetm.Simulation.uvw_momentum_3d(self, timestep, tausx, tausy, dpdx, dpdy, idpdx, idpdy, viscosity.interp(self.domain.U), viscosity.interp(self.domain.V))
+        if self.apply_bottom_friction:
+            self.bottom_friction_3d()
+
+        # Update horizontal transports. Also update the halos so that transports (and more importantly, the velocities
+        # derived subsequently) are valid there. Information from these halos is needed for many reasons:
+        # - the Coriolis update requires horizontal velocities at the four points surrounding each U/V point
+        # - to advect the horizontal velocities themselves, for which they need to be valid in the halos in the direction of transport
+        # - to advect quantities defined on the T grid, as this requires horizontal velocities at the boundaries of every T cell
+        #   of the subdomain interior; this includes cells at the very Western and Southern boundary,
+        #   which for U and V grids lie within the halo
+        # - to allow interpolation of horizontal velocities to the advection grids for momentum (UU, UV, VU, VV),
+        #   which again requires halos values
+        # - to calculate vertical velocities, which requires horizontal transports at the four interfaces around every T point
+        if self._u3dfirst:
+            self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity.interp(self.domain.U))
+            self.pk.update_halos()
+            self.coriolis_fpk()
+            self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity.interp(self.domain.V))
+            self.qk.update_halos()
+            self.coriolis_fqk()
+        else:
+            self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity.interp(self.domain.V))
+            self.qk.update_halos()
+            self.coriolis_fqk()
+            self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity.interp(self.domain.U))
+            self.pk.update_halos()
+            self.coriolis_fpk()
+        self._u3dfirst = not self._u3dfirst
+
+        # Infer vertical velocity from horizontal transports and desired layer height change.
+        # This is done at all points surrounding U and V points, so no further halo exchange of w is needed
+        # to support interpolation to U and V grids later on. This does require that transports are up to date in halos.
+        self.w_3d(timestep)
 
         itimestep = 1. / timestep
-
-        # Update the halos so that transports (and more importantly, the velocities derived subsequently) are valid there.
-        # This is needed to advect quantities defined on the T grid, as this requires velocities at the boundaries of every T cell
-        # of the subdomain interior; this includes cells at the very Western and Southern boundary, which for U and V grids lie within the halo
-        # Moreover, the velocities will also be interpolated to the advection grids for momentum (UU, UV, VU, VV), which again requires halos values.
-        # The vertical velocity is already computed at all points surrounding U and V points, so no further halo exchange of w is needed
-        # to support interpolation to U and V grids later on.
-        self.pk.update_halos()
-        self.qk.update_halos()
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
-        # Use updated velocities (uk, vk) to compute shear frequency (SS)
+        # Use updated velocities (uk, vk) to compute shear frequency (SS) at T points (interior only, not in halos)
         self.update_shear_frequency(viscosity)
 
         # Interpolate 3D velocities to advection grids.
