@@ -47,7 +47,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
             sim.start_3d()
             sim.update_surface_pressure_gradient(domain.T.zio, sp)
 
-            sim.uvw_momentum_3d(timestep * mode_split, tausx, tausy, sim.dpdx, sim.dpdy, idpdx, idpdy, viscosity)
+            sim.update_3d_momentum(timestep * mode_split, tausx, tausy, sim.dpdx, sim.dpdy, idpdx, idpdy, viscosity)
 
             div = numpy.zeros(domain.T.hn.shape)
             U1 = (sim.pk * domain.U.dy).all_values[:, 2:-2, 1:-3]
