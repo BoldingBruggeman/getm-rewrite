@@ -657,7 +657,7 @@ class Simulation(_pygetm.Simulation):
         # That's already the case for the X grid, but for the T grid (now at t=n+1) we explicitly compute thicknesses at time=n+1/2.
         # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
         # fortunately these values are not needed for advection.
-        h_half = self.domain.T.ho.all_values + self.domain.T.hn.all_values
+        h_half = 0.5 * (self.domain.T.ho.all_values + self.domain.T.hn.all_values)
         self.domain.UU.hn.all_values[:, :, :-1] = h_half[:, :, 1:]
         self.domain.VV.hn.all_values[:, :-1, :] = h_half[:, 1:, :]
         self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
