@@ -37,7 +37,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
     pre_tot = (t * domain.T.hn).values.sum()
     for istep, time in enumerate(times):
         sim.update_surface_pressure_gradient(domain.T.z, sp)
-        sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
+        sim.update_2d_momentum(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
         sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
         sim.update_depth()
 

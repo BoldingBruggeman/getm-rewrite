@@ -76,9 +76,7 @@ def test(name: str, periodic_x: bool=False, periodic_y: bool=False, tau_x: float
 
     for istep in range(ntime):
         sim.update_surface_pressure_gradient(domain.T.z, sp)
-        sim.uv_momentum_2d(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
-        sim.U.update_halos()
-        sim.V.update_halos()
+        sim.update_2d_momentum(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
 
         # Compute updated velocities on tracer grid
         u_T_old, v_T_old = u_T, v_T
