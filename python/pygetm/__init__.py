@@ -9,3 +9,4 @@ from . import density
 from . import operators
 from .simulation import *
 from .constants import *
+from .operators import AdvectionScheme

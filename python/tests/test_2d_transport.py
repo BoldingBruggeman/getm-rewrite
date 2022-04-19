@@ -35,7 +35,7 @@ def test(name, periodic_x: bool=False, periodic_y: bool=False, tau_x: float=0., 
 
     # Set up rectangular domain (all points unmasked)
     domain = pygetm.domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
-    sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_2D, advection_scheme=pygetm.HSIMT, apply_bottom_friction=apply_bottom_friction)
+    sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_2D, advection_scheme=pygetm.AdvectionScheme.HSIMT, apply_bottom_friction=apply_bottom_friction)
 
     # Idealized surface forcing
     tausx = domain.U.array(fill=tau_x)

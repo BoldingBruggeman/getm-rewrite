@@ -58,11 +58,6 @@ cpdef enum:
     UVGRID = -3
     VUGRID = -4
 
-# JB: for now, this is copy of the constants in parallel. Values must stay in sync
-cpdef enum:
-    TOP_AND_BOTTOM = 9
-    LEFT_AND_RIGHT = 10
-
 cdef class Array:
     cdef void* p
     cdef numpy.ndarray _array
@@ -217,75 +212,58 @@ cdef class Domain:
 
 cdef class Advection:
     cdef void* p
-    cdef Grid tgrid
-    cdef Grid ugrid
-    cdef Grid vgrid
+    cdef readonly Grid grid
+    cdef readonly Grid ugrid
+    cdef readonly Grid vgrid
     cdef readonly numpy.ndarray D, h
-    cdef double[:, :, ::1] h_work, hu, hv
-    cdef double[:, ::1] D_ref, DU, DV
+    cdef double* ph
+    cdef double* phu
+    cdef double* phv
+    cdef double* pDU
+    cdef double* pDV
 
     def __init__(self, Grid grid, int scheme):
-        self.tgrid = grid
+        self.grid = grid
         self.ugrid = grid.ugrid
         self.vgrid = grid.vgrid
-        self.p = advection_create(scheme, self.tgrid.p)
+        self.p = advection_create(scheme, self.grid.p)
 
         # Work array for layer heights that change during 3d advection
         # This is shared by the temporary column height that evolves similarly during 2d advection
-        self.h = numpy.empty((self.tgrid.nz_, self.tgrid.ny_, self.tgrid.nx_))
+        self.h = numpy.empty((self.grid.nz_, self.grid.ny_, self.grid.nx_))
         self.D = self.h[0,...]
 
         # Store references to column height and layer thicknesses
-        self.D_ref = self.tgrid.D.all_values
-        self.DU = self.ugrid.D.all_values
-        self.DV = self.vgrid.D.all_values
-        self.hu = self.ugrid.hn.all_values
-        self.hv = self.vgrid.hn.all_values
-
-        # Efficient reference to work array
-        self.h_work = self.h
+        self.pDU = <double*>(<Array>self.ugrid.D).p
+        self.pDV = <double*>(<Array>self.vgrid.D).p
+        self.phu = <double*>(<Array>self.ugrid.hn).p
+        self.phv = <double*>(<Array>self.vgrid.hn).p
+        self.ph = <double*>self.h.data
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def __call__(self, Array u not None, Array v not None, double timestep, Array var not None, double Ah = 0, skip_initial_halo_exchange=True):
-        assert u.grid is self.ugrid
-        assert v.grid is self.vgrid
-        assert var.grid is self.tgrid
-        self.h_work[0,:,:] = self.D_ref
-        if not skip_initial_halo_exchange:
-            var.update_halos(TOP_AND_BOTTOM)
-        advection_uv_calculate(2, 1, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
-        var.update_halos(LEFT_AND_RIGHT)
-        advection_uv_calculate(1, 1, self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, timestep, &self.h_work[0,0,0], &self.DU[0,0], <double *>var.p)
-        var.update_halos(TOP_AND_BOTTOM)
-        advection_uv_calculate(2, 1, self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.DV[0,0], <double *>var.p)
+    def u_2d(self, Array u not None, double Ah, double timestep, Array var not None):
+        advection_uv_calculate(1, 1, self.p, self.grid.p, self.ugrid.p, <double *>u.p, Ah, timestep, self.ph, self.pDU, <double *>var.p)
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
-    def apply_3d(self, Array u not None, Array v not None, Array w not None, double timestep, Array var not None, double Ah = 0, new_h=False, skip_initial_halo_exchange=False, Array w_var=None):
-        if w_var is None:
-            w_var = w
-        assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
-        assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
-        assert w.grid is self.tgrid, 'grid mismatch for w: expected %s, got %s' % (self.tgrid.postfix, w.grid.postfix)
-        assert w.z == INTERFACES, 'grid mismatch for w: expected values at layer interfaces'
-        assert w_var.grid is self.tgrid, 'grid mismatch for w_var: expected %s, got %s' % (self.tgrid.postfix, w_var.grid.postfix)
-        assert w_var.z == INTERFACES, 'grid mismatch for w_var: expected values at layer interfaces'
-        assert var.grid is self.tgrid, 'grid mismatch for advected quantity: expected %s, got %s' % (self.tgrid.postfix, var.grid.postfix)
-        assert var.ndim == 3 and var.z != INTERFACES, 'grid mismatch for advected quantity: expected 3D variable defined at layer centers'
-        cdef double[:, :, ::1] h
-        h = (self.tgrid.hn if new_h else self.tgrid.ho).all_values
-        self.h_work[:,:,:] = h
-        if not skip_initial_halo_exchange:
-            var.update_halos(LEFT_AND_RIGHT)
-        advection_uv_calculate(1, var._array.shape[0], self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hu[0,0,0], <double *>var.p)
-        var.update_halos(TOP_AND_BOTTOM)
-        advection_uv_calculate(2, var._array.shape[0], self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hv[0,0,0], <double *>var.p)
-        advection_w_calculate(self.p, self.tgrid.p, <double *>w.p, <double *>w_var.p, timestep, &self.h_work[0,0,0], <double *>var.p)
-        var.update_halos(TOP_AND_BOTTOM)
-        advection_uv_calculate(2, var._array.shape[0], self.p, self.tgrid.p, self.vgrid.p, <double *>v.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hv[0,0,0], <double *>var.p)
-        var.update_halos(LEFT_AND_RIGHT)
-        advection_uv_calculate(1, var._array.shape[0], self.p, self.tgrid.p, self.ugrid.p, <double *>u.p, Ah, 0.5 * timestep, &self.h_work[0,0,0], &self.hu[0,0,0], <double *>var.p)
+    def v_2d(self, Array v not None, double Ah, double timestep, Array var not None):
+        advection_uv_calculate(2, 1, self.p, self.grid.p, self.vgrid.p, <double *>v.p, Ah, timestep, self.ph, self.pDV, <double *>var.p)
+
+    @cython.initializedcheck(False)
+    @cython.boundscheck(False) # turn off bounds-checking for entire function
+    def u_3d(self, Array u not None, double Ah, double timestep, Array var not None):
+        advection_uv_calculate(1, var._array.shape[0], self.p, self.grid.p, self.ugrid.p, <double *>u.p, Ah, timestep, self.ph, self.phu, <double *>var.p)
+
+    @cython.initializedcheck(False)
+    @cython.boundscheck(False) # turn off bounds-checking for entire function
+    def v_3d(self, Array v not None, double Ah, double timestep, Array var not None):
+        advection_uv_calculate(2, var._array.shape[0], self.p, self.grid.p, self.vgrid.p, <double *>v.p, Ah, timestep, self.ph, self.phv, <double *>var.p)
+
+    @cython.initializedcheck(False)
+    @cython.boundscheck(False) # turn off bounds-checking for entire function
+    def w_3d(self, Array w not None, Array w_var not None, double timestep, Array var not None):
+        advection_w_calculate(self.p, self.grid.p, <double *>w.p, <double *>w_var.p, timestep, self.ph, <double *>var.p)
 
 cdef class VerticalDiffusion:
     cdef void* p

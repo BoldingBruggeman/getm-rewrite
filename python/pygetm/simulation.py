@@ -26,14 +26,6 @@ BAROTROPIC_3D = 2
 FROZEN_DENSITY = 3
 BAROCLINIC = 4
 
-# Must match number in .../operators/advection.F90 - do you use them Jorn?
-HSIMT = 1
-MUSCL = 2
-P2_PDM = 3
-SPLMAX13 = 4
-SUPERBEE = 5
-UPSTREAM = 6 
-
 class Boundaries:
     __slots__ = '_tracer', '_type', 'values'
     def __init__(self, tracer: 'Tracer'):
@@ -83,7 +75,7 @@ class Simulation(_pygetm.Simulation):
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'u_taus', 'u_taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst') + _time_arrays
 
-    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: int=4, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
+    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
         logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, A=0.7, g1=1., g2=15.):
 
@@ -505,20 +497,20 @@ class Simulation(_pygetm.Simulation):
 
         itimestep = 1. / timestep
 
-        # Advect U using velocities interpolated to its own advection grids
+        # Advect depth-averaged u velocity (u1) using velocities interpolated to its own advection grids
         self.U.interp(self.uua)
         self.V.interp(self.uva)
         self.uua.all_values /= self.domain.UU.D.all_values
         self.uva.all_values /= self.domain.UV.D.all_values
-        self.uadv(self.uua, self.uva, timestep, self.u1)
+        self.uadv(self.uua, self.uva, timestep, self.u1, skip_initial_halo_exchange=True)
         self.advU.all_values[...] = (self.u1.all_values * self.uadv.D - self.U.all_values) * itimestep
 
-        # Advect V using velocities interpolated to its own advection grids
+        # Advect depth-averaged v velocity (v1) using velocities interpolated to its own advection grids
         self.U.interp(self.vua)
         self.V.interp(self.vva)
         self.vua.all_values /= self.domain.VU.D.all_values
         self.vva.all_values /= self.domain.VV.D.all_values
-        self.vadv(self.vua, self.vva, timestep, self.v1)
+        self.vadv(self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True)
         self.advV.all_values[...] = (self.v1.all_values * self.vadv.D - self.V.all_values) * itimestep
 
         # Restore velocity at time=n-1/2
