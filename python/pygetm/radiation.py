@@ -29,7 +29,7 @@ class TwoBand(Radiation):
         super().__init__(grid)
         self.A = grid.array(name='A', units='1', long_name='non-visible fraction of shortwave radiation', fill_value=FILL_VALUE)
         self.kc1 = grid.array(name='kc1', units='m-1', long_name='attenuation of non-visible fraction of shortwave radiation', fill_value=FILL_VALUE)
-        self.kc2 = grid.array(name='kc2', units='1', long_name='attenuation of visible fraction of shortwave radiation', fill_value=FILL_VALUE)
+        self.kc2 = grid.array(name='kc2', units='m-1', long_name='attenuation of visible fraction of shortwave radiation', fill_value=FILL_VALUE)
 
         self._first = True
         if jerlov_type:
