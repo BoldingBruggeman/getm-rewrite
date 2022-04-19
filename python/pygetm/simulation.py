@@ -334,7 +334,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.input_manager.update(self.time, include_3d=macro_active)
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
-        self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=macro_active)
+        self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=macro_active and self.runtype == BAROCLINIC)
 
         # Update elevation at the open boundaries
         self.update_sealevel_boundaries(self.timestep)
