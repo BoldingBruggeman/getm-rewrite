@@ -53,7 +53,7 @@ class GETMAccessor:
 
 open_nc_files = []
 def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=False, **kwargs) -> xarray.DataArray:
-    key = (paths, preprocess, cache, kwargs)
+    key = (paths, preprocess, cache, kwargs.copy())
     for k, ds in open_nc_files:
         if k == key:
             break
