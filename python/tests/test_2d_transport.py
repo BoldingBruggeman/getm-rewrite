@@ -4,8 +4,6 @@ import argparse
 import numpy
 
 import pygetm
-import pygetm.domain
-from pygetm.constants import RHO0
 
 def check_range(name, values, rtol=1e-12, atol=1e-12, target_value=None):
     values = numpy.asarray(values)
@@ -37,7 +35,7 @@ def test(name, periodic_x: bool=False, periodic_y: bool=False, tau_x: float=0., 
 
     # Set up rectangular domain (all points unmasked)
     domain = pygetm.domain.create_cartesian(500.*numpy.arange(100), 500.*numpy.arange(30), 1, f=0, H=50, periodic_x=periodic_x, periodic_y=periodic_y)
-    sim = pygetm.Simulation(domain, runtype=1, advection_scheme=1, apply_bottom_friction=apply_bottom_friction)
+    sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_2D, advection_scheme=pygetm.HSIMT, apply_bottom_friction=apply_bottom_friction)
 
     # Idealized surface forcing
     tausx = domain.U.array(fill=tau_x)
@@ -52,8 +50,8 @@ def test(name, periodic_x: bool=False, periodic_y: bool=False, tau_x: float=0., 
         sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
         sim.update_depth()
 
-    success = check_range('U', sim.U, target_value=None if apply_bottom_friction else ntime * timestep * tau_x / RHO0)
-    success = check_range('V', sim.V, target_value=None if apply_bottom_friction else ntime * timestep * tau_y / RHO0) and success
+    success = check_range('U', sim.U, target_value=None if apply_bottom_friction else ntime * timestep * tau_x / pygetm.RHO0)
+    success = check_range('V', sim.V, target_value=None if apply_bottom_friction else ntime * timestep * tau_y / pygetm.RHO0) and success
     success = check_range('z', domain.T.z, target_value=0) and success
     return success
 
