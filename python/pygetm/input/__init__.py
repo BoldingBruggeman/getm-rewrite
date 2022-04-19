@@ -51,11 +51,13 @@ class GETMAccessor:
                     self._coordinates['z'] = coord
         return self._coordinates
 
-open_nc_files = {}
+open_nc_files = []
 def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=False, **kwargs) -> xarray.DataArray:
-    key = (paths, preprocess, cache, frozenset(kwargs.items()))
-    ds = open_nc_files.get(key, None)
-    if ds is None:
+    key = (paths, preprocess, cache, kwargs)
+    for k, ds in open_nc_files:
+        if k == key:
+            break
+    else:
         kwargs['decode_times'] = False
         kwargs['cache'] = cache
         if isinstance(paths, str):
@@ -66,7 +68,7 @@ def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=
                 ds = preprocess(ds)
         else:
             ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
-        open_nc_files[key] = ds
+        open_nc_files.append((key, ds))
     array = ds[name]
     return xarray.DataArray(WrappedArray(array), dims=array.dims, coords=array.coords, attrs=array.attrs, name='from_nc(%s, %s)' % (paths, name))
 
@@ -474,6 +476,9 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._next = 0.
         self.slices: List[Union[int, slice]] = [slice(None)] * source.ndim
 
+    def apply(self, *inputs, dtype=None) -> numpy.ndarray:
+        return self._current
+
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self._current
 
@@ -625,7 +630,7 @@ class InputManager:
                 self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in %i of %i unmasked points.' % (array.name, value.name, n_unmasked - finite.sum(where=unmasked), n_unmasked))
             self._logger.info('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
 
-    def update(self, time, include_3d: bool):
+    def update(self, time, include_3d: bool=True):
         """Update all arrays linked to time-dependent inputs to the current time."""
         for name, source, target, update_always in self.fields:
             if include_3d or update_always:
