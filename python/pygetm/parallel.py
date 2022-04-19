@@ -253,7 +253,7 @@ class DistributedArray:
     __slots__ = ['rank', 'group2task', 'halo2name']
     def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, overlap: int=0):
         self.rank = tiling.rank
-        self.group2task: MutableMapping[Neighbor, Tuple[List, List, List, List]] = [([], [], [], []) for _ in range(max(Neighbor) + 1)]
+        self.group2task: List[Tuple[List[MPI.Prequest], List[MPI.Prequest], List[Tuple[numpy.ndarray, numpy.ndarray]], List[Tuple[numpy.ndarray, numpy.ndarray]]]] = [([], [], [], []) for _ in range(max(Neighbor) + 1)]
         self.halo2name = {}
 
         key = (field.shape, halo, overlap, field.dtype)
