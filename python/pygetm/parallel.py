@@ -1,7 +1,8 @@
-from typing import Iterable, Mapping, Optional, Tuple, Union, Any
+from typing import Iterable, Mapping, MutableMapping, Optional, Tuple, Union, Any, List
 import logging
 import functools
 import pickle
+import enum
 
 from mpi4py import MPI
 import numpy
@@ -224,38 +225,42 @@ class Tiling:
                 self.caches[key].fill(fill_value)
         return self.caches[key]
 
-BOTTOMLEFT = 1
-BOTTOM = 2
-BOTTOMRIGHT = 3
-LEFT = 4
-RIGHT = 5
-TOPLEFT = 6
-TOP = 7
-TOPRIGHT = 8
+@enum.unique
+class Neighbor(enum.IntEnum):
+    # Specific neighbors
+    BOTTOMLEFT = 1
+    BOTTOM = 2
+    BOTTOMRIGHT = 3
+    LEFT = 4
+    RIGHT = 5
+    TOPLEFT = 6
+    TOP = 7
+    TOPRIGHT = 8
 
-ALL = 0
-TOP_AND_BOTTOM = 9
-LEFT_AND_RIGHT = 10
-TOP_AND_RIGHT = 11     # for T to U/V grid interpolation
+    # Groups of neighbors (for update_halos command)
+    ALL = 0
+    TOP_AND_BOTTOM = 9
+    LEFT_AND_RIGHT = 10
+    TOP_AND_RIGHT = 11     # for T to U/V grid interpolation
 
 GROUP2PARTS = {
-    TOP_AND_BOTTOM: (TOP, BOTTOM),
-    LEFT_AND_RIGHT: (LEFT, RIGHT),
-    TOP_AND_RIGHT: (TOP, RIGHT),
+    Neighbor.TOP_AND_BOTTOM: (Neighbor.TOP, Neighbor.BOTTOM),
+    Neighbor.LEFT_AND_RIGHT: (Neighbor.LEFT, Neighbor.RIGHT),
+    Neighbor.TOP_AND_RIGHT: (Neighbor.TOP, Neighbor.RIGHT),
 }
 
 class DistributedArray:
     __slots__ = ['rank', 'group2task', 'halo2name']
     def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, overlap: int=0):
         self.rank = tiling.rank
-        self.group2task = [([], [], [], []) for _ in range(12)]
+        self.group2task: MutableMapping[Neighbor, Tuple[List, List, List, List]] = [([], [], [], []) for _ in range(max(Neighbor) + 1)]
         self.halo2name = {}
 
         key = (field.shape, halo, overlap, field.dtype)
         caches = tiling.caches.get(key)
         owncaches = []
 
-        def add_task(name: str, recvtag: int, sendtag: int, outer: numpy.ndarray, inner: numpy.ndarray):
+        def add_task(name: str, recvtag: Neighbor, sendtag: Neighbor, outer: numpy.ndarray, inner: numpy.ndarray):
             neighbor = getattr(tiling, name)
             assert isinstance(neighbor, int), 'Wrong type for neighbor %s: %s (type %s)' % (name, neighbor, type(neighbor))
             assert inner.shape == outer.shape
@@ -270,29 +275,29 @@ class DistributedArray:
                 send_req = tiling.comm.Send_init(inner_cache, neighbor, sendtag)
                 recv_req = tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
                 self.halo2name[id(outer)] = name
-                for group in [ALL, sendtag] + [group for (group, parts) in GROUP2PARTS.items() if sendtag in parts]:
+                for group in [Neighbor.ALL, sendtag] + [group for (group, parts) in GROUP2PARTS.items() if sendtag in parts]:
                     send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
                     send_reqs.append(send_req)
                     send_data.append((inner, inner_cache))
-                for group in [ALL, recvtag] + [group for (group, parts) in GROUP2PARTS.items() if recvtag in parts]:
+                for group in [Neighbor.ALL, recvtag] + [group for (group, parts) in GROUP2PARTS.items() if recvtag in parts]:
                     send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
                     recv_reqs.append(recv_req)
                     recv_data.append((outer, outer_cache))
 
         in_start = halo + overlap
         in_stop = in_start + halo
-        add_task('bottomleft',  BOTTOMLEFT,  TOPRIGHT,    field[...,      :halo,       :halo ], field[...,  in_start: in_stop,  in_start: in_stop ])
-        add_task('bottom',      BOTTOM,      TOP,         field[...,      :halo,   halo:-halo], field[...,  in_start: in_stop,  halo    :-halo    ])
-        add_task('bottomright', BOTTOMRIGHT, TOPLEFT,     field[...,      :halo,  -halo:     ], field[...,  in_start: in_stop, -in_stop :-in_start])
-        add_task('left',        LEFT,        RIGHT,       field[...,  halo:-halo,      :halo ], field[...,  halo    :-halo,     in_start: in_stop ])
-        add_task('right',       RIGHT,       LEFT,        field[...,  halo:-halo, -halo:     ], field[...,  halo    :-halo,    -in_stop :-in_start])
-        add_task('topleft',     TOPLEFT,     BOTTOMRIGHT, field[..., -halo:,           :halo ], field[..., -in_stop :-in_start, in_start: in_stop ])
-        add_task('top',         TOP,         BOTTOM,      field[..., -halo:,       halo:-halo], field[..., -in_stop :-in_start, halo    :-halo    ])
-        add_task('topright',    TOPRIGHT,    BOTTOMLEFT,  field[..., -halo:,      -halo:     ], field[..., -in_stop :-in_start,-in_stop :-in_start])
+        add_task('bottomleft',  Neighbor.BOTTOMLEFT,  Neighbor.TOPRIGHT,    field[...,      :halo,       :halo ], field[...,  in_start: in_stop,  in_start: in_stop ])
+        add_task('bottom',      Neighbor.BOTTOM,      Neighbor.TOP,         field[...,      :halo,   halo:-halo], field[...,  in_start: in_stop,  halo    :-halo    ])
+        add_task('bottomright', Neighbor.BOTTOMRIGHT, Neighbor.TOPLEFT,     field[...,      :halo,  -halo:     ], field[...,  in_start: in_stop, -in_stop :-in_start])
+        add_task('left',        Neighbor.LEFT,        Neighbor.RIGHT,       field[...,  halo:-halo,      :halo ], field[...,  halo    :-halo,     in_start: in_stop ])
+        add_task('right',       Neighbor.RIGHT,       Neighbor.LEFT,        field[...,  halo:-halo, -halo:     ], field[...,  halo    :-halo,    -in_stop :-in_start])
+        add_task('topleft',     Neighbor.TOPLEFT,     Neighbor.BOTTOMRIGHT, field[..., -halo:,           :halo ], field[..., -in_stop :-in_start, in_start: in_stop ])
+        add_task('top',         Neighbor.TOP,         Neighbor.BOTTOM,      field[..., -halo:,       halo:-halo], field[..., -in_stop :-in_start, halo    :-halo    ])
+        add_task('topright',    Neighbor.TOPRIGHT,    Neighbor.BOTTOMLEFT,  field[..., -halo:,      -halo:     ], field[..., -in_stop :-in_start,-in_stop :-in_start])
         if caches is None:
             tiling.caches[key] = owncaches
 
-    def update_halos(self, group: int=ALL):
+    def update_halos(self, group: Neighbor=Neighbor.ALL):
         send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
         Startall(recv_reqs)
         for inner, cache in send_data:
@@ -303,7 +308,7 @@ class DistributedArray:
             outer[...] = cache
         Waitall(send_reqs)
 
-    def compare_halos(self, group: int=ALL) -> bool:
+    def compare_halos(self, group: Neighbor=Neighbor.ALL) -> bool:
         send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
         Startall(recv_reqs)
         for inner, cache in send_data:

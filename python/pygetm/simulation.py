@@ -341,7 +341,7 @@ class Simulation(_pygetm.Simulation):
 
         # Calculate the surface pressure gradient in the U and V points.
         # This requires elevation and surface pressure (both on T grid) to be valid in the halos
-        self.airsea.sp.update_halos(parallel.TOP_AND_RIGHT)
+        self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
 
         # Update momentum using surface stresses and pressure gradients. Inputs and outputs on U and V grids.
@@ -546,7 +546,7 @@ class Simulation(_pygetm.Simulation):
     def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         """Update depth-explicit transports (pk, qk) and velocities (uk, vk). This will also update their halos."""
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids. For that, information from the halos is used.
-        viscosity.update_halos(parallel.TOP_AND_RIGHT)
+        viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
 
         if self.apply_bottom_friction:
             self.bottom_friction_3d()
@@ -644,8 +644,8 @@ class Simulation(_pygetm.Simulation):
         # These velocities will be advected, and therefore need to be valid througout the halos.
         # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
         # at the innermost halo point only, which is ensured by T.zin exchange.
-        self.domain.U.zin.update_halos(parallel.RIGHT)
-        self.domain.V.zin.update_halos(parallel.TOP)
+        self.domain.U.zin.update_halos(parallel.Neighbor.RIGHT)
+        self.domain.V.zin.update_halos(parallel.Neighbor.TOP)
 
         # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
         # This routine also sets ho to the previous value of hn
@@ -693,8 +693,8 @@ class Simulation(_pygetm.Simulation):
         # These velocities will be advected, and therefore need to be valid througout the halos.
         # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
         # at the innermost halo point only, which is ensured by T.zin exchange.
-        self.domain.U.z.update_halos(parallel.RIGHT)
-        self.domain.V.z.update_halos(parallel.TOP)
+        self.domain.U.z.update_halos(parallel.Neighbor.RIGHT)
+        self.domain.V.z.update_halos(parallel.Neighbor.TOP)
 
         # Update total water depth D on T, U, V, X grids
         # This also processes the halos; no further halo exchange needed.
