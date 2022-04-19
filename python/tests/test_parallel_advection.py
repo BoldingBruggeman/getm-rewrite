@@ -95,7 +95,7 @@ if args.output:
     ncf = outman.add_netcdf_file(args.output, interval=10)
     ncf.request('tracer')
 
-advect = pygetm.Advection(subdomain.T, scheme=4)
+advect = pygetm.operators.Advection(subdomain.T, scheme=4)
 
 def main():
     ifig = 0

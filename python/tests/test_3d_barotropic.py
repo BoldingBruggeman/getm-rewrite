@@ -26,7 +26,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
     t = domain.T.array(name='tracer', z=pygetm.CENTERS)
     rng = numpy.random.default_rng()
     rng.random(t.all_values.shape, out=t.all_values)
-    adv = pygetm.Advection(t.grid, scheme=1)
+    adv = pygetm.operators.Advection(t.grid, scheme=1)
 
     times = timestep * numpy.arange(ntime)
     mode_split = 10

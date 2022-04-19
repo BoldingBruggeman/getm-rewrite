@@ -14,6 +14,7 @@ from . import core
 from . import domain
 from . import parallel
 from . import output
+from . import operators
 from . import pyfabm
 import pygetm.mixing
 import pygetm.density
@@ -135,8 +136,8 @@ class Simulation(_pygetm.Simulation):
 
         self.fwf = dom.T.array(name='fwf', units='m s-1', long_name='freshwater flux', fill_value=FILL_VALUE)
         self.fwf.fill(0.)
-        self.uadv = _pygetm.Advection(dom.U, scheme=advection_scheme)
-        self.vadv = _pygetm.Advection(dom.V, scheme=advection_scheme)
+        self.uadv = operators.Advection(dom.U, scheme=advection_scheme)
+        self.vadv = operators.Advection(dom.V, scheme=advection_scheme)
 
         self.uua = dom.UU.array(fill=numpy.nan)
         self.uva = dom.UV.array(fill=numpy.nan)
@@ -157,7 +158,7 @@ class Simulation(_pygetm.Simulation):
         self.fabm_model = None
 
         if runtype > BAROTROPIC_2D:
-            self.tracer_advection = _pygetm.Advection(dom.T, scheme=advection_scheme)
+            self.tracer_advection = operators.Advection(dom.T, scheme=advection_scheme)
 
             # Turbulence and associated fields
             self.turbulence = turbulence or pygetm.mixing.GOTM(self.domain, nml_path=gotm)
@@ -167,7 +168,7 @@ class Simulation(_pygetm.Simulation):
             self.z0s = dom.T.array(fill=0.1, name='z0s', units='m', long_name='hydrodynamic roughness (surface)', fill_value=FILL_VALUE)
             self.z0b = dom.T.array(fill=0.1, name='z0b', units='m', long_name='hydrodynamic roughness (bottom)', fill_value=FILL_VALUE)
 
-            self.vertical_diffusion = _pygetm.VerticalDiffusion(dom.T, cnpar=1.)
+            self.vertical_diffusion = operators.VerticalDiffusion(dom.T, cnpar=1.)
 
             if fabm:
                 def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):

@@ -33,7 +33,7 @@ tracer.values[0, ...] = 1
 
 ini_min = tracer.values[...].min()
 ini_max = tracer.values[...].max()
-vdif = pygetm.VerticalDiffusion(tracer.grid, cnpar=cnpar)
+vdif = pygetm.operators.VerticalDiffusion(tracer.grid, cnpar=cnpar)
 
 for _ in range(nstep):
     vdif(nuh, dt, tracer)

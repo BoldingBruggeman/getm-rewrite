@@ -6,8 +6,6 @@ from . import airsea
 from . import radiation
 from . import mixing
 from . import density
+from . import operators
 from .simulation import *
 from .constants import *
-
-Advection = _pygetm.Advection
-VerticalDiffusion = _pygetm.VerticalDiffusion
