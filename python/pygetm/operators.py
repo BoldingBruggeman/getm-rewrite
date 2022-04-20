@@ -1,5 +1,5 @@
 import enum
-from typing import Optional
+from typing import Optional, Iterable
 
 from . import _pygetm
 from . import domain
@@ -56,5 +56,47 @@ class Advection(_pygetm.Advection):
         self.v_3d(v, Ah, 0.5 * timestep, var)
         var.update_halos(parallel.Neighbor.LEFT_AND_RIGHT)
         self.u_3d(u, Ah, 0.5 * timestep, var)
+
+    def apply_3d_batch(self, u: core.Array, v: core.Array, w: core.Array, timestep: float, vars: Iterable[core.Array], Ah: float=0., new_h: bool=False, skip_initial_halo_exchange: bool=False, w_vars: Optional[Iterable[core.Array]]=None):
+        if w_vars is None:
+            w_vars = [w] * len(vars)
+        assert u.grid is self.ugrid, 'grid mismatch for u: expected %s, got %s' % (self.ugrid.postfix, u.grid.postfix)
+        assert v.grid is self.vgrid, 'grid mismatch for v: expected %s, got %s' % (self.vgrid.postfix, v.grid.postfix)
+        assert w.grid is self.grid, 'grid mismatch for w: expected %s, got %s' % (self.grid.postfix, w.grid.postfix)
+        assert w.z == INTERFACES, 'grid mismatch for w: expected values at layer interfaces'
+        for w_var in w_vars:
+            assert w_var.grid is self.grid, 'grid mismatch for w_var: expected %s, got %s' % (self.grid.postfix, w_var.grid.postfix)
+            assert w_var.z == INTERFACES, 'grid mismatch for w_var: expected values at layer interfaces'
+        if not skip_initial_halo_exchange:
+            for var in vars:
+                var.update_halos_start(parallel.Neighbor.LEFT_AND_RIGHT)
+        current_h = (self.grid.hn if new_h else self.grid.ho).all_values.copy()
+        for var in vars:
+            self.h[...] = current_h
+            if not skip_initial_halo_exchange:
+                var.update_halos_finish(parallel.Neighbor.LEFT_AND_RIGHT)
+            self.u_3d(u, Ah, 0.5 * timestep, var)
+            var.update_halos_start(parallel.Neighbor.TOP_AND_BOTTOM)
+        current_h[...] = self.h
+        for var in vars:
+            self.h[...] = current_h
+            var.update_halos_finish(parallel.Neighbor.TOP_AND_BOTTOM)
+            self.v_3d(v, Ah, 0.5 * timestep, var)
+        current_h[...] = self.h
+        for var, w_var in zip(vars, w_vars):
+            self.h[...] = current_h
+            self.w_3d(w, w_var, timestep, var)
+            var.update_halos_start(parallel.Neighbor.TOP_AND_BOTTOM)
+        current_h[...] = self.h
+        for var in vars:
+            self.h[...] = current_h
+            var.update_halos_finish(parallel.Neighbor.TOP_AND_BOTTOM)
+            self.v_3d(v, Ah, 0.5 * timestep, var)
+            var.update_halos_start(parallel.Neighbor.LEFT_AND_RIGHT)
+        current_h[...] = self.h
+        for var in vars:
+            self.h[...] = current_h
+            var.update_halos_finish(parallel.Neighbor.LEFT_AND_RIGHT)
+            self.u_3d(u, Ah, 0.5 * timestep, var)
 
 VerticalDiffusion = _pygetm.VerticalDiffusion

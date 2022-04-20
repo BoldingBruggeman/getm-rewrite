@@ -68,6 +68,20 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo, overlap=self.grid.overlap)
         return self._dist.update_halos(*args, **kwargs)
 
+    def update_halos_start(self, *args, **kwargs):
+        if not self.grid.domain.tiling:
+            return
+        if self._dist is None:
+            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo, overlap=self.grid.overlap)
+        return self._dist.update_halos_start(*args, **kwargs)
+
+    def update_halos_finish(self, *args, **kwargs):
+        if not self.grid.domain.tiling:
+            return
+        if self._dist is None:
+            self._dist = parallel.DistributedArray(self.grid.domain.tiling, self.all_values, self.grid.halo, overlap=self.grid.overlap)
+        return self._dist.update_halos_finish(*args, **kwargs)
+
     def compare_halos(self, *args, **kwargs):
         if not self.grid.domain.tiling:
             return True

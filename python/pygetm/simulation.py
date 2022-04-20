@@ -386,16 +386,18 @@ class Simulation(_pygetm.Simulation):
                 self.temp.source.all_values[-1, ...] += self.airsea.shf.all_values
 
                 # Transport of passive tracers (including biogeochemical ones)
-                w_if = None
+                w_res = []
+                for tracer in self.tracers:
+                    w = self.ww
+                    if tracer.vertical_velocity is not None and tracer.vertical_velocity.all_values.any():
+                        w = self.domain.T.array(fill=0., z=INTERFACES)
+                        tracer.vertical_velocity.interp(w)
+                        w.all_values += self.ww.all_values
+                    w_res.append(w)
+                self.tracer_advection.apply_3d_batch(self.uk, self.vk, self.ww, self.macrotimestep, self.tracers, w_vars=w_res)
                 for tracer in self.tracers:
                     if tracer.source is not None:
                         tracer.source.all_values *= self.macrotimestep * tracer.source_scale
-                    w = self.ww
-                    if tracer.vertical_velocity is not None:
-                        w_if = tracer.vertical_velocity.interp(w_if or self.domain.T.array(fill=0., z=INTERFACES))
-                        w_if.all_values += self.ww.all_values
-                        w = w_if
-                    self.tracer_advection.apply_3d(self.uk, self.vk, self.ww, self.macrotimestep, tracer, w_var=w)
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
                     if self.domain.open_boundaries:
                         tracer.boundaries.update()

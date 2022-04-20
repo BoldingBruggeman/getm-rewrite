@@ -251,13 +251,13 @@ GROUP2PARTS = {
 
 class DistributedArray:
     __slots__ = ['rank', 'group2task', 'halo2name']
-    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, overlap: int=0):
+    def __init__(self, tiling: Tiling, field: numpy.ndarray, halo: int, overlap: int=0, share_caches: bool=False):
         self.rank = tiling.rank
         self.group2task: List[Tuple[List[MPI.Prequest], List[MPI.Prequest], List[Tuple[numpy.ndarray, numpy.ndarray]], List[Tuple[numpy.ndarray, numpy.ndarray]]]] = [([], [], [], []) for _ in range(max(Neighbor) + 1)]
         self.halo2name = {}
 
         key = (field.shape, halo, overlap, field.dtype)
-        caches = tiling.caches.get(key)
+        caches = None if not share_caches else tiling.caches.get(key)
         owncaches = []
 
         def add_task(name: str, recvtag: Neighbor, sendtag: Neighbor, outer: numpy.ndarray, inner: numpy.ndarray):
@@ -294,7 +294,7 @@ class DistributedArray:
         add_task('topleft',     Neighbor.TOPLEFT,     Neighbor.BOTTOMRIGHT, field[..., -halo:,           :halo ], field[..., -in_stop :-in_start, in_start: in_stop ])
         add_task('top',         Neighbor.TOP,         Neighbor.BOTTOM,      field[..., -halo:,       halo:-halo], field[..., -in_stop :-in_start, halo    :-halo    ])
         add_task('topright',    Neighbor.TOPRIGHT,    Neighbor.BOTTOMLEFT,  field[..., -halo:,      -halo:     ], field[..., -in_stop :-in_start,-in_stop :-in_start])
-        if caches is None:
+        if caches is None and share_caches:
             tiling.caches[key] = owncaches
 
     def update_halos(self, group: Neighbor=Neighbor.ALL):
@@ -307,6 +307,18 @@ class DistributedArray:
         for outer, cache in recv_data:
             outer[...] = cache
         Waitall(send_reqs)
+
+    def update_halos_start(self, group: Neighbor=Neighbor.ALL):
+        send_reqs, recv_reqs, send_data, _ = self.group2task[group]
+        for inner, cache in send_data:
+            cache[...] = inner
+        Startall(send_reqs + recv_reqs)
+
+    def update_halos_finish(self, group: Neighbor=Neighbor.ALL):
+        send_reqs, recv_reqs, _, recv_data = self.group2task[group]
+        Waitall(send_reqs + recv_reqs)
+        for outer, cache in recv_data:
+            outer[...] = cache
 
     def compare_halos(self, group: Neighbor=Neighbor.ALL) -> bool:
         send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
