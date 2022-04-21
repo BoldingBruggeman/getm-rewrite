@@ -48,6 +48,7 @@ class Boundaries:
 class Tracer(core.Array):
     __slots__ = 'source', 'source_scale', 'vertical_velocity', 'boundaries', 'river_values', 'river_follow', 'rivers'
     def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, rivers_follow_target_cell: bool=False, **kwargs):
+        kwargs.setdefault('attrs', {})['_part_of_state'] = True
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
         if data is None:
             data = numpy.full_like(grid.hn.all_values, numpy.nan)
@@ -68,7 +69,7 @@ class Tracer(core.Array):
             self.rivers[river.name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'taus', 'taub'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
@@ -153,7 +154,7 @@ class Simulation(_pygetm.Simulation):
             self.tracer_advection = operators.Advection(dom.T, scheme=advection_scheme)
 
             # Turbulence and associated fields
-            self.turbulence = turbulence or pygetm.mixing.GOTM(self.domain, nml_path=gotm)
+            self.turbulence = turbulence or pygetm.mixing.GOTM(self.domain.T, nml_path=gotm)
             self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
             self.u_taus = dom.T.array(fill=0., name='u_taus', units='m s-1', long_name='shear velocity (surface)', fill_value=FILL_VALUE)
             self.u_taub = dom.T.array(fill=0., name='u_taub', units='m s-1', long_name='shear velocity (bottom)', fill_value=FILL_VALUE)
@@ -333,7 +334,9 @@ class Simulation(_pygetm.Simulation):
         self.update_sealevel_boundaries(self.timestep)
 
         # Calculate the surface pressure gradient in the U and V points.
-        # This requires elevation and surface pressure (both on T grid) to be valid in the halos
+        # Note: this requires elevation and surface air pressure (both on T grid) to be valid in the halos,
+        # which is guaranteed for elevation (update_depth does the halo exchange) , and for air pressure
+        # if it is managed by the input manager (e.g. read from file)
         self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
 
@@ -342,7 +345,8 @@ class Simulation(_pygetm.Simulation):
 
         self.update_freshwater_fluxes(self.timestep)
 
-        # Update sea level on T grid, and from that calculate sea level and water depth on all grids
+        # Update surface elevation on T grid, and from that calculate surface elevation and water depth on all grids
+        # Elevation halos are updated by update_depth
         self.update_sealevel(self.timestep, self.U, self.V, self.fwf)
         self.update_depth()
 
@@ -375,9 +379,16 @@ class Simulation(_pygetm.Simulation):
             self.update_3d_momentum(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
 
             if self.runtype == BAROCLINIC:
-                # Buoyancy frequency and turbulence (T grid - interfaces)
+                # Calculate squared buoyancy frequency NN (T grid, interfaces between layers)
                 self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
-                self.u_taus.all_values[...] = (self.airsea.taux.all_values**2 + self.airsea.tauy.all_values**2)**0.25 / numpy.sqrt(RHO0)
+
+                # Update total stresses (x and y combined) and calculate the friction velocities (m s-1)
+                # This is for turbulence (GOTM), so all on the T grid
+                self.update_stresses(self.airsea.taux, self.airsea.tauy)
+                numpy.sqrt(self.taus.all_values, out=self.u_taus.all_values)
+                numpy.sqrt(self.taub.all_values, out=self.u_taub.all_values)
+
+                # turbulence (T grid - interfaces)
                 self.turbulence(self.macrotimestep, self.u_taus, self.u_taub, self.z0s, self.z0b, self.NN, self.SS)
 
                 # Temperature and salinity (T grid - centers)
@@ -455,6 +466,7 @@ class Simulation(_pygetm.Simulation):
                 river_values = numpy.where(river_follow, tracer_old, tracer.river_values)
                 tracer_new = (tracer_old * river_depth + river_values * self._cum_river_height_increase) / (river_depth + self._cum_river_height_increase)
                 tracer.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = numpy.where(river_active, tracer_new, tracer_old)
+            tracer.update_halos_start(parallel.Neighbor.LEFT_AND_RIGHT)   # to prepare for advection
         self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = h + h_increase
         self.domain.T.zin.all_values[self.domain.rivers.j, self.domain.rivers.i] += self._cum_river_height_increase
         self._cum_river_height_increase.fill(0.)

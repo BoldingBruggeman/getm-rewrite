@@ -67,9 +67,6 @@ class Advection(_pygetm.Advection):
         for w_var in w_vars:
             assert w_var.grid is self.grid, 'grid mismatch for w_var: expected %s, got %s' % (self.grid.postfix, w_var.grid.postfix)
             assert w_var.z == INTERFACES, 'grid mismatch for w_var: expected values at layer interfaces'
-        if not skip_initial_halo_exchange:
-            for var in vars:
-                var.update_halos_start(parallel.Neighbor.LEFT_AND_RIGHT)
         current_h = (self.grid.hn if new_h else self.grid.ho).all_values.copy()
         for var in vars:
             self.h[...] = current_h

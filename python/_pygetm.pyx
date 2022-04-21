@@ -37,6 +37,7 @@ cdef extern void momentum_uv_coriolis_3d(int direction, void* momentum) nogil
 cdef extern void momentum_bottom_friction_2d(void* momentum, int runtype) nogil
 cdef extern void momentum_bottom_friction_3d(void* momentum) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
+cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
 cdef extern void* pressure_create(int runtype, void* pdomain) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
@@ -350,6 +351,11 @@ cdef class Simulation:
 
     def w_3d(self, double timestep):
         momentum_w_3d(self.pmomentum, timestep)
+
+    def update_stresses(self, Array tausx not None, Array tausy not None):
+        assert tausx.grid is self.domain.T, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.T.postfix, tausx.grid.postfix)
+        assert tausy.grid is self.domain.T, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.T.postfix, tausy.grid.postfix)
+        momentum_stresses(self.pmomentum, <double *>tausx.p, <double *>tausy.p)
 
 #   call self%velocities_3d()
 #   call self%uv_advection_3d(dt)

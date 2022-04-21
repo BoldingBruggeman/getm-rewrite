@@ -1,5 +1,6 @@
 import numpy
 import cftime
+import enum
 
 import pyairsea
 import pygetm.domain
@@ -9,10 +10,11 @@ from .constants import FILL_VALUE
 
 CPA = 1008.
 
-RELATIVE_HUMIDITY = 1
-WET_BULB_TEMPERATURE = 2
-DEW_POINT_TEMPERATURE = 3
-SPECIFIC_HUMIDITY = 4
+class HumidityMeasure(enum.IntEnum):
+    RELATIVE_HUMIDITY = 1
+    WET_BULB_TEMPERATURE = 2
+    DEW_POINT_TEMPERATURE = 3
+    SPECIFIC_HUMIDITY = 4
 
 class Fluxes:
     def initialize(self, domain: pygetm.domain.Domain):
@@ -21,7 +23,7 @@ class Fluxes:
         self.taux = domain.T.array(name='tausx', long_name='wind stress in Eastward direction', units='Pa', fill_value=FILL_VALUE)
         self.tauy = domain.T.array(name='tausy', long_name='wind stress in Northward direction', units='Pa', fill_value=FILL_VALUE)
         self.shf = domain.T.array(name='shf', units='W m-2', long_name='surface heat flux', fill_value=FILL_VALUE)
-        self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill_value=FILL_VALUE)
+        self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill_value=FILL_VALUE, attrs={'_require_halos': True})
         self.swr = domain.T.array(name='swr', long_name='surface net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_shortwave_flux', attrs={'_3d_only': True})
 
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
@@ -41,7 +43,7 @@ class Fluxes:
         self.tauy.interp(self.tauy_V)
 
 class FluxesFromMeteo(Fluxes):
-    def __init__(self, longwave_method: int=1, albedo_method: int=1, humidity_measure=DEW_POINT_TEMPERATURE, calculate_swr: bool=True):
+    def __init__(self, longwave_method: int=1, albedo_method: int=1, humidity_measure: HumidityMeasure=HumidityMeasure.DEW_POINT_TEMPERATURE, calculate_swr: bool=True):
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
         self.humidity_measure = humidity_measure
@@ -54,11 +56,11 @@ class FluxesFromMeteo(Fluxes):
         self.ea = domain.T.array(name='ea', long_name='vapor pressure', units='Pa', fill_value=FILL_VALUE)
         self.qs = domain.T.array(name='qs', long_name='specific humidity at saturation', units='kg kg-1', fill_value=FILL_VALUE)
         self.qa = domain.T.array(name='qa', long_name='specific humidity', units='kg kg-1', fill_value=FILL_VALUE)
-        if self.humidity_measure == DEW_POINT_TEMPERATURE:
+        if self.humidity_measure == HumidityMeasure.DEW_POINT_TEMPERATURE:
             self.hum = self.d2m = domain.T.array(name='d2m', long_name='dew point temperature @ 2 m', units='degrees_Celsius', fill_value=FILL_VALUE)
-        elif self.humidity_measure == RELATIVE_HUMIDITY:
+        elif self.humidity_measure == HumidityMeasure.RELATIVE_HUMIDITY:
             self.hum = self.rh = domain.T.array(name='rh', long_name='relative humidity @ 2 m', units='%', fill_value=FILL_VALUE)
-        elif self.humidity_measure == WET_BULB_TEMPERATURE:
+        elif self.humidity_measure == HumidityMeasure.WET_BULB_TEMPERATURE:
             self.hum = self.wbt = domain.T.array(name='wbt', long_name='wet bulb temperature @ 2 m', units='degrees_Celsius', fill_value=FILL_VALUE)
         else:
             self.hum = self.qa
