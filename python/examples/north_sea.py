@@ -27,9 +27,6 @@ sim = pygetm.Simulation(domain, runtype=pygetm.BAROCLINIC, advection_scheme=pyge
 )
 sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
 
-domain.plot().savefig('domain-%02i.png' % domain.tiling.rank)
-#sim.input_manager.debug_nc_reads()
-
 if args.output:
     debug_output = False
     sim.logger.info('Setting up output')
