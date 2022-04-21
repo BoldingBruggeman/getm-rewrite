@@ -447,6 +447,8 @@ def test_scaling_command():
     parser.add_argument('--out', help='path to write scaling figure to')
     parser.add_argument('--compare', help='Path of NetCDF file to compare across simulations')
     args, leftover_args = parser.parse_known_args()
+    if leftover_args:
+        print('Arguments %s will be passed to %s' % (leftover_args, args.setup_script))
     test_scaling(args.setup_script, args.nmax, args.nmin, extra_args=leftover_args, plot=args.plot, out=args.out, compare=args.compare)
 
 def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra_args: Iterable[str]=[], plot: bool=True, out: Optional[str]=None, compare: Optional[str]=None):
