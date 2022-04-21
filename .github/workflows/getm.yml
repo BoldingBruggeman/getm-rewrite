@@ -49,5 +49,7 @@ jobs:
           diff -s par_adv_1x1.nc par_adv_1x2.nc
       - name: Test North Sea
         run: |
+          source ${CONDA}/etc/profile.d/conda.sh
+          conda activate pygetm
           cd python/examples
           python north_sea.py ../../getm-setups/NorthSea
