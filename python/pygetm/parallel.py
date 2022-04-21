@@ -471,13 +471,13 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
         p = subprocess.run(['mpiexec', '-n', str(n), sys.executable, setup_script] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         if p.returncode != 0:
             if n == ntest[0]:
-                print('First simulation failed - quitting. Last result:')
+                print('First simulation failed with return code %i - quitting. Last result:' % p.returncode)
                 print(p.stdout)
                 sys.exit(1)
             log_path = 'scaling-%03i.log' % n
             with open(log_path, 'w') as f:
                 f.write(p.stdout)
-            print('FAILED, log written to %s' % log_path)
+            print('FAILED with return code %i, log written to %s' % (p.returncode, log_path))
             continue
         m = re.search('Time spent in main loop: ([\d\.]+) s', p.stdout)
         duration = float(m.group(1))
