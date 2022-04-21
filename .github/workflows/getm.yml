@@ -53,3 +53,9 @@ jobs:
           conda activate pygetm
           cd python/examples
           python north_sea.py ../../getm-setups/NorthSea
+      - name: Test North Sea scaling
+        run: |
+          source ${CONDA}/etc/profile.d/conda.sh
+          conda activate pygetm
+          cd python/examples
+          pygetm-test-scaling --nmax 4 --compare north_sea.nc north_sea.py ../../getm-setups/NorthSea
