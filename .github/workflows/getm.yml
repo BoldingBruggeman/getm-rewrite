@@ -44,3 +44,12 @@ jobs:
           mpiexec -n 2 python test_parallel_advection.py --nrow 1 --ncol 2 --noplot -n 1 -o par_adv_1x2.nc
           diff -s par_adv_1x1.nc par_adv_2x1.nc
           diff -s par_adv_1x1.nc par_adv_1x2.nc
+      - name: Clone getm-setups
+        uses: actions/checkout@v2
+        with:
+           path: setups
+           repository: https://git.code.sf.net/p/getm/getm-setups
+      - name: Test North Sea
+        run: |
+          cd python/examples
+          python north_sea.py ../../setups/NorthSea
