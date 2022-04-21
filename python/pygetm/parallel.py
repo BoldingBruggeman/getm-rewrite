@@ -476,6 +476,7 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
             if n == ntest[0]:
                 print('First simulation failed with return code %i - quitting. Last result:' % p.returncode)
                 print(p.stdout)
+                print()
                 break
             log_path = 'scaling-%03i.log' % n
             with open(log_path, 'w') as f:
