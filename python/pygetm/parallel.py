@@ -463,7 +463,7 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
         nmax = os.cpu_count()
     ncpus = []
     durations = []
-    returncode = 0
+    success = True
     refname = None
     ntest = list(range(nmin, nmax + 1))
     if nmin > 1 and compare:
@@ -472,10 +472,11 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
         print('Running %s with %i CPUs... ' % (os.path.basename(setup_script), n), end='', flush=True)
         p = subprocess.run(['mpiexec', '-n', str(n), sys.executable, setup_script] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         if p.returncode != 0:
+            success = False
             if n == ntest[0]:
                 print('First simulation failed with return code %i - quitting. Last result:' % p.returncode)
                 print(p.stdout)
-                sys.exit(1)
+                break
             log_path = 'scaling-%03i.log' % n
             with open(log_path, 'w') as f:
                 f.write(p.stdout)
@@ -496,14 +497,14 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
             else:
                 print('  comparing %s wih reference produced with 1 CPUs... ' % (compare,), flush=True)
                 if not compare_nc.compare(compare, refname):
-                    returncode = 1
+                    success = False
 
     if refname is not None:
         print('Deleting reference result %s... ' % refname, end='')
         os.remove(refname)
         print('done.')
 
-    if plot:
+    if plot and success:
         from matplotlib import pyplot
         fig, ax = pyplot.subplots()
         ax.plot(ncpus, durations, '.')
@@ -516,4 +517,4 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
         else:
             pyplot.show()
 
-    sys.exit(returncode)
+    sys.exit(0 if success else 1)
