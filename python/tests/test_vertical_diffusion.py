@@ -31,9 +31,14 @@ tracer = domain.T.array(z=pygetm.CENTERS)
 tracer.values[...] = 0
 tracer.values[0, ...] = 1
 
+mask = numpy.broadcast_to(domain.T.mask.values != 1, tracer.shape)
+valid_tracer = numpy.ma.array(tracer.values, mask=mask)
+
 ini_min = tracer.values[...].min()
 ini_max = tracer.values[...].max()
 vdif = pygetm.operators.VerticalDiffusion(tracer.grid, cnpar=cnpar)
+
+tolerance = 1e-14
 
 for _ in range(nstep):
     vdif(nuh, dt, tracer)
@@ -41,8 +46,6 @@ for _ in range(nstep):
 if not numpy.isfinite(tracer)[...].all():
     print('ERROR: tracer contains non-finite values after diffusion')
     sys.exit(1)
-mask = numpy.broadcast_to(domain.T.mask.values != 1, tracer.shape)
-valid_tracer = numpy.ma.array(tracer.values, mask=mask)
 
 col_min = valid_tracer.min(axis=1).min(axis=1)
 col_max = valid_tracer.max(axis=1).max(axis=1)
@@ -53,7 +56,7 @@ print('Absolute range in profiles: %s' % (col_range,))
 print('Relative range in profiles: %s' % (rel_col_range,))
 max_rel_col_range = rel_col_range.max()
 global_min, global_max = col_min.min(), col_max.max()
-tolerance = 1e-14
+
 if max_rel_col_range > tolerance:
     print('ERROR: maximum range across domain %s exceeds tolerance %s' % (max_rel_col_range, tolerance))
     sys.exit(1)
@@ -81,12 +84,24 @@ if error > tolerance:
     print('ERROR: error %s in tracer after using vertical diffusion solver to integrate sources exceeds tolerance %s' % (error, tolerance))
     sys.exit(1)
 
-# Now try without spatial gradient and source term only
+# Now try without spatial gradient and relative [linear] source term only
+tolerance = 1e-13
 tracer.values[...] = 1
-sources = domain.T.array(fill=-.1 / dt, z=pygetm.CENTERS) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
-for _ in range(1):
-    vdif(nuh, dt, tracer, ea2=sources)
-print(valid_tracer)
+r = 0.1   # relative rate of increase
+rel_sink = domain.T.array(fill=-r / dt, z=pygetm.CENTERS) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
+for _ in range(nstep):
+    vdif(nuh, dt, tracer, ea2=rel_sink)
+expected = 1. / (1. - r)**nstep
+delta = valid_tracer - expected
+rel_delta = delta / expected
+rel_delta_min = rel_delta.min(axis=(1, 2))
+rel_delta_max = rel_delta.max(axis=(1, 2))
+if (rel_delta_min - rel_delta_max).any():
+    print('ERROR: relative error in tracer varies horizontally after using vertical diffusion solver to integrate relative sources: %s vs %s' % (rel_delta_min, rel_delta_max))
+rel_error = numpy.abs(rel_delta).max()
+if rel_error > tolerance:
+    print('ERROR: maximum relative error %s in tracer after using vertical diffusion solver to integrate relative sources exceeds tolerance %s' % (rel_error, tolerance))
+    sys.exit(1)
 
 # Now try without spatial gradient in tracer, but with variable diffusivity
 tolerance = 1e-11
