@@ -11,6 +11,20 @@ module pygotm
 
 contains
 
+   subroutine redirect_output(stdout_file, stderr_file) bind(c)
+      character(kind=c_char), target, intent(in)  :: stdout_file(*), stderr_file(*)
+      character(len=256), pointer :: pstdout_file, pstderr_file
+      call c_f_pointer(c_loc(stdout_file), pstdout_file)
+      call c_f_pointer(c_loc(stderr_file), pstderr_file)
+      open(unit=0, file=pstderr_file(:index(pstderr_file, C_NULL_CHAR) - 1))
+      open(unit=6, file=pstdout_file(:index(pstdout_file, C_NULL_CHAR) - 1))
+   end subroutine
+
+   subroutine close_redirected_output() bind(c)
+      close(unit=0)
+      close(unit=6)
+   end subroutine
+
    subroutine initialize(nlev, nml_file, ptke, ptkeo, peps, pL, pnum, pnuh) bind(c)
       integer(c_int), value,          intent(in)  :: nlev
       character(kind=c_char), target, intent(in)  :: nml_file(*)
@@ -41,6 +55,8 @@ contains
       pnuh = c_loc(nuh)
 
       initialized = .true.
+      flush(unit=0)
+      flush(unit=6)
    end subroutine
 
    subroutine calculate(nlev, dt, h, D, u_taus, u_taub, z0s, z0b, NN, SS) bind(c)

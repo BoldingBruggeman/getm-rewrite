@@ -1,4 +1,5 @@
 from typing import Optional
+import itertools
 
 import numpy
 
@@ -17,6 +18,7 @@ class Turbulence:
 class GOTM(Turbulence):
     def __init__(self, grid: domain.Grid, nml_path: Optional[str]=None):
         super().__init__(grid)
+        self.logger = grid.domain.root_logger.getChild('GOTM')
         self.mix = _pygotm.Mixing(grid.nz, b'' if nml_path is None else nml_path.encode('ascii'))
         self.grid = grid
         self.nuh.fill(self.mix.nuh[:, numpy.newaxis, numpy.newaxis])
@@ -25,6 +27,10 @@ class GOTM(Turbulence):
         self.tkeo = grid.array(fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='tkeo', units='m2 s-2', long_name='turbulent kinetic energy at previous timestep')
         self.eps = grid.array(fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='eps', units='m2 s-3', long_name='energy dissipation rate')
         self.L = grid.array(fill=self.mix.L[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='L', units='m', long_name='turbulence length scale')
+        for l in itertools.chain(_pygotm.stdout, _pygotm.stderr):
+            l = l.rstrip()
+            if l:
+                self.logger.info(l)
 
     def __call__(self, timestep: float, u_taus: core.Array, u_taub: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
         """Update turbulent quantities and calculate turbulent diffusivity nuh and turbulent viscosity,

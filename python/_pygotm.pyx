@@ -2,14 +2,34 @@
 # cython: profile=True
 
 cimport cython
+import tempfile
+import atexit
+import os
 
 cimport numpy
 import numpy
 
-cdef extern void initialize(int nlev, const char* inputdir, double** ptke, double** ptkeo, double** peps, double** pL, double** pnum, double** pnuh) nogil
+cdef extern void initialize(int nlev, const char* nml_file, double** ptke, double** ptkeo, double** peps, double** pL, double** pnum, double** pnuh) nogil
 cdef extern void calculate(int nlev, double dt, double* h, double D, double taus, double taub, double z0s, double z0b, double* SS, double* NN) nogil
 cdef extern void calculate_3d(int nx, int nz, int nz, int istart, int istop, int jstart, int jstop, double dt, int* mask, double* h3d, double* D, double* u_taus, double* u_taub, double* z0s, double* z0b, double* NN, double* SS, double* tke, double* tkeo, double* eps, double* L, double* num, double* nuh)
 cdef extern void diff(int nlev, double dt, double cnpar, int posconc, double* h, int Bcup, int Bcdw, double Yup, double Ydw, double* nuY, double* Lsour, double* Qsour, double* Taur, double* Yobs, double* Y)
+cdef extern void redirect_output(const char* stdout_file, const char* stderr_file) nogil
+cdef extern void close_redirected_output() nogil
+
+with tempfile.NamedTemporaryFile(delete=False) as f1, tempfile.NamedTemporaryFile(delete=False) as f2:
+    stdout_path = f1.name
+    stderr_path = f2.name
+redirect_output(stdout_path.encode('ascii'), stderr_path.encode('ascii'))
+stdout = open(stdout_path)
+stderr = open(stderr_path)
+
+def cleanup():
+    close_redirected_output()
+    stdout.close()
+    stderr.close()
+    os.remove(stdout_path)
+    os.remove(stderr_path)
+atexit.register(cleanup)
 
 cdef class Mixing:
     cdef readonly numpy.ndarray tke, tkeo, eps, L, num, nuh
