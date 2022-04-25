@@ -445,13 +445,13 @@ def test_scaling_command():
     parser.add_argument('--nmax', type=int, help='maximum number of CPUs to test with')
     parser.add_argument('--plot', action='store_true', help='whether to create scaling plot')
     parser.add_argument('--out', help='path to write scaling figure to')
-    parser.add_argument('--compare', help='Path of NetCDF file to compare across simulations')
+    parser.add_argument('--compare', action='append', default=[], help='Path of NetCDF file to compare across simulations')
     args, leftover_args = parser.parse_known_args()
     if leftover_args:
         print('Arguments %s will be passed to %s' % (leftover_args, args.setup_script))
     test_scaling(args.setup_script, args.nmax, args.nmin, extra_args=leftover_args, plot=args.plot, out=args.out, compare=args.compare)
 
-def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra_args: Iterable[str]=[], plot: bool=True, out: Optional[str]=None, compare: Optional[str]=None):
+def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra_args: Iterable[str]=[], plot: bool=True, out: Optional[str]=None, compare: Optional[Iterable[str]]=None):
     import subprocess
     import sys
     import os
@@ -464,7 +464,7 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
     ncpus = []
     durations = []
     success = True
-    refname = None
+    refnames = []
     ntest = list(range(nmin, nmax + 1))
     if nmin > 1 and compare:
         ntest.insert(0, 1)
@@ -488,19 +488,19 @@ def test_scaling(setup_script: str, nmax: Optional[int]=None, nmin: int=1, extra
         print('%.3f s in main loop' % (duration,))
         ncpus.append(n)
         durations.append(duration)
-        if compare:
+        for i, path in enumerate(compare):
             if n == 1:
-                print('  copying reference %s to temporary file... ' % compare, end='', flush=True)
-                with open(compare, 'rb') as fin, tempfile.NamedTemporaryFile(suffix='.nc', delete=False) as fout:
+                print('  copying reference %s to temporary file... ' % path, end='', flush=True)
+                with open(path, 'rb') as fin, tempfile.NamedTemporaryFile(suffix='.nc', delete=False) as fout:
                     shutil.copyfileobj(fin, fout)
-                    refname = fout.name
+                    refnames.append(fout.name)
                 print('done.')
             else:
-                print('  comparing %s wih reference produced with 1 CPUs... ' % (compare,), flush=True)
-                if not compare_nc.compare(compare, refname):
+                print('  comparing %s wih reference produced with 1 CPUs... ' % (path,), flush=True)
+                if not compare_nc.compare(path, refnames[i]):
                     success = False
 
-    if refname is not None:
+    for refname in refnames:
         print('Deleting reference result %s... ' % refname, end='')
         os.remove(refname)
         print('done.')
