@@ -75,7 +75,7 @@ MODULE getm_momentum
       real(real64), dimension(:,:,:), allocatable :: advpk,advqk
       real(real64), dimension(:,:,:), allocatable :: diffuk,diffvk
       real(real64), dimension(:,:,:), allocatable :: uk,vk
-      real(real64), dimension(:,:), allocatable :: taus,taub
+      real(real64), dimension(:,:), allocatable :: ustar2_s,ustar2_b
       real(real64), dimension(:,:), allocatable :: taubx,tauby
       real(real64), dimension(:,:,:), allocatable :: SS
       real(real64), dimension(:), allocatable :: bdyu,bdyv

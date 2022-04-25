@@ -162,6 +162,7 @@ MODULE SUBROUTINE stresses(self,tausx,tausy)
    if(associated(self%logs)) call self%logs%info('stresses()',level=3)
    k=1 !note
 !  x-component of bottom momentum flux at U-points
+!  (square of shear velocity = bottom stress in Pa divided by density rho0)
    UGrid: associate( UG => self%domain%U )
    do j=UG%l(2)+1,UG%u(2) !KB loop boundaries
       do i=UG%l(1)+1,UG%u(1)
@@ -174,6 +175,7 @@ MODULE SUBROUTINE stresses(self,tausx,tausy)
    end associate UGrid
 
 !  y-component of bottom momentum flux at V-points
+!  (square of shear velocity = bottom stress in Pa divided by density rho0)
    VGrid: associate( VG => self%domain%V )
    do j=VG%l(2)+1,VG%u(2) !KB loop boundaries
       do i=VG%l(1)+1,VG%u(1)
@@ -190,11 +192,11 @@ MODULE SUBROUTINE stresses(self,tausx,tausy)
    do j=TG%l(2)+1,TG%u(2) !KB loop boundaries
       do i=TG%l(1)+1,TG%u(1)
          if (TG%mask(i,j) > 0) then
-            ! total surface stress at T-points
-            self%taus(i,j)=sqrt(tausx(i,j)**2 + tausy(i,j)**2)/rho0
+            ! total surface stress at T-points (square of shear velocity = surface stress in Pa divided by density rho0)
+            self%ustar2_s(i,j)=sqrt(tausx(i,j)**2 + tausy(i,j)**2)/rho0
 
-            ! total bottom stress at T-points
-            self%taub(i,j)=sqrt(0.5_real64*( &
+            ! total bottom stress at T-points (square of shear velocity = bottom stress in Pa divided by density rho0)
+            self%ustar2_b(i,j)=sqrt(0.5_real64*( &
 #if 1
                       (self%taubx(i-1,j  ))**2+(self%taubx(i,j))**2 &
                      +(self%tauby(i  ,j-1))**2+(self%tauby(i,j))**2))

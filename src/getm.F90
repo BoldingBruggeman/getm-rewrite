@@ -382,7 +382,7 @@ SUBROUTINE getm_integrate(self)
                                        pressure%idpdx,pressure%idpdy,mixing%num)
          call momentum%stresses(airsea%taux,airsea%tauy)
 
-         call mixing%calculate(dti,momentum%taus,momentum%taub,momentum%SS,density%NN)
+         call mixing%calculate(dti,momentum%ustar2_s,momentum%ustar2_b,momentum%SS,density%NN)
 
          ! 3D baroclinic
          if (self%runtype > 3) then

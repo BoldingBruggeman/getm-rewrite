@@ -27,17 +27,20 @@ class GOTM(Turbulence):
         self.tkeo = grid.array(fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='tkeo', units='m2 s-2', long_name='turbulent kinetic energy at previous timestep')
         self.eps = grid.array(fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='eps', units='m2 s-3', long_name='energy dissipation rate')
         self.L = grid.array(fill=self.mix.L[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='L', units='m', long_name='turbulence length scale')
+        self.log()
+
+    def log(self):
         for l in itertools.chain(_pygotm.stdout, _pygotm.stderr):
             l = l.rstrip()
             if l:
                 self.logger.info(l)
 
-    def __call__(self, timestep: float, u_taus: core.Array, u_taub: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
+    def __call__(self, timestep: float, ustar_s: core.Array, ustar_b: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
         """Update turbulent quantities and calculate turbulent diffusivity nuh and turbulent viscosity,
-        using surface and bottom friction velocity (u_taus, u_taub, both in m s-1), surface and bottom hydrodynamic roughness (z0s, z0b, both in m)
+        using surface and bottom friction velocity (ustar_s, ustar_b, both in m s-1), surface and bottom hydrodynamic roughness (z0s, z0b, both in m)
         squared buoyancy frequency (NN in s-2), and squared shear frequency (SS in s-2)."""
-        assert u_taus.grid is self.grid and u_taus.ndim == 2
-        assert u_taub.grid is self.grid and u_taub.ndim == 2
+        assert ustar_s.grid is self.grid and ustar_s.ndim == 2
+        assert ustar_b.grid is self.grid and ustar_b.ndim == 2
         assert z0s.grid is self.grid and z0s.ndim == 2
         assert z0b.grid is self.grid and z0b.ndim == 2
         assert NN.grid is self.grid and NN.z == INTERFACES
@@ -45,7 +48,7 @@ class GOTM(Turbulence):
 
         nz, ny, nx = self.grid.hn.all_values.shape
         self.mix.turbulence_3d(nx, ny, nz, 2, nx - 2, 2, ny - 2, timestep, self.grid.mask.all_values,
-            self.grid.hn.all_values, self.grid.D.all_values, u_taus.all_values, u_taub.all_values,
+            self.grid.hn.all_values, self.grid.D.all_values, ustar_s.all_values, ustar_b.all_values,
             z0s.all_values, z0b.all_values, NN.all_values, SS.all_values,
             self.tke.all_values, self.tkeo.all_values, self.eps.all_values, self.L.all_values, self.num.all_values, self.nuh.all_values)
 
@@ -53,3 +56,5 @@ class GOTM(Turbulence):
         # Viscosity (at T points) needs to be valid at open boundary points to so it can be interpolated to inward-adjacent U/V points.
         # However, it cannot be computed as the shear frequency SS is not available at the boundary.
         self.num.update_boundary(ZERO_GRADIENT)
+
+        self.log()

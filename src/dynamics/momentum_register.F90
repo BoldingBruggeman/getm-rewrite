@@ -178,22 +178,22 @@ MODULE SUBROUTINE momentum_register(self,runtype)
    call f%attributes%set('axis', 'X Y Z T')
    call self%fm%send_data('ww', self%ww(TG%imin:TG%imax,TG%jmin:TG%jmax,TG%kmin:TG%kmax))
 
-   call self%fm%register('taus', 'm2/s', 'total surface stress at T-points', &
+   call self%fm%register('ustar2_s', 'm2/s', 'total surface stress at T-points', &
                          standard_name='', &
                          dimensions=(self%domain%T%dim_2d_ids), &
   !KB                       output_level=output_level_debug, &
                          part_of_state=.false., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('taus', self%taus(TG%imin:TG%imax,TG%jmin:TG%jmax))
-   call self%fm%register('taub', 'm2/s', 'total bottom stress at T-points', &
+   call self%fm%send_data('ustar2_s', self%ustar2_s(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%register('ustar2_b', 'm2/s2', 'total bottom stress at T-points', &
                          standard_name='', &
                          dimensions=(self%domain%T%dim_2d_ids), &
   !KB                       output_level=output_level_debug, &
                          part_of_state=.false., &
                          category='2d', field=f)
    call f%attributes%set('axis', 'X Y')
-   call self%fm%send_data('taub', self%taub(TG%imin:TG%imax,TG%jmin:TG%jmax))
+   call self%fm%send_data('ustar2_b', self%ustar2_b(TG%imin:TG%imax,TG%jmin:TG%jmax))
    call self%fm%register('taubx', 'm2/s', 'bottom momentum flux in local x-direction', &
                          standard_name='', &
                          dimensions=(self%domain%U%dim_2d_ids), &

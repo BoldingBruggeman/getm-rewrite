@@ -199,8 +199,8 @@ contains
          case ('rv');   p = c_loc(momentum%rv); grid_type = 3
          case ('rru');   p = c_loc(momentum%rru); grid_type = 2
          case ('rrv');   p = c_loc(momentum%rrv); grid_type = 3
-         case ('taus');   p = c_loc(momentum%taus)
-         case ('taub');   p = c_loc(momentum%taub)
+         case ('ustar2_s');   p = c_loc(momentum%ustar2_s)
+         case ('ustar2_b');   p = c_loc(momentum%ustar2_b)
          case ('pk');   if (allocated(momentum%pk)) p = c_loc(momentum%pk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('qk');   if (allocated(momentum%qk)) p = c_loc(momentum%qk); grid_type = 3; sub_type = subtype_depth_explicit
          case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); sub_type = subtype_depth_explicit_interfaces

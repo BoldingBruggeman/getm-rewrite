@@ -28,7 +28,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
    ! x-direction
    UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
+      do i=UG%imin-1,UG%imax
          if (UG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin,UG%D(i,j))
             self%rru(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
@@ -38,7 +38,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
    end do
    if (runtype .eq. 1) then
       do j=UG%jmin,UG%jmax
-         do i=UG%imin,UG%imax
+         do i=UG%imin-1,UG%imax
             if (UG%mask(i,j) > 0) then
                ustar=sqrt(self%rru(i,j)*(self%u1(i,j)**2+self%work2d(i,j)**2))
                hh=max(self%domain%Dmin,UG%D(i,j))
@@ -49,7 +49,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       end do
    end if
    do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
+      do i=UG%imin-1,UG%imax
          if (UG%mask(i,j) > 0) then
             self%ru(i,j)=self%rru(i,j)*sqrt(self%u1(i,j)**2+self%work2d(i,j)**2)
          end if
@@ -59,7 +59,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
 
    ! y-direction
    VGrid: associate( VG => self%domain%V )
-   do j=VG%jmin,VG%jmax
+   do j=VG%jmin-1,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin,VG%D(i,j))
@@ -69,7 +69,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       end do
    end do
    if (runtype .eq. 1) then
-      do j=VG%jmin,VG%jmax
+      do j=VG%jmin-1,VG%jmax
          do i=VG%imin,VG%imax
             if (VG%mask(i,j) > 0) then
                ustar=sqrt(self%rrv(i,j)*(self%work2d(i,j)**2+self%v1(i,j)**2))
@@ -80,7 +80,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
          end do
       end do
    end if
-   do j=VG%jmin,VG%jmax
+   do j=VG%jmin-1,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
             self%rv(i,j)=self%rrv(i,j)*sqrt(self%work2d(i,j)**2+self%v1(i,j)**2)
@@ -113,14 +113,17 @@ MODULE SUBROUTINE bottom_friction_3d(self)
    UGrid: associate( UG => self%domain%U )
    k=UG%kmin
    do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
+      do i=UG%imin-1,UG%imax
          self%work2d(i,j)=0._real64
          if (UG%mask(i,j) > 0) then
+            ! r below is the square of [friction velocity divided by the velocity at the center of the bottom layer]
+            ! work2d is v velocity interpolated to U grid
+            ! rru is [the square of friction velocity] (= stress in Pa divided by density), per actual velocity at the layer center
             hh=max(self%domain%Dmin/UG%kmax,UG%hn(i,j,k))
             r=(kappa/log((UG%z0b(i,j)+0.5*hh)/UG%z0b(i,j)))**2 ! GETM online report - (127)
             self%work2d(i,j)=0.25_real64*(self%vk(i,j,k)+self%vk(i+1,j,k)+self%vk(i,j-1,k)+self%vk(i+1,j-1,k))
 #if 0
-            ustar=sqrt(r*(self%uk(i,j,k)**2+self%work2d(i,j)**2))
+            ustar=sqrt(r*(self%uk(i,j,k)**2+self%work2d(i,j)**2))   ! friction velocity (m s-1)
             UG%z0b(i,j)=min(hh,UG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
             r=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
 #endif
@@ -132,7 +135,7 @@ MODULE SUBROUTINE bottom_friction_3d(self)
 
    VGrid: associate( VG => self%domain%V )
    k=VG%kmin
-   do j=VG%jmin,VG%jmax
+   do j=VG%jmin-1,VG%jmax
       do i=VG%imin,VG%imax
          self%work2d(i,j)=0._real64
          if (VG%mask(i,j) > 0) then
