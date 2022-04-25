@@ -77,7 +77,7 @@ def load_bdyinfo(dom: domain.Domain, path: str, type_2d: Optional[int]=None, typ
                 # Note that indices are 1-based as in Fortran. We convert to the Python convention: 0-based indices,
                 # with the upper bound being the first index that is EXcluded.
                 l, mstart, mstop, type_2d_, type_3d_ = map(int, f.get_line().split())
-                dom.add_open_boundary(side, l - 1, mstart - 1, mstop, type_2d_ if type_2d is None else type_2d, type_3d_ if type_3d is None else type_3d)
+                dom.open_boundaries.add_by_index(side, l - 1, mstart - 1, mstop, type_2d_ if type_2d is None else type_2d, type_3d_ if type_3d is None else type_3d)
 
 def load_riverinfo(dom: domain.Domain, path: str):
     """Add rivers from riverinfo.dat to domain"""

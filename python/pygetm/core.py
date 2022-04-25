@@ -141,7 +141,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 z = False if fill.ndim != 3 else (INTERFACES if fill.shape[0] == grid.nz_ + 1 else CENTERS)
         if dtype is None:
             dtype = float if fill is None else fill.dtype
-        shape = [grid.nbdyp] if on_boundary else [grid.ny_, grid.nx_]
+        shape = [grid.domain.open_boundaries.np] if on_boundary else [grid.ny_, grid.nx_]
         if z:
             shape.insert(1 if on_boundary else 0, grid.nz_ + 1 if z == INTERFACES else grid.nz_,)
         if copy or fill is None:

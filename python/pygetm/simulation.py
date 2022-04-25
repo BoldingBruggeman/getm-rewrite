@@ -673,9 +673,9 @@ class Simulation(_pygetm.Simulation):
             # Update pressure (dbar) at layer centers, assuming it is equal to depth in m
             _pygetm.thickness2center_depth(self.domain.T.mask, self.domain.T.hn, self.pres)
 
-        if self.domain.zc_bdy.saved:
+        if self.domain.open_boundaries.zc.saved:
             # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
-            self.domain.zc_bdy.all_values[...] = self.domain.T.zc.all_values[:, self.domain.bdy_j, self.domain.bdy_i].T
+            self.domain.open_boundaries.zc.all_values[...] = self.domain.T.zc.all_values[:, self.domain.open_boundaries.j, self.domain.open_boundaries.i].T
 
     def update_depth(self):
         """Use surface elevation on T grid to update elevations on U,V,X grids and subsequently update total water depth D on all grids."""

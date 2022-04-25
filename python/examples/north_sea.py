@@ -67,8 +67,6 @@ if sim.runtype == pygetm.BAROCLINIC:
     sim.temp.set(10.)
 
 sim.logger.info('Setting up TPXO tidal boundary forcing')
-bdy_lon = domain.T.lon.all_values[domain.bdy_j, domain.bdy_i]
-bdy_lat = domain.T.lat.all_values[domain.bdy_j, domain.bdy_i]
 if domain.open_boundaries:
     sim.zbdy.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'elev'), on_grid=True)
     sim.bdyu.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'u'), on_grid=True)

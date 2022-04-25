@@ -571,13 +571,13 @@ class InputManager:
             # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
             # or for only the open boundary points that fall within the local subdomain. Determine which of these.
             idim = value.ndim - (2 if array.z else 1)
-            if value.shape[idim] != grid.nbdyp:
+            if value.shape[idim] != grid.domain.open_boundaries.np:
                 # The source array covers all open boundaries (global domain).
                 # Slice out only the points that fall within the current subdomain
-                if value.shape[idim] != grid.domain.nbdyp_glob:
-                    self._logger.error('Dimension %i of %s does not have expected extent %i (number of open boundary points in the global domain). Its actual extent is %i' % (idim, value.name, grid.domain.nbdyp_glob, value.shape[idim]))
-                if grid.domain.local_to_global_ob:
-                    value = concatenate_slices(value, idim, [slice(start, stop) for (start, stop) in grid.domain.local_to_global_ob])
+                if value.shape[idim] != grid.domain.open_boundaries.np_glob:
+                    self._logger.error('Dimension %i of %s does not have expected extent %i (number of open boundary points in the global domain). Its actual extent is %i' % (idim, value.name, grid.domain.open_boundaries.np_glob, value.shape[idim]))
+                if grid.domain.open_boundaries.local_to_global:
+                    value = concatenate_slices(value, idim, [slice(start, stop) for (start, stop) in grid.domain.open_boundaries.local_to_global])
         elif array.ndim != 0:
             # The target is a normal 2D (horizontal-only) or 3D (depth-explicit) array
             # The source data can either be on the native model grid, or at an arbitrary lon, lat grid.
@@ -609,7 +609,7 @@ class InputManager:
             # The target is a depth-explicit array.
             # The source must be defined on z coordinates and interpolated to our [time-varying] depths
             if array.on_boundary:
-                z_coordinate = grid.domain.zc_bdy if array.z == CENTERS else grid.domain.zf_bdy
+                z_coordinate = grid.domain.open_boundaries.zc if array.z == CENTERS else grid.domain.open_boundaries.zf
             else:
                 z_coordinate = grid.zc if array.z == CENTERS else grid.zf
             z_coordinate.saved = True

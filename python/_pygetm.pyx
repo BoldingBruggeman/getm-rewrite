@@ -132,7 +132,7 @@ cdef class Array:
         self.on_boundary = on_boundary
         if self.on_boundary:
             assert data.ndim in (1, 2) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
-            assert data.shape[0] == self.grid.nbdyp, 'Incorrect shape of first dimension (number of boundary points): expected %i, got %i' % (self.grid.nbdyp, data.shape[0])
+            assert data.shape[0] == self.grid.domain.open_boundaries.np, 'Incorrect shape of first dimension (number of boundary points): expected %i, got %i' % (self.grid.domain.open_boundaries.np, data.shape[0])
             assert data.ndim == 1 or data.shape[1] == self.grid.nz_ or data.shape[1] == self.grid.nz_ + 1, 'Incorrect shape of second dimension (number of layers): expected %i or %i, got %i' % (self.grid.nz_, self.grid.nz_ + 1, data.shape[1])
         elif data.ndim != 0:
             assert data.ndim in (2, 3) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
