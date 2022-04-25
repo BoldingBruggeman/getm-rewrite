@@ -88,9 +88,9 @@ if error > tolerance:
 tolerance = 1e-13
 tracer.values[...] = 1
 r = 0.1   # relative rate of increase
-rel_sink = domain.T.array(fill=-r / dt, z=pygetm.CENTERS) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
+rel_sources = domain.T.array(fill=r / dt, z=pygetm.CENTERS) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
 for _ in range(nstep):
-    vdif(nuh, dt, tracer, ea2=rel_sink)
+    vdif(nuh, dt, tracer, ea2=rel_sources)
 expected = 1. / (1. - r)**nstep
 delta = valid_tracer - expected
 rel_delta = delta / expected

@@ -206,7 +206,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 
             ! bottom friction
             k=UG%kmin
-            self%ea2(i,j,k)=dt*self%rru(i,j)
+            self%ea2(i,j,k)=-dt*self%rru(i,j)
          end if
       end do
    end do
@@ -312,7 +312,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
             ! bottom friction
             k=VG%kmin
 !KB            self%ea2(i,j,k)=dt*self%rrv(i,j)/(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
-            self%ea2(i,j,k)=dt*self%rrv(i,j)
+            self%ea2(i,j,k)=-dt*self%rrv(i,j)
          end if
       end do
    end do

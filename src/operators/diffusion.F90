@@ -195,7 +195,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
          end if
       end do
    end do
-   if (present(ea2)) self%a2=self%a2+ea2
+   if (present(ea2)) self%a2=self%a2-ea2
    if (present(ea4)) self%a4=self%a4+ea4
    call cpu_time(matrix_end)
    self%matrix_time = self%matrix_time + matrix_end - matrix_start
