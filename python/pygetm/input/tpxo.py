@@ -13,6 +13,8 @@ ROOT = '../../../igotm/data/TPXO9'
 def get(lon, lat, variable='h', verbose: bool=False, root=ROOT, scale_factor: float=1.) -> xarray.DataArray:
     assert variable in ('h', 'u', 'v', 'hz', 'hu', 'hv')
 
+    lon = numpy.asarray(lon)
+    lat = numpy.asarray(lat)
     def select(ncvar) -> xarray.DataArray:
         out = pygetm.input.limit_region(ncvar, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=True)
         out = pygetm.input.horizontal_interpolation(out, lon, lat)
