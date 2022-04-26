@@ -560,7 +560,6 @@ class InputManager:
             return
 
         assert isinstance(value, xarray.DataArray), 'If value is not numeric, it should be an xarray.DataArray, but it is %s (type %s).' % (value, type(value))
-        assert isinstance(value.variable.data, LazyArray), 'If value is an xarray.DataArray, its underlying type should be a LazyArray, but it is %s (type %s).' % (value.variable.data, type(value.variable.data))
 
         if include_halos is None:
             include_halos = array.attrs.get('_require_halos', False) or array.attrs.get('_part_of_state', False)
