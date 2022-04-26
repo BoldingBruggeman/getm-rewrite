@@ -35,7 +35,7 @@ class Fluxes:
         """Update surface flux of momentum (taux_U at U grid, tauy_V at V grid, taux and tauy at T grid)
         and optionally the surface heat flux (shf) and net downwelling shortwave flux (swr)"""
         if not self._ready:
-            assert self.taux.require_set(self.logger) * self.tauy.require_set(self.logger) * self.sp.require_set(self.logger)
+            assert self.taux.require_set(self.logger) * self.tauy.require_set(self.logger) * self.sp.require_set(self.logger) * (not calculate_heat_flux or self.swr.require_set(self.logger))
             self._ready = True
         self.taux.update_halos(parallel.Neighbor.RIGHT)
         self.taux.interp(self.taux_U)
