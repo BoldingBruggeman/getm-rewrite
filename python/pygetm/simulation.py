@@ -79,9 +79,10 @@ class Simulation(_pygetm.Simulation):
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
-        logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, A=0.7, g1=1., g2=15.):
+        logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, A=0.7, g1=1., g2=15., internal_pressure_method=0):
 
         self.logger = dom.root_logger
+        self.logger.setLevel(log_level)
         self.output_manager = output.OutputManager(rank=dom.tiling.rank, logger=self.logger.getChild('output_manager'))
         self.input_manager = dom.input_manager
         dom.field_manager = self.output_manager
@@ -94,7 +95,7 @@ class Simulation(_pygetm.Simulation):
             apply_bottom_friction = False
 
         assert not dom.initialized
-        super().__init__(dom, runtype, apply_bottom_friction, internal_pressure_method=1)
+        super().__init__(dom, runtype, apply_bottom_friction, internal_pressure_method=internal_pressure_method)
         self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
         dom.T.hn.fabm_standard_name = 'cell_thickness'
         if dom.T.lon is not None:
@@ -382,8 +383,8 @@ class Simulation(_pygetm.Simulation):
             # Update presssure gradient for start of the 3D time step. JB: presumably airsea.sp needs to be at start of the macrotimestep - not currently the case if we update meteo on 2D timestep!
             self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.sp)
 
-            #if self.runtype == BAROCLINIC:
-            #    self.update_internal_pressure_gradient(self.buoy, self.SxB, self.SyB)
+            if self.runtype == BAROCLINIC:
+                self.update_internal_pressure_gradient(self.buoy, self.SxB, self.SyB)
 
             # JB: at what time should airsea.taux_U and airsea.tauy_V formally be defined? Start of the macrotimestep like dpdx/dpdy? TODO
             self.update_3d_momentum(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
