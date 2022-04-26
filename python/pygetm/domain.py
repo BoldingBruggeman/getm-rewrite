@@ -416,7 +416,7 @@ class OpenBoundary:
         self.type_3d = type_3d
 
 class OpenBoundaries(collections.Mapping):
-    __slots__ = ('domain', 'np', 'np_glob', 'i', 'j', 'lon', 'lat', 'zc', 'zf', 'local_to_global', '_boundaries', '_frozen')
+    __slots__ = ('domain', 'np', 'np_glob', 'i', 'j', 'z', 'u', 'v', 'lon', 'lat', 'zc', 'zf', 'local_to_global', '_boundaries', '_frozen')
 
     def __init__(self, domain: 'Domain'):
         self.domain = domain
@@ -514,12 +514,18 @@ class OpenBoundaries(collections.Mapping):
             bdyinfo = numpy.stack(bdyinfo, axis=-1)
             self.domain.initialize_open_boundaries(nwb=side2count[WEST], nnb=side2count[NORTH], neb=side2count[EAST], nsb=side2count[SOUTH], nbdyp=self.np, bdy_i=self.i - HALO, bdy_j=self.j - HALO, bdy_info=bdyinfo)
 
+        # Coordinates of open boundary points
         self.zc = self.domain.T.array(z=CENTERS, on_boundary=True)
         self.zf = self.domain.T.array(z=INTERFACES, on_boundary=True)
         if self.domain.lon is not None:
             self.lon = self.domain.T.array(on_boundary=True, fill=self.domain.T.lon.all_values[self.j, self.i])
         if self.domain.lat is not None:
             self.lat = self.domain.T.array(on_boundary=True, fill=self.domain.T.lat.all_values[self.j, self.i])
+
+        # The arrays below are placeholders that will be assigned data (from momemntum/sealevel Frotran modules) when linked to the Simulation
+        self.z = core.Array(grid=self.domain.T, name='z_bdy', units='m', long_name='surface elevation at open boundaries')
+        self.u = core.Array(grid=self.domain.T, name='u_bdy', long_name='Eastward velocity or transport at open boundaries')
+        self.v = core.Array(grid=self.domain.T, name='v_bdy', long_name='Northward velocity or transport open boundaries')
 
         self._frozen = True
 

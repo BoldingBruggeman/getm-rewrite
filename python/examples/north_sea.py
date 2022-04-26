@@ -68,9 +68,9 @@ if sim.runtype == pygetm.BAROCLINIC:
 
 sim.logger.info('Setting up TPXO tidal boundary forcing')
 if domain.open_boundaries:
-    sim.zbdy.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'elev'), on_grid=True)
-    sim.bdyu.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'u'), on_grid=True)
-    sim.bdyv.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'v'), on_grid=True)
+    domain.open_boundaries.z.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'elev'))
+    domain.open_boundaries.u.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'u'))
+    domain.open_boundaries.v.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'v'))
     if sim.runtype == pygetm.BAROCLINIC:
         sim.temp.boundaries.type = pygetm.SPONGE
         sim.temp.boundaries.values.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/3D/bound_3D.CFSR.2006.nc'), 'temp'), on_grid=True)

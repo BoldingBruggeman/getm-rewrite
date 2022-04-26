@@ -69,9 +69,9 @@ class Tracer(core.Array):
             self.rivers[river.name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
-    _sealevel_arrays = 'zbdy',
+    _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst') + _time_arrays
@@ -108,6 +108,9 @@ class Simulation(_pygetm.Simulation):
             'SS': dict(units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
         }
 
+        self.wrap(self.domain.open_boundaries.z, b'zbdy', source=3)
+        self.wrap(self.domain.open_boundaries.u, b'bdyu', source=1)
+        self.wrap(self.domain.open_boundaries.v, b'bdyv', source=1)
         for name in Simulation._momentum_arrays:
             setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=1))
         for name in Simulation._pressure_arrays:
