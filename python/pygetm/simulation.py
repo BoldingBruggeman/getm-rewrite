@@ -69,12 +69,12 @@ class Tracer(core.Array):
             self.rivers[river.name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'bdyu', 'bdyv', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = 'zbdy',
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -93,7 +93,7 @@ class Simulation(_pygetm.Simulation):
             apply_bottom_friction = False
 
         assert not dom.initialized
-        _pygetm.Simulation.__init__(self, dom, runtype, apply_bottom_friction)
+        super().__init__(dom, runtype, apply_bottom_friction, internal_pressure_method=1)
         self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
         dom.T.hn.fabm_standard_name = 'cell_thickness'
         if dom.T.lon is not None:
@@ -207,6 +207,7 @@ class Simulation(_pygetm.Simulation):
             self.temp.fill(5.)
             self.salt.fill(35.)
             self.rho = dom.T.array(z=CENTERS, name='rho', units='kg m-3', long_name='density', fabm_standard_name='density')
+            self.buoy = dom.T.array(z=CENTERS, name='buoy', units='m s-2', long_name='buoyancy')
             self.tracer_totals.append(self.salt)
             self.sss = self.salt.isel(-1)
 
@@ -375,6 +376,9 @@ class Simulation(_pygetm.Simulation):
             # Update presssure gradient for start of the 3D time step. JB: presumably airsea.sp needs to be at start of the macrotimestep - not currently the case if we update meteo on 2D timestep!
             self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.sp)
 
+            #if self.runtype == BAROCLINIC:
+            #    self.update_internal_pressure_gradient(self.buoy, self.SxB, self.SyB)
+
             # JB: at what time should airsea.taux_U and airsea.tauy_V formally be defined? Start of the macrotimestep like dpdx/dpdy? TODO
             self.update_3d_momentum(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
 
@@ -415,11 +419,9 @@ class Simulation(_pygetm.Simulation):
                     if self.domain.open_boundaries:
                         tracer.boundaries.update()
 
-                # Update density to keep it in sync with T and S.
-                # Unlike buoyancy frequency, density does not influence hydrodynamics directly.
-                # Therefore, it is computed only if needed for output (or as input for biogeochemistry)
-                if self.rho.saved:
-                    self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
+                # Update density and buoyancy to keep them in sync with T and S.
+                self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
+                self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
 
                 # From conservative temperature to in-situ sea surface temperature, needed to compute heat/momentum fluxes at the surface
                 self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), out=self.sst)

@@ -209,6 +209,8 @@ contains
          case ('Ui');   p = c_loc(momentum%Ui); grid_type = 2
          case ('Vi');   p = c_loc(momentum%Vi); grid_type = 3
          case ('SS');   if (allocated(momentum%SS)) p = c_loc(momentum%SS); sub_type = subtype_depth_explicit_interfaces
+         case ('SxB');   p = c_loc(momentum%SxB); grid_type = 2
+         case ('SyB');   p = c_loc(momentum%SyB); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -598,9 +600,10 @@ contains
       call momentum%stresses(tausx, tausy)
    end subroutine
 
-   function pressure_create(runtype, pdomain) result(ppressure) bind(c)
+   function pressure_create(runtype, pdomain, method_internal_pressure) result(ppressure) bind(c)
       integer(c_int), intent(in), value :: runtype
       type(c_ptr),    intent(in), value :: pdomain
+      integer,        intent(in), value :: method_internal_pressure
       type(c_ptr) :: ppressure
 
       type (type_getm_domain),   pointer :: domain
@@ -609,6 +612,7 @@ contains
       call c_f_pointer(pdomain, domain)
       allocate(pressure)
       call pressure%configure()
+      pressure%method_internal_pressure = method_internal_pressure
       call pressure%initialize(runtype, domain)
       ppressure = c_loc(pressure)
    end function
@@ -624,6 +628,20 @@ contains
       call c_f_pointer(pz, z, pressure%domain%T%u(1:2) - pressure%domain%T%l(1:2) + 1)
       call c_f_pointer(psp, sp, pressure%domain%T%u(1:2) - pressure%domain%T%l(1:2) + 1)
       call pressure%surface(z, sp)
+   end subroutine
+
+   subroutine pressure_internal(ppressure, pbuoy, pSxB, pSyB) bind(c)
+      type(c_ptr), intent(in), value :: ppressure
+      type(c_ptr), intent(in), value :: pbuoy, pSxB, pSyB
+
+      type (type_getm_pressure), pointer :: pressure
+      real(real64), contiguous, pointer :: buoy(:,:,:), SxB(:,:), SyB(:,:)
+
+      call c_f_pointer(ppressure, pressure)
+      call c_f_pointer(pbuoy, buoy, pressure%domain%T%u - pressure%domain%T%l + 1)
+      call c_f_pointer(pSxB, SxB, pressure%domain%U%u(1:2) - pressure%domain%U%l(1:2) + 1)
+      call c_f_pointer(pSyB, SyB, pressure%domain%V%u(1:2) - pressure%domain%V%l(1:2) + 1)
+      call pressure%internal(buoy, SxB, SyB)
    end subroutine
 
    function sealevel_create(pdomain) result(psealevel) bind(c)
