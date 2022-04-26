@@ -293,8 +293,8 @@ class Simulation(_pygetm.Simulation):
 
         if self.runtype == BAROCLINIC:
             # ensure density is in sync with initial T & S
-            if self.rho.saved:
-                self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
+            self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
+            self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
             self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
 
         # Update all input fields
