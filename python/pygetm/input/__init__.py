@@ -79,7 +79,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         self.dtype = dtype
         self._slices = []
 
-    def update(self, time: cftime.datetime) -> bool:
+    def update(self, time: cftime.datetime, numtime: numpy.longdouble) -> bool:
         return False
 
     def astype(self, dtype, **kwargs) -> numpy.ndarray:
@@ -136,10 +136,10 @@ class OperatorResult(LazyArray):
         assert all([isinstance(dim, int) for dim in self.passthrough]), 'Invalid passthrough: %s. All entries should be of type int' % (self.passthrough,)
         super().__init__(shape, dtype or float)
 
-    def update(self, time: cftime.datetime) -> bool:
+    def update(self, *args) -> bool:
         updated = False
         for input in self.lazy_inputs:
-            updated = input.update(time) or updated
+            updated = input.update(*args) or updated
         return updated
 
     def __getitem__(self, slices) -> numpy.ndarray:
@@ -187,7 +187,7 @@ class WrappedArray(OperatorResult):
     def apply(self, source, dtype=None) -> numpy.ndarray:
         return source
 
-    def update(self, time: cftime.datetime) -> bool:
+    def update(self, *args) -> bool:
         return False
 
 class ConcatenatedSliceArray(UnaryOperatorResult):
@@ -466,9 +466,11 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         self._current = numpy.empty(shape, dtype=self.dtype)
 
-        self._numtimes = numpy.asarray(time_coord.values, self.dtype)
-        self._cftime_args = (time_coord.attrs['units'], time_coord.attrs.get('calendar', 'standard'))
-        self._timecoord = xarray.DataArray(cftime.num2date(self._numtimes[0], *self._cftime_args))
+        numtimes = numpy.asarray(time_coord.values, dtype=numpy.longdouble)
+        times = cftime.num2date(numtimes[:2], time_coord.attrs['units'], time_coord.attrs.get('calendar', 'standard'))
+        scale_factor = (times[1].toordinal(fractional=True) - times[0].toordinal(fractional=True)) / (numtimes[1] - numtimes[0])
+        self._numtimes = times[0].toordinal(fractional=True) + (numtimes - numtimes[0]) * scale_factor
+        self._timecoord = xarray.DataArray(times[0])
 
         self._numnow = None
         self._numnext = 0.
@@ -486,16 +488,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
     def is_time_varying(self) -> bool:
         return True
 
-    def update(self, time: cftime.datetime) -> bool:
-        # Convert the time into a numerical value matching units and calendar of the variable's time coordinate
-        # This is expensive, so cache previous results
-        if TemporalInterpolationResult.last_time is not time:
-            TemporalInterpolationResult.last_time = time
-            TemporalInterpolationResult.last_numtimes = {}
-        numtime = TemporalInterpolationResult.last_numtimes.get(self._cftime_args)
-        if not numtime:
-            numtime = TemporalInterpolationResult.last_numtimes[self._cftime_args] = cftime.date2num(time, *self._cftime_args)
-
+    def update(self, time: cftime.datetime, numtime: numpy.longdouble) -> bool:
         if numtime == self._numnow:
             return False
 
@@ -630,12 +623,13 @@ class InputManager:
                 self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in %i of %i unmasked points.' % (array.name, value.name, n_unmasked - finite.sum(where=unmasked), n_unmasked))
             self._logger.info('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
 
-    def update(self, time, include_3d: bool=True):
+    def update(self, time: cftime.datetime, include_3d: bool=True):
         """Update all arrays linked to time-dependent inputs to the current time."""
+        numtime = time.toordinal(fractional=True)
         for name, source, target, update_always in self.fields:
             if include_3d or update_always:
                 self._logger.debug('updating %s' % name)
-                source.update(time)
+                source.update(time, numtime)
                 target[...] = source
 
     @property

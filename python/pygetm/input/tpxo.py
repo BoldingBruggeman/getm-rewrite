@@ -48,7 +48,7 @@ class Data(pygetm.input.LazyArray):
         self.lat = lat
         self.time = None
 
-    def update(self, time: cftime.datetime) -> bool:
+    def update(self, time: cftime.datetime, numtime: numpy.longdouble) -> bool:
         self.time = time
         return True
 

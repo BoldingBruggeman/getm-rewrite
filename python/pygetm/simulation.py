@@ -7,6 +7,7 @@ import timeit
 
 import numpy
 import numpy.typing
+import cftime
 
 from .constants import *
 from . import _pygetm
@@ -237,9 +238,11 @@ class Simulation(_pygetm.Simulation):
         self.tracers.append(tracer)
         return tracer
 
-    def start(self, time: datetime.datetime, timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
+    def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
         and after the FABM model has been provided with all dependencies"""
+        if isinstance(time, datetime.datetime):
+            time = cftime.datetime(time.year, time.month, time.day, time.hour, time.minute, time.second, time.microsecond)
         self.logger.info('Starting simulation at %s' % time)
         self.timestep = timestep
         self.split_factor = split_factor
@@ -271,7 +274,7 @@ class Simulation(_pygetm.Simulation):
 
             try:
                 self._yearday = self.fabm_model.dependencies.find('number_of_days_since_start_of_the_year')
-                self._yearday.value = (self.time - datetime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
+                self._yearday.value = (self.time - cftime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
             except KeyError:
                 self._yearday = None
 
@@ -481,7 +484,7 @@ class Simulation(_pygetm.Simulation):
     def update_fabm_sources(self):
         """Update FABM sources, vertical velocities, and diagnostics. This does not update the state variables themselves; that is done by update_fabm"""
         if self._yearday:
-            self._yearday.value = (self.time - datetime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
+            self._yearday.value = (self.time - cftime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
         self.fabm_model.get_sources(out=(self.fabm_sources_interior, self.fabm_sources_surface, self.fabm_sources_bottom))
         self.fabm_model.get_vertical_movement(self.fabm_vertical_velocity)
 
