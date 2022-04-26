@@ -601,7 +601,7 @@ class InputManager:
             # The source data is time-dependent; during the simulation it will be interpolated in time.
             if value.getm.time.size > 1:
                 value = temporal_interpolation(value)
-            else:
+            elif value.getm.time.dims[0] in value.dims:
                 self._logger.warning('%s is set to %s, which has only one time point. The value from this time will be used now. %s will not be further updated by the input manager at runtime.' % (array.name, value.name, array.name))
                 itimedim = value.dims.index(value.getm.time.dims[0])
                 value = value[tuple([0 if idim == itimedim else slice(None) for idim in range(value.ndim)])]
