@@ -411,6 +411,7 @@ def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, it
             assert isourcedim != izdim, 'Dimension with length %i should precede depth dimension %i in %s, which has shape %s' % (l, izdim, source.name, source.shape)
             assert isourcedim < source.ndim, 'Dimension with length %i expected after depth dimension %i in %s, which has shape %s' % (l, izdim, source.name, source.shape)
         target2sourcedim[i] = isourcedim
+        isourcedim += 1
     coords = {}
     for n, c in source.coords.items():
         if n == source.dims[izdim]:
