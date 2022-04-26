@@ -108,9 +108,9 @@ class Simulation(_pygetm.Simulation):
             'SS': dict(units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
         }
 
-        self.wrap(self.domain.open_boundaries.z, b'zbdy', source=3)
-        self.wrap(self.domain.open_boundaries.u, b'bdyu', source=1)
-        self.wrap(self.domain.open_boundaries.v, b'bdyv', source=1)
+        self.domain.open_boundaries.z = self.wrap(self.domain.open_boundaries.z, b'zbdy', source=3)
+        self.domain.open_boundaries.u = self.wrap(self.domain.open_boundaries.u, b'bdyu', source=1)
+        self.domain.open_boundaries.v = self.wrap(self.domain.open_boundaries.v, b'bdyv', source=1)
         for name in Simulation._momentum_arrays:
             setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=1))
         for name in Simulation._pressure_arrays:
