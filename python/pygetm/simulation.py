@@ -26,7 +26,7 @@ BAROTROPIC_3D = 2
 FROZEN_DENSITY = 3
 BAROCLINIC = 4
 
-class Boundaries:
+class OpenBoundaries:
     __slots__ = '_tracer', '_type', 'values'
     def __init__(self, tracer: 'Tracer'):
         self._tracer = tracer
@@ -46,7 +46,7 @@ class Boundaries:
         self._tracer.update_boundary(self._type, self.values)
 
 class Tracer(core.Array):
-    __slots__ = 'source', 'source_scale', 'vertical_velocity', 'boundaries', 'river_values', 'river_follow', 'rivers'
+    __slots__ = 'source', 'source_scale', 'vertical_velocity', 'open_boundaries', 'river_values', 'river_follow', 'rivers'
     def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, rivers_follow_target_cell: bool=False, **kwargs):
         kwargs.setdefault('attrs', {})['_part_of_state'] = True
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
@@ -59,7 +59,7 @@ class Tracer(core.Array):
         self.source = source
         self.source_scale = source_scale
         self.vertical_velocity = vertical_velocity
-        self.boundaries = Boundaries(self)
+        self.open_boundaries = OpenBoundaries(self)
         self.river_values = numpy.zeros((len(grid.domain.rivers),))
         self.river_follow = numpy.full((len(grid.domain.rivers),), rivers_follow_target_cell, dtype=bool)
         self.rivers = {}
@@ -310,7 +310,7 @@ class Simulation(_pygetm.Simulation):
 
         if self.domain.open_boundaries:
             for tracer in self.tracers:
-                tracer.boundaries.update()
+                tracer.open_boundaries.update()
 
         self.output_manager.start(save=save)
 
@@ -420,7 +420,7 @@ class Simulation(_pygetm.Simulation):
                         tracer.source.all_values *= self.macrotimestep * tracer.source_scale
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
                     if self.domain.open_boundaries:
-                        tracer.boundaries.update()
+                        tracer.open_boundaries.update()
 
                 # Update density and buoyancy to keep them in sync with T and S.
                 self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)

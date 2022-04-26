@@ -72,10 +72,10 @@ if domain.open_boundaries:
     domain.open_boundaries.u.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'u'))
     domain.open_boundaries.v.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'v'))
     if sim.runtype == pygetm.BAROCLINIC:
-        sim.temp.boundaries.type = pygetm.SPONGE
-        sim.temp.boundaries.values.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/3D/bound_3D.CFSR.2006.nc'), 'temp'), on_grid=True)
-        sim.salt.boundaries.type = pygetm.SPONGE
-        sim.salt.boundaries.values.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/3D/bound_3D.CFSR.2006.nc'), 'salt'), on_grid=True)
+        sim.temp.open_boundaries.type = pygetm.SPONGE
+        sim.temp.open_boundaries.values.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/3D/bound_3D.CFSR.2006.nc'), 'temp'), on_grid=True)
+        sim.salt.open_boundaries.type = pygetm.SPONGE
+        sim.salt.open_boundaries.values.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/3D/bound_3D.CFSR.2006.nc'), 'salt'), on_grid=True)
 
 for name, river in domain.rivers.items():
     river.flow.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/River/rivers.nc'), name))
