@@ -88,7 +88,7 @@ def test(name: str, periodic_x: bool=False, periodic_y: bool=False, tau_x: float
 
         sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
         sim.update_depth()
-        sim.output_manager.save()
+        sim.output_manager.save(istep * timestep, istep)
 
     sim.output_manager.close()
 
