@@ -424,6 +424,7 @@ class Simulation(_pygetm.Simulation):
 
             # Update density, buoyancy and internal pressure to keep them in sync with T and S.
             self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
+            self.rho.update_halos(parallel.Neighbor.TOP_AND_RIGHT)   # valid rho around all U and V needed for internal pressure; not yet valid becasue T&S were not valid in halos when rho was calculated
             self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
             self.update_internal_pressure_gradient(self.buoy, self.SxB, self.SyB)
 
