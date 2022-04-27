@@ -489,7 +489,7 @@ class Simulation(_pygetm.Simulation):
         self.fabm_model.get_sources(out=(self.fabm_sources_interior, self.fabm_sources_surface, self.fabm_sources_bottom))
         self.fabm_model.get_vertical_movement(self.fabm_vertical_velocity)
 
-    def update_fabm(self, timestep: float):
+    def update_fabm(self, timestep: float, repair: bool=True):
         """Time-integrate source terms of all FABM state variables (3D pelagic tracers as well as bottom- and surface-attached variables)"""
         self.fabm_sources_interior *= timestep
         self.fabm_sources_surface *= timestep
@@ -497,6 +497,7 @@ class Simulation(_pygetm.Simulation):
         self.fabm_model.interior_state += self.fabm_sources_interior
         self.fabm_model.surface_state += self.fabm_sources_surface
         self.fabm_model.bottom_state += self.fabm_sources_bottom
+        self.fabm_model.check_state(repair=repair)
 
     def report_domain_integrals(self):
         """Write totals of selected variables over the global domain (those in list self.tracer_totals) to the log."""
