@@ -29,13 +29,18 @@ class Fluxes:
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
         self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
 
+        # Forcing variables for processes operating over the 3D timestep; these lag behind the 2D forcing variables defined above.
+        self.spo = domain.T.array()
+        self.taux_Uo = domain.U.array()
+        self.tauy_Vo = domain.V.array()
+
         self._ready = False
 
     def __call__(self, time: cftime.datetime, sst: core.Array, sss: core.Array, calculate_heat_flux: bool) -> None:
         """Update surface flux of momentum (taux_U at U grid, tauy_V at V grid, taux and tauy at T grid)
         and optionally the surface heat flux (shf) and net downwelling shortwave flux (swr)"""
         if not self._ready:
-            assert self.taux.require_set(self.logger) * self.tauy.require_set(self.logger) * self.sp.require_set(self.logger) * (not calculate_heat_flux or self.swr.require_set(self.logger))
+            assert self.taux.require_set(self.logger) * self.tauy.require_set(self.logger) * self.sp.require_set(self.logger) * (not calculate_heat_flux or self.shf.require_set(self.logger)) * (not calculate_heat_flux or self.swr.require_set(self.logger))
             self._ready = True
         self.taux.update_halos(parallel.Neighbor.RIGHT)
         self.taux.interp(self.taux_U)

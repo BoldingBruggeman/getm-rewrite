@@ -291,35 +291,16 @@ class Simulation(_pygetm.Simulation):
             for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
                 variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
 
-        if self.runtype == BAROCLINIC:
-            # ensure density is in sync with initial T & S
-            self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
-            self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-            self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), self.sst)
+        # Update inputs and forcing variables based on the current time and state
+        self.update_forcing(macro_active=True)
 
-        # Update all input fields
-        self.domain.input_manager.update(time, include_3d=True)
-
-        # Ensure heat and momentum fluxes have sensible values
-        self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=self.runtype == BAROCLINIC)
-        if self.runtype == BAROCLINIC:
-            assert self.airsea.shf.require_set(self.logger)
-            self.radiation(self.airsea.swr)
-
-        # Update elevation at the open boundaries
-        self.update_sealevel_boundaries(self.timestep)
-
-        if self.fabm_model:
-            self.update_fabm_sources()
-
-        if self.domain.open_boundaries:
-            for tracer in self.tracers:
-                tracer.open_boundaries.update()
-
+        # Start output manager
         self.output_manager.start(self.istep, self.time, save=save)
 
+        # Record true start time for performance analysis
         self._start_time = timeit.default_timer()
 
+        # Start profiing if requested
         self._profile = None
         if profile:
             import cProfile
@@ -328,36 +309,23 @@ class Simulation(_pygetm.Simulation):
             pr.enable()
 
     def advance(self):
-        self.time += self.timedelta
-        self.istep += 1
-        macro_active = self.istep % self.split_factor == 0
-
-        # Update all inputs
-        self.domain.input_manager.update(self.time, include_3d=macro_active)
-
-        # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
-        self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=macro_active and self.runtype == BAROCLINIC)
-
-        # Update elevation at the open boundaries
-        self.update_sealevel_boundaries(self.timestep)
-
-        # Calculate the surface pressure gradient in the U and V points.
-        # Note: this requires elevation and surface air pressure (both on T grid) to be valid in the halos,
-        # which is guaranteed for elevation (update_depth does the halo exchange) , and for air pressure
-        # if it is managed by the input manager (e.g. read from file)
-        self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
-        self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
-
-        # Update momentum using surface stresses and pressure gradients. Inputs and outputs on U and V grids.
+        # Update momentum from time=-1/2 to +1/2, using surface stresses and pressure gradients defined at time=0
+        # Inputs and outputs on U and V grids
         self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
 
-        self.update_freshwater_fluxes(self.timestep)
-
-        # Update surface elevation on T grid, and from that calculate surface elevation and water depth on all grids
+        # Update surface elevation on T grid from time=0 to time=1
+        # From that, calculate surface elevation and water depth on all grids
         # Elevation halos are updated by update_depth
         self.update_sealevel(self.timestep, self.U, self.V, self.fwf)
         self.update_depth()
 
+        # Track cumulative increase in elevation due to river inflow over the current macrotimestep
+        self._cum_river_height_increase += self.domain.rivers.flow * self.domain.rivers.iarea * self.timestep
+
+        # Update the time
+        self.time += self.timedelta
+        self.istep += 1
+        macro_active = self.istep % self.split_factor == 0
         if self.report != 0 and self.istep % self.report == 0:
             self.logger.info(self.time)
 
@@ -366,50 +334,53 @@ class Simulation(_pygetm.Simulation):
             self.Ui.all_values *= 1. / self.split_factor
             self.Vi.all_values *= 1. / self.split_factor
 
-            # Use previous source terms for biogeochemistry to update tracers
+            # Use previous source terms for biogeochemistry to update tracers (start of the current macrotimestep)
             # This should be done before the tracer concentrations change due to transport or rivers,
             # as the source terms are only valid for the current tracer concentrations.
             if self.fabm_model:
                 self.update_fabm(self.macrotimestep)
 
-            # Update of layer thicknesses and tracer concentrations to account for river inflow over the past macrotimestep.
+            # Update of layer thicknesses and tracer concentrations to account for river inflow
+            # between start and end of the current macrotimestep.
             self.add_rivers_3d()
 
             # Update 3D elevations and layer thicknesses. New elevation on T grid will match elevation at end of 2D timestep,
             # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 macrotimestep behind. Old
-            # elevations and thicknesses will be one macrotimestep behind new elevations aand thicknesses.
+            # elevations zio and thicknesses ho will be one macrotimestep behind new elevations zin and thicknesses hn.
             self.start_3d()
 
-            # Update presssure gradient for start of the 3D time step. JB: presumably airsea.sp needs to be at start of the macrotimestep - not currently the case if we update meteo on 2D timestep!
-            self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.sp)
+            # Update presssure gradient for start of the 3D time step
+            # Note that we use previously-recorded elevations and surface pressure at the start of the 3D timestep
+            self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.spo)
+
+            # Update momentum from time=-1/2 to 1/2 of the macrotimestep, using forcing defined at time=0
+            # For this purposes, surface stresses at the end of the previous macrotimestep were saved (taux_Uo, tauy_Vo)
+            # Pressure gradients dpdx and dpdy have just been updated to match the start of the current macrotimestep
+            # Internal pressure idpdx and idpdy were calculated at the end of the previous macrotimestep and are therefore ready as-is.
+            self.update_3d_momentum(self.macrotimestep, self.airsea.taux_Uo, self.airsea.tauy_Vo, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
 
             if self.runtype == BAROCLINIC:
-                self.update_internal_pressure_gradient(self.buoy, self.SxB, self.SyB)
-
-            # JB: at what time should airsea.taux_U and airsea.tauy_V formally be defined? Start of the macrotimestep like dpdx/dpdy? TODO
-            self.update_3d_momentum(self.macrotimestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
-
-            if self.runtype == BAROCLINIC:
-                # Calculate squared buoyancy frequency NN (T grid, interfaces between layers)
-                self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
-
                 # Update total stresses (x and y combined) and calculate the friction velocities (m s-1)
                 # This is for turbulence (GOTM), so all on the T grid
+                # Note that surface stress is currently defined at the start of the MICROtimestep
+                # (only one microtimestep before the end of the current macrotimestep),
+                # whereas bottom stress is at 1/2 of the macrotimestep, since it is computed from velocities that have just been updated.
                 self.update_stresses(self.airsea.taux, self.airsea.tauy)
                 numpy.sqrt(self.ustar2_s.all_values, out=self.ustar_s.all_values)
                 numpy.sqrt(self.ustar2_b.all_values, out=self.ustar_b.all_values)
                 self.taub.all_values[...] = self.ustar2_b.all_values * RHO0
 
-                # turbulence (T grid - interfaces)
+                # Update turbulent quantities (T grid - interfaces) from time=0 to time=1 (macrotimestep),
+                # using surface/buoyancy-related forcing at time=0, and velocity-related forcing at time=1/2
                 #self.domain.T.z0b.all_values[1:, 1:] = 0.5 * (numpy.maximum(self.domain.U.z0b.all_values[1:, 1:], self.domain.U.z0b.all_values[1:, :-1]) + numpy.maximum(self.domain.V.z0b.all_values[:-1, 1:], self.domain.V.z0b.all_values[1:, :-1]))
                 self.turbulence(self.macrotimestep, self.ustar_s, self.ustar_b, self.z0s, self.domain.T.z0b, self.NN, self.SS)
 
-                # Temperature and salinity (T grid - centers)
-                self.radiation(self.airsea.swr)
+                # Temperature sources (T grid), defined at the start of the macrotimestep
                 self.temp.source.all_values[...] = self.radiation.swr_abs.all_values
                 self.temp.source.all_values[-1, ...] += self.airsea.shf.all_values
 
-                # Transport of passive tracers (including biogeochemical ones)
+                # Advection of passive tracers (including biogeochemical ones)from time=0 to time=1 (macrotimestep),
+                # using velocities defined at time=1/2
                 w_res = []
                 for tracer in self.tracers:
                     w = self.ww
@@ -419,23 +390,13 @@ class Simulation(_pygetm.Simulation):
                         w.all_values += self.ww.all_values
                     w_res.append(w)
                 self.tracer_advection.apply_3d_batch(self.uk, self.vk, self.ww, self.macrotimestep, self.tracers, w_vars=w_res)
+
+                # Diffusion of passive tracers (including biogeochemical ones)
+                # This simultaneously time-integrates source terms, if specified - but BGC sources have already been handled separately.
                 for tracer in self.tracers:
                     if tracer.source is not None:
                         tracer.source.all_values *= self.macrotimestep * tracer.source_scale
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
-                    if self.domain.open_boundaries:
-                        tracer.open_boundaries.update()
-
-                # Update density and buoyancy to keep them in sync with T and S.
-                self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
-                self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-
-                # From conservative temperature to in-situ sea surface temperature, needed to compute heat/momentum fluxes at the surface
-                self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), out=self.sst)
-
-                # Update source terms of biogeochemistry, using the new tracer concentrations
-                if self.fabm_model:
-                    self.update_fabm_sources()
 
             self.report_domain_integrals()
 
@@ -443,8 +404,65 @@ class Simulation(_pygetm.Simulation):
             self.Ui.all_values.fill(0.)
             self.Vi.all_values.fill(0.)
 
+        # Update all inputs and fluxes that will drive the next state update
+        self.update_forcing(macro_active)
+
         self.output_manager.save(self.timestep * self.istep, self.istep, self.time)
+
         return macro_active
+
+    def update_forcing(self, macro_active: bool):
+        # Update all inputs
+        self.domain.input_manager.update(self.time, include_3d=macro_active)
+
+        if self.runtype == BAROCLINIC and macro_active:
+            # Update tracer values at open boundaries. This must be done after input_manager.update,
+            # but before diagnostics/forcing variables derived from the tracers are calculated
+            if self.domain.open_boundaries:
+                for tracer in self.tracers:
+                    tracer.open_boundaries.update()
+
+            # Update density, buoyancy and internal pressure to keep them in sync with T and S.
+            self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
+            self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
+            self.update_internal_pressure_gradient(self.buoy, self.SxB, self.SyB)
+
+            # From conservative temperature to in-situ sea surface temperature,
+            # needed to compute heat/momentum fluxes at the surface
+            self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), out=self.sst)
+
+            # Calculate squared buoyancy frequency NN (T grid, interfaces between layers)
+            self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
+
+        # Update freshwater fluxes (TODO: add precipitation)
+        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = self.domain.rivers.flow * self.domain.rivers.iarea
+
+        # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
+        self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=macro_active and self.runtype == BAROCLINIC)
+
+        # Update elevation at the open boundaries. This must be done before update_surface_pressure_gradient
+        self.update_sealevel_boundaries(self.timestep)
+
+        # Calculate the surface pressure gradient in the U and V points.
+        # Note: this requires elevation and surface air pressure (both on T grid) to be valid in the halos,
+        # which is guaranteed for elevation (update_depth does the halo exchange) , and for air pressure
+        # if it is managed by the input manager (e.g. read from file)
+        self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
+        self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
+
+        if self.runtype == BAROCLINIC and macro_active:
+            # Update radiation. This must come after the airsea update, which is responsible for calculating swr
+            self.radiation(self.airsea.swr)
+
+            # Update source terms of biogeochemistry, using the new tracer concentrations
+            # Do this last because FABM could depend on any of the variables computed before
+            if self.fabm_model:
+                self.update_fabm_sources()
+
+            # Save forcing variables for the next baroclinic update
+            self.airsea.spo.all_values[...] = self.airsea.sp.all_values
+            self.airsea.taux_Uo.all_values[...] = self.airsea.taux_U.all_values
+            self.airsea.tauy_Vo.all_values[...] = self.airsea.tauy_V.all_values
 
     def finish(self):
         if self._profile:
@@ -456,11 +474,6 @@ class Simulation(_pygetm.Simulation):
                 ps.print_stats()
         self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
         self.output_manager.close()
-
-    def update_freshwater_fluxes(self, timestep: float):
-        height_increase_rate = self.domain.rivers.flow * self.domain.rivers.iarea
-        self._cum_river_height_increase += height_increase_rate * timestep
-        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = height_increase_rate
 
     def add_rivers_3d(self):
         """Update layer thicknesses and tracer concentrations to account for river inflow."""
