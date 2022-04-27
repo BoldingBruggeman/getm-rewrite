@@ -30,10 +30,10 @@ sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
 if args.output:
     debug_output = False
     sim.logger.info('Setting up output')
-    output = sim.output_manager.add_netcdf_file('meteo.nc', interval=60, sync_interval=200000)
+    output = sim.output_manager.add_netcdf_file('meteo.nc', interval=datetime.timedelta(hours=1), sync_interval=None)
     output.request(('u10', 'v10', 'sp', 't2m', 'qa', 'tcc'))
     #output.request(('qe', 'qh', 'ql', 'swr', 'albedo', 'zen'))
-    output = sim.output_manager.add_netcdf_file('north_sea_2d.nc', interval=60, sync_interval=200000)
+    output = sim.output_manager.add_netcdf_file('north_sea_2d.nc', interval=datetime.timedelta(hours=1), sync_interval=None)
     output.request(('U', 'V'), mask=True)
     output.request(('zt', 'Dt', 'tausxu', 'tausyv', ))
     if debug_output:
@@ -41,7 +41,7 @@ if args.output:
         output.request(('Du', 'Dv', 'dpdx', 'dpdy', 'z0bu', 'z0bv', 'z0bt'))   #, 'u_taus'
         output.request(('ru', 'rru', 'rv', 'rrv'))
     if sim.runtype > pygetm.BAROTROPIC_2D:
-        output = sim.output_manager.add_netcdf_file('north_sea_3d.nc', interval=360, sync_interval=200000)
+        output = sim.output_manager.add_netcdf_file('north_sea_3d.nc', interval=datetime.timedelta(hours=6), sync_interval=None)
         output.request(('uk', 'vk', 'ww', 'SS', 'num',))
         if debug_output:
             output.request(('fpk', 'fqk', 'advpk', 'advqk',))

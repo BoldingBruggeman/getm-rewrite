@@ -316,7 +316,7 @@ class Simulation(_pygetm.Simulation):
             for tracer in self.tracers:
                 tracer.open_boundaries.update()
 
-        self.output_manager.start(save=save)
+        self.output_manager.start(self.istep, self.time, save=save)
 
         self._start_time = timeit.default_timer()
 
@@ -443,7 +443,7 @@ class Simulation(_pygetm.Simulation):
             self.Ui.all_values.fill(0.)
             self.Vi.all_values.fill(0.)
 
-        self.output_manager.save()
+        self.output_manager.save(self.timestep * self.istep, self.istep, self.time)
         return macro_active
 
     def finish(self):

@@ -1,7 +1,9 @@
-from typing import  MutableSequence, Optional
+from typing import Optional
 import os.path
+import logging
 
 import numpy.typing
+import cftime
 import netCDF4
 
 from .. import core
@@ -10,8 +12,8 @@ from .. import _pygetm
 from ..constants import INTERFACES
 
 class NetCDFFile(File):
-    def __init__(self, field_manager: FieldManager, path: str, rank: int, sub: bool=False, sync_interval: int=1, **kwargs):
-        super().__init__(field_manager, path=path, **kwargs)
+    def __init__(self, field_manager: FieldManager, logger: logging.Logger, path: str, rank: int, sub: bool=False, sync_interval: Optional[int]=1, time_reference: Optional[cftime.datetime]=None, **kwargs):
+        super().__init__(field_manager, logger, path=path, **kwargs)
         name, ext = os.path.splitext(path)
         if sub:
             name += '_%05i' % rank
@@ -21,12 +23,14 @@ class NetCDFFile(File):
         self.is_root = rank == 0
         self.sub = sub
         self.created = False
+        self.time_offset = 0.
+        self.time_reference = time_reference
         self.sync_interval = sync_interval
 
     def __repr__(self) -> str:
         return 'NetCDFFile(\'%s\')' % self.path
 
-    def _create(self):
+    def _create(self, time: Optional[cftime.datetime]):
         self.created = True
 
         if self.is_root or self.sub:
@@ -48,6 +52,12 @@ class NetCDFFile(File):
                 if (ziname not in self.nc.dimensions): self.nc.createDimension(ziname, nz + 1)
             self.nc.createDimension('time',)
             self.nctime = self.nc.createVariable('time', float, ('time',))
+            if time is not None:
+                self.nctime.units = 'seconds since %s' % self.time_reference.strftime('%Y-%m-%d %H:%M:%S')
+                self.nctime.calendar = time.calendar
+                self.time_offset = (time - self.time_reference).total_seconds()
+            else:
+                self.nctime.units = 's'
             self.ncvars = []
             for output_name, field in self.fields.items():
                 dims = ('y%s' % field.grid.postfix, 'x%s' % field.grid.postfix)
@@ -67,16 +77,21 @@ class NetCDFFile(File):
             if field.constant:
                 field.get(getattr(field, '_ncvar', None), sub=self.sub)
 
-    def save_now(self):
+    def start(self, itimestep: int, time: Optional[cftime.datetime], save: bool):
+        if self.time_reference is None:
+            self.time_reference = time
+        super().start(itimestep, time, save)
+
+    def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if not self.created:
-            self._create()
+            self._create(time)
         if self.nc is not None:
-            self.nctime[self.itime] = self.itime
+            self.nctime[self.itime] = self.time_offset + seconds_passed
         for field in self.fields.values():
             if not field.constant:
                 field.get(getattr(field, '_ncvar', None), slice_spec=(self.itime,), sub=self.sub)
         self.itime += 1
-        if self.nc is not None and self.itime % self.sync_interval == 0:
+        if self.nc is not None and self.sync_interval is not None and self.itime % self.sync_interval == 0:
             self.nc.sync()
 
     def close(self):
