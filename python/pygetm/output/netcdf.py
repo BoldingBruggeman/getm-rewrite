@@ -23,6 +23,9 @@ class NetCDFFile(File):
         self.created = False
         self.sync_interval = sync_interval
 
+    def __repr__(self) -> str:
+        return 'NetCDFFile(\'%s\')' % self.path
+
     def _create(self):
         self.created = True
 
@@ -57,12 +60,12 @@ class NetCDFFile(File):
                     setattr(ncvar, att, value)
                 if field.coordinates:
                     setattr(ncvar, 'coordinates', ' '.join(field.coordinates))
-                field.ncvar = ncvar
+                field._ncvar = ncvar
 
         # Save time-invariant fields
         for field in self.fields.values():
             if field.constant:
-                field.get(getattr(field, 'ncvar', None), sub=self.sub)
+                field.get(getattr(field, '_ncvar', None), sub=self.sub)
 
     def save_now(self):
         if not self.created:
@@ -71,7 +74,7 @@ class NetCDFFile(File):
             self.nctime[self.itime] = self.itime
         for field in self.fields.values():
             if not field.constant:
-                field.get(getattr(field, 'ncvar', None), slice_spec=(self.itime,), sub=self.sub)
+                field.get(getattr(field, '_ncvar', None), slice_spec=(self.itime,), sub=self.sub)
         self.itime += 1
         if self.nc is not None and self.itime % self.sync_interval == 0:
             self.nc.sync()
