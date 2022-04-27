@@ -94,6 +94,7 @@ if f_glob is not None and args.plot:
 if args.output:
     ncf = outman.add_netcdf_file(args.output, interval=10)
     ncf.request('tracer')
+outman.start()
 
 advect = pygetm.operators.Advection(subdomain.T, scheme=4)
 
