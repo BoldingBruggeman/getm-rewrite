@@ -129,7 +129,7 @@ def main():
         # Update halos
         f.update_halos()
 
-        outman.save()
+        outman.save(i * timestep, i)
 
     duration = timeit.default_timer() - start
     print('Time spent in loop: %.4f s' % duration)
