@@ -167,7 +167,10 @@ class TimeAverage(UnivariateTransform):
         return True
 
     def update(self):
-        self.array.all_values += self._source.get(out=None, sub=True)
+        if self._n == 0:
+            self._source.get(out=self.array.all_values, sub=True)
+        else:
+            self.array.all_values += self._source.get(out=None, sub=True)
         self._n += 1
 
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
@@ -175,7 +178,6 @@ class TimeAverage(UnivariateTransform):
             self.array.all_values /= self._n
         super().get(out, slice_spec, sub)
         self._n = 0
-        self.array.all_values.fill(0.)
 
     def get_expression(self) -> str:
         return 'time_average(%s)' % self._source.get_expression()
