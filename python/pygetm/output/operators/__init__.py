@@ -10,6 +10,7 @@ import pygetm.core
 from pygetm.constants import INTERFACES
 
 class Base:
+    __slots__ = 'dtype', 'ndim', 'grid', 'fill_value', 'atts', 'constant', 'coordinates'
     def __init__(self, ndim: int, dtype: numpy.typing.DTypeLike, grid, fill_value=None, constant: bool=False, atts={}):
         self.dtype = dtype
         self.ndim = ndim
@@ -28,19 +29,23 @@ class Base:
     def get_expression(self) -> str:
         raise NotImplementedError
 
+    def is_updatable(self) -> bool:
+        return False
+
 class FieldCollection:
     def __init__(self, field_manager, default_dtype: Optional[numpy.typing.DTypeLike]=None):
         self.fields: MutableMapping[str, Base] = collections.OrderedDict()
         self.expression2name = {}
         self.field_manager = field_manager
         self.default_dtype = default_dtype
+        self._updatable = []
 
-    def request(self, name: Union[str, Iterable[str]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False, generate_unique_name: bool=False):
+    def request(self, name: Union[str, Iterable[str]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False, time_average: bool=False, generate_unique_name: bool=False):
         if not isinstance(name, str):
             # Multiple names requested; call request for each individually
             assert output_name is None, 'request is called with multiple names: %s. Therefore, output_name cannot be specified.' % (name,)
             for n in name:
-                self.request(n, dtype=dtype, mask=mask)
+                self.request(n, dtype=dtype, mask=mask, time_average=time_average)
             return
 
         assert name in self.field_manager.fields, 'Unknown field "%s" requested. Available: %s' % (name, ', '.join(self.field_manager.fields))
@@ -59,8 +64,12 @@ class FieldCollection:
         if dtype is None and array.dtype == float:
             dtype = self.default_dtype
         field = Field(array, self, dtype=dtype)
-        if mask:
-            field = Mask(field, self)
+        if time_average:
+            field = TimeAverage(field)
+        if time_average or mask:
+            field = Mask(field)
+        if field.is_updatable():
+            self._updatable.append(field)
         self.fields[output_name] = field
         self.expression2name[field.get_expression()] = output_name
         field.coordinates = field.get_coordinates()
@@ -72,8 +81,10 @@ class FieldCollection:
         return self.request(expression, generate_unique_name=True)
 
 class Field(Base):
-    def __init__(self, array: pygetm.core.Array, collection: FieldCollection, dtype: Optional[numpy.typing.DTypeLike]=None):
-        atts = {}
+    __slots__ = 'collection', 'array', 'global_array', '_ncvar'
+    def __init__(self, array: pygetm.core.Array, collection: FieldCollection, dtype: Optional[numpy.typing.DTypeLike]=None, atts=None):
+        if atts is None:
+            atts = {}
         if array.units is not None:
             atts['units'] = array.units
         if array.long_name is not None:
@@ -89,12 +100,17 @@ class Field(Base):
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
         if sub:
             # Get data for subdomain only
-            out[slice_spec + (Ellipsis,)] = self.array.all_values
+            if out is not None:
+                out[slice_spec + (Ellipsis,)] = self.array.all_values
+            else:
+                out = self.array.all_values
         else:
             # Get data for global array
+            # If we have access to the full global field (root rank only), use that, as gathering from subdomains may leave gaps.
+            # Nevertheless we cannot skip the gather in that case, because only all non-root ranks will call gather anyway.
+            self.array.gather(out, slice_spec)
             if self.global_array:
                 out[...] = self.global_array.values
-            self.array.gather(out, slice_spec)
         return out
 
     def get_coordinates(self) -> Sequence['Base']:
@@ -111,33 +127,55 @@ class Field(Base):
     def z(self) -> bool:
         return self.array.z
 
+    @property
+    def on_boundary(self) -> bool:
+        return self.array.on_boundary
+
     def get_expression(self) -> str:
         return self.array.name
 
-class Mask(Base):
-    def __init__(self, source: Base, collection: FieldCollection):
-        super().__init__(source.ndim, source.dtype, source.grid, source.fill_value, source.constant, source.atts)
-        self.source = source
-        if self.fill_value is None:
-            self.fill_value = netCDF4.default_fillvals.get(self.dtype.str[1:])
-        self.mask = Field(self.source.grid.mask, collection)
+class UnivariateTransform(Field):
+    __slots__ = '_source',
+    def __init__(self, source: Field):
+        self._source = source
+        assert source.fill_value is not None, 'UnivariateTransform cannot be used on variables without fill value.'
+        array = pygetm.core.Array.create(source.grid, z=source.z, dtype=source.dtype, on_boundary=source.on_boundary, fill_value=source.fill_value)
+        super().__init__(array, source.collection, atts=source.atts)
 
+    def is_updatable(self) -> bool:
+        return self._source.is_updatable()
+
+    def update(self):
+        return self._source.update()
+
+class Mask(UnivariateTransform):
     def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
-        data = self.source.get(None if out is None else numpy.empty_like(out[slice_spec + (Ellipsis,)]))
-
-        # Obtain mask and apply it
-        mask = self.mask.get(None if out is None else numpy.empty(data.shape, dtype=int))
-        if data is not None:
-            data[mask == 0] = self.fill_value
-            out[slice_spec + (Ellipsis,)] = data
-        return out
-
-    def get_coordinates(self) -> Sequence['Base']:
-        return self.source.get_coordinates()
+        self._source.get(out=self.array.all_values, sub=True)
+        self.array.all_values[..., self.grid.mask.all_values == 0] = self.fill_value
+        super().get(out, slice_spec, sub)
 
     def get_expression(self) -> str:
-        return 'mask(%s)' % self.source.get_expression()
+        return 'mask(%s)' % self._source.get_expression()
 
-    @property
-    def z(self) -> bool:
-        return self.source.z
+class TimeAverage(UnivariateTransform):
+    __slots__ = '_n',
+    def __init__(self, source: Field):
+        super().__init__(source)
+        self._n = 0
+
+    def is_updatable(self) -> bool:
+        return True
+
+    def update(self):
+        self.array.all_values += self._source.get(out=None, sub=True)
+        self._n += 1
+
+    def get(self, out: numpy.typing.ArrayLike, slice_spec: Tuple[int]=(), sub: bool=False) -> numpy.typing.ArrayLike:
+        if self._n > 0:
+            self.array.all_values /= self._n
+        super().get(out, slice_spec, sub)
+        self._n = 0
+        self.array.all_values.fill(0.)
+
+    def get_expression(self) -> str:
+        return 'time_average(%s)' % self._source.get_expression()

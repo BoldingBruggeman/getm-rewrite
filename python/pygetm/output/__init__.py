@@ -27,6 +27,8 @@ class File(operators.FieldCollection):
         pass
 
     def save(self):
+        for field in self._updatable:
+            field.update()
         self.wait -= 1
         if self.wait == 0:
             self.save_now()
