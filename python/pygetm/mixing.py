@@ -9,18 +9,22 @@ from . import _pygotm
 from .constants import *
 
 class Turbulence:
-    def __init__(self, grid: domain.Grid):
+    def initialize(self, grid: domain.Grid):
+        self.grid = grid
+        self.logger = grid.domain.root_logger.getChild(self.__class__.__name__)
         self.nuh = grid.array(z=INTERFACES, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=FILL_VALUE)
         self.num = grid.array(z=INTERFACES, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=FILL_VALUE)
         self.nuh.fill(0.)
         self.num.fill(0.)
 
 class GOTM(Turbulence):
-    def __init__(self, grid: domain.Grid, nml_path: Optional[str]=None):
-        super().__init__(grid)
-        self.logger = grid.domain.root_logger.getChild('GOTM')
-        self.mix = _pygotm.Mixing(grid.nz, b'' if nml_path is None else nml_path.encode('ascii'))
-        self.grid = grid
+    def __init__(self, nml_path: Optional[str]=None):
+        super().__init__()
+        self.nml_path = nml_path
+
+    def initialize(self, grid: domain.Grid):
+        super().initialize(grid)
+        self.mix = _pygotm.Mixing(grid.nz, b'' if self.nml_path is None else self.nml_path.encode('ascii'))
         self.nuh.fill(self.mix.nuh[:, numpy.newaxis, numpy.newaxis])
         self.num.fill(self.mix.num[:, numpy.newaxis, numpy.newaxis])
         self.tke = grid.array(fill=self.mix.tke[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='tke', units='m2 s-2', long_name='turbulent kinetic energy')

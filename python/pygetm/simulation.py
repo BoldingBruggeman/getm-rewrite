@@ -159,7 +159,8 @@ class Simulation(_pygetm.Simulation):
             self.tracer_advection = operators.Advection(dom.T, scheme=advection_scheme)
 
             # Turbulence and associated fields
-            self.turbulence = turbulence or pygetm.mixing.GOTM(self.domain.T, nml_path=gotm)
+            self.turbulence = turbulence or pygetm.mixing.GOTM(nml_path=gotm)
+            self.turbulence.initialize(self.domain.T)
             self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
             self.ustar_s = dom.T.array(fill=0., name='ustar_s', units='m s-1', long_name='shear velocity (surface)', fill_value=FILL_VALUE)
             self.ustar_b = dom.T.array(fill=0., name='ustar_b', units='m s-1', long_name='shear velocity (bottom)', fill_value=FILL_VALUE)
