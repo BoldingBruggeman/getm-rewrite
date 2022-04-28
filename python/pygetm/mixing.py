@@ -9,13 +9,13 @@ from . import _pygotm
 from .constants import *
 
 class Turbulence:
-    def initialize(self, grid: domain.Grid, num: float=0., nuh: float=0.):
+    def initialize(self, grid: domain.Grid):
         self.grid = grid
         self.logger = grid.domain.root_logger.getChild(self.__class__.__name__)
         self.nuh = grid.array(z=INTERFACES, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=FILL_VALUE)
         self.num = grid.array(z=INTERFACES, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=FILL_VALUE)
-        self.nuh.fill(nuh)
-        self.num.fill(num)
+        self.nuh.fill(0.)
+        self.num.fill(0.)
 
     def __call__(self, timestep: float, ustar_s: core.Array, ustar_b: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
         pass
