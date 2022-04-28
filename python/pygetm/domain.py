@@ -416,7 +416,7 @@ class OpenBoundary:
         self.type_3d = type_3d
 
 class OpenBoundaries(collections.Mapping):
-    __slots__ = ('domain', 'np', 'np_glob', 'i', 'j', 'z', 'u', 'v', 'lon', 'lat', 'zc', 'zf', 'local_to_global', '_boundaries', '_frozen')
+    __slots__ = ('domain', 'np', 'np_glob', 'i', 'j', 'i_glob', 'j_glob', 'z', 'u', 'v', 'lon', 'lat', 'zc', 'zf', 'local_to_global', '_boundaries', '_frozen')
 
     def __init__(self, domain: 'Domain'):
         self.domain = domain
@@ -429,14 +429,14 @@ class OpenBoundaries(collections.Mapping):
         assert not self._frozen, 'The open boundary collection has already been initialized'
         # NB below we convert to indices in the T grid of the current subdomain INCLUDING halos
         # We also limit the indices to the range valid for the current subdomain.
-        HALO = 2
+        xoffset, yoffset = self.domain.tiling.xoffset - self.domain.halox, self.domain.tiling.yoffset - self.domain.haloy
         if side in (WEST, EAST):
-            l_offset, m_offset, l_max, m_max = self.domain.tiling.xoffset, self.domain.tiling.yoffset, self.domain.T.nx_, self.domain.T.ny_
+            l_offset, m_offset, l_max, m_max = xoffset, yoffset, self.domain.T.nx_, self.domain.T.ny_
         else:
-            l_offset, m_offset, l_max, m_max = self.domain.tiling.yoffset, self.domain.tiling.xoffset, self.domain.T.ny_, self.domain.T.nx_
-        l_loc = HALO + l - l_offset
-        mstart_loc_ = HALO + mstart - m_offset
-        mstop_loc_ = HALO + mstop - m_offset
+            l_offset, m_offset, l_max, m_max = yoffset, xoffset, self.domain.T.ny_, self.domain.T.nx_
+        l_loc = l - l_offset
+        mstart_loc_ = mstart - m_offset
+        mstop_loc_ = mstop - m_offset
         mstart_loc = min(max(0, mstart_loc_), m_max)
         mstop_loc = min(max(0, mstop_loc_), m_max)
         if l_loc < 0 or l_loc >= l_max or mstop_loc <= mstart_loc:
@@ -504,6 +504,8 @@ class OpenBoundaries(collections.Mapping):
         self.np_glob = nbdyp_glob
         self.i = numpy.empty((0,), dtype=numpy.intc) if self.np == 0 else numpy.concatenate(bdy_i, dtype=numpy.intc)
         self.j = numpy.empty((0,), dtype=numpy.intc) if self.np == 0 else numpy.concatenate(bdy_j, dtype=numpy.intc)
+        self.i_glob = self.i - self.domain.halox + self.domain.tiling.xoffset
+        self.j_glob = self.j - self.domain.haloy + self.domain.tiling.yoffset
         self.domain.logger.info('%i open boundaries (%i West, %i North, %i East, %i South)' % (len(bdyinfo), side2count[WEST], side2count[NORTH], side2count[EAST], side2count[SOUTH]))
         if self.np > 0:
             if self.np == self.np_glob:
