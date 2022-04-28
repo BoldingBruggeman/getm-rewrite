@@ -70,6 +70,7 @@ def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=
             ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
         open_nc_files.append((key, ds))
     array = ds[name]
+    # Note: we wrap the netCDF array ourselves, in order to support lazy operators (e.g., add, multiply)
     return xarray.DataArray(WrappedArray(array), dims=array.dims, coords=array.coords, attrs=array.attrs, name='from_nc(%s, %s)' % (paths, name))
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
@@ -77,7 +78,6 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         self.shape = tuple(shape)
         self.ndim = len(self.shape)
         self.dtype = dtype
-        self._slices = []
 
     def update(self, time: cftime.datetime, numtime: numpy.longdouble) -> bool:
         return False
@@ -114,12 +114,18 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
 
 class OperatorResult(LazyArray):
     def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, **kwargs):
-        self.inputs = [inp if not isinstance(inp, xarray.DataArray) else inp.variable for inp in inputs]
+        self.inputs = []
+        for inp in inputs:
+            if isinstance(inp, xarray.DataArray):
+                inp = inp.variable
+            if isinstance(inp, xarray.Variable) and isinstance(inp._data, WrappedArray):
+                inp = inp._data.inputs[0]
+            self.inputs.append(inp)
         self.input_names = [getattr(inp, 'name', None) for inp in inputs]
         self.lazy_inputs = []
         for input in inputs:
             if isinstance(input, xarray.DataArray) and isinstance(input.variable._data, LazyArray):
-                self.lazy_inputs.append(input.data)
+                self.lazy_inputs.append(input.variable._data)
             elif isinstance(input, LazyArray):
                 self.lazy_inputs.append(input)
         self.kwargs = kwargs
@@ -132,7 +138,9 @@ class OperatorResult(LazyArray):
             shape = numpy.broadcast_shapes(*shapes)
         if passthrough is True:
             passthrough = range(len(shape))
-        self.passthrough = frozenset(passthrough)
+        if not isinstance(passthrough, dict):
+            passthrough = dict([(i, i) for i in passthrough])
+        self.passthrough = passthrough
         assert all([isinstance(dim, int) for dim in self.passthrough]), 'Invalid passthrough: %s. All entries should be of type int' % (self.passthrough,)
         super().__init__(shape, dtype or float)
 
@@ -144,9 +152,10 @@ class OperatorResult(LazyArray):
 
     def __getitem__(self, slices) -> numpy.ndarray:
         assert isinstance(slices, tuple)
-        if Ellipsis in slices:
-            i = slices.index(Ellipsis)
-            slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
+        for i, s in enumerate(slices):
+            if s is Ellipsis:
+                slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
+                break
         assert len(slices) == self.ndim
         preslices, postslices = [], []
         for i, slc in enumerate(slices):
@@ -191,6 +200,10 @@ class WrappedArray(OperatorResult):
         return False
 
 class ConcatenatedSliceArray(UnaryOperatorResult):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._slices = []
+
     def __array__(self, dtype=None) -> numpy.ndarray:
         data = numpy.empty(self.shape, dtype or self.dtype)
         for src_slice, tgt_slice in self._slices:
@@ -213,9 +226,11 @@ class ConcatenatedSliceArray(UnaryOperatorResult):
             shape.append((stop - start + stride - 1) // stride)
         data = numpy.empty(shape, self.dtype)
         for src_slice, tgt_slice in self._slices:
-            src_slice = tuple([(cust if i in self.passthrough else ori) for i, (cust, ori) in enumerate(zip(slices, src_slice))])
+            src_slice = list(src_slice)
+            for iout, iin in self.passthrough.items():
+                src_slice[iin] = slices[iout]
             tgt_slice = tuple([ori for i, (cust, ori) in enumerate(zip(slices, tgt_slice)) if i not in self.passthrough or not isinstance(cust, int)])
-            data[tgt_slice] = self._source[src_slice]
+            data[tgt_slice] = self._source[tuple(src_slice)]
         return data
 
 def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False) -> xarray.DataArray:
@@ -324,6 +339,63 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
             coords[name] = c
     return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs, name='concatenate_slices(%s, slices=(%s))' % (source.name, strslices))
 
+
+class Transpose(UnaryOperatorResult):
+    def __array__(self, dtype=None) -> numpy.ndarray:
+        return numpy.asarray(self._source).transpose()
+
+    def __getitem__(self, slices) -> numpy.ndarray:
+        return self._source[slices[::-1]].transpose()
+
+def transpose(source: xarray.DataArray) -> xarray.DataArray:
+    data = Transpose(source, shape=source.shape[::-1], passthrough=list(range(source.ndim)), dtype=source.dtype)
+    coords = {}
+    for name, c in source.coords.items():
+        coords[name] = c.transpose()
+    return xarray.DataArray(data, dims=source.dims[::-1], coords=coords, attrs=source.attrs, name='transpose(%s)' % (source.name,))
+
+def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
+    """Index named dimensions with integers, slice objects or integer arrays"""
+    advanced_indices = []
+    for dim in list(indices):
+        assert dim in source.dims, 'indexed dimension %s not used by source, which has dimensions %s' % (dim, source.dims)
+        if not isinstance(indices[dim], (int, slice)):
+            advanced_indices.append(source.dims.index(dim))
+#            indices[dim] = xarray.Variable([source.dims[advanced_indices[0]]], numpy.asarray(indices[dim], dtype=numpy.intp))
+            indices[dim] = xarray.Variable(['__newdim'], numpy.asarray(indices[dim], dtype=numpy.intp))
+
+    # Final slices per dimension
+    slices = tuple([indices.get(dim, slice(None)) for dim in source.dims])
+
+    # Determine final shape
+    shape = []
+    dims = []
+    passthrough = {}
+    advanced_added = False
+    for i, (dim, slc, l) in enumerate(zip(source.dims, slices, source.shape)):
+        if i not in advanced_indices:
+            # Slice is integer or slice object. if integer, it will be sliced out so it does not contribute to the final shape
+            if isinstance(slc, slice):
+                start, stop, stride = slc.indices(l)
+                dims.append(dim)
+                passthrough[len(shape)] = i
+                shape.append((stop - start + stride - 1) // stride)
+        elif not advanced_added:
+            # First advanced slice. Add the shape produced by the broadcast combination of advanced indices
+            assert max(advanced_indices) - min(advanced_indices) + 1 == len(advanced_indices), 'advanced indices must be side-by-side for now'
+            for l in numpy.broadcast_shapes(*[indices[source.dims[i]].shape for i in advanced_indices]):
+                dims.append('dim_%i' % len(shape))
+                shape.append(l)
+            advanced_added = True
+
+    data = ConcatenatedSliceArray(source, shape=shape, passthrough=passthrough, dtype=source.dtype)
+    data._slices.append((slices, (slice(None),) * len(shape)))
+
+    coords = {}
+    for name, c in source.coords.items():
+        if all(dim not in c.dims for dim in indices):
+            coords[name] = c
+    return xarray.DataArray(data, dims=dims, coords=coords, attrs=source.attrs, name='isel(%s, %s)' % (source.name, ''.join([', %s=%s' % (name, value) for name, value in indices.items()])))
 
 def horizontal_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
     assert source.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.name
@@ -479,16 +551,19 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._next = 0.
         self.slices: List[Union[int, slice]] = [slice(None)] * source.ndim
 
-    def apply(self, *inputs, dtype=None) -> numpy.ndarray:
-        return self._current
-
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self._current
+
+    def __getitem__(self, slices) -> numpy.ndarray:
+        return self._current[slices]
 
     def is_time_varying(self) -> bool:
         return True
 
-    def update(self, time: cftime.datetime, numtime: numpy.longdouble) -> bool:
+    def update(self, time: cftime.datetime, numtime: Optional[numpy.longdouble]=None) -> bool:
+        if numtime is None:
+            numtime = time.toordinal(fractional=True)
+
         if numtime == self._numnow:
             return False
 
@@ -520,6 +595,19 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._timecoord.values[...] = time
         return True
 
+def debug_nc_reads(logger: Optional[logging.Logger]=None):
+    """Hook into xarray so that every read from a NetCDF file is written to the log."""
+    import xarray.backends.netCDF4_
+    if logger is None:
+        logger = logging.getLogger('pygetm.input')
+        logger.setLevel(logging.DEBUG)
+    class NetCDF4ArrayWrapper2(xarray.backends.netCDF4_.NetCDF4ArrayWrapper):
+        __slots__ = ()
+        def _getitem(self, key):
+            logger.debug('Reading %s[%s] from %s' % (self.variable_name, key, self.datastore._filename))
+            return super()._getitem(key)
+    xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
+
 class InputManager:
     def __init__(self):
         self.fields = []
@@ -527,15 +615,9 @@ class InputManager:
 
     def debug_nc_reads(self):
         """Hook into xarray so that every read from a NetCDF file is written to the log."""
-        import xarray.backends.netCDF4_
-        class NetCDF4ArrayWrapper2(xarray.backends.netCDF4_.NetCDF4ArrayWrapper):
-            __slots__ = ()
-            _logger = self._logger.getChild('nc')
-            _logger.setLevel(logging.DEBUG)
-            def _getitem(self, key):
-                self._logger.debug('Reading %s[%s] from %s' % (self.variable_name, key, self.datastore._filename))
-                return super()._getitem(key)
-        xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
+        _logger = self._logger.getChild('nc')
+        _logger.setLevel(logging.DEBUG)
+        debug_nc_reads(_logger)
 
     def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
         """Link an array to the provided input. If this input is constant in time, the value of the array will be set immediately.
@@ -563,6 +645,12 @@ class InputManager:
         if array.on_boundary:
             # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
             # or for only the open boundary points that fall within the local subdomain. Determine which of these.
+            if value.ndim >= 2 and value.shape[-1] == grid.domain.nx and value.shape[-2] == grid.domain.ny:
+                # on-grid data for the global domain - extract data at open boundary points
+                value = isel(value, **{value.dims[-1]: grid.domain.open_boundaries.i_glob, value.dims[-2]: grid.domain.open_boundaries.j_glob})
+                if array.z:
+                    # open boundary arrays have z dimension last (fastest varying), but gridded 3D data have z first
+                    value = transpose(value)
             idim = value.ndim - (2 if array.z else 1)
             if value.shape[idim] != grid.domain.open_boundaries.np:
                 # The source array covers all open boundaries (global domain).
@@ -610,10 +698,10 @@ class InputManager:
 
         target = array.all_values[target_slice]
         assert value.shape == target.shape, 'Source shape %s does not match target shape %s' % (value.shape, target.shape)
-        if isinstance(value.variable.data, LazyArray) and value.variable.data.is_time_varying():
+        if isinstance(value.variable._data, LazyArray) and value.variable._data.is_time_varying():
             _3d_only = array.attrs.get('_3d_only', False)
             self._logger.info('%s will be updated dynamically from %s%s' % (array.name, value.name, ' on macrotimestep' if _3d_only else ''))
-            self.fields.append((array.name, value.data, target, not _3d_only))
+            self.fields.append((array.name, value.variable._data, target, not _3d_only))
         else:
             target[...] = value
             unmasked = True if (array.ndim == 0 or array.on_boundary) else numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
