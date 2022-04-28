@@ -110,13 +110,13 @@ class FluxesFromMeteo(Fluxes):
         pyairsea.solar_zenith_angle(yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values)
         pyairsea.shortwave_radiation(yday, self.zen.all_values, self.lon.all_values, self.lat.all_values, self.tcc.all_values, self.swr.all_values)
         pyairsea.albedo_water(self.albedo_method, self.zen.all_values, yday, self.albedo.all_values)
-        self.swr.all_values[...] *= 1 - self.albedo.all_values
+        self.swr.all_values *= 1. - self.albedo.all_values
 
     def update_transfer_coefficients(self, sst: core.Array):
         """Update transfer coefficients for momentum (cd_mom), latent heat (cd_latent) and sensible heat (cd_sensible)"""
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
-        self.w.all_values[...] = numpy.sqrt(self.u10.all_values**2 + self.v10.all_values**2)
+        numpy.sqrt(self.u10.all_values**2 + self.v10.all_values**2, out=self.w.all_values)
         pyairsea.transfer_coefficients(1, sst_K, t2m_K, self.w.all_values, self.cd_mom.all_values, self.cd_sensible.all_values, self.cd_latent.all_values)
 
     def __call__(self, time: cftime.datetime, sst: core.Array, sss: core.Array, calculate_heat_flux: bool) -> None:
