@@ -513,19 +513,19 @@ class VerticalInterpolation(UnaryOperatorResult):
     def apply(self, source, dtype=None) -> numpy.ndarray:
         return pygetm.util.interpolate.interp_1d(self.z, self.source_z, source, axis=self.axis)
 
-def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
+def temporal_interpolation(source: xarray.DataArray, climatology: bool=False) -> xarray.DataArray:
     time_coord = source.getm.time
     assert time_coord is not None, 'No time coordinate found'
-    result = TemporalInterpolationResult(source)
+    result = TemporalInterpolationResult(source, climatology)
     dims = [d for i, d in enumerate(source.dims) if i != result._itimedim]
     coords = dict(source.coords.items())
     coords[time_coord.dims[0]] = result._timecoord
     return xarray.DataArray(result, dims=dims, coords=coords, attrs=source.attrs, name='temporal_interpolation(%s)' % source.name)
 
 class TemporalInterpolationResult(UnaryOperatorResult):
-    __slots__ = '_current', '_itimedim', '_numnow', '_numnext', '_slope', '_inext', '_next', '_slices'
+    __slots__ = '_current', '_itimedim', '_numnow', '_numnext', '_slope', '_inext', '_next', '_slices', 'climatology', '_year'
 
-    def __init__(self, source: xarray.DataArray, dtype=float):
+    def __init__(self, source: xarray.DataArray, climatology: bool, dtype=float):
         time_coord = source.getm.time
         shape = list(source.shape)
         self._itimedim = source.dims.index(time_coord.dims[0])
@@ -547,6 +547,10 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._slices: List[Union[int, slice]] = [slice(None)] * source.ndim
         self.name = source.name
 
+        self.climatology = climatology
+        assert not climatology or all(time.year == self.times[0].year for time in self.times)
+        self._year = self.times[0].year
+
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self._current
 
@@ -567,9 +571,16 @@ class TemporalInterpolationResult(UnaryOperatorResult):
             # First call to update - make sure the time series does not start after the requested time.
             if time.calendar != self.times[0].calendar:
                 raise Exception('Simulation calendar %s does not match calendar %s used by %s.' % (time.calendar, self.times[0].calendar, self.name))
-            if time < self.times[0]:
-                raise Exception('Cannot interpolate %s to value at %s, because time series starts only at %s.' % (self._source_name, time.strftime(), self.times[0].strftime()))
-            self._inext = self.times.searchsorted(time, side='right') - 2
+            if self.climatology:
+                self._inext = self.times.searchsorted(time.replace(year=self._year), side='right') - 2
+                self._year = time.year
+                if self._inext < -1:
+                    self._inext += self.times.size
+                    self._year -= 1
+            else:
+                if time < self.times[0]:
+                    raise Exception('Cannot interpolate %s to value at %s, because time series starts only at %s.' % (self._source_name, time.strftime(), self.times[0].strftime()))
+                self._inext = self.times.searchsorted(time, side='right') - 2
         elif numtime < self._numnow:
             # Subsequent call to update - make sure the requested time equals or exceeds the previously requested value
             raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._timecoord.values.flat[0].strftime(), time.strftime()))
@@ -578,11 +589,18 @@ class TemporalInterpolationResult(UnaryOperatorResult):
             # Move to next record
             self._inext += 1
             if self._inext == self.times.size:
-                raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, time.strftime(), self.times[-1].strftime()))
+                if self.climatology:
+                    self._inext = 0
+                    self._year += 1
+                else:
+                    raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, time.strftime(), self.times[-1].strftime()))
             old, numold = self._next, self._numnext
             self._slices[self._itimedim] = self._inext
             self._next = numpy.asarray(self._source[tuple(self._slices)].values, dtype=self.dtype)
-            self._numnext = self.times[self._inext].toordinal(fractional=True)
+            next_time = self.times[self._inext]
+            if self.climatology:
+                next_time = next_time.replace(year=self._year)
+            self._numnext = next_time.toordinal(fractional=True)
             self._slope = (self._next - old) / (self._numnext - numold)
 
         # Do linear interpolation
@@ -617,7 +635,7 @@ class InputManager:
         _logger.setLevel(logging.DEBUG)
         debug_nc_reads(_logger)
 
-    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
+    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False):
         """Link an array to the provided input. If this input is constant in time, the value of the array will be set immediately.
         If the input is time-dependent, the array and its linked input will be registered with the input manager; the array
         will then be updated to the current time when InputManager.update is called."""
@@ -678,7 +696,7 @@ class InputManager:
         if value.getm.time is not None:
             # The source data is time-dependent; during the simulation it will be interpolated in time.
             if value.getm.time.size > 1:
-                value = temporal_interpolation(value)
+                value = temporal_interpolation(value, climatology=climatology)
             elif value.getm.time.dims:
                 self._logger.warning('%s is set to %s, which has only one time point %s. The value from this time will be used now. %s will not be further updated by the input manager at runtime.' % (array.name, value.name, value.getm.time.values.flat[0].strftime(), array.name))
                 itimedim = value.dims.index(value.getm.time.dims[0])

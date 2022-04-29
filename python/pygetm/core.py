@@ -298,9 +298,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # one return value
             return self.create(self.grid, result)
 
-    def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None):
+    def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False):
         """Link this array to a field or value managed by the input manager. This will perform temporal and spatial interpolation as required."""
-        self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos)
+        self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos, climatology=climatology)
 
     def require_set(self, logger: Optional[logging.Logger]=None):
         """Assess whether all non-masked cells of this field have been set. If not, an error message is written to the log and False is returned."""
