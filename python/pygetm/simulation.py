@@ -49,7 +49,7 @@ class OpenBoundaries:
 class Tracer(core.Array):
     __slots__ = 'source', 'source_scale', 'vertical_velocity', 'open_boundaries', 'river_values', 'river_follow', 'rivers'
     def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, rivers_follow_target_cell: bool=False, **kwargs):
-        kwargs.setdefault('attrs', {})['_part_of_state'] = True
+        kwargs.setdefault('attrs', {}).update(_part_of_state=True, _3d_only=True)
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
         if data is None:
             data = numpy.full_like(grid.hn.all_values, numpy.nan)
@@ -124,6 +124,7 @@ class Simulation(_pygetm.Simulation):
             self.uk.all_values.fill(0.)
             self.vk.all_values.fill(0.)
             self.ww.all_values.fill(0.)
+            self.SS.fill(0.)
 
         self.update_depth()
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))

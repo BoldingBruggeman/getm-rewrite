@@ -45,7 +45,7 @@ class GETMAccessor:
                     self._coordinates['latitude'] = coord
                 elif units in ('degrees_east', 'degree_east', 'degree_E', 'degrees_E', 'degreeE', 'degreesE') or standard_name == 'longitude':
                     self._coordinates['longitude'] = coord
-                elif units is not None and ' since ' in units:
+                elif coord.size > 0 and isinstance(coord.values.flat[0], cftime.datetime):
                     self._coordinates['time'] = coord
                 elif name == 'zax':
                     self._coordinates['z'] = coord
@@ -58,7 +58,8 @@ def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=
         if k == key:
             break
     else:
-        kwargs['decode_times'] = False
+        kwargs['decode_times'] = True
+        kwargs['use_cftime'] = True
         kwargs['cache'] = cache
         if isinstance(paths, str):
             paths = glob.glob(paths)
@@ -149,6 +150,9 @@ class OperatorResult(LazyArray):
         for input in self.lazy_inputs:
             updated = input.update(*args) or updated
         return updated
+
+    def is_time_varying(self) -> bool:
+        return self.lazy_inputs and any(input.is_time_varying() for input in self.lazy_inputs)
 
     def __getitem__(self, slices) -> numpy.ndarray:
         assert isinstance(slices, tuple)
@@ -493,7 +497,7 @@ def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, it
     return xarray.DataArray(VerticalInterpolation(source, target_z, itargetdim), dims=source.dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
 
 class VerticalInterpolation(UnaryOperatorResult):
-    def __init__(self, source: xarray.DataArray, z: numpy.ndarray, axis: int=0, z_depends_on_time: bool=True):
+    def __init__(self, source: xarray.DataArray, z: numpy.ndarray, axis: int=0):
         source_z = source.getm.z
         self.izdim = source.dims.index(source_z.dims[0])
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
@@ -505,18 +509,13 @@ class VerticalInterpolation(UnaryOperatorResult):
         self.source_z = source_z.values
         if (self.source_z >= 0.).all():
             self.source_z = -self.source_z
-        self.z_depends_on_time = z_depends_on_time
 
     def apply(self, source, dtype=None) -> numpy.ndarray:
         return pygetm.util.interpolate.interp_1d(self.z, self.source_z, source, axis=self.axis)
 
-    def is_time_varying(self) -> bool:
-        return self.z_depends_on_time or self._source.is_time_varying()
-
 def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     time_coord = source.getm.time
-    if time_coord is None:
-        return source
+    assert time_coord is not None, 'No time coordinate found'
     result = TemporalInterpolationResult(source)
     dims = [d for i, d in enumerate(source.dims) if i != result._itimedim]
     coords = dict(source.coords.items())
@@ -524,8 +523,7 @@ def temporal_interpolation(source: xarray.DataArray) -> xarray.DataArray:
     return xarray.DataArray(result, dims=dims, coords=coords, attrs=source.attrs, name='temporal_interpolation(%s)' % source.name)
 
 class TemporalInterpolationResult(UnaryOperatorResult):
-    last_time: Optional[cftime.datetime] = None
-    last_numtimes = {}
+    __slots__ = '_current', '_itimedim', '_numnow', '_numnext', '_slope', '_inext', '_next', '_slices'
 
     def __init__(self, source: xarray.DataArray, dtype=float):
         time_coord = source.getm.time
@@ -538,18 +536,16 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         self._current = numpy.empty(shape, dtype=self.dtype)
 
-        numtimes = numpy.asarray(time_coord.values, dtype=numpy.longdouble)
-        times = cftime.num2date(numtimes[:2], time_coord.attrs['units'], time_coord.attrs.get('calendar', 'standard'))
-        scale_factor = (times[1].toordinal(fractional=True) - times[0].toordinal(fractional=True)) / (numtimes[1] - numtimes[0])
-        self._numtimes = times[0].toordinal(fractional=True) + (numtimes - numtimes[0]) * scale_factor
-        self._timecoord = xarray.DataArray(times[0])
+        self.times = time_coord.values
+        self._timecoord = xarray.DataArray(self.times[0])
 
         self._numnow = None
         self._numnext = 0.
         self._slope = 0.
         self._inext = -1
         self._next = 0.
-        self.slices: List[Union[int, slice]] = [slice(None)] * source.ndim
+        self._slices: List[Union[int, slice]] = [slice(None)] * source.ndim
+        self.name = source.name
 
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self._current
@@ -569,22 +565,24 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         if self._numnow is None:
             # First call to update - make sure the time series does not start after the requested time.
-            self._inext = self._numtimes.searchsorted(numtime, side='right') - 2
-            if self._inext < -1:
-                raise Exception('Cannot interpolate %s to value at %s, because time series starts only after %s.' % (self._source_name, numtime, self._numtimes[0]))
+            if time.calendar != self.times[0].calendar:
+                raise Exception('Simulation calendar %s does not match calendar %s used by %s.' % (time.calendar, self.times[0].calendar, self.name))
+            if time < self.times[0]:
+                raise Exception('Cannot interpolate %s to value at %s, because time series starts only at %s.' % (self._source_name, time.strftime(), self.times[0].strftime()))
+            self._inext = self.times.searchsorted(time, side='right') - 2
         elif numtime < self._numnow:
             # Subsequent call to update - make sure the requested time equals or exceeds the previously requested value
-            raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._numnow, numtime))
+            raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._timecoord.values.flat[0].strftime(), time.strftime()))
 
         while self._inext < 1 or self._numnext < numtime:
             # Move to next record
             self._inext += 1
-            if self._inext == self._numtimes.size:
-                raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, numtime, self._numtimes[self._inext - 1]))
+            if self._inext == self.times.size:
+                raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, time.strftime(), self.times[-1].strftime()))
             old, numold = self._next, self._numnext
-            self.slices[self._itimedim] = self._inext
-            self._next = numpy.asarray(self._source[tuple(self.slices)].values, dtype=self.dtype)
-            self._numnext = self._numtimes[self._inext]
+            self._slices[self._itimedim] = self._inext
+            self._next = numpy.asarray(self._source[tuple(self._slices)].values, dtype=self.dtype)
+            self._numnext = self.times[self._inext].toordinal(fractional=True)
             self._slope = (self._next - old) / (self._numnext - numold)
 
         # Do linear interpolation
@@ -682,7 +680,7 @@ class InputManager:
             if value.getm.time.size > 1:
                 value = temporal_interpolation(value)
             elif value.getm.time.dims:
-                self._logger.warning('%s is set to %s, which has only one time point. The value from this time will be used now. %s will not be further updated by the input manager at runtime.' % (array.name, value.name, array.name))
+                self._logger.warning('%s is set to %s, which has only one time point %s. The value from this time will be used now. %s will not be further updated by the input manager at runtime.' % (array.name, value.name, value.getm.time.values.flat[0].strftime(), array.name))
                 itimedim = value.dims.index(value.getm.time.dims[0])
                 value = value[tuple([0 if idim == itimedim else slice(None) for idim in range(value.ndim)])]
 
