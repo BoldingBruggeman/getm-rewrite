@@ -23,6 +23,7 @@ pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, 'riverinfo.dat
 sim = pygetm.Simulation(domain, runtype=pygetm.BAROCLINIC, advection_scheme=pygetm.AdvectionScheme.HSIMT,
     gotm=os.path.join(args.setup_dir, 'gotmturb.nml'),
     airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.SPECIFIC_HUMIDITY),
+    internal_pressure_method=1
 #    fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
 )
 sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
@@ -64,7 +65,8 @@ if sim.runtype < pygetm.BAROCLINIC:
     sim.sst = sim.airsea.t2m
     sim.turbulence.num[...]=1e-2
 if sim.runtype == pygetm.BAROCLINIC:
-    sim.temp.set(10.)
+    sim.temp.set(11.6)
+    sim.salt.set(35.2)
 
 sim.logger.info('Setting up TPXO tidal boundary forcing')
 if domain.open_boundaries:
@@ -83,7 +85,6 @@ for name, river in domain.rivers.items():
 
 if sim.fabm_model:
     sim.logger.info('Setting up FABM dependencies that GETM does not provide')
-    sim.get_fabm_dependency('bottom_stress').set(0)
     if sim.runtype == pygetm.BAROTROPIC_3D:
         sim.get_fabm_dependency('temperature').set(5.)
         sim.get_fabm_dependency('practical_salinity').set(35.)
