@@ -391,10 +391,9 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
     if verbose:
         print('final shape: %s' % (shape,))
 
-    lazyvar = SliceArray(source.variable, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim], dtype=source.dtype, name='concatenate_slices(%s, slices=(%s))' % (source.name, strslices))
-
     istart = 0
     strslices = ''
+    final_slices = []
     for s in slices:
         n = s.stop - s.start
         source_slice = [slice(None)] * source.ndim
@@ -402,9 +401,12 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
         source_slice[idim] = s
         target_slice[idim] = slice(istart, istart + n)
         strslices += '[%i:%i],' % (s.start, s.stop)
-        lazyvar._slices.append((tuple(source_slice), tuple(target_slice)))
+        final_slices.append((tuple(source_slice), tuple(target_slice)))
         istart += n
     assert istart == shape[idim]
+
+    lazyvar = SliceArray(source.variable, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim], dtype=source.dtype, name='concatenate_slices(%s, slices=(%s))' % (source.name, strslices))
+    lazyvar._slices.extend(final_slices)
 
     coords = {}
     for name, c in source.coords.items():
