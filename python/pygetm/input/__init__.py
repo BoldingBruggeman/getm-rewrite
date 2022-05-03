@@ -701,7 +701,7 @@ class InputManager:
         _logger.setLevel(logging.DEBUG)
         debug_nc_reads(_logger)
 
-    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False):
+    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False, mask: bool=False):
         """Link an array to the provided input. If this input is constant in time, the value of the array will be set immediately.
         If the input is time-dependent, the array and its linked input will be registered with the input manager; the array
         will then be updated to the current time when InputManager.update is called."""
@@ -786,8 +786,14 @@ class InputManager:
             self.fields.append((array.name, value.variable._data, target, not _3d_only))
         else:
             target[...] = value
-            unmasked = True if (array.ndim == 0 or array.on_boundary) else numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
             finite = numpy.isfinite(target)
+            if array.ndim == 0 or array.on_boundary:
+                unmasked = numpy.broadcast_to(True, target.shape)
+            else:
+                unmasked = numpy.broadcast_to(grid.mask.all_values[target_slice] != 0, target.shape)
+                if array.fill_value is not None:
+                    keep_mask = unmasked if mask else numpy.logical_or(unmasked, finite)
+                    target[~keep_mask] = array.fill_value
             if not finite.all(where=unmasked):
                 n_unmasked = unmasked.sum()
                 self._logger.warning('%s is set to %s, which is not finite (e.g., NaN) in %i of %i unmasked points.' % (array.name, value.name, n_unmasked - finite.sum(where=unmasked), n_unmasked))

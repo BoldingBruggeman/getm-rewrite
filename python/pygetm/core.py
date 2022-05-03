@@ -157,7 +157,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def fill(self, value):
         """Set array to specified value, while respecting the mask: masked points are set to fill_value"""
         self.all_values[...] = value
-        if self.fill_value is not None:
+        if self.fill_value is not None and not (self.ndim == 0 or self.on_boundary):
             self.all_values[..., self.grid.mask.all_values == 0] = self.fill_value
 
     @property
@@ -298,9 +298,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # one return value
             return self.create(self.grid, result)
 
-    def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False):
+    def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False, mask: bool=False):
         """Link this array to a field or value managed by the input manager. This will perform temporal and spatial interpolation as required."""
-        self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos, climatology=climatology)
+        self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos, climatology=climatology, mask=mask)
 
     def require_set(self, logger: Optional[logging.Logger]=None):
         """Assess whether all non-masked cells of this field have been set. If not, an error message is written to the log and False is returned."""
