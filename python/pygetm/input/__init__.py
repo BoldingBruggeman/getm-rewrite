@@ -66,6 +66,7 @@ def _open(path, preprocess=None, **kwargs):
 def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, **kwargs) -> xarray.DataArray:
     kwargs.setdefault('decode_times', True)
     kwargs['use_cftime'] = True
+    kwargs['cache'] = False
     if isinstance(paths, str):
         pattern = paths
         paths = glob.glob(pattern)
@@ -143,36 +144,59 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
 
 class OperatorResult(LazyArray):
     def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, name: Optional[str]=None, **kwargs):
+        # Unpack unnamed arguments
         self.inputs = []
         self.lazy_inputs = []
         self.input_names = []
         for inp in inputs:
             assert isinstance(inp, (numpy.ndarray, numbers.Number, LazyArray, xarray.Variable)), 'Input has unknown type %s' % type(inp)
+
+            # Unpack to LazyArray if possible
             if isinstance(inp, xarray.Variable) and isinstance(inp._data, LazyArray):
                 inp = inp._data
-            input_name = getattr(inp, 'name', None)
-            self.input_names.append(input_name or str(inp))
+
+            if isinstance(inp, xarray.Variable) and isinstance(inp._data, LazyArray):
+                self.input_names.append(inp._data.name)
+            elif isinstance(inp, (numpy.ndarray, numbers.Number)):
+                self.input_names.append(str(inp))
+            else:
+                # Other datatype, typically xarray.Variable.
+                # Do not call str/repr, as that will cause evaluation (e..g read from file) of the entire array
+                self.input_names.append(str(type(inp)))
+
+            # If this is a WrappedArray, unwrap (the wrapping was only for ufunc support)
             if isinstance(inp, WrappedArray):
                 inp = inp.inputs[0]
+
             if isinstance(inp, LazyArray):
                 self.lazy_inputs.append(inp)
             self.inputs.append(inp)
+
+        # Store keyword arguments as-is (no unpacking)
         self.kwargs = kwargs
+
+        # Infer shape from inputs if not provided
         if shape is None:
-            # Infer shape from inputs
             shapes = []
             for input in inputs:
                 if isinstance(input, (numpy.ndarray, LazyArray, xarray.DataArray, xarray.Variable)):
                     shapes.append(input.shape)
             shape = numpy.broadcast_shapes(*shapes)
+
+        # Process dimensions for which we can passthrough slices to inputs
+        # This can be True (= all dimensions), an iterable, or a dictionary mapping sliced dimensions
+        # to input dimensions (if the current operator adds or removes dimensions)
         if passthrough is True:
             passthrough = range(len(shape))
         if not isinstance(passthrough, dict):
             passthrough = dict([(i, i) for i in passthrough])
         self.passthrough = passthrough
         assert all([isinstance(dim, int) for dim in self.passthrough]), 'Invalid passthrough: %s. All entries should be of type int' % (self.passthrough,)
+
+        # Generate a name for the variable if not provided
         if name is None:
             name = '%s(%s%s)' % (self.__class__.__name__, ', '.join(self.input_names), ''.join(', %s=%s' % item for item in self.kwargs.items()))
+
         super().__init__(shape, dtype or float, name)
 
     def update(self, *args) -> bool:
@@ -246,9 +270,9 @@ class SliceArray(UnaryOperatorResult):
                 # This dimension will be sliced out
                 continue
             assert isinstance(s, slice), 'Dimension %i has unsupported slice type %s with value %s. Passthrough: %s' % (i, type(s), s, list(self.passthrough))
-            start, stop, stride = s.indices(l)
-            assert i in self.passthrough or (start == 0 and stop == l and stride == 1), 'invalid slice for dimension %i with length %i: %i:%i:%i' % (i, l, start, stop, stride)
-            shape.append((stop - start + stride - 1) // stride)
+            start, stop, step = s.indices(l)
+            assert i in self.passthrough or (start == 0 and stop == l and step == 1), 'invalid slice for dimension %i with length %i: %i:%i:%i' % (i, l, start, stop, step)
+            shape.append(len(range(start, stop, step)))
         data = numpy.empty(shape, self.dtype)
         for src_slice, tgt_slice in self._slices:
             src_slice = list(src_slice)
