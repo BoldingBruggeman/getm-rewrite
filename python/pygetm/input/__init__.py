@@ -52,41 +52,60 @@ class GETMAccessor:
         return self._coordinates
 
 open_nc_files = []
-def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, cache=False, **kwargs) -> xarray.DataArray:
-    key = (paths, preprocess, cache, kwargs.copy())
+def _open(path, preprocess=None, **kwargs):
+    key = (path, preprocess, kwargs.copy())
     for k, ds in open_nc_files:
         if k == key:
-            break
+            return ds
+    ds = xarray.open_dataset(path, **kwargs)
+    if preprocess:
+        ds = preprocess(ds)
+    open_nc_files.append((key, ds))
+    return ds
+
+def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, **kwargs) -> xarray.DataArray:
+    kwargs.setdefault('decode_times', True)
+    kwargs['use_cftime'] = True
+    if isinstance(paths, str):
+        pattern = paths
+        paths = glob.glob(pattern)
+        if not paths:
+            raise Exception('No files found matching %s' % pattern)
+    arrays = []
+    for path in paths:
+        ds = _open(path, preprocess, **kwargs)
+        array = ds[name]
+        # Note: we wrap the netCDF array ourselves, in order to support lazy operators (e.g., add, multiply)
+        lazyvar = WrappedArray(array.variable, name='from_nc(%s, %s)' % (path, name))
+        array = xarray.DataArray(lazyvar, dims=array.dims, coords=array.coords, attrs=array.attrs, name=lazyvar.name)
+        arrays.append(array)
+    if len(arrays) == 1:
+        return arrays[0]
     else:
-        kwargs['decode_times'] = True
-        kwargs['use_cftime'] = True
-        kwargs['cache'] = cache
-        if isinstance(paths, str):
-            paths = glob.glob(paths)
-        if len(paths) == 1:
-            ds = xarray.open_dataset(paths[0], **kwargs)
-            if preprocess:
-                ds = preprocess(ds)
-        else:
-            ds = xarray.open_mfdataset(paths, preprocess=preprocess, **kwargs)
-        open_nc_files.append((key, ds))
-    array = ds[name]
-    # Note: we wrap the netCDF array ourselves, in order to support lazy operators (e.g., add, multiply)
-    return xarray.DataArray(WrappedArray(array), dims=array.dims, coords=array.coords, attrs=array.attrs, name='from_nc(%s, %s)' % (paths, name))
+        assert all(array.getm.time is not None for array in arrays)
+        return xarray.concat(sorted(arrays, key=lambda a: a.getm.time.values.flat[0]), dim=arrays[0].getm.time.dims[0])
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self, shape: Iterable[int], dtype):
+    def __init__(self, shape: Iterable[int], dtype: numpy.typing.DTypeLike, name: str):
         self.shape = tuple(shape)
         self.ndim = len(self.shape)
         self.dtype = dtype
+        self.name = name
 
     def update(self, time: cftime.datetime, numtime: numpy.longdouble) -> bool:
         return False
 
     def astype(self, dtype, **kwargs) -> numpy.ndarray:
+        if dtype == self.dtype:
+            return self
         return self.__array__(dtype)
 
     def __array_function__(self, func, types, args, kwargs):
+        if func == numpy.result_type:
+            args = tuple(x.dtype if isinstance(x, LazyArray) else x for x in args)
+            return numpy.result_type(*args)
+        if func == numpy.concatenate:
+            return ConcatenatedArray(*args, **kwargs)
         args = tuple(numpy.asarray(x) if isinstance(x, LazyArray) else x for x in args)
         kwargs = dict((k, numpy.asarray(v)) if isinstance(v, LazyArray) else (k, v) for (k, v) in kwargs.items())
         return func(*args, **kwargs)
@@ -99,7 +118,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
             return NotImplemented
 
         for x in inputs:
-            if not isinstance(x, (numpy.ndarray, numbers.Number, LazyArray, xarray.DataArray)):
+            if not isinstance(x, (numpy.ndarray, numbers.Number, LazyArray, xarray.Variable)):
                 return NotImplemented
 
         return UFuncResult(getattr(ufunc, method), *inputs, **kwargs)
@@ -113,28 +132,37 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def is_time_varying(self) -> bool:
         return False
 
+    def _finalize_slices(self, slices: Tuple):
+        assert isinstance(slices, tuple)
+        for i, s in enumerate(slices):
+            if s is Ellipsis:
+                slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
+                break
+        assert len(slices) == self.ndim
+        return slices
+
 class OperatorResult(LazyArray):
-    def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, **kwargs):
+    def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, name: Optional[str]=None, **kwargs):
         self.inputs = []
-        for inp in inputs:
-            if isinstance(inp, xarray.DataArray):
-                inp = inp.variable
-            if isinstance(inp, xarray.Variable) and isinstance(inp._data, WrappedArray):
-                inp = inp._data.inputs[0]
-            self.inputs.append(inp)
-        self.input_names = [getattr(inp, 'name', None) for inp in inputs]
         self.lazy_inputs = []
-        for input in inputs:
-            if isinstance(input, xarray.DataArray) and isinstance(input.variable._data, LazyArray):
-                self.lazy_inputs.append(input.variable._data)
-            elif isinstance(input, LazyArray):
-                self.lazy_inputs.append(input)
+        self.input_names = []
+        for inp in inputs:
+            assert isinstance(inp, (numpy.ndarray, numbers.Number, LazyArray, xarray.Variable)), 'Input has unknown type %s' % type(inp)
+            if isinstance(inp, xarray.Variable) and isinstance(inp._data, LazyArray):
+                inp = inp._data
+            input_name = getattr(inp, 'name', None)
+            self.input_names.append(input_name or str(inp))
+            if isinstance(inp, WrappedArray):
+                inp = inp.inputs[0]
+            if isinstance(inp, LazyArray):
+                self.lazy_inputs.append(inp)
+            self.inputs.append(inp)
         self.kwargs = kwargs
         if shape is None:
             # Infer shape from inputs
             shapes = []
             for input in inputs:
-                if isinstance(input, (numpy.ndarray, LazyArray, xarray.DataArray)):
+                if isinstance(input, (numpy.ndarray, LazyArray, xarray.DataArray, xarray.Variable)):
                     shapes.append(input.shape)
             shape = numpy.broadcast_shapes(*shapes)
         if passthrough is True:
@@ -143,7 +171,9 @@ class OperatorResult(LazyArray):
             passthrough = dict([(i, i) for i in passthrough])
         self.passthrough = passthrough
         assert all([isinstance(dim, int) for dim in self.passthrough]), 'Invalid passthrough: %s. All entries should be of type int' % (self.passthrough,)
-        super().__init__(shape, dtype or float)
+        if name is None:
+            name = '%s(%s%s)' % (self.__class__.__name__, ', '.join(self.input_names), ''.join(', %s=%s' % item for item in self.kwargs.items()))
+        super().__init__(shape, dtype or float, name)
 
     def update(self, *args) -> bool:
         updated = False
@@ -155,17 +185,11 @@ class OperatorResult(LazyArray):
         return self.lazy_inputs and any(input.is_time_varying() for input in self.lazy_inputs)
 
     def __getitem__(self, slices) -> numpy.ndarray:
-        assert isinstance(slices, tuple)
-        for i, s in enumerate(slices):
-            if s is Ellipsis:
-                slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
-                break
-        assert len(slices) == self.ndim
         preslices, postslices = [], []
-        for i, slc in enumerate(slices):
+        for i, slc in enumerate(self._finalize_slices(slices)):
             if i in self.passthrough:
                 preslices.append(slc)
-                if not isinstance(slc, int): postslices.append(slice(None))
+                if not isinstance(slc, (int, numpy.integer)): postslices.append(slice(None))
             else:
                 preslices.append(slice(None))
                 postslices.append(slc)
@@ -192,10 +216,10 @@ class UFuncResult(OperatorResult):
     def apply(self, *inputs, dtype=None) -> numpy.ndarray:
         return self.ufunc(*inputs, **self.kwargs)
 
-class WrappedArray(OperatorResult):
-    def __init__(self, source: xarray.DataArray):
-        assert not isinstance(source.variable._data, LazyArray)
-        super().__init__(source, passthrough=True, dtype=source.dtype)
+class WrappedArray(UnaryOperatorResult):
+    def __init__(self, source: xarray.Variable, **kwargs):
+        assert isinstance(source, xarray.Variable)
+        super().__init__(source, passthrough=True, dtype=source.dtype, **kwargs)
 
     def apply(self, source, dtype=None) -> numpy.ndarray:
         return source
@@ -203,7 +227,7 @@ class WrappedArray(OperatorResult):
     def update(self, *args) -> bool:
         return False
 
-class ConcatenatedSliceArray(UnaryOperatorResult):
+class SliceArray(UnaryOperatorResult):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._slices = []
@@ -215,16 +239,13 @@ class ConcatenatedSliceArray(UnaryOperatorResult):
         return data
 
     def __getitem__(self, slices) -> numpy.ndarray:
-        assert isinstance(slices, tuple)
-        if Ellipsis in slices:
-            i = slices.index(Ellipsis)
-            slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
-        assert len(slices) == self.ndim
+        slices = self._finalize_slices(slices)
         shape = []
         for i, (l, s) in enumerate(zip(self.shape, slices)):
-            if i in self.passthrough and isinstance(s, int):
+            if i in self.passthrough and isinstance(s, (int, numpy.integer)):
                 # This dimension will be sliced out
                 continue
+            assert isinstance(s, slice), 'Dimension %i has unsupported slice type %s with value %s. Passthrough: %s' % (i, type(s), s, list(self.passthrough))
             start, stop, stride = s.indices(l)
             assert i in self.passthrough or (start == 0 and stop == l and stride == 1), 'invalid slice for dimension %i with length %i: %i:%i:%i' % (i, l, start, stop, stride)
             shape.append((stop - start + stride - 1) // stride)
@@ -233,9 +254,33 @@ class ConcatenatedSliceArray(UnaryOperatorResult):
             src_slice = list(src_slice)
             for iout, iin in self.passthrough.items():
                 src_slice[iin] = slices[iout]
-            tgt_slice = tuple([ori for i, (cust, ori) in enumerate(zip(slices, tgt_slice)) if i not in self.passthrough or not isinstance(cust, int)])
+            tgt_slice = tuple([ori for i, (cust, ori) in enumerate(zip(slices, tgt_slice)) if i not in self.passthrough or not isinstance(cust, (int, numpy.integer))])
             data[tgt_slice] = self._source[tuple(src_slice)]
         return data
+
+class ConcatenatedArray(UnaryOperatorResult):
+    def __init__(self, arrays, axis: int=0, *args, **kwargs):
+        shape = list(arrays[0].shape)
+        for array in arrays[1:]:
+            shape[axis] += array.shape[axis]
+            assert all(array.shape[i] == l for i, l in enumerate(shape) if i != axis)
+        self.axis = axis
+        super().__init__(*arrays, shape=shape, **kwargs)
+
+    def __array__(self, dtype=None) -> numpy.ndarray:
+        return numpy.concatenate(self.inputs, axis=self.axis, dtype=dtype)
+
+    def __getitem__(self, slices) -> numpy.ndarray:
+        slices = list(self._finalize_slices(slices))
+        assert isinstance(slices[self.axis], (int, numpy.integer)), 'Unsupported slice for concatenated dimension: %s' % (slices[self.axis],)
+        if slices[self.axis] < 0:
+            slices[self.axis] += self.shape[self.axis]
+        assert slices[self.axis] >= 0 and slices[self.axis] < self.shape[self.axis]
+        for input in self.inputs:
+            if slices[self.axis] < input.shape[self.axis]:
+                return numpy.asarray(input[tuple(slices)])
+            slices[self.axis] -= input.shape[self.axis]
+        assert False, 'Index out of bounds?'
 
 def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False) -> xarray.DataArray:
     assert numpy.isfinite(minlon) and numpy.isfinite(maxlon), 'Longitude range %s - %s is not valid' % (minlon, maxlon)
@@ -300,17 +345,17 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
     if verbose:
         print('final shape: %s' % (shape,))
 
-    data = ConcatenatedSliceArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)])
-    data._slices.append((center_source, center_target))
+    lazyvar = SliceArray(source.variable, shape=shape, passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)], name='limit_region(%s, minlon=%s, maxlon=%s, minlat=%s, maxlat=%s)' % (source.name, minlon, maxlon, minlat, maxlat))
+    lazyvar._slices.append((center_source, center_target))
     if left_target:
-        data._slices.append((left_source, left_target))
+        lazyvar._slices.append((left_source, left_target))
     if right_target:
-        data._slices.append((right_source, right_target))
+        lazyvar._slices.append((right_source, right_target))
 
     coords = dict(source.coords.items())
     coords[source_lon.name] = target_lon
     coords[source_lat.name] = target_lat
-    return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs, name='limit_region(%s, minlon=%s, maxlon=%s, minlat=%s, maxlat=%s)' % (source.name, minlon, maxlon, minlat, maxlat))
+    return xarray.DataArray(lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
 
 def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice], verbose=False) -> xarray.DataArray:
@@ -322,7 +367,7 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
     if verbose:
         print('final shape: %s' % (shape,))
 
-    data = ConcatenatedSliceArray(source, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim], dtype=source.dtype)
+    lazyvar = SliceArray(source.variable, shape=shape, passthrough=[i for i in range(len(shape)) if i != idim], dtype=source.dtype, name='concatenate_slices(%s, slices=(%s))' % (source.name, strslices))
 
     istart = 0
     strslices = ''
@@ -333,7 +378,7 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
         source_slice[idim] = s
         target_slice[idim] = slice(istart, istart + n)
         strslices += '[%i:%i],' % (s.start, s.stop)
-        data._slices.append((tuple(source_slice), tuple(target_slice)))
+        lazyvar._slices.append((tuple(source_slice), tuple(target_slice)))
         istart += n
     assert istart == shape[idim]
 
@@ -341,7 +386,7 @@ def concatenate_slices(source: xarray.DataArray, idim: int, slices: Tuple[slice]
     for name, c in source.coords.items():
         if source.dims[idim] not in c.dims:
             coords[name] = c
-    return xarray.DataArray(data, dims=source.dims, coords=coords, attrs=source.attrs, name='concatenate_slices(%s, slices=(%s))' % (source.name, strslices))
+    return xarray.DataArray(lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
 
 class Transpose(UnaryOperatorResult):
@@ -352,11 +397,11 @@ class Transpose(UnaryOperatorResult):
         return self._source[slices[::-1]].transpose()
 
 def transpose(source: xarray.DataArray) -> xarray.DataArray:
-    data = Transpose(source, shape=source.shape[::-1], passthrough=list(range(source.ndim)), dtype=source.dtype)
+    lazyvar = Transpose(source.variable, shape=source.shape[::-1], passthrough=list(range(source.ndim)), dtype=source.dtype, name='transpose(%s)' % (source.name,))
     coords = {}
     for name, c in source.coords.items():
         coords[name] = c.transpose()
-    return xarray.DataArray(data, dims=source.dims[::-1], coords=coords, attrs=source.attrs, name='transpose(%s)' % (source.name,))
+    return xarray.DataArray(lazyvar, dims=source.dims[::-1], coords=coords, attrs=source.attrs, name=lazyvar.name)
 
 def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
     """Index named dimensions with integers, slice objects or integer arrays"""
@@ -392,14 +437,14 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
                 shape.append(l)
             advanced_added = True
 
-    data = ConcatenatedSliceArray(source, shape=shape, passthrough=passthrough, dtype=source.dtype)
-    data._slices.append((slices, (slice(None),) * len(shape)))
+    lazyvar = SliceArray(source.variable, shape=shape, passthrough=passthrough, dtype=source.dtype, name='isel(%s, %s)' % (source.name, ''.join([', %s=%s' % (name, value) for name, value in indices.items()])))
+    lazyvar._slices.append((slices, (slice(None),) * len(shape)))
 
     coords = {}
     for name, c in source.coords.items():
         if all(dim not in c.dims for dim in indices):
             coords[name] = c
-    return xarray.DataArray(data, dims=dims, coords=coords, attrs=source.attrs, name='isel(%s, %s)' % (source.name, ''.join([', %s=%s' % (name, value) for name, value in indices.items()])))
+    return xarray.DataArray(lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
 def horizontal_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
     assert source.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.name
@@ -434,39 +479,37 @@ def horizontal_interpolation(source: xarray.DataArray, lon: xarray.DataArray, la
     coords[lon.name] = lon
     coords[lat.name] = lat
     dims = source.dims[:min(ilondim, ilatdim)] + dimensions + source.dims[max(ilondim, ilatdim) + 1:]
-    return xarray.DataArray(SpatialInterpolation(ip, source, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1), dims=dims, coords=coords, attrs=source.attrs, name='horizontal_interpolation(%s)' % source.name)
+    lazyvar = SpatialInterpolation(ip, source.variable, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1, name='horizontal_interpolation(%s)' % source.name)
+    return xarray.DataArray(lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
 class SpatialInterpolation(UnaryOperatorResult):
-    def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.DataArray, shape: Iterable[int], npre: int, npost: int):
-        UnaryOperatorResult.__init__(self, source, shape=shape)
+    def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.Variable, shape: Iterable[int], npre: int, npost: int, **kwargs):
+        UnaryOperatorResult.__init__(self, source, shape=shape, **kwargs)
         self._ip = ip
         self.npre = npre
         self.npost = npost
 
     def __array__(self, dtype=None) -> numpy.ndarray:
-        return self._ip(self._source.values)
+        return self._ip(numpy.asarray(self._source))
 
     def __getitem__(self, slices) -> numpy.ndarray:
-        assert isinstance(slices, tuple)
-        if Ellipsis in slices:
-            i = slices.index(Ellipsis)
-            slices = slices[:i] + (slice(None),) * (self.ndim + 1 - len(slices)) + slices[i + 1:]
-        assert len(slices) == self.ndim
         src_slice, tgt_slice = [Ellipsis], [Ellipsis]
-        for i, s in enumerate(slices):
+        ntrailing_dim_removed = 0
+        for i, s in enumerate(self._finalize_slices(slices)):
             if i < self.npre:
                 # prefixed dimension
                 src_slice.insert(i, s)
             elif i >= self.ndim - self.npost:
                 # trailing dimension
-                if isinstance(s, int):
-                    s = slice(s, s + 1)
+                if isinstance(s, (int, numpy.integer)):
+                    ntrailing_dim_removed += 1
                     tgt_slice.append(0)
                 src_slice.append(s)
             else:
                 assert isinstance(s, slice) and s.start is None and s.stop is None and s.step is None, '%s' % s
-        source = self._source[tuple(src_slice)]
-        result = self._ip(source.values)
+        source = numpy.asarray(self._source[tuple(src_slice)])
+        source.shape = source.shape + (1,) * ntrailing_dim_removed
+        result = self._ip(source)
         return result[tuple(tgt_slice)]
 
 def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, itargetdim: int=0) -> xarray.DataArray:
@@ -494,19 +537,19 @@ def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, it
             coords[n + '_'] = ([source.dims[target2sourcedim[i]] for i in range(target_z.ndim)], target_z)
         else:
             coords[n] = c
-    return xarray.DataArray(VerticalInterpolation(source, target_z, itargetdim), dims=source.dims, coords=coords, attrs=source.attrs, name='vertical_interpolation(%s)' % source.name)
+    lazyvar = VerticalInterpolation(source.variable, target_z, izdim, source_z.values, itargetdim, name='horizontal_interpolation(%s)' % source.name)
+    return xarray.DataArray(lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
 class VerticalInterpolation(UnaryOperatorResult):
-    def __init__(self, source: xarray.DataArray, z: numpy.ndarray, axis: int=0):
-        source_z = source.getm.z
-        self.izdim = source.dims.index(source_z.dims[0])
+    def __init__(self, source: xarray.Variable, z: numpy.ndarray, izdim: int, source_z: numpy.ndarray, axis: int=0, **kwargs):
+        self.izdim = izdim
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
         shape = list(source.shape)
         shape[self.izdim] = z.shape[axis]
-        UnaryOperatorResult.__init__(self, source, shape=shape, passthrough=passthrough)
+        super().__init__(source, shape=shape, passthrough=passthrough, **kwargs)
         self.z = z
         self.axis = axis
-        self.source_z = source_z.values
+        self.source_z = source_z
         if (self.source_z >= 0.).all():
             self.source_z = -self.source_z
 
@@ -516,27 +559,27 @@ class VerticalInterpolation(UnaryOperatorResult):
 def temporal_interpolation(source: xarray.DataArray, climatology: bool=False) -> xarray.DataArray:
     time_coord = source.getm.time
     assert time_coord is not None, 'No time coordinate found'
-    result = TemporalInterpolationResult(source, climatology)
-    dims = [d for i, d in enumerate(source.dims) if i != result._itimedim]
+    itimedim = source.dims.index(time_coord.dims[0])
+    lazyvar = TemporalInterpolationResult(source.variable, itimedim, time_coord.values, climatology, name='temporal_interpolation(%s)' % source.name)
+    dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
     coords = dict(source.coords.items())
-    coords[time_coord.dims[0]] = result._timecoord
-    return xarray.DataArray(result, dims=dims, coords=coords, attrs=source.attrs, name='temporal_interpolation(%s)' % source.name)
+    coords[time_coord.dims[0]] = lazyvar._timecoord
+    return xarray.DataArray(lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
 class TemporalInterpolationResult(UnaryOperatorResult):
     __slots__ = '_current', '_itimedim', '_numnow', '_numnext', '_slope', '_inext', '_next', '_slices', 'climatology', '_year'
 
-    def __init__(self, source: xarray.DataArray, climatology: bool, dtype=float):
-        time_coord = source.getm.time
+    def __init__(self, source: xarray.Variable, itimedim: int, times: numpy.ndarray, climatology: bool, dtype=float, **kwargs):
         shape = list(source.shape)
-        self._itimedim = source.dims.index(time_coord.dims[0])
+        self._itimedim = itimedim
         assert shape[self._itimedim] > 1, 'Cannot interpolate %s in time because its time dimension has length %i.' % (source.name, shape[self._itimedim])
         shape.pop(self._itimedim)
 
-        super().__init__(source, shape=shape, dtype=dtype)
+        super().__init__(source, shape=shape, dtype=dtype, **kwargs)
 
         self._current = numpy.empty(shape, dtype=self.dtype)
 
-        self.times = time_coord.values
+        self.times = times
         self._timecoord = xarray.DataArray(self.times[0])
 
         self._numnow = None
@@ -545,7 +588,6 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._inext = -1
         self._next = 0.
         self._slices: List[Union[int, slice]] = [slice(None)] * source.ndim
-        self.name = source.name
 
         self.climatology = climatology
         assert not climatology or all(time.year == self.times[0].year for time in self.times)
@@ -570,7 +612,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         if self._numnow is None:
             # First call to update - make sure the time series does not start after the requested time.
             if time.calendar != self.times[0].calendar:
-                raise Exception('Simulation calendar %s does not match calendar %s used by %s.' % (time.calendar, self.times[0].calendar, self.name))
+                raise Exception('Simulation calendar %s does not match calendar %s used by %s.' % (time.calendar, self.times[0].calendar, self._source_name))
             if self.climatology:
                 self._inext = self.times.searchsorted(time.replace(year=self._year), side='right') - 2
                 self._year = time.year
@@ -596,7 +638,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
                     raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, time.strftime(), self.times[-1].strftime()))
             old, numold = self._next, self._numnext
             self._slices[self._itimedim] = self._inext
-            self._next = numpy.asarray(self._source[tuple(self._slices)].values, dtype=self.dtype)
+            self._next = numpy.asarray(self._source[tuple(self._slices)], dtype=self.dtype)
             next_time = self.times[self._inext]
             if self.climatology:
                 next_time = next_time.replace(year=self._year)
