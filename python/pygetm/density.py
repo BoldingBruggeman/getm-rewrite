@@ -10,7 +10,8 @@ import pygsw
 # by inheriting from this class and overriding methos.
 
 class Density:
-    def get_buoyancy_frequency(self, SA: core.Array, ct: core.Array, p: core.Array=None, out: core.Array=None) -> core.Array:
+    @staticmethod
+    def get_buoyancy_frequency(SA: core.Array, ct: core.Array, p: core.Array=None, out: core.Array=None) -> core.Array:
         """Compute the square of the buoyancy frequency at layer interface from absolute salinity, conservative temperature and pressure at the layer centers."""
         assert SA.grid is ct.grid
         assert SA.ndim == 3
@@ -23,7 +24,8 @@ class Density:
         pygsw.nsquared(SA.grid.mask.all_values, SA.grid.hn.all_values, SA.all_values, ct.all_values, p.all_values, SA.grid.lat.all_values, out.all_values[1:-1, :, :])
         return out
 
-    def get_density(self, SA: core.Array, ct: core.Array, p: core.Array=None, out: core.Array=None) -> core.Array:
+    @staticmethod
+    def get_density(SA: core.Array, ct: core.Array, p: core.Array=None, out: core.Array=None) -> core.Array:
         """Compute in-situ density from absolute salinity and conservative temperature. Inputs can be 2D or 3D."""
         assert SA.grid is ct.grid
         if out is None:
@@ -35,7 +37,8 @@ class Density:
         pygsw.rho(SA.all_values.ravel(), ct.all_values.ravel(), p.all_values.ravel(), out.all_values.ravel())
         return out
 
-    def get_potential_temperature(self, SA: core.Array, ct: core.Array, out: core.Array=None) -> core.Array:
+    @staticmethod
+    def get_potential_temperature(SA: core.Array, ct: core.Array, out: core.Array=None) -> core.Array:
         """Compute potential temperature from absolute salinity and conservative temperature. Inputs can be 2D or 3D."""
         assert SA.grid is ct.grid
         if out is None:
@@ -44,7 +47,8 @@ class Density:
         pygsw.pt_from_ct(SA.all_values.ravel(), ct.all_values.ravel(), out.all_values.ravel())
         return out
 
-    def convert_ts(self, sp: core.Array, pt: core.Array, p: core.Array=None):
+    @staticmethod
+    def convert_ts(sp: core.Array, pt: core.Array, p: core.Array=None):
         """Convert practical salinity and potential temperature to absolute salinity and conservative temperature.
         Pressure must be provided as well as practical salinity and potential temperature.
         The conversion happens in-place."""
