@@ -431,6 +431,7 @@ def thickness2center_depth(Array mask not None, Array h not None, Array out=None
         out = h.grid.array(z=CENTERS)
     assert mask.grid is out.grid and out.z == CENTERS
     c_thickness2center_depth(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>out.p)
+    return out
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
