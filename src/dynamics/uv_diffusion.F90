@@ -328,7 +328,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    end do
    do j=VG%jmin,VG%jmax ! diffv defined on V-points
       do i=VG%imin,VG%imax ! diffv defined on V-points
-         diffu(i,j)=0._real64
+         diffv(i,j)=0._real64
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
             diffv(i,j)=-self%Am(i,j)*0.5_real64*(hv(i,j)+hv(i+1,j))*XG%dy(i,j) &
                        *(shear(i,j)-shear(i-1,j))*VG%iarea(i,j)
