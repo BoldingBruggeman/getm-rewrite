@@ -126,7 +126,7 @@ class Simulation(_pygetm.Simulation):
             self.ww.all_values.fill(0.)
             self.SS.fill(0.)
 
-        self.update_depth()
+        self.update_depth(self.domain.T.z, self.domain.U.z, self.domain.V.z, self.domain.X.z, self.domain.T.zo)
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
@@ -316,10 +316,9 @@ class Simulation(_pygetm.Simulation):
         self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
 
         # Update surface elevation on T grid from time=0 to time=1
-        # From that, calculate surface elevation and water depth on all grids
-        # Elevation halos are updated by update_depth
+        # Halos exchange so that depths and thicknesses can be computed everywhere without further halo exchange
         self.update_sealevel(self.timestep, self.U, self.V, self.fwf)
-        self.update_depth()
+        self.domain.T.z.update_halos()
 
         # Track cumulative increase in elevation due to river inflow over the current macrotimestep
         self._cum_river_height_increase += self.domain.rivers.flow * self.domain.rivers.iarea * self.timestep
@@ -437,6 +436,20 @@ class Simulation(_pygetm.Simulation):
             # Calculate squared buoyancy frequency NN (T grid, interfaces between layers)
             self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
 
+        # Update surface elevation on U, V, X grids and water depth on all grids
+        self.update_depth(self.domain.T.z, self.domain.U.z, self.domain.V.z, self.domain.X.z, self.domain.T.zo)
+
+        # Calculate 2D (depth-averaged) velocities using updated water depths
+        # Note that as long as transports U and V are 0 in masked points=, u1 and v1 will be too,
+        # provided D contains only non-zero finite values
+        numpy.divide(self.U.all_values, self.U.grid.D.all_values, out=self.u1.all_values)
+        numpy.divide(self.V.all_values, self.V.grid.D.all_values, out=self.v1.all_values)
+
+        # Calculate bottom friction using updated depth-averaged velocities u1 and v1
+        # Warning: this uses velocities u1 and v1 at masked points, which therefore need to be kept at 0
+        if self.apply_bottom_friction:
+            self.bottom_friction_2d()
+
         # Update freshwater fluxes (TODO: add precipitation)
         self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = self.domain.rivers.flow * self.domain.rivers.iarea
 
@@ -448,7 +461,7 @@ class Simulation(_pygetm.Simulation):
 
         # Calculate the surface pressure gradient in the U and V points.
         # Note: this requires elevation and surface air pressure (both on T grid) to be valid in the halos,
-        # which is guaranteed for elevation (update_depth does the halo exchange) , and for air pressure
+        # which is guaranteed for elevation (halo exchange happens just after update), and for air pressure
         # if it is managed by the input manager (e.g. read from file)
         self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
@@ -531,37 +544,45 @@ class Simulation(_pygetm.Simulation):
             if total is not None:
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
-    def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
-        """Update depth-integrated transports (U, V) and depth-averaged velocities (u1, v1). This will also update their halos."""
-        # compute velocities at time=n-1/2
-        self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values
-        self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
+    def advect_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, u1_ready: bool=False):
+        # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
+        # using velocities reconstructed from transports interpolated to their own advection grids
+        # Then reconstruct the resulting change in transports U and V and return this (advU, advV)
+
+        if not u1_ready:
+            numpy.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
+            numpy.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
 
         itimestep = 1. / timestep
 
-        # Advect depth-averaged u velocity (u1) using velocities interpolated to its own advection grids
-        self.U.interp(self.uua)
-        self.V.interp(self.uva)
+        # Advection of u velocity (u1)
+        U.interp(self.uua)
+        V.interp(self.uva)
         self.uua.all_values /= self.domain.UU.D.all_values
         self.uva.all_values /= self.domain.UV.D.all_values
         self.uadv(self.uua, self.uva, timestep, self.u1, skip_initial_halo_exchange=True)
-        self.advU.all_values[...] = (self.u1.all_values * self.uadv.D - self.U.all_values) * itimestep
+        advU.all_values[...] = (self.u1.all_values * self.uadv.D - U.all_values) * itimestep
 
-        # Advect depth-averaged v velocity (v1) using velocities interpolated to its own advection grids
+        # Advection of v velocity (v1)
         self.U.interp(self.vua)
         self.V.interp(self.vva)
         self.vua.all_values /= self.domain.VU.D.all_values
         self.vva.all_values /= self.domain.VV.D.all_values
         self.vadv(self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True)
-        self.advV.all_values[...] = (self.v1.all_values * self.vadv.D - self.V.all_values) * itimestep
+        advV.all_values[...] = (self.v1.all_values * self.vadv.D - V.all_values) * itimestep
 
-        # Restore velocity at time=n-1/2
-        self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values
-        self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
+    def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
+        """Update depth-integrated transports (U, V) and depth-averaged velocities (u1, v1).
+        This will also update their halos. Note that velocities u1 and v1 are assumed to be in sync
+        with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D)"""
 
-        if self.apply_bottom_friction:
-            self.bottom_friction_2d()
+        # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
+        # store the resulting change in transports U and V (advU, advV),
+        # to be taken into account by transport update further down.
+        # Since self.u1=self.U/self.U.grid.D (and same for v1/V), we state that with u1_ready=True
+        self.advect_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, u1_ready=True)
 
+        # Update 2D transports from t-1/2 to t+1/2
         if self._ufirst:
             self.u_2d(timestep, tausx, dpdx)
             self.U.update_halos()
@@ -647,6 +668,16 @@ class Simulation(_pygetm.Simulation):
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
+    def slow_advection(self, timestep: float):
+        """Compute slow (3D) advection contribution to 2D advection.
+        This is done by comparing the previously calculated depth-integrated 3D transport
+        (between centers of the current and next macrotime step) with the newly calculated
+        depth-integrated transport based on accumulated 2D transports (accumulated over the
+        current macrotimestep, and thus representative for its center)."""
+        self.advect_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA)
+        self.SxA.all_values[...] = self.advpk.all_values.sum(axis=0) - self.SxA.all_values
+        self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
+
     def start_3d(self):
         """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step.
         Note: this uses sea level on T grid as computed by the 2D time step. This has to be up to date in the halos too!
@@ -660,27 +691,8 @@ class Simulation(_pygetm.Simulation):
         # Synchronize new elevations on the 3D time step to those of the 2D time step that has just completed.
         self.domain.T.zin.all_values[...] = self.domain.T.z.all_values
 
-        # Compute elevations on U, V, X grids.
-        # Note that this must be at time=n+1/2, whereas elevations on the T grid is now at time=n+1.
-        zi_T_half = 0.5 * (self.domain.T.zio + self.domain.T.zin)
-        zi_T_half.interp(self.domain.U.zin)
-        zi_T_half.interp(self.domain.V.zin)
-        zi_T_half.interp(self.domain.X.zin)
-
-        # Clip newly inferred elevations to ensure the minimum depth is respected.
-        self.domain.U.zin.all_values.clip(min=-self.domain.U.H.all_values + self.domain.Dmin, out=self.domain.U.zin.all_values)
-        self.domain.V.zin.all_values.clip(min=-self.domain.V.H.all_values + self.domain.Dmin, out=self.domain.V.zin.all_values)
-        self.domain.X.zin.all_values.clip(min=-self.domain.X.H.all_values + self.domain.Dmin, out=self.domain.X.zin.all_values)
-
-        # Halo exchange for elevation on U, V grids, needed because the very last points in the halos
-        # (x=-1 for U, y=-1 for V) are not valid after interpolating from the T grid above.
-        # These elevations are needed to later compute velocities from transports
-        # (by dividing by layer thicknesses, which are computed from elevation)
-        # These velocities will be advected, and therefore need to be valid througout the halos.
-        # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
-        # at the innermost halo point only, which is ensured by T.zin exchange.
-        self.domain.U.zin.update_halos(parallel.Neighbor.RIGHT)
-        self.domain.V.zin.update_halos(parallel.Neighbor.TOP)
+        # Update elevations on U, V, X grids and total water depth D on all grids
+        self.update_depth(self.domain.T.zin, self.domain.U.zin, self.domain.V.zin, self.domain.X.zin, self.domain.T.zio)
 
         # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
         # This routine also sets ho to the previous value of hn
@@ -705,35 +717,39 @@ class Simulation(_pygetm.Simulation):
             # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
             self.domain.open_boundaries.zc.all_values[...] = self.domain.T.zc.all_values[:, self.domain.open_boundaries.j, self.domain.open_boundaries.i].T
 
-    def update_depth(self):
-        """Use surface elevation on T grid to update elevations on U,V,X grids and subsequently update total water depth D on all grids."""
-        # Halo exchange for sea level on T grid
-        self.domain.T.z.update_halos()
-
-        # Compute sea level on U, V, X grids.
-        # Note that this must be at time=n+1/2, whereas sea level on T grid is now at time=n+1.
-        z_T_half = 0.5 * (self.domain.T.zo + self.domain.T.z)
-        z_T_half.interp(self.domain.U.z)
-        z_T_half.interp(self.domain.V.z)
-        z_T_half.interp(self.domain.X.z)
-        self.domain.U.z.all_values.clip(min=-self.domain.U.H.all_values + self.domain.Dmin, out=self.domain.U.z.all_values)
-        self.domain.V.z.all_values.clip(min=-self.domain.V.H.all_values + self.domain.Dmin, out=self.domain.V.z.all_values)
-        self.domain.X.z.all_values.clip(min=-self.domain.X.H.all_values + self.domain.Dmin, out=self.domain.X.z.all_values)
-        z_T_half.all_values.clip(min=-self.domain.T.H.all_values + self.domain.Dmin, out=z_T_half.all_values)
+    def update_depth(self, z_T: core.Array, z_U: core.Array, z_V: core.Array, z_X: core.Array, zo_T: core.Array):
+        """Use old and new surface elevation on T grid to update elevations on U, V, X grids
+        and subsequently update total water depth D on all grids. z_T (and zo_T) must be up to date in halos"""
+        # Compute surface elevation on U, V, X grids.
+        # Note that this must be at time=n+1/2, whereas surface elevation on T grid is now at time=n+1.
+        z_T_half = 0.5 * (zo_T + z_T)
+        z_T_half.interp(z_U)
+        z_T_half.interp(z_V)
+        z_T_half.interp(z_X)
+        _pygetm.clip_z(z_U, self.domain.Dmin)
+        _pygetm.clip_z(z_V, self.domain.Dmin)
+        _pygetm.clip_z(z_X, self.domain.Dmin)
 
         # Halo exchange for elevation on U, V grids, needed because the very last points in the halos
         # (x=-1 for U, y=-1 for V) are not valid after interpolating from the T grid above.
         # These elevations are needed to later compute velocities from transports
         # (by dividing by layer thicknesses, which are computed from elevation)
         # These velocities will be advected, and therefore need to be valid througout the halos.
-        # We do not need to halo-exchange elevation on the X grid, since that need to be be valid
-        # at the innermost halo point only, which is ensured by T.zin exchange.
-        self.domain.U.z.update_halos(parallel.Neighbor.RIGHT)
-        self.domain.V.z.update_halos(parallel.Neighbor.TOP)
+        # We do not need to halo-exchange elevation on the X grid, since that needs to be be valid
+        # at the innermost halo point only, which is ensured by z_T exchange.
+        z_U.update_halos(parallel.Neighbor.RIGHT)
+        z_V.update_halos(parallel.Neighbor.TOP)
 
         # Update total water depth D on T, U, V, X grids
         # This also processes the halos; no further halo exchange needed.
-        self.domain.update_depths()
+        numpy.add(self.domain.T.H.all_values, z_T.all_values, where=self.domain.T.mask.all_values > 0, out=self.domain.T.D.all_values)
+        numpy.add(self.domain.U.H.all_values, z_U.all_values, where=self.domain.U.mask.all_values > 0, out=self.domain.U.D.all_values)
+        numpy.add(self.domain.V.H.all_values, z_V.all_values, where=self.domain.V.mask.all_values > 0, out=self.domain.V.D.all_values)
+        numpy.add(self.domain.X.H.all_values, z_X.all_values, where=self.domain.X.mask.all_values > 0, out=self.domain.X.D.all_values)
+
+        # Update dampening factor (0-1) for shallow water
+        _pygetm.alpha(self.domain.U.D, self.domain.Dmin, self.domain.Dcrit, self.domain.U.alpha)
+        _pygetm.alpha(self.domain.V.D, self.domain.Dmin, self.domain.Dcrit, self.domain.V.alpha)
 
         # Update column depth on advection grids. These must be at time=n+1/2.
         # That's already the case for the X grid, but for the T grid we explicitly compute and use D at time=n+1/2.
@@ -741,9 +757,6 @@ class Simulation(_pygetm.Simulation):
         self.domain.UU.D.all_values[:, :-1] = D_T_half[:, 1:]
         self.domain.VV.D.all_values[:-1, :] = D_T_half[1:, :]
         self.domain.UV.D.all_values[:, :] = self.domain.VU.D.all_values[:, :] = self.domain.X.D.all_values[1:, 1:]
-
-        self.u1.all_values[:, :] = self.U.all_values / self.U.grid.D.all_values
-        self.v1.all_values[:, :] = self.V.all_values / self.V.grid.D.all_values
 
     @property
     def Ekin(self, rho0: float=RHO0):

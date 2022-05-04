@@ -15,7 +15,6 @@ cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int 
 cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
 cdef extern void domain_initialize(void* grid, int runtype, double Dmin, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
-cdef extern void domain_update_depths(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain) nogil
 cdef extern void domain_tracer_bdy(void* domain, void* grid, int nz, double* field, int bdytype, double* bdy)
 cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
@@ -43,12 +42,13 @@ cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void pressure_internal(void* pressure, double* buoy, double* SxB, double* SyB) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
-#cdef extern void sealevel_update_uvx(void* sealevel) nogil
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* top, double* out) nogil
 cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
+cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha)
+cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
 
 cpdef enum:
     TGRID = 1
@@ -195,9 +195,6 @@ cdef class Domain:
     def __dealloc__(self):
         if self.p != NULL:
             domain_finalize(self.p)
-
-    def update_depths(self):
-        domain_update_depths(self.p)
 
     def do_vertical(self):
         domain_do_vertical(self.p)
@@ -384,9 +381,6 @@ cdef class Simulation:
         assert V.grid is self.domain.V
         sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p, <double *>fwf.p)
 
-    #def update_sealevel_uvx(self):
-    #    sealevel_update_uvx(self.psealevel)
-
     def update_sealevel_boundaries(self, double timestep):
         sealevel_boundaries(self.psealevel, self.pmomentum, timestep)
 
@@ -432,6 +426,17 @@ def thickness2center_depth(Array mask not None, Array h not None, Array out=None
     assert mask.grid is out.grid and out.z == CENTERS
     c_thickness2center_depth(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>out.p)
     return out
+
+def alpha(Array D not None, double Dmin, double Dcrit, Array out not None):
+    cdef Array mask
+    mask = D.grid.mask
+    c_alpha(D._array.size, <double*>D.p, Dmin, Dcrit, <int*>mask.p, <double*>out.p)
+
+def clip_z(Array z not None, double Dmin):
+    cdef Array mask, H
+    mask = z.grid.mask
+    H = z.grid.H
+    c_clip_z(z._array.size, <double*>z.p, <double*>H.p, Dmin, <int*>mask.p)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

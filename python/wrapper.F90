@@ -177,6 +177,7 @@ contains
          case ('ho'); p = c_loc(grid%ho); sub_type = subtype_depth_explicit
          case ('zc'); p = c_loc(grid%zc); sub_type = subtype_depth_explicit
          case ('zf'); p = c_loc(grid%zf); sub_type = subtype_depth_explicit_interfaces
+         case ('alpha'); p = c_loc(grid%alpha)
          end select
       case (1)
          call c_f_pointer(obj, momentum)
@@ -307,15 +308,6 @@ contains
       domain%Dmin = Dmin
       call domain%initialize(runtype)
       maxdt = domain%maxdt
-   end subroutine
-
-   subroutine domain_update_depths(pdomain) bind(c)
-      type(c_ptr), intent(in), value :: pdomain
-
-      type (type_getm_domain), pointer :: domain
-
-      call c_f_pointer(pdomain, domain)
-      call domain%update_depths()
    end subroutine
 
    subroutine domain_tracer_bdy(pdomain, pgrid, nz, pfield, bdytype, pbdy) bind(c)
@@ -673,15 +665,6 @@ contains
       call sealevel%t(timestep, U, V, fwf)
    end subroutine
 
-   subroutine sealevel_update_uvx(psealevel) bind(c)
-      type(c_ptr), intent(in),    value :: psealevel
-
-      type (type_getm_sealevel), pointer :: sealevel
-
-      call c_f_pointer(psealevel, sealevel)
-      call sealevel%uvx()
-   end subroutine
-
    subroutine sealevel_boundaries(psealevel, pmomentum, timestep) bind(c)
       type(c_ptr), intent(in), value :: psealevel, pmomentum
       real(c_double), intent(in), value :: timestep
@@ -758,6 +741,24 @@ contains
       do k=nz-1,1,-1
          where (mask /= 0) out(:,:,k) = out(:,:,k+1) + 0.5_c_double * (h(:,:,k) + h(:,:,k+1))
       end do
+   end subroutine
+
+   subroutine c_alpha(n, D, Dmin, Dcrit, mask, alpha) bind(c)
+      integer(c_int), intent(in), value :: n
+      integer(c_int), intent(in)        :: mask(n)
+      real(c_double), intent(in)        :: D(n)
+      real(c_double), intent(in), value :: Dmin, Dcrit
+      real(c_double), intent(inout)     :: alpha(n)
+      where (mask /= 0) alpha = max(0._c_double, min(1._c_double, (D - Dmin) / (Dcrit - Dmin)))
+   end subroutine
+
+   subroutine c_clip_z(n, z, H, Dmin, mask) bind(c)
+      integer(c_int), intent(in), value :: n
+      real(c_double), intent(inout)     :: z(n)
+      real(c_double), intent(in)        :: H(n)
+      real(c_double), intent(in), value :: Dmin
+      integer(c_int), intent(in)        :: mask(n)
+      where (mask /= 0) z = max(-H + Dmin, z)
    end subroutine
 
 end module
