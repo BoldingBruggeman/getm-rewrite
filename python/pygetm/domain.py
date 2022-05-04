@@ -32,7 +32,7 @@ def find_interfaces(c: numpy.ndarray):
 class Grid(_pygetm.Grid):
     _coordinate_arrays = 'x', 'y', 'lon', 'lat'
     _readonly_arrays = _coordinate_arrays + ('dx', 'dy', 'idx', 'idy', 'dlon', 'dlat', 'area', 'iarea', 'cor')
-    _fortran_arrays = _readonly_arrays + ('H', 'D', 'mask', 'z', 'zo', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin')
+    _fortran_arrays = _readonly_arrays + ('H', 'D', 'mask', 'z', 'zo', 'ho', 'hn', 'zc', 'zf', 'z0b', 'z0b_min', 'zio', 'zin', 'alpha')
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
     __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp', 'overlap')
 
@@ -63,6 +63,7 @@ class Grid(_pygetm.Grid):
         'zf': dict(units='m', long_name='interface depth', fill_value=FILL_VALUE),
         'z0b': dict(units='m', long_name='hydrodynamic bottom roughness', fill_value=FILL_VALUE),
         'z0b_min': dict(units='m', long_name='physical bottom roughness', constant=True, fill_value=FILL_VALUE),
+        'alpha': dict(units='1', long_name='dampening', fill_value=FILL_VALUE),
     }
 
     def __init__(self, domain: 'Domain', grid_type: int, ioffset: int, joffset: int, overlap: int=0, ugrid: Optional['Grid']=None, vgrid: Optional['Grid']=None):
@@ -804,6 +805,7 @@ class Domain(_pygetm.Domain):
         self.X = Grid(self, _pygetm.XGRID, ioffset=0, joffset=0, overlap=1)
 
         self.Dmin = 1.
+        self.Dcrit = 2.
 
         self.initialized = False
         self.open_boundaries = OpenBoundaries(self)
