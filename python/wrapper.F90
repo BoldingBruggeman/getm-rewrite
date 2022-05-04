@@ -212,6 +212,8 @@ contains
          case ('SS');   if (allocated(momentum%SS)) p = c_loc(momentum%SS); sub_type = subtype_depth_explicit_interfaces
          case ('SxB');   p = c_loc(momentum%SxB); grid_type = 2
          case ('SyB');   p = c_loc(momentum%SyB); grid_type = 3
+         case ('SxA');   p = c_loc(momentum%SxA); grid_type = 2
+         case ('SyA');   p = c_loc(momentum%SyA); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)

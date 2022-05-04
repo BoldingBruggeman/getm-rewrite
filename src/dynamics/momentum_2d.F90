@@ -207,7 +207,7 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
 #ifndef _APPLY_ADV_DIFF_
                         -self%advU(i,j)-self%diffu1(i,j)-self%dampU(i,j) &
 #endif
-                        +self%SxA(i,j)-self%SxB(i,j)+self%SxD(i,j)+Slr))) &
+                        -self%SxA(i,j)-self%SxB(i,j)+self%SxD(i,j)+Slr))) &
                         /(1._real64+dt*self%ru(i,j)/UG%D(i,j))
             self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)
          end if
@@ -258,7 +258,7 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
 #ifndef _APPLY_ADV_DIFF_
                         -self%advV(i,j)-self%diffv1(i,j)-self%dampV(i,j) &
 #endif
-                        +self%SyA(i,j)-self%SyB(i,j)+self%SyD(i,j)+Slr))) &
+                        -self%SyA(i,j)-self%SyB(i,j)+self%SyD(i,j)+Slr))) &
                         /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
             self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)
          end if

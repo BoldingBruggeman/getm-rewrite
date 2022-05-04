@@ -70,7 +70,7 @@ class Tracer(core.Array):
             self.rivers[river.name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB', 'SxA', 'SyA'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
@@ -126,7 +126,7 @@ class Simulation(_pygetm.Simulation):
             self.ww.all_values.fill(0.)
             self.SS.fill(0.)
 
-        self.update_depth(self.domain.T.z, self.domain.U.z, self.domain.V.z, self.domain.X.z, self.domain.T.zo)
+        self.update_depth()
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
@@ -437,7 +437,7 @@ class Simulation(_pygetm.Simulation):
             self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
 
         # Update surface elevation on U, V, X grids and water depth on all grids
-        self.update_depth(self.domain.T.z, self.domain.U.z, self.domain.V.z, self.domain.X.z, self.domain.T.zo)
+        self.update_depth()
 
         # Calculate 2D (depth-averaged) velocities using updated water depths
         # Note that as long as transports U and V are 0 in masked points=, u1 and v1 will be too,
@@ -668,12 +668,11 @@ class Simulation(_pygetm.Simulation):
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
-    def slow_advection(self, timestep: float):
-        """Compute slow (3D) advection contribution to 2D advection.
-        This is done by comparing the previously calculated depth-integrated 3D transport
-        (between centers of the current and next macrotime step) with the newly calculated
-        depth-integrated transport based on accumulated 2D transports (accumulated over the
-        current macrotimestep, and thus representative for its center)."""
+        # Compute slow (3D) advection contribution to 2D advection.
+        # This is done by comparing the previously calculated depth-integrated 3D transport
+        # (between centers of the current and next macrotime step) with the newly calculated
+        # depth-integrated transport based on accumulated 2D transports (accumulated over the
+        # current macrotimestep, and thus representative for its center).
         self.advect_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA)
         self.SxA.all_values[...] = self.advpk.all_values.sum(axis=0) - self.SxA.all_values
         self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
@@ -692,7 +691,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.T.zin.all_values[...] = self.domain.T.z.all_values
 
         # Update elevations on U, V, X grids and total water depth D on all grids
-        self.update_depth(self.domain.T.zin, self.domain.U.zin, self.domain.V.zin, self.domain.X.zin, self.domain.T.zio)
+        self.update_depth(_3d=True)
 
         # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
         # This routine also sets ho to the previous value of hn
@@ -717,9 +716,14 @@ class Simulation(_pygetm.Simulation):
             # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
             self.domain.open_boundaries.zc.all_values[...] = self.domain.T.zc.all_values[:, self.domain.open_boundaries.j, self.domain.open_boundaries.i].T
 
-    def update_depth(self, z_T: core.Array, z_U: core.Array, z_V: core.Array, z_X: core.Array, zo_T: core.Array):
+    def update_depth(self, _3d: bool=False):
         """Use old and new surface elevation on T grid to update elevations on U, V, X grids
         and subsequently update total water depth D on all grids. z_T (and zo_T) must be up to date in halos"""
+        if _3d:
+            z_T, z_U, z_V, z_X, zo_T = self.domain.T.zin, self.domain.U.zin, self.domain.V.zin, self.domain.X.zin, self.domain.T.zio
+        else:
+            z_T, z_U, z_V, z_X, zo_T = self.domain.T.z, self.domain.U.z, self.domain.V.z, self.domain.X.z, self.domain.T.zo
+
         # Compute surface elevation on U, V, X grids.
         # Note that this must be at time=n+1/2, whereas surface elevation on T grid is now at time=n+1.
         z_T_half = 0.5 * (zo_T + z_T)
