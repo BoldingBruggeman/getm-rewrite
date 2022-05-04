@@ -128,6 +128,7 @@ MODULE getm_momentum
       procedure :: slow_momentum_terms => slow_momentum_terms
       procedure :: slow_advection => slow_advection
       procedure :: slow_diffusion => slow_diffusion
+      procedure :: diffusion_driver => diffusion_driver
       procedure :: slow_bottom_friction => slow_bottom_friction
       procedure :: shear_frequency => shear_frequency
       procedure :: stresses => stresses
@@ -332,6 +333,24 @@ MODULE getm_momentum
       MODULE SUBROUTINE slow_diffusion(self)
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE slow_diffusion
+      MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
+      !  Subroutine arguments
+         class(type_getm_momentum), intent(inout) :: self
+#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
+         real(real64), dimension(:,:), intent(in) :: h(_T2_)
+#undef _T2_
+#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
+#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
+         real(real64), dimension(:,:), intent(in) :: hu(_U2_)
+         real(real64), dimension(:,:), intent(in) :: u(_U2_)
+         real(real64), dimension(:,:), intent(in) :: hv(_V2_)
+         real(real64), dimension(:,:), intent(in) :: v(_V2_)
+         real(real64), dimension(:,:), intent(inout) :: diffu(_U2_)
+         real(real64), dimension(:,:), intent(inout) :: diffv(_V2_)
+#undef _V2_
+#undef _U2_
+      END SUBROUTINE diffusion_driver
+
       MODULE SUBROUTINE uv_diffusion_3d(self,dt)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt

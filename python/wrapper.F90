@@ -466,6 +466,27 @@ contains
       pmomentum = c_loc(momentum)
    end function
 
+   subroutine momentum_diffusion_driver(pmomentum, nk, ph, phu, pu, phv, pv, pdiffu, pdiffv) bind(c)
+      integer(c_int), intent(in), value :: nk
+      type(c_ptr),    intent(in), value :: pmomentum, ph, phu, pu, phv, pv, pdiffu, pdiffv
+
+      type (type_getm_momentum), pointer :: momentum
+      real(real64), contiguous, pointer, dimension(:,:,:) :: h, hu, u, hv, v, diffu, diffv
+      integer :: k
+
+      call c_f_pointer(pmomentum, momentum)
+      call c_f_pointer(ph, h,   (/momentum%domain%T%u(1) - momentum%domain%T%l(1) + 1, momentum%domain%T%u(2) - momentum%domain%T%l(2) + 1, nk/))
+      call c_f_pointer(phu, hu, (/momentum%domain%U%u(1) - momentum%domain%U%l(1) + 1, momentum%domain%U%u(2) - momentum%domain%U%l(2) + 1, nk/))
+      call c_f_pointer(pu, u,   (/momentum%domain%U%u(1) - momentum%domain%U%l(1) + 1, momentum%domain%U%u(2) - momentum%domain%U%l(2) + 1, nk/))
+      call c_f_pointer(phv, hv, (/momentum%domain%V%u(1) - momentum%domain%V%l(1) + 1, momentum%domain%V%u(2) - momentum%domain%V%l(2) + 1, nk/))
+      call c_f_pointer(pv, v,   (/momentum%domain%V%u(1) - momentum%domain%V%l(1) + 1, momentum%domain%V%u(2) - momentum%domain%V%l(2) + 1, nk/))
+      call c_f_pointer(pdiffu, diffu, (/momentum%domain%U%u(1) - momentum%domain%U%l(1) + 1, momentum%domain%U%u(2) - momentum%domain%U%l(2) + 1, nk/))
+      call c_f_pointer(pdiffv, diffv, (/momentum%domain%V%u(1) - momentum%domain%V%l(1) + 1, momentum%domain%V%u(2) - momentum%domain%V%l(2) + 1, nk/))
+      do k = 1, nk
+         call momentum%diffusion_driver(h(:,:,k), hu(:,:,k), u(:,:,k), hv(:,:,k), v(:,:,k), diffu(:,:,k), diffv(:,:,k))
+      end do
+   end subroutine
+
    subroutine momentum_u_2d(direction, pmomentum, timestep, ptausx, pdpdx) bind(c)
       integer(c_int), intent(in), value :: direction
       type(c_ptr),    intent(in), value :: pmomentum

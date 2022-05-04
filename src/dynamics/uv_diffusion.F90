@@ -242,7 +242,7 @@ END SUBROUTINE numerical_damping
 
 !---------------------------------------------------------------------------
 
-SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
+MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    !! Driver routine for velocity diffusion
    !! @note
    !! this routine should likely be in a submodule

@@ -37,6 +37,7 @@ cdef extern void momentum_bottom_friction_2d(void* momentum, int runtype) nogil
 cdef extern void momentum_bottom_friction_3d(void* momentum) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
+cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hu, double* u, double* hv, double* v, double* diffu, double* )
 cdef extern void* pressure_create(int runtype, void* pdomain, int method_internal_pressure) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void pressure_internal(void* pressure, double* buoy, double* SxB, double* SyB) nogil
@@ -349,6 +350,17 @@ cdef class Simulation:
 
     def w_3d(self, double timestep):
         momentum_w_3d(self.pmomentum, timestep)
+
+    def momentum_diffusion_driver(self, Array h not None, Array hu not None, Array u not None, Array hv not None, Array v not None, Array diffu not None, Array diffv not None):
+        assert h.grid is self.domain.T
+        assert hu.grid is self.domain.U
+        assert u.grid is self.domain.U
+        assert hv.grid is self.domain.V
+        assert v.grid is self.domain.V
+        assert diffu.grid is self.domain.U
+        assert diffv.grid is self.domain.V
+        cdef int nk = h._array.shape[0] if h.z else 1
+        momentum_diffusion_driver(self.pmomentum, nk, <double*> h.p, <double*> hu.p, <double*> u.p, <double*> hv.p, <double*> v.p, <double*> diffu.p, <double*> diffv.p)
 
     def update_stresses(self, Array tausx not None, Array tausy not None):
         assert tausx.grid is self.domain.T, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.T.postfix, tausx.grid.postfix)
