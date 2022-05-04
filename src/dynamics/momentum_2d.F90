@@ -209,7 +209,7 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
 #endif
                         -self%SxA(i,j)-self%SxB(i,j)+self%SxD(i,j)+Slr))) &
                         /(1._real64+dt*self%ru(i,j)/UG%D(i,j))
-            self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)
+            !self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)   ! JB now done in Python, needs to include halos for slow advection
          end if
       end do
    end do
@@ -260,7 +260,7 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
 #endif
                         -self%SyA(i,j)-self%SyB(i,j)+self%SyD(i,j)+Slr))) &
                         /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
-            self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)
+            !self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)   ! JB now done in Python, needs to include halos for slow advection
          end if
       end do
    end do

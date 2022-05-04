@@ -599,6 +599,9 @@ class Simulation(_pygetm.Simulation):
             self.coriolis_fu()
         self._ufirst = not self._ufirst
 
+        self.Ui.all_values += self.U.all_values
+        self.Vi.all_values += self.V.all_values
+
     def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         """Update depth-explicit transports (pk, qk) and velocities (uk, vk). This will also update their halos."""
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids. For that, information from the halos is used.
