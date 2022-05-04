@@ -34,8 +34,12 @@ contains
         0.895253,     0.899936,     0.904619,     0.909302,     0.913985, &
         0.918668 /)
 
-      !  calculate cloud correction factor,fortran counts from 1 !
-      if (dlat >= 0._rk .and. dlat <= 90._rk) then
+      ! Calculate cloud correction factor,fortran counts from 1 !
+      ! Of course abs(latitude) should always lie between 0 and 90.
+      ! But if the caller includes points with a missing/masked value,
+      ! latitude may lie outside the natural range. That should not trigger
+      ! out-of-bound array access.
+      if (dlat >= -90._rk .and. dlat <= 90._rk) then
          cloud_correction_factor = ccf(nint(abs(dlat))+1)
       else
          cloud_correction_factor = 1._rk
