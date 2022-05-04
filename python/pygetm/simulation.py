@@ -313,7 +313,7 @@ class Simulation(_pygetm.Simulation):
     def advance(self):
         # Update momentum from time=-1/2 to +1/2, using surface stresses and pressure gradients defined at time=0
         # Inputs and outputs on U and V grids
-        self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
+        self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, u1_ready=True)
 
         # Update surface elevation on T grid from time=0 to time=1
         # Halos exchange so that depths and thicknesses can be computed everywhere without further halo exchange
@@ -571,7 +571,7 @@ class Simulation(_pygetm.Simulation):
         self.vadv(self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True)
         advV.all_values[...] = (self.v1.all_values * self.vadv.D - V.all_values) * itimestep
 
-    def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
+    def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, u1_ready: bool=False):
         """Update depth-integrated transports (U, V) and depth-averaged velocities (u1, v1).
         This will also update their halos. Note that velocities u1 and v1 are assumed to be in sync
         with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D)"""
@@ -580,7 +580,7 @@ class Simulation(_pygetm.Simulation):
         # store the resulting change in transports U and V (advU, advV),
         # to be taken into account by transport update further down.
         # Since self.u1=self.U/self.U.grid.D (and same for v1/V), we state that with u1_ready=True
-        self.advect_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, u1_ready=True)
+        self.advect_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, u1_ready=u1_ready)
 
         # Update 2D transports from t-1/2 to t+1/2
         if self._ufirst:
