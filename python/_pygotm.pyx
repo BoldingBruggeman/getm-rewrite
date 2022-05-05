@@ -60,6 +60,21 @@ cdef class Mixing:
                       const double[:, :, ::1] h not None, const double[:, ::1] D not None, const double[:, ::1] u_taus not None, const double[:, ::1] u_taub not None,
                       const double[:, ::1] z0s not None, const double[:, ::1] z0b not None,  const double[:, :, ::1] NN not None,  const double[:, :, ::1] SS not None,
                       double[:, :, ::1] tke not None,  double[:, :, ::1] tkeo not None, double[:, :, ::1] eps not None,  double[:, :, ::1] L not None, double[:, :, ::1] num not None,  double[:, :, ::1] nuh not None):
+        assert mask.shape[1] == nx and mask.shape[0] == ny
+        assert h.shape[2] == nx and h.shape[1] == ny and h.shape[0] == nz
+        assert D.shape[1] == nx and D.shape[0] == ny
+        assert u_taus.shape[1] == nx and u_taus.shape[0] == ny
+        assert u_taub.shape[1] == nx and u_taub.shape[0] == ny
+        assert z0s.shape[1] == nx and z0s.shape[0] == ny
+        assert z0b.shape[1] == nx and z0b.shape[0] == ny
+        assert NN.shape[2] == nx and NN.shape[1] == ny and NN.shape[0] == nz + 1
+        assert SS.shape[2] == nx and SS.shape[1] == ny and SS.shape[0] == nz + 1
+        assert tke.shape[2] == nx and tke.shape[1] == ny and tke.shape[0] == nz + 1
+        assert tkeo.shape[2] == nx and tkeo.shape[1] == ny and tkeo.shape[0] == nz + 1
+        assert eps.shape[2] == nx and eps.shape[1] == ny and eps.shape[0] == nz + 1
+        assert L.shape[2] == nx and L.shape[1] == ny and L.shape[0] == nz + 1
+        assert num.shape[2] == nx and num.shape[1] == ny and num.shape[0] == nz + 1
+        assert nuh.shape[2] == nx and nuh.shape[1] == ny and nuh.shape[0] == nz + 1
         calculate_3d(nx, ny, nz, istart, istop, jstart, jstop, dt, &mask[0,0], &h[0,0,0], &D[0,0], &u_taus[0,0], &u_taub[0,0], &z0s[0,0], &z0b[0,0], &NN[0,0,0], &SS[0,0,0],
                      &tke[0,0,0], &tkeo[0,0,0], &eps[0,0,0], &L[0,0,0], &num[0,0,0], &nuh[0,0,0])
 
