@@ -296,6 +296,9 @@ class Simulation(_pygetm.Simulation):
         # Update inputs and forcing variables based on the current time and state
         self.update_forcing(macro_active=True)
 
+        if self.apply_bottom_friction:
+            self.bottom_friction_3d()
+
         # Start output manager
         self.output_manager.start(self.istep, self.time, save=save)
 
@@ -312,11 +315,13 @@ class Simulation(_pygetm.Simulation):
 
     def advance(self):
         # Update momentum from time=-1/2 to +1/2, using surface stresses and pressure gradients defined at time=0
-        # Inputs and outputs on U and V grids
+        # Inputs and outputs on U and V grids. As depth-averaged velocities u1 and v1 are already in sync
+        # with transports U and V and water depths D, we skip their computation by passing u1_ready=True
         self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, u1_ready=True)
 
-        # Update surface elevation on T grid from time=0 to time=1
-        # Halos exchange so that depths and thicknesses can be computed everywhere without further halo exchange
+        # Update surface elevation on T grid from time=0 to time=1 using transports U and V at time=1/2 and
+        # freshwater fluxes at time=0. Exchange elevation halos so that depths and thicknesses can be computed
+        # everywhere without further halo exchange
         self.update_sealevel(self.timestep, self.U, self.V, self.fwf)
         self.domain.T.z.update_halos()
 
@@ -335,13 +340,13 @@ class Simulation(_pygetm.Simulation):
             self.Ui.all_values *= 1. / self.split_factor
             self.Vi.all_values *= 1. / self.split_factor
 
-            # Use previous source terms for biogeochemistry to update tracers (start of the current macrotimestep)
-            # This should be done before the tracer concentrations change due to transport or rivers,
-            # as the source terms are only valid for the current tracer concentrations.
+            # Use previous source terms for biogeochemistry (valid for the start of the current macrotimestep)
+            # to update tracers. This should be done before the tracer concentrations change due to transport
+            # or rivers, as the source terms are only valid for the current tracer concentrations.
             if self.fabm_model:
                 self.update_fabm(self.macrotimestep)
 
-            # Update of layer thicknesses and tracer concentrations to account for river inflow
+            # Update layer thicknesses and tracer concentrations to account for river inflow
             # between start and end of the current macrotimestep.
             self.add_rivers_3d()
 
@@ -355,7 +360,7 @@ class Simulation(_pygetm.Simulation):
             self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.spo)
 
             # Update momentum from time=-1/2 to 1/2 of the macrotimestep, using forcing defined at time=0
-            # For this purposes, surface stresses at the end of the previous macrotimestep were saved (taux_Uo, tauy_Vo)
+            # For this purpose, surface stresses at the end of the previous macrotimestep were saved (taux_Uo, tauy_Vo)
             # Pressure gradients dpdx and dpdy have just been updated to match the start of the current macrotimestep
             # Internal pressure idpdx and idpdy were calculated at the end of the previous macrotimestep and are therefore ready as-is.
             self.update_3d_momentum(self.macrotimestep, self.airsea.taux_Uo, self.airsea.tauy_Vo, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
@@ -436,7 +441,10 @@ class Simulation(_pygetm.Simulation):
             # Calculate squared buoyancy frequency NN (T grid, interfaces between layers)
             self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
 
-        # Update surface elevation on U, V, X grids and water depth on all grids
+        # Update surface elevation z on U, V, X grids and water depth D on all grids
+        # This is based on old and new elevation (T grid) for the microtimestep.
+        # Thus, for grids lagging 1/2 a timestep behind (U, V, X grids), the elevations
+        # and water depths will be representative for 1/2 a MICROtimestep ago.
         self.update_depth()
 
         # Calculate 2D (depth-averaged) velocities using updated water depths
@@ -607,9 +615,6 @@ class Simulation(_pygetm.Simulation):
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids. For that, information from the halos is used.
         viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
 
-        if self.apply_bottom_friction:
-            self.bottom_friction_3d()
-
         # Update horizontal transports. Also update the halos so that transports (and more importantly, the velocities
         # derived subsequently) are valid there. Information from these halos is needed for many reasons:
         # - the Coriolis update requires horizontal velocities at the four points surrounding each U/V point
@@ -649,6 +654,11 @@ class Simulation(_pygetm.Simulation):
 
         # Use updated velocities (uk, vk) to compute shear frequency (SS) at T points (interior only, not in halos)
         self.update_shear_frequency(viscosity)
+
+        # Calculate bottom friction from updated velocities (and syncronized layer thicknesses hn)
+        # This needs to be done before derived quantities such as bottom stress are calculated
+        if self.apply_bottom_friction:
+            self.bottom_friction_3d()
 
         # Interpolate 3D velocities to advection grids.
         # This needs to be done before uk/vk are changed by the advection operator (apply_3d).

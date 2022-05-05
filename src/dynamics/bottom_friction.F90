@@ -23,7 +23,10 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
 !  Local variables
    integer :: i,j,k
    real(real64) :: hh,ustar
+   real(real64), allocatable :: ustar2_per_u2(:,:)
 !---------------------------------------------------------------------------
+   allocate(ustar2_per_u2, mold=self%work2d)
+
    if (associated(self%logs)) call self%logs%info('bottom_friction_2d()',level=3)
    ! x-direction
    UGrid: associate( UG => self%domain%U )
@@ -31,7 +34,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       do i=UG%imin-1,UG%imax
          if (UG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin,UG%D(i,j))
-            self%rru(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
+            ustar2_per_u2(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
             self%work2d(i,j)=0.25_real64*(self%v1(i,j)+self%v1(i+1,j)+self%v1(i,j-1)+self%v1(i+1,j-1))
          end if
       end do
@@ -40,10 +43,10 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       do j=UG%jmin,UG%jmax
          do i=UG%imin-1,UG%imax
             if (UG%mask(i,j) > 0) then
-               ustar=sqrt(self%rru(i,j)*(self%u1(i,j)**2+self%work2d(i,j)**2))
+               ustar=sqrt(ustar2_per_u2(i,j)*(self%u1(i,j)**2+self%work2d(i,j)**2))
                hh=max(self%domain%Dmin,UG%D(i,j))
                UG%z0b(i,j)=min(hh,UG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
-               self%rru(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
+               ustar2_per_u2(i,j)=(kappa/log((UG%z0b(i,j)+0.5_real64*hh)/UG%z0b(i,j)))**2
             end if
          end do
       end do
@@ -51,7 +54,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
    do j=UG%jmin,UG%jmax
       do i=UG%imin-1,UG%imax
          if (UG%mask(i,j) > 0) then
-            self%ru(i,j)=self%rru(i,j)*sqrt(self%u1(i,j)**2+self%work2d(i,j)**2)
+            self%ru(i,j)=ustar2_per_u2(i,j)*sqrt(self%u1(i,j)**2+self%work2d(i,j)**2)
          end if
       end do
    end do
@@ -63,7 +66,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin,VG%D(i,j))
-            self%rrv(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
+            ustar2_per_u2(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
             self%work2d(i,j)=0.25_real64*(self%u1(i,j)+self%u1(i+1,j)+self%u1(i,j-1)+self%u1(i+1,j-1))
          end if
       end do
@@ -72,10 +75,10 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
       do j=VG%jmin-1,VG%jmax
          do i=VG%imin,VG%imax
             if (VG%mask(i,j) > 0) then
-               ustar=sqrt(self%rrv(i,j)*(self%work2d(i,j)**2+self%v1(i,j)**2))
+               ustar=sqrt(ustar2_per_u2(i,j)*(self%work2d(i,j)**2+self%v1(i,j)**2))
                hh=max(self%domain%Dmin,VG%D(i,j))
                VG%z0b(i,j)=min(hh,VG%z0b_min(i,j)+0.1_real64*avmmol/max(avmmol,ustar))
-               self%rrv(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
+               ustar2_per_u2(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
             end if
          end do
       end do
@@ -83,7 +86,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
    do j=VG%jmin-1,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
-            self%rv(i,j)=self%rrv(i,j)*sqrt(self%work2d(i,j)**2+self%v1(i,j)**2)
+            self%rv(i,j)=ustar2_per_u2(i,j)*sqrt(self%work2d(i,j)**2+self%v1(i,j)**2)
          end if
       end do
    end do
