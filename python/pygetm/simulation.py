@@ -568,7 +568,7 @@ class Simulation(_pygetm.Simulation):
         if self.diffuse_momentum:
             # Compute velocity diffusion contribution to transport sources.
             # This uses depth-averaged velocities u1 and v1, which therefore have to be up to date
-            self.momentum_diffusion_driver(self.domain.T.D, self.domain.U.D, self.u1, self.domain.V.D, self.v1, diffu1, diffv1)
+            self.momentum_diffusion_driver(self.domain.T.D, self.domain.X.D, self.u1,self.v1, diffu1, diffv1)
 
         itimestep = 1. / timestep
 
@@ -689,6 +689,9 @@ class Simulation(_pygetm.Simulation):
         # Restore velocity at time=n-1/2
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
+
+        if self.diffuse_momentum:
+            self.momentum_diffusion_driver(self.domain.T.hn, self.domain.X.hn, self.uk, self.vk, self.diffuk, self.diffvk)
 
         # Compute slow (3D) advection contribution to 2D advection.
         # This is done by comparing the previously calculated depth-integrated 3D transport

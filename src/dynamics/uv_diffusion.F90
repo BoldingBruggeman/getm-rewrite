@@ -27,10 +27,11 @@ MODULE SUBROUTINE uv_diffusion_2d(self,dt)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
+   XGrid: associate( XG => self%domain%X )
    if (self%Am0 > 0._real64) then !KB - another check is required
       where(UG%mask > 0) self%u1 = self%U/UG%D
       where(VG%mask > 0) self%v1 = self%V/VG%D
-      call diffusion_driver(self,TG%D,UG%D,self%u1,VG%D,self%v1,self%diffu1,self%diffv1)
+      call diffusion_driver(self,TG%D,XG%D,self%u1,self%v1,self%diffu1,self%diffv1)
    end if
    if (self%An_method > 0) then
       call numerical_damping(self,self%U,self%V)
@@ -39,6 +40,7 @@ MODULE SUBROUTINE uv_diffusion_2d(self,dt)
    self%U=dt*(self%diffu1+self%dampU)
    self%V=dt*(self%diffv1+self%dampV)
 #endif
+   end associate XGrid
    end associate VGrid
    end associate UGrid
    end associate TGrid
@@ -66,13 +68,13 @@ MODULE SUBROUTINE uv_diffusion_3d(self,dt)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
+   XGrid: associate( XG => self%domain%X )
    if (self%Am0 > 0._real64) then
       where(UG%mask > 0) self%uk(:,:,k) = self%pk(:,:,k)/UG%hn(:,:,k)
       where(VG%mask > 0) self%vk(:,:,k) = self%qk(:,:,k)/VG%hn(:,:,k)
       do k=1,TG%kmax
-         call diffusion_driver(self,TG%hn(:,:,k), &
-                                    UG%hn(:,:,k),self%uk(:,:,k), &
-                                    VG%hn(:,:,k),self%vk(:,:,k), &
+         call diffusion_driver(self,TG%hn(:,:,k), XG%hn(:,:,k), &
+                                    self%uk(:,:,k), self%vk(:,:,k), &
                                     self%diffuk(:,:,k),self%diffvk(:,:,k))
       end do
 #ifdef _APPLY_ADV_DIFF_
@@ -80,6 +82,7 @@ MODULE SUBROUTINE uv_diffusion_3d(self,dt)
       self%qk=dt*self%diffvk
 #endif
    end if
+   end associate XGrid
    end associate VGrid
    end associate UGrid
    end associate TGrid
@@ -106,10 +109,11 @@ MODULE SUBROUTINE slow_diffusion(self)
    TGrid: associate( TG => self%domain%T )
    UGrid: associate( UG => self%domain%U )
    VGrid: associate( VG => self%domain%V )
+   XGrid: associate( XG => self%domain%X )
    if (self%Am0 > 0._real64) then
       where(UG%mask > 0) self%u1 = self%U/UG%D
       where(VG%mask > 0) self%v1 = self%V/VG%D
-      call diffusion_driver(self,self%u1,self%v1,TG%D,UG%D,VG%D,self%SxD,self%SyD)
+      call diffusion_driver(self,TG%D,XG%D,self%u1,self%v1,self%SxD,self%SyD)
    end if
    if (self%An_method > 0) then
       call numerical_damping(self,self%Ui,self%Vi)
@@ -135,6 +139,7 @@ MODULE SUBROUTINE slow_diffusion(self)
          end if
       end do
    end do
+   end associate XGrid
    end associate VGrid
    end associate UGrid
    end associate TGrid
@@ -242,7 +247,7 @@ END SUBROUTINE numerical_damping
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
+MODULE SUBROUTINE diffusion_driver(self,h,hx,u,v,diffu,diffv)
    !! Driver routine for velocity diffusion
    !! @note
    !! this routine should likely be in a submodule
@@ -255,11 +260,12 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
    real(real64), dimension(:,:), intent(in) :: h(_T2_)
 #undef _T2_
+#define _X2_ self%domain%X%l(1):,self%domain%X%l(2):
+   real(real64), dimension(:,:), intent(in) :: hx(_X2_)
+#undef _X2_
 #define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
 #define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
-   real(real64), dimension(:,:), intent(in) :: hu(_U2_)
    real(real64), dimension(:,:), intent(in) :: u(_U2_)
-   real(real64), dimension(:,:), intent(in) :: hv(_V2_)
    real(real64), dimension(:,:), intent(in) :: v(_V2_)
    real(real64), dimension(:,:), intent(inout) :: diffu(_U2_)
    real(real64), dimension(:,:), intent(inout) :: diffv(_V2_)
@@ -272,7 +278,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    integer :: i,j
 !---------------------------------------------------------------------------
 !KB   if (associated(self%logs)) call self%logs%info('diffusion_driver()',level=2)
-   xSHEAR: associate( shear => self%work2d )
+   xSHEAR: associate( flux => self%work2d )
    TGrid: associate( TG => self%domain%T )
    XGrid: associate( XG => self%domain%X )
    UGrid: associate( UG => self%domain%U )
@@ -280,9 +286,9 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    ! Central for dx(2*Am*dx(U/DU))
    do j=TG%jmin,TG%jmax
       do i=TG%imin,TG%imax+1 ! shear defined on T-points
-         shear(i,j)=0._real64
+         flux(i,j)=0._real64
          if (TG%mask(i,j) == 1) then
-            shear(i,j)=(u(i,j)-u(i-1,j))/TG%dx(i,j)
+            flux(i,j) = 2._real64 * self%Am0 * TG%dy(i,j) * h(i,j) * (u(i,j) - u(i-1,j)) * TG%idx(i,j)
          end if
       end do
    end do
@@ -290,8 +296,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
       do i=UG%imin,UG%imax ! diffu defined on U-points
          diffu(i,j)=0._real64
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            diffu(i,j)=-2._real64*self%Am0*TG%dy(i,j)*h(i,j) &
-                       *(shear(i+1,j)-shear(i,j))*UG%iarea(i,j)
+            diffu(i,j) = (flux(i+1,j) - flux(i,j)) * UG%iarea(i,j)
          end if
       end do
    end do
@@ -299,18 +304,16 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    ! Central for dy(Am*(dy(U/DU)+dx(V/DV)))
    do j=XG%jmin-1,XG%jmax ! work2d defined on X-points
       do i=XG%imin,XG%imax
-         shear(i,j)=0._real64
+         flux(i,j)=0._real64
          if (XG%mask(i,j) > 0) then
-            shear(i,j)=(u(i,j+1)-u(i,j))/XG%dy(i,j)+(v(i+1,j)-v(i,j))/XG%dx(i,j)
+            flux(i,j) = self%Am0 * XG%dx(i,j) * hx(i,j) * ((u(i,j+1) - u(i,j)) * XG%idy(i,j) + (v(i+1,j) - v(i,j)) * XG%idx(i,j))
          end if
       end do
    end do
    do j=UG%jmin,UG%jmax ! diffu defined on U-points
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            diffu(i,j)=diffu(i,j) &
-                       -self%Am0*0.5_real64*(hu(i,j)+hu(i,j+1))*XG%dx(i,j) &
-                       *(shear(i,j)-shear(i,j-1))*UG%iarea(i,j)
+            diffu(i,j) = diffu(i,j) + (flux(i,j) - flux(i,j-1)) * UG%iarea(i,j)
          end if
       end do
    end do
@@ -320,9 +323,9 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    VGrid: associate( VG => self%domain%V )
    do j=XG%jmin,XG%jmax
       do i=XG%imin-1,XG%imax ! work2d defined on X-points
-         shear(i,j)=0._real64
+         flux(i,j)=0._real64
          if (XG%mask(i,j) > 0) then
-            shear(i,j)= (u(i,j+1)-u(i,j))/XG%dy(i,j)+(v(i+1,j)-v(i,j))/XG%dx(i,j)
+            flux(i,j)= self%Am0 * XG%dy(i,j) * hx(i,j) * ((u(i,j+1) - u(i,j)) * XG%idy(i,j) + (v(i+1,j) - v(i,j)) * XG%idx(i,j))
          end if
       end do
    end do
@@ -330,8 +333,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
       do i=VG%imin,VG%imax ! diffv defined on V-points
          diffv(i,j)=0._real64
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            diffv(i,j)=-self%Am0*0.5_real64*(hv(i,j)+hv(i+1,j))*XG%dy(i,j) &
-                       *(shear(i,j)-shear(i-1,j))*VG%iarea(i,j)
+            diffv(i,j) = (flux(i,j) - flux(i-1,j)) * VG%iarea(i,j)
          end if
       end do
    end do
@@ -339,17 +341,16 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    ! Central for dy(2*Am*dy(V/DV))
    do j=TG%jmin,TG%jmax+1 ! work2d defined on T-points
       do i=TG%imin,TG%imax
-         shear(i,j)=0._real64
+         flux(i,j)=0._real64
          if (TG%mask(i,j) == 1) then
-            shear(i,j)=(v(i,j)-v(i,j-1))/TG%dy(i,j)
+            flux(i,j) = 2._real64 * self%Am0 * TG%dx(i,j) * TG%h(i,j) * (v(i,j) - v(i,j-1)) * TG%idy(i,j)
          end if
       end do
    end do
    do j=VG%jmin,VG%jmax ! diffv defined on V-points
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            diffv(i,j)=diffv(i,j)-2._real64*self%Am0*TG%dx(i,j)*TG%h(i,j) &
-                                  *(shear(i,j+1)-shear(i,j))*VG%iarea(i,j)
+            diffv(i,j) = diffv(i,j) + (flux(i,j+1) - flux(i,j)) * VG%iarea(i,j)
          end if
       end do
    end do

@@ -333,17 +333,18 @@ MODULE getm_momentum
       MODULE SUBROUTINE slow_diffusion(self)
          class(type_getm_momentum), intent(inout) :: self
       END SUBROUTINE slow_diffusion
-      MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
+      MODULE SUBROUTINE diffusion_driver(self,h,hx,u,v,diffu,diffv)
       !  Subroutine arguments
          class(type_getm_momentum), intent(inout) :: self
 #define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
          real(real64), dimension(:,:), intent(in) :: h(_T2_)
 #undef _T2_
+#define _X2_ self%domain%X%l(1):,self%domain%X%l(2):
+   real(real64), dimension(:,:), intent(in) :: hx(_X2_)
+#undef _X2_
 #define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
 #define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
-         real(real64), dimension(:,:), intent(in) :: hu(_U2_)
          real(real64), dimension(:,:), intent(in) :: u(_U2_)
-         real(real64), dimension(:,:), intent(in) :: hv(_V2_)
          real(real64), dimension(:,:), intent(in) :: v(_V2_)
          real(real64), dimension(:,:), intent(inout) :: diffu(_U2_)
          real(real64), dimension(:,:), intent(inout) :: diffv(_V2_)
