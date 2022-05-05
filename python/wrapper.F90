@@ -190,6 +190,8 @@ contains
          case ('fqk');  if (allocated(momentum%fqk)) p = c_loc(momentum%fqk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advU');  p = c_loc(momentum%advU); grid_type = 2
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
+         case ('diffu1');  p = c_loc(momentum%diffu1); grid_type = 2
+         case ('diffv1');  p = c_loc(momentum%diffv1); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
          case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
@@ -207,6 +209,8 @@ contains
          case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); sub_type = subtype_depth_explicit_interfaces
          case ('advpk'); if (allocated(momentum%advpk)) p = c_loc(momentum%advpk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advqk'); if (allocated(momentum%advqk)) p = c_loc(momentum%advqk); grid_type = 3; sub_type = subtype_depth_explicit
+         case ('diffuk'); if (allocated(momentum%diffuk)) p = c_loc(momentum%diffuk); grid_type = 2; sub_type = subtype_depth_explicit
+         case ('diffvk'); if (allocated(momentum%diffvk)) p = c_loc(momentum%diffvk); grid_type = 3; sub_type = subtype_depth_explicit
          case ('Ui');   p = c_loc(momentum%Ui); grid_type = 2
          case ('Vi');   p = c_loc(momentum%Vi); grid_type = 3
          case ('SS');   if (allocated(momentum%SS)) p = c_loc(momentum%SS); sub_type = subtype_depth_explicit_interfaces
@@ -214,6 +218,8 @@ contains
          case ('SyB');   p = c_loc(momentum%SyB); grid_type = 3
          case ('SxA');   p = c_loc(momentum%SxA); grid_type = 2
          case ('SyA');   p = c_loc(momentum%SyA); grid_type = 3
+         case ('SxD');   p = c_loc(momentum%SxD); grid_type = 2
+         case ('SyD');   p = c_loc(momentum%SyD); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)
@@ -445,10 +451,10 @@ contains
                     w, w_var, tgrid%mask, timestep, h, var)
    end subroutine
 
-   function momentum_create(runtype, pdomain, apply_bottom_friction) result(pmomentum) bind(c)
+   function momentum_create(runtype, pdomain, Am0) result(pmomentum) bind(c)
       integer(c_int), intent(in), value :: runtype
       type(c_ptr),    intent(in), value :: pdomain
-      integer(c_int), intent(in), value :: apply_bottom_friction
+      real(c_double), intent(in), value :: Am0
       type(c_ptr) :: pmomentum
 
       type (type_getm_domain),   pointer :: domain
@@ -458,8 +464,7 @@ contains
       allocate(momentum)
       call momentum%configure()
       momentum%advection_scheme = 0
-      momentum%apply_bottom_friction = (apply_bottom_friction == 1)
-      momentum%apply_diffusion = .false.
+      momentum%Am0 = Am0
       call momentum%initialize(runtype, domain)
       allocate(momentum%vertical_diffusion)
       call momentum%vertical_diffusion%initialize(domain%T)

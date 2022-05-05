@@ -70,16 +70,16 @@ class Tracer(core.Array):
             self.rivers[river.name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB', 'SxA', 'SyA'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'diffu1', 'diffv1', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'diffuk', 'diffvk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB', 'SxA', 'SyA', 'SxD', 'SyD'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
-        logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, A=0.7, g1=1., g2=15., internal_pressure_method=0):
+        logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, A=0.7, g1=1., g2=15., internal_pressure_method=0, Am: float=0.):
 
         self.logger = dom.root_logger
         self.logger.setLevel(log_level)
@@ -93,9 +93,13 @@ class Simulation(_pygetm.Simulation):
         if apply_bottom_friction and (numpy.ma.array(dom.z0b_min, mask=dom.mask==0) == 0.).any():
             self.logger.warning('Disabling bottom friction because bottom roughness is 0 in one or more points.')
             apply_bottom_friction = False
+        self.apply_bottom_friction = apply_bottom_friction
+        self.diffuse_momentum = Am > 0.
+        if not self.diffuse_momentum:
+            self.logger.info('Diffusion of momemntum if off because Am is 0')
 
         assert not dom.initialized
-        super().__init__(dom, runtype, apply_bottom_friction, internal_pressure_method=internal_pressure_method)
+        super().__init__(dom, runtype, internal_pressure_method=internal_pressure_method, Am0=Am)
         self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
         dom.T.hn.fabm_standard_name = 'cell_thickness'
         if dom.T.lon is not None:
@@ -552,7 +556,7 @@ class Simulation(_pygetm.Simulation):
             if total is not None:
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
-    def advect_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, u1_ready: bool=False):
+    def advect_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffu1: core.Array, diffv1: core.Array, u1_ready: bool=False):
         # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
         # using velocities reconstructed from transports interpolated to their own advection grids
         # Then reconstruct the resulting change in transports U and V and return this (advU, advV)
@@ -560,6 +564,11 @@ class Simulation(_pygetm.Simulation):
         if not u1_ready:
             numpy.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
             numpy.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
+
+        if self.diffuse_momentum:
+            # Compute velocity diffusion contribution to transport sources.
+            # This uses depth-averaged velocities u1 and v1, which therefore have to be up to date
+            self.momentum_diffusion_driver(self.domain.T.D, self.domain.U.D, self.u1, self.domain.V.D, self.v1, diffu1, diffv1)
 
         itimestep = 1. / timestep
 
@@ -588,7 +597,7 @@ class Simulation(_pygetm.Simulation):
         # store the resulting change in transports U and V (advU, advV),
         # to be taken into account by transport update further down.
         # Since self.u1=self.U/self.U.grid.D (and same for v1/V), we state that with u1_ready=True
-        self.advect_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, u1_ready=u1_ready)
+        self.advect_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1, u1_ready=u1_ready)
 
         # Update 2D transports from t-1/2 to t+1/2
         if self._ufirst:
@@ -686,9 +695,11 @@ class Simulation(_pygetm.Simulation):
         # (between centers of the current and next macrotime step) with the newly calculated
         # depth-integrated transport based on accumulated 2D transports (accumulated over the
         # current macrotimestep, and thus representative for its center).
-        self.advect_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA)
+        self.advect_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA, self.SxD, self.SyD)
         self.SxA.all_values[...] = self.advpk.all_values.sum(axis=0) - self.SxA.all_values
         self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
+        self.SxD.all_values[...] = self.diffuk.all_values.sum(axis=0) - self.SxD.all_values
+        self.SyD.all_values[...] = self.diffvk.all_values.sum(axis=0) - self.SyD.all_values
 
     def start_3d(self):
         """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step.

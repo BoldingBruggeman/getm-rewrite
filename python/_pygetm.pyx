@@ -27,7 +27,7 @@ cdef extern void advection_uv_calculate(int direction, int nk, void* advection, 
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
-cdef extern void* momentum_create(int runtype, void* pdomain, int apply_bottom_friction) nogil
+cdef extern void* momentum_create(int runtype, void* pdomain, double Am0) nogil
 cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
 cdef extern void momentum_u_3d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx, double* pidpdx, double* pviscosity) nogil
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
@@ -294,17 +294,15 @@ cdef class Simulation:
     cdef void* ppressure
     cdef void* psealevel
     cdef readonly int nx, ny
-    cdef readonly int apply_bottom_friction
 
-    def __init__(self, Domain domain, int runtype, int apply_bottom_friction, int internal_pressure_method=1):
+    def __init__(self, Domain domain, int runtype, int internal_pressure_method=1, double Am0=0.):
         self.domain = domain
         domain.initialize(runtype)
         self.runtype = runtype
-        self.pmomentum = momentum_create(runtype, domain.p, apply_bottom_friction)
+        self.pmomentum = momentum_create(runtype, domain.p, Am0)
         self.ppressure = pressure_create(runtype, domain.p, internal_pressure_method)
         self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
-        self.apply_bottom_friction = apply_bottom_friction
 
     def u_2d(self, double timestep, Array tausx not None, Array dpdx not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)

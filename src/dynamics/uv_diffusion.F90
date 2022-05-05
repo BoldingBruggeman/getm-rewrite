@@ -290,7 +290,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
       do i=UG%imin,UG%imax ! diffu defined on U-points
          diffu(i,j)=0._real64
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            diffu(i,j)=-2._real64*self%Am(i,j)*TG%dy(i,j)*h(i,j) &
+            diffu(i,j)=-2._real64*self%Am0*TG%dy(i,j)*h(i,j) &
                        *(shear(i+1,j)-shear(i,j))*UG%iarea(i,j)
          end if
       end do
@@ -309,7 +309,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
             diffu(i,j)=diffu(i,j) &
-                       -self%Am(i,j)*0.5_real64*(hu(i,j)+hu(i,j+1))*XG%dx(i,j) &
+                       -self%Am0*0.5_real64*(hu(i,j)+hu(i,j+1))*XG%dx(i,j) &
                        *(shear(i,j)-shear(i,j-1))*UG%iarea(i,j)
          end if
       end do
@@ -330,7 +330,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
       do i=VG%imin,VG%imax ! diffv defined on V-points
          diffv(i,j)=0._real64
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            diffv(i,j)=-self%Am(i,j)*0.5_real64*(hv(i,j)+hv(i+1,j))*XG%dy(i,j) &
+            diffv(i,j)=-self%Am0*0.5_real64*(hv(i,j)+hv(i+1,j))*XG%dy(i,j) &
                        *(shear(i,j)-shear(i-1,j))*VG%iarea(i,j)
          end if
       end do
@@ -348,7 +348,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hu,u,hv,v,diffu,diffv)
    do j=VG%jmin,VG%jmax ! diffv defined on V-points
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            diffv(i,j)=diffv(i,j)-2._real64*self%Am(i,j)*TG%dx(i,j)*TG%h(i,j) &
+            diffv(i,j)=diffv(i,j)-2._real64*self%Am0*TG%dx(i,j)*TG%h(i,j) &
                                   *(shear(i,j+1)-shear(i,j))*VG%iarea(i,j)
          end if
       end do

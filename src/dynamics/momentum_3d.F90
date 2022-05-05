@@ -185,7 +185,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
                self%ea4(i,j,k)=dt*(-0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k))*g*dpdx(i,j) &
                                    +UG%alpha(i,j)*( self%fqk(i,j,k) &
                                                    +self%advpk(i,j,k) &
-                                                   -self%diffuk(i,j,k) &
+                                                   +self%diffuk(i,j,k) &
                                                    +ip_fac*idpdx(i,j,k)) &
                                   )
 #else
@@ -289,7 +289,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
                self%ea4(i,j,k)=dt*(-0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k))*g*dpdy(i,j) &
                                    +VG%alpha(i,j)*(-self%fpk(i,j,k) &
                                                    +self%advqk(i,j,k) &
-                                                   -self%diffvk(i,j,k) &
+                                                   +self%diffvk(i,j,k) &
                                                    +ip_fac*idpdy(i,j,k)) &
                                   )
 
