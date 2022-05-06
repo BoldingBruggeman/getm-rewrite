@@ -30,9 +30,6 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
 
     times = timestep * numpy.arange(ntime)
     mode_split = 10
-    domain.T.zio.all_values[...] = 0
-    domain.T.zin.all_values[...] = 0
-    sim.start_3d()
     z_sum_ini = domain.T.z.ma.sum()
     pre_tot = (t * domain.T.hn).values.sum()
     for istep, time in enumerate(times):
@@ -44,7 +41,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
         if istep % mode_split == 0:
             sim.Ui.all_values[...] /= mode_split
             sim.Vi.all_values[...] /= mode_split
-            sim.start_3d()
+            sim.domain.update_depth(True)
             sim.update_surface_pressure_gradient(domain.T.zio, sp)
 
             sim.update_3d_momentum(timestep * mode_split, tausx, tausy, sim.dpdx, sim.dpdy, idpdx, idpdy, viscosity)
