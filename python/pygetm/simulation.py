@@ -644,7 +644,8 @@ class Simulation(_pygetm.Simulation):
 
     def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         """Update depth-explicit transports (pk, qk) and velocities (uk, vk). This will also update their halos."""
-        # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids. For that, information from the halos is used.
+        # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids.
+        # For that, information from the halos is used.
         viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
 
         # Update horizontal transports. Also update the halos so that transports (and more importantly, the velocities
@@ -681,6 +682,7 @@ class Simulation(_pygetm.Simulation):
         itimestep = 1. / timestep
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
+        # Both velocities and U/V thicknesses are now at time 1/2
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
@@ -699,23 +701,23 @@ class Simulation(_pygetm.Simulation):
         self.uk.interp(self.vua3d)
         self.vk.interp(self.vva3d)
 
-        # Advect 3D u velocity from time=n-1/2 to n+1/2 using velocities interpolated to its own advection grids
+        # Advect 3D u velocity from time=1/2 to 1 1/2 using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk, new_h=True, skip_initial_halo_exchange=True)
         self.advpk.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
 
-        # Advect 3D v velocity from time=n-1/2 to n+1/2 using velocities interpolated to its own advection grids
+        # Advect 3D v velocity from time=1/2 to 1 1/2 using velocities interpolated to its own advection grids
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk, new_h=True, skip_initial_halo_exchange=True)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
-        # Restore velocity at time=n-1/2
+        # Restore velocity at time=1/2 (the final value at the end of the current timestep)
         numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
         if self.diffuse_momentum:
             # Note that thicknesses should be in sync with velocities uk and vk
-            # This means they should lag 1/2 a timestep behind the T grid (already the case for X)
+            # This means they should lag 1/2 a timestep behind the T grid (already the case for X, but for T we use 1/2(ho+hn))
             self.momentum_diffusion_driver(self.h_T_half, self.domain.X.hn, self.uk, self.vk, self.diffuk, self.diffvk)
 
         # Compute slow (3D) advection contribution to 2D advection.
@@ -777,7 +779,8 @@ class Simulation(_pygetm.Simulation):
             z_T, z_U, z_V, z_X, zo_T = self.domain.T.z, self.domain.U.z, self.domain.V.z, self.domain.X.z, self.domain.T.zo
 
         # Compute surface elevation on U, V, X grids.
-        # Note that this must be at time=n+1/2, whereas surface elevation on T grid is now at time=n+1.
+        # These must lag 1/2 a timestep behind the T grid.
+        # They are therefore calculated from the average of old and new elevations on the T grid.
         z_T_half = 0.5 * (zo_T + z_T)
         z_T_half.interp(z_U)
         z_T_half.interp(z_V)
@@ -807,8 +810,8 @@ class Simulation(_pygetm.Simulation):
         _pygetm.alpha(self.domain.U.D, self.domain.Dmin, self.domain.Dcrit, self.domain.U.alpha)
         _pygetm.alpha(self.domain.V.D, self.domain.Dmin, self.domain.Dcrit, self.domain.V.alpha)
 
-        # Update column depth on advection grids. These must be at time=n+1/2.
-        # That's already the case for the X grid, but for the T grid we explicitly compute and use D at time=n+1/2.
+        # Update total water depth on advection grids. These must be 1/2 timestep behind the T grid.
+        # That's already the case for the X grid, but for the T grid we explicitly compute and use the average of old and new D.
         numpy.add(self.domain.T.H.all_values, z_T_half.all_values, self.D_T_half.all_values)
         self.domain.UU.D.all_values[:, :-1] = self.D_T_half.all_values[:, 1:]
         self.domain.VV.D.all_values[:-1, :] = self.D_T_half.all_values[1:, :]
