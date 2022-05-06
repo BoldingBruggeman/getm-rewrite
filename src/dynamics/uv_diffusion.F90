@@ -75,11 +75,11 @@ MODULE SUBROUTINE uv_diffusion_3d(self,dt)
       do k=1,TG%kmax
          call diffusion_driver(self,TG%hn(:,:,k), XG%hn(:,:,k), &
                                     self%uk(:,:,k), self%vk(:,:,k), &
-                                    self%diffuk(:,:,k),self%diffvk(:,:,k))
+                                    self%diffpk(:,:,k),self%diffqk(:,:,k))
       end do
 #ifdef _APPLY_ADV_DIFF_
-      self%pk=dt*self%diffuk
-      self%qk=dt*self%diffvk
+      self%pk=dt*self%diffpk
+      self%qk=dt*self%diffqk
 #endif
    end if
    end associate XGrid
@@ -126,7 +126,7 @@ MODULE SUBROUTINE slow_diffusion(self)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
-            self%SxD(i,j)=SUM(self%diffuk(i,j,1:))-self%SxD(i,j)-self%dampU(i,j)
+            self%SxD(i,j)=SUM(self%diffpk(i,j,1:))-self%SxD(i,j)-self%dampU(i,j)
          end if
       end do
    end do
@@ -135,7 +135,7 @@ MODULE SUBROUTINE slow_diffusion(self)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then
-            self%SyD(i,j)=SUM(self%diffvk(i,j,1:))-self%SyD(i,j)-self%dampv(i,j)
+            self%SyD(i,j)=SUM(self%diffqk(i,j,1:))-self%SyD(i,j)-self%dampv(i,j)
          end if
       end do
    end do

@@ -209,9 +209,9 @@ contains
          case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); sub_type = subtype_depth_explicit_interfaces
          case ('advpk'); if (allocated(momentum%advpk)) p = c_loc(momentum%advpk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advqk'); if (allocated(momentum%advqk)) p = c_loc(momentum%advqk); grid_type = 3; sub_type = subtype_depth_explicit
-         case ('diffuk'); if (allocated(momentum%diffuk)) p = c_loc(momentum%diffuk); grid_type = 2 &
+         case ('diffpk'); if (allocated(momentum%diffpk)) p = c_loc(momentum%diffpk); grid_type = 2 &
             ;sub_type = subtype_depth_explicit
-         case ('diffvk'); if (allocated(momentum%diffvk)) p = c_loc(momentum%diffvk); grid_type = 3 &
+         case ('diffqk'); if (allocated(momentum%diffqk)) p = c_loc(momentum%diffqk); grid_type = 3 &
             ;sub_type = subtype_depth_explicit
          case ('Ui');   p = c_loc(momentum%Ui); grid_type = 2
          case ('Vi');   p = c_loc(momentum%Vi); grid_type = 3

@@ -81,7 +81,7 @@ class Tracer(core.Array):
             self.rivers[river.name] = river_tracer
 
 class Simulation(_pygetm.Simulation):
-    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'diffu1', 'diffv1', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'diffuk', 'diffvk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB', 'SxA', 'SyA', 'SxD', 'SyD'
+    _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'diffu1', 'diffv1', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'diffpk', 'diffqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB', 'SxA', 'SyA', 'SxD', 'SyD'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
@@ -711,7 +711,7 @@ class Simulation(_pygetm.Simulation):
         if self.diffuse_momentum:
             # Note that thicknesses should be in sync with velocities uk and vk
             # This means they should lag 1/2 a timestep behind the T grid (already the case for X, but for T we use 1/2(ho+hn))
-            self.momentum_diffusion_driver(self.h_T_half, self.domain.X.hn, self.uk, self.vk, self.diffuk, self.diffvk)
+            self.momentum_diffusion_driver(self.h_T_half, self.domain.X.hn, self.uk, self.vk, self.diffpk, self.diffqk)
 
         # Compute slow (3D) advection contribution to 2D advection.
         # This is done by comparing the previously calculated depth-integrated 3D transport
@@ -721,8 +721,8 @@ class Simulation(_pygetm.Simulation):
         self.advect_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA, self.SxD, self.SyD)
         self.SxA.all_values[...] = self.advpk.all_values.sum(axis=0) - self.SxA.all_values
         self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
-        self.SxD.all_values[...] = self.diffuk.all_values.sum(axis=0) - self.SxD.all_values
-        self.SyD.all_values[...] = self.diffvk.all_values.sum(axis=0) - self.SyD.all_values
+        self.SxD.all_values[...] = self.diffpk.all_values.sum(axis=0) - self.SxD.all_values
+        self.SyD.all_values[...] = self.diffqk.all_values.sum(axis=0) - self.SyD.all_values
 
     def start_3d(self):
         """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step.

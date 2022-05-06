@@ -42,8 +42,8 @@ MODULE SUBROUTINE uv_initialize_3d(self)
    call mm_s('fqk',self%fqk,self%qk,def=0._real64,stat=stat)
    call mm_s('advpk',self%advpk,self%pk,def=0._real64,stat=stat)
    call mm_s('advqk',self%advqk,self%qk,def=0._real64,stat=stat)
-   call mm_s('diffuk',self%diffuk,self%pk,def=0._real64,stat=stat)
-   call mm_s('diffvk',self%diffvk,self%qk,def=0._real64,stat=stat)
+   call mm_s('diffpk',self%diffpk,self%pk,def=0._real64,stat=stat)
+   call mm_s('diffqk',self%diffqk,self%qk,def=0._real64,stat=stat)
    call mm_s('uk',self%uk,self%pk,def=0._real64,stat=stat)
    call mm_s('vk',self%vk,self%qk,def=0._real64,stat=stat)
    call mm_s('ustar2_s',self%ustar2_s,TG%l(1:2),TG%u(1:2),def=0._real64,stat=stat)
@@ -185,7 +185,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
                self%ea4(i,j,k)=dt*(-0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k))*g*dpdx(i,j) &
                                    +UG%alpha(i,j)*( self%fqk(i,j,k) &
                                                    +self%advpk(i,j,k) &
-                                                   +self%diffuk(i,j,k) &
+                                                   +self%diffpk(i,j,k) &
                                                    +ip_fac*idpdx(i,j,k)) &
                                   )
 #else
@@ -289,7 +289,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
                self%ea4(i,j,k)=dt*(-0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k))*g*dpdy(i,j) &
                                    +VG%alpha(i,j)*(-self%fpk(i,j,k) &
                                                    +self%advqk(i,j,k) &
-                                                   +self%diffvk(i,j,k) &
+                                                   +self%diffqk(i,j,k) &
                                                    +ip_fac*idpdy(i,j,k)) &
                                   )
 
