@@ -566,7 +566,7 @@ class Simulation(_pygetm.Simulation):
             if total is not None:
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
-    def advect_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffu1: core.Array, diffv1: core.Array, u1_ready: bool=False):
+    def transport_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffu1: core.Array, diffv1: core.Array, u1_ready: bool=False):
         # Advect and optionally diffuse depth-averaged u and v velocity (u1, v1),
         # using velocities reconstructed from transports interpolated to their own advection grids
         # Then reconstruct the resulting change in transports U and V and return this (advU, advV)
@@ -608,7 +608,7 @@ class Simulation(_pygetm.Simulation):
         # store the resulting change in transports U and V (advU, advV),
         # to be taken into account by transport update further down.
         # Since self.u1=self.U/self.U.grid.D (and same for v1/V), we state that with u1_ready=True
-        self.advect_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1, u1_ready=u1_ready)
+        self.transport_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1, u1_ready=u1_ready)
 
         # Update 2D transports from t-1/2 to t+1/2
         if self._ufirst:
@@ -689,13 +689,12 @@ class Simulation(_pygetm.Simulation):
         self.uk.interp(self.vua3d)
         self.vk.interp(self.vva3d)
 
-        # Advect 3D u velocity from time=1/2 to 1 1/2 using velocities interpolated to its own advection grids
+        # Advect 3D u and v velocity from time=1/2 to 1 1/2 using velocities interpolated to its own advection grids
+        # Store the resulting trend, which will be applied as part of the momentum update in the next timestep.
+        # They will also be used to calculate the slow advection contribution to depth-integrated momentum equations.
         # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.uadv.apply_3d(self.uua3d, self.uva3d, self.ww.interp(self.uk.grid), timestep, self.uk, new_h=True, skip_initial_halo_exchange=True)
         self.advpk.all_values[...] = (self.uk.all_values * self.uadv.h - self.pk.all_values) * itimestep
-
-        # Advect 3D v velocity from time=1/2 to 1 1/2 using velocities interpolated to its own advection grids
-        # JB the alternative would be to interpolate transports and then divide by (colocated) layer heights, like we do for 2D
         self.vadv.apply_3d(self.vua3d, self.vva3d, self.ww.interp(self.vk.grid), timestep, self.vk, new_h=True, skip_initial_halo_exchange=True)
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
@@ -704,16 +703,17 @@ class Simulation(_pygetm.Simulation):
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
         if self.diffuse_momentum:
-            # Note that thicknesses should be in sync with velocities uk and vk
+            # Calculate the momentum trends (diffpk, diffqk) associated with diffusion of 3D u and v velocity
+            # between time=1/2 to 1 1/2. Note that thicknesses should be in sync with velocities uk and vk
             # This means they should lag 1/2 a timestep behind the T grid (already the case for X, but for T we use 1/2(ho+hn))
             self.momentum_diffusion_driver(self.domain.h_T_half, self.domain.X.hn, self.uk, self.vk, self.diffpk, self.diffqk)
 
-        # Compute slow (3D) advection contribution to 2D advection.
-        # This is done by comparing the previously calculated depth-integrated 3D transport
+        # Compute slow (3D) advection and diffusion contribution to to the depth-integrated momentum equations.
+        # This is done by comparing the depth-integrated 3D transport calculated above
         # (between centers of the current and next macrotime step) with the newly calculated
         # depth-integrated transport based on accumulated 2D transports (accumulated over the
         # current macrotimestep, and thus representative for its center).
-        self.advect_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA, self.SxD, self.SyD)
+        self.transport_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA, self.SxD, self.SyD)
         self.SxA.all_values[...] = self.advpk.all_values.sum(axis=0) - self.SxA.all_values
         self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
         self.SxD.all_values[...] = self.diffpk.all_values.sum(axis=0) - self.SxD.all_values
