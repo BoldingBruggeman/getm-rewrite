@@ -64,6 +64,7 @@ if domain.open_boundaries:
         sim.zbdy.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=args.tpxo9_dir), on_grid=True)
         sim.bdyu.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='u', root=args.tpxo9_dir), on_grid=True)
         sim.bdyv.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='v', root=args.tpxo9_dir), on_grid=True)
+
     if sim.runtype == pygetm.BAROCLINIC:
         sim.temp.open_boundaries.type = pygetm.SPONGE
         sim.temp.open_boundaries.values.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/3D/bound_3D.CFSR.2006.nc'), 'temp'))
@@ -105,17 +106,17 @@ if args.output:
     output.request(('u10', 'v10', 'sp', 't2m', 'qa', 'tcc'))
     #output.request(('qe', 'qh', 'ql', 'swr', 'albedo', 'zen'))
     output = sim.output_manager.add_netcdf_file('north_sea_2d.nc', interval=datetime.timedelta(hours=1), sync_interval=None)
-    output.request(('U', 'V'), mask=True)
-    output.request(('zt', 'Dt', 'tausxu', 'tausyv', ))
+    output.request(('zt', 'Dt', 'u1', 'v1', 'tausxu', 'tausyv', ))
     if args.debug_output:
-        output.request(('maskt', 'masku', 'maskv', ))   #, 'u_taus'
+        output.request(('maskt', 'masku', 'maskv', ))
+        output.request(('U', 'V'), mask=True)
         output.request(('Du', 'Dv', 'dpdx', 'dpdy', 'z0bu', 'z0bv', 'z0bt'))   #, 'u_taus'
         output.request(('ru', 'rru', 'rv', 'rrv'))
     if sim.runtype > pygetm.BAROTROPIC_2D:
         output = sim.output_manager.add_netcdf_file('north_sea_3d.nc', interval=datetime.timedelta(hours=6), sync_interval=None)
         output.request(('uk', 'vk', 'ww', 'SS', 'num',))
         if args.debug_output:
-            output.request(('fpk', 'fqk', 'advpk', 'advqk',))
+            output.request(('fpk', 'fqk', 'advpk', 'advqk', )) # 'diffpk', 'diffqk'))
     if sim.runtype == pygetm.BAROCLINIC:
         output.request(('temp', 'salt', 'rho', 'NN', 'rad', 'sst', 'hnt', 'nuh',))
         if args.debug_output:
@@ -123,7 +124,7 @@ if args.output:
         if sim.fabm_model:
             output.request(('par', 'med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
 
-sim.start(simstart, timestep=60., split_factor=30, profile=profile)
+sim.start(simstart, timestep=60., split_factor=30, report=60, profile=profile)
 while sim.time < simstop:
     sim.advance()
 sim.finish()
