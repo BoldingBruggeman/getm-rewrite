@@ -86,7 +86,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'D_T_half', 'h_T_half') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -141,11 +141,10 @@ class Simulation(_pygetm.Simulation):
             self.ww.all_values.fill(0.)
             self.SS.fill(0.)
 
-        # Water depth and thicknesses on T grid that lag 1/2 time step behind tracer (i.e., they are in sync with U,V,X grids)
-        self.D_T_half = dom.T.array(fill=numpy.nan)
-        self.h_T_half = dom.T.array(fill=numpy.nan, z=CENTERS)
+        # Derive old and new elevations, water depths and thicknesses from current surface elevation on T grid
+        self.domain.update_depth_and_thicknesses()
+        self.domain.update_depth_and_thicknesses()
 
-        self.update_depth()
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
@@ -222,7 +221,7 @@ class Simulation(_pygetm.Simulation):
                     ar.wrap_ndarray(self.fabm_conserved_quantity_totals[i, ...])
                     self.tracer_totals.append(ar)
 
-            self.pres = dom.T.array(z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
+            self.pres = dom.depth
 
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
@@ -273,10 +272,6 @@ class Simulation(_pygetm.Simulation):
         self.time = time
         self.istep = 0
         self.report = report
-
-        if self.runtype > BAROTROPIC_2D:
-            # ensure ho and hn are up to date and identical
-            self.start_3d()
 
         if self.fabm_model:
             # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
@@ -372,7 +367,7 @@ class Simulation(_pygetm.Simulation):
             # Update 3D elevations and layer thicknesses. New elevation on T grid will match elevation at end of 2D timestep,
             # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 macrotimestep behind. Old
             # elevations zio and thicknesses ho will be one macrotimestep behind new elevations zin and thicknesses hn.
-            self.start_3d()
+            self.domain.update_depth_and_thicknesses()
 
             # Update presssure gradient for start of the 3D time step
             # Note that we use previously-recorded elevations and surface pressure at the start of the 3D timestep
@@ -464,7 +459,7 @@ class Simulation(_pygetm.Simulation):
         # This is based on old and new elevation (T grid) for the microtimestep.
         # Thus, for grids lagging 1/2 a timestep behind (U, V, X grids), the elevations
         # and water depths will be representative for 1/2 a MICROtimestep ago.
-        self.update_depth()
+        self.domain.update_depth()
 
         # Calculate 2D (depth-averaged) velocities using updated water depths
         # Note that as long as transports U and V are 0 in masked points=, u1 and v1 will be too,
@@ -584,7 +579,7 @@ class Simulation(_pygetm.Simulation):
             # Compute velocity diffusion contribution to transport sources.
             # This uses depth-averaged velocities u1 and v1, which therefore have to be up to date
             # Water depths should be in sync with velocities, which means they should lag 1/2 a timestep behind the tracer/T grid
-            self.momentum_diffusion_driver(self.D_T_half, self.domain.X.D, self.u1,self.v1, diffu1, diffv1)
+            self.momentum_diffusion_driver(self.domain.D_T_half, self.domain.X.D, self.u1,self.v1, diffu1, diffv1)
 
         itimestep = 1. / timestep
 
@@ -711,7 +706,7 @@ class Simulation(_pygetm.Simulation):
         if self.diffuse_momentum:
             # Note that thicknesses should be in sync with velocities uk and vk
             # This means they should lag 1/2 a timestep behind the T grid (already the case for X, but for T we use 1/2(ho+hn))
-            self.momentum_diffusion_driver(self.h_T_half, self.domain.X.hn, self.uk, self.vk, self.diffpk, self.diffqk)
+            self.momentum_diffusion_driver(self.domain.h_T_half, self.domain.X.hn, self.uk, self.vk, self.diffpk, self.diffqk)
 
         # Compute slow (3D) advection contribution to 2D advection.
         # This is done by comparing the previously calculated depth-integrated 3D transport
@@ -723,92 +718,6 @@ class Simulation(_pygetm.Simulation):
         self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
         self.SxD.all_values[...] = self.diffpk.all_values.sum(axis=0) - self.SxD.all_values
         self.SyD.all_values[...] = self.diffqk.all_values.sum(axis=0) - self.SyD.all_values
-
-    def start_3d(self):
-        """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step.
-        Note: this uses sea level on T grid as computed by the 2D time step. This has to be up to date in the halos too!
-        """
-        # Store current elevations as previous elevations (on the 3D time step)
-        self.domain.T.zio.all_values[...] = self.domain.T.zin.all_values
-        self.domain.U.zio.all_values[...] = self.domain.U.zin.all_values
-        self.domain.V.zio.all_values[...] = self.domain.V.zin.all_values
-        self.domain.X.zio.all_values[...] = self.domain.X.zin.all_values
-
-        # Synchronize new elevations on the 3D time step to those of the 2D time step that has just completed.
-        self.domain.T.zin.all_values[...] = self.domain.T.z.all_values
-
-        # Update elevations on U, V, X grids by averaging zio and zin; then derive total water depth D on all grids
-        self.update_depth(_3d=True)
-
-        # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
-        # This routine also sets ho to the previous value of hn
-        # All points (interior and halo) are processed, so ho and hn will be valid in halos after this completes,
-        # provided zin was valid in the halo beforehand.
-        self.domain.do_vertical()
-
-        # Update thicknesses on advection grids. These must be at time=n+1/2
-        # That's already the case for the X grid, but for the T grid (now at t=n+1) we explicitly compute thicknesses at time=n+1/2.
-        # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
-        # fortunately these values are not needed for advection.
-        self.h_T_half.all_values[...] = 0.5 * (self.domain.T.ho.all_values + self.domain.T.hn.all_values)
-        self.domain.UU.hn.all_values[:, :, :-1] = self.h_T_half.all_values[:, :, 1:]
-        self.domain.VV.hn.all_values[:, :-1, :] = self.h_T_half.all_values[:, 1:, :]
-        self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
-
-        if self.pres.saved:
-            # Update pressure (dbar) at layer centers, assuming it is equal to depth in m
-            _pygetm.thickness2center_depth(self.domain.T.mask, self.domain.T.hn, self.pres)
-
-        if self.domain.open_boundaries.zc.saved:
-            # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
-            self.domain.open_boundaries.zc.all_values[...] = self.domain.T.zc.all_values[:, self.domain.open_boundaries.j, self.domain.open_boundaries.i].T
-
-    def update_depth(self, _3d: bool=False):
-        """Use old and new surface elevation on T grid to update elevations on U, V, X grids
-        and subsequently update total water depth D on all grids. z_T (and zo_T) must be up to date in halos"""
-        if _3d:
-            z_T, z_U, z_V, z_X, zo_T = self.domain.T.zin, self.domain.U.zin, self.domain.V.zin, self.domain.X.zin, self.domain.T.zio
-        else:
-            z_T, z_U, z_V, z_X, zo_T = self.domain.T.z, self.domain.U.z, self.domain.V.z, self.domain.X.z, self.domain.T.zo
-
-        # Compute surface elevation on U, V, X grids.
-        # These must lag 1/2 a timestep behind the T grid.
-        # They are therefore calculated from the average of old and new elevations on the T grid.
-        z_T_half = 0.5 * (zo_T + z_T)
-        z_T_half.interp(z_U)
-        z_T_half.interp(z_V)
-        z_T_half.interp(z_X)
-        _pygetm.clip_z(z_U, self.domain.Dmin)
-        _pygetm.clip_z(z_V, self.domain.Dmin)
-        _pygetm.clip_z(z_X, self.domain.Dmin)
-
-        # Halo exchange for elevation on U, V grids, needed because the very last points in the halos
-        # (x=-1 for U, y=-1 for V) are not valid after interpolating from the T grid above.
-        # These elevations are needed to later compute velocities from transports
-        # (by dividing by layer thicknesses, which are computed from elevation)
-        # These velocities will be advected, and therefore need to be valid througout the halos.
-        # We do not need to halo-exchange elevation on the X grid, since that needs to be be valid
-        # at the innermost halo point only, which is ensured by z_T exchange.
-        z_U.update_halos(parallel.Neighbor.RIGHT)
-        z_V.update_halos(parallel.Neighbor.TOP)
-
-        # Update total water depth D on T, U, V, X grids
-        # This also processes the halos; no further halo exchange needed.
-        numpy.add(self.domain.T.H.all_values, z_T.all_values, where=self.domain.T.mask.all_values > 0, out=self.domain.T.D.all_values)
-        numpy.add(self.domain.U.H.all_values, z_U.all_values, where=self.domain.U.mask.all_values > 0, out=self.domain.U.D.all_values)
-        numpy.add(self.domain.V.H.all_values, z_V.all_values, where=self.domain.V.mask.all_values > 0, out=self.domain.V.D.all_values)
-        numpy.add(self.domain.X.H.all_values, z_X.all_values, where=self.domain.X.mask.all_values > 0, out=self.domain.X.D.all_values)
-
-        # Update dampening factor (0-1) for shallow water
-        _pygetm.alpha(self.domain.U.D, self.domain.Dmin, self.domain.Dcrit, self.domain.U.alpha)
-        _pygetm.alpha(self.domain.V.D, self.domain.Dmin, self.domain.Dcrit, self.domain.V.alpha)
-
-        # Update total water depth on advection grids. These must be 1/2 timestep behind the T grid.
-        # That's already the case for the X grid, but for the T grid we explicitly compute and use the average of old and new D.
-        numpy.add(self.domain.T.H.all_values, z_T_half.all_values, self.D_T_half.all_values)
-        self.domain.UU.D.all_values[:, :-1] = self.D_T_half.all_values[:, 1:]
-        self.domain.VV.D.all_values[:-1, :] = self.D_T_half.all_values[1:, :]
-        self.domain.UV.D.all_values[:, :] = self.domain.VU.D.all_values[:, :] = self.domain.X.D.all_values[1:, 1:]
 
     @property
     def Ekin(self, rho0: float=RHO0):
