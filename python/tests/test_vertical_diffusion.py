@@ -9,7 +9,6 @@ extent = 50000
 domain = pygetm.domain.create_cartesian(numpy.linspace(0, extent, 50), numpy.linspace(0, extent, 52), 25, f=0, H=50)
 domain.mask[...] = numpy.random.random_sample(domain.mask.shape) > 0.5   # randomly mask half of the domain
 sim = pygetm.Simulation(domain, runtype=2)
-domain.do_vertical()
 
 assert (domain.T.ho.all_values == domain.T.hn.all_values).all(), 'ho and hn are not identical'
 
