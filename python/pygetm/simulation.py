@@ -141,10 +141,6 @@ class Simulation(_pygetm.Simulation):
             self.ww.all_values.fill(0.)
             self.SS.fill(0.)
 
-        # Derive old and new elevations, water depths and thicknesses from current surface elevation on T grid
-        self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
-        self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
-
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
@@ -240,6 +236,11 @@ class Simulation(_pygetm.Simulation):
             self.density = density or pygetm.density.Density()
         else:
             self.sss = None
+
+        # Derive old and new elevations, water depths and thicknesses from current surface elevation on T grid
+        # This must be done after self.pres.saved is set
+        self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
+        self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
 
     def __getitem__(self, key: str) -> core.Array:
         return self.output_manager.fields[key]
@@ -417,7 +418,7 @@ class Simulation(_pygetm.Simulation):
                     if tracer.source is not None:
                         tracer.source.all_values *= self.macrotimestep * tracer.source_scale
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
-
+                
             self.report_domain_integrals()
 
             # Reset depth-integrated transports that will be incremented over subsequent 3D timestep.
