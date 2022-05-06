@@ -2,6 +2,7 @@ from typing import Optional, Tuple, List, Mapping
 import operator
 import logging
 import os.path
+import enum
 import collections
 
 import numpy
@@ -20,6 +21,14 @@ WEST  = 1
 NORTH = 2
 EAST  = 3
 SOUTH = 4
+
+
+class VerticalCoordinates(enum.IntEnum):
+    SIGMA = 1
+#    Z = 2
+#    GVC = 3
+#    HYBRID = 4
+#    ADAPTIVE = 5
 
 def find_interfaces(c: numpy.ndarray):
     c_if = numpy.empty((c.size + 1),)

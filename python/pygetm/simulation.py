@@ -28,13 +28,6 @@ BAROTROPIC_3D = 2
 FROZEN_DENSITY = 3
 BAROCLINIC = 4
 
-class VerticalCoordinates(enum.IntEnum):
-    SIGMA = 1
-#    Z = 2
-#    GVC = 3
-#    HYBRID = 4
-#    ADAPTIVE = 5
-
 class InternalPressure(enum.IntEnum):
     BLUMBERG_MELLOR = 1
 #    BLUMBERG_MELLOR_LIN=2

@@ -10,3 +10,4 @@ from . import operators
 from .simulation import *
 from .constants import *
 from .operators import AdvectionScheme
+from .domain import VerticalCoordinates
