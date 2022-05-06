@@ -302,7 +302,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hx,u,v,diffu,diffv)
    end do
 
    ! Central for dy(Am*(dy(U/DU)+dx(V/DV)))
-   do j=XG%jmin-1,XG%jmax ! work2d defined on X-points
+   do j=XG%jmin,XG%jmax ! work2d defined on X-points
       do i=XG%imin,XG%imax
          flux(i,j)=0._real64
          if (XG%mask(i,j) > 0) then
@@ -322,10 +322,10 @@ MODULE SUBROUTINE diffusion_driver(self,h,hx,u,v,diffu,diffv)
    ! Central for dx(Am*(dy(U/DU)+dx(V/DV)))
    VGrid: associate( VG => self%domain%V )
    do j=XG%jmin,XG%jmax
-      do i=XG%imin-1,XG%imax ! work2d defined on X-points
+      do i=XG%imin,XG%imax ! work2d defined on X-points
          flux(i,j)=0._real64
          if (XG%mask(i,j) > 0) then
-            flux(i,j)= self%Am0 * XG%dy(i,j) * hx(i,j) * ((u(i,j+1) - u(i,j)) * XG%idy(i,j) + (v(i+1,j) - v(i,j)) * XG%idx(i,j))
+            flux(i,j) = self%Am0 * XG%dy(i,j) * hx(i,j) * ((u(i,j+1) - u(i,j)) * XG%idy(i,j) + (v(i+1,j) - v(i,j)) * XG%idx(i,j))
          end if
       end do
    end do
