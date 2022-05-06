@@ -73,7 +73,7 @@ MODULE SUBROUTINE do_sigma(self)
       do i=TG%l(1),TG%u(1)
          if (TG%mask(i,j) > 0) then
 !KB            TG%ho(i,j,:)=(TG%zio(i,j)+TG%H(i,j))*dga(:)
-            TG%hn(i,j,1:self%T%kmax)=(TG%zin(i,j)+TG%H(i,j))*dga(:)
+            TG%hn(i,j,1:self%T%kmax)=TG%D(i,j)*dga(:)
          end if
       end do
    end do
@@ -89,7 +89,7 @@ MODULE SUBROUTINE do_sigma(self)
       do i=UG%l(1),UG%u(1) ! requires zin is HALO-updated (-1)
          if (UG%mask(i,j) > 0) then
 !KB            UG%ho(i,j,:)=(UG%zio(i,j)+UG%H(i,j))*dga(:)
-            UG%hn(i,j,1:self%U%kmax)=(UG%zin(i,j)+UG%H(i,j))*dga(:)
+            UG%hn(i,j,1:self%U%kmax)=UG%D(i,j)*dga(:)
          end if
       end do
    end do
@@ -103,7 +103,7 @@ MODULE SUBROUTINE do_sigma(self)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
 !KB            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
-            VG%hn(i,j,1:self%V%kmax)=(VG%zin(i,j)+VG%H(i,j))*dga(:)
+            VG%hn(i,j,1:self%V%kmax)=VG%D(i,j)*dga(:)
          end if
       end do
    end do
@@ -117,7 +117,7 @@ MODULE SUBROUTINE do_sigma(self)
       do i=XG%l(1),XG%u(1)
          if (XG%mask(i,j) > 0) then
 !KB            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
-            XG%hn(i,j,1:self%X%kmax)=(XG%zin(i,j)+XG%H(i,j))*dga(:)
+            XG%hn(i,j,1:self%X%kmax)=XG%D(i,j)*dga(:)
          end if
       end do
    end do
