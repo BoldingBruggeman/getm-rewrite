@@ -815,6 +815,7 @@ class Domain(_pygetm.Domain):
 
         self.Dmin = 1.
         self.Dcrit = 2.
+        self.vertical_coordinates_method = VerticalCoordinates.SIGMA
 
         self.initialized = False
         self.open_boundaries = OpenBoundaries(self)
@@ -866,7 +867,7 @@ class Domain(_pygetm.Domain):
         self.z_.flags.writeable = self.z.flags.writeable = False
         self.zo_.flags.writeable = self.zo.flags.writeable = False
 
-        _pygetm.Domain.initialize(self, runtype, Dmin=self.Dmin)
+        _pygetm.Domain.initialize(self, runtype, Dmin=self.Dmin, method_vertical_coordinates=self.vertical_coordinates_method)
 
         self.rivers.initialize()
 

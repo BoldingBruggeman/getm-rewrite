@@ -13,7 +13,7 @@ from pygetm.constants import *
 cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin, int kmax, int* halox, int* haloy, int* haloz) nogil
 cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int nwb, int nnb, int neb, int nsb, int* bdy_info, int* bdy_i, int* bdy_j) nogil
 cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
-cdef extern void domain_initialize(void* grid, int runtype, double Dmin, double* maxdt) nogil
+cdef extern void domain_initialize(void* grid, int runtype, double Dmin, int method_vertical_coordinates, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain) nogil
 cdef extern void domain_tracer_bdy(void* domain, void* grid, int nz, double* field, int bdytype, double* bdy)
@@ -200,8 +200,8 @@ cdef class Domain:
     def do_vertical(self):
         domain_do_vertical(self.p)
 
-    def initialize(self, int runtype, double Dmin):
-        domain_initialize(self.p, runtype, Dmin, &self.maxdt)
+    def initialize(self, int runtype, double Dmin, int method_vertical_coordinates):
+        domain_initialize(self.p, runtype, Dmin, method_vertical_coordinates, &self.maxdt)
 
     def initialize_open_boundaries(self, int nwb, int nnb, int neb, int nsb, int nbdyp, int[:,::1] bdy_info, int[::1] bdy_i, int[::1] bdy_j):
         assert bdy_info.shape[0] == 6, 'bdy_info should have 6 rows'

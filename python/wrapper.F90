@@ -209,10 +209,10 @@ contains
          case ('ww');   if (allocated(momentum%ww)) p = c_loc(momentum%ww); sub_type = subtype_depth_explicit_interfaces
          case ('advpk'); if (allocated(momentum%advpk)) p = c_loc(momentum%advpk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advqk'); if (allocated(momentum%advqk)) p = c_loc(momentum%advqk); grid_type = 3; sub_type = subtype_depth_explicit
-         case ('diffuk'); if (allocated(momentum%diffuk)) p = c_loc(momentum%diffuk); grid_type = 2; &
-            sub_type = subtype_depth_explicit
-         case ('diffvk'); if (allocated(momentum%diffvk)) p = c_loc(momentum%diffvk); grid_type = 3; &
-            sub_type = subtype_depth_explicit
+         case ('diffuk'); if (allocated(momentum%diffuk)) p = c_loc(momentum%diffuk); grid_type = 2 &
+            ;sub_type = subtype_depth_explicit
+         case ('diffvk'); if (allocated(momentum%diffvk)) p = c_loc(momentum%diffvk); grid_type = 3 &
+            ;sub_type = subtype_depth_explicit
          case ('Ui');   p = c_loc(momentum%Ui); grid_type = 2
          case ('Vi');   p = c_loc(momentum%Vi); grid_type = 3
          case ('SS');   if (allocated(momentum%SS)) p = c_loc(momentum%SS); sub_type = subtype_depth_explicit_interfaces
@@ -306,16 +306,18 @@ contains
       end do
    end subroutine
 
-   subroutine domain_initialize(pdomain, runtype, Dmin, maxdt) bind(c)
+   subroutine domain_initialize(pdomain, runtype, Dmin, method_vertical_coordinates, maxdt) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: runtype
       real(c_double), intent(in), value :: Dmin
+      integer(c_int), intent(in), value :: method_vertical_coordinates
       real(c_double), intent(out)       :: maxdt
 
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
       domain%Dmin = Dmin
+      domain%method_vertical_coordinates = method_vertical_coordinates
       call domain%initialize(runtype)
       maxdt = domain%maxdt
    end subroutine
