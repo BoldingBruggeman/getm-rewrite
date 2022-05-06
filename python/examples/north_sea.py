@@ -13,10 +13,10 @@ import argparse
 import pathlib
 
 parser = argparse.ArgumentParser()
+parser.add_argument('setup_dir', type=pathlib.Path, help='Path to configuration files', default='.')
 parser.add_argument('--start', help='Similation start time - yyyy-mm-dd hh:mi:ss', default='2006-01-02 00:00:00')
 parser.add_argument('--stop', help='Similation stop time - yyyy-mm-dd hh:mi:ss', default='2007-01-01 00:00:00')
 parser.add_argument('--meteo_dir', type=pathlib.Path, help='Path to meteo forcing files')
-parser.add_argument('--setup_dir', type=pathlib.Path, help='Path to configuration files', default='.')
 #parser.add_argument('--input_dir', type=pathlib.Path, help='Path to input files', default='input' )
 parser.add_argument('--tpxo9_dir', type=pathlib.Path, help='Path to TPXO9 configuration files')
 parser.add_argument('--tiling', type=argparse.FileType('r'), help='Path to tiling pickle file')
@@ -38,8 +38,11 @@ if args.meteo_dir is None: args.no_meteo = True
 profile = 'northsea' if args.profile is not None else None
 
 domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001)
-pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, 'bdyinfo.dat')) if not args.no_boundaries else None
-pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, 'riverinfo.dat')) if not args.no_rivers else None
+
+if not args.no_boundaries:
+    pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, 'bdyinfo.dat'))
+if not args.no_rivers:
+    pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, 'riverinfo.dat'))
 
 sim = pygetm.Simulation(domain,
         runtype=pygetm.BAROCLINIC,
