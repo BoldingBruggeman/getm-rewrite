@@ -142,8 +142,8 @@ class Simulation(_pygetm.Simulation):
             self.SS.fill(0.)
 
         # Derive old and new elevations, water depths and thicknesses from current surface elevation on T grid
-        self.domain.update_depth_and_thicknesses()
-        self.domain.update_depth_and_thicknesses()
+        self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
+        self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
 
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
@@ -367,7 +367,7 @@ class Simulation(_pygetm.Simulation):
             # Update 3D elevations and layer thicknesses. New elevation on T grid will match elevation at end of 2D timestep,
             # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 macrotimestep behind. Old
             # elevations zio and thicknesses ho will be one macrotimestep behind new elevations zin and thicknesses hn.
-            self.domain.update_depth_and_thicknesses()
+            self.domain.update_depth(_3d=True)
 
             # Update presssure gradient for start of the 3D time step
             # Note that we use previously-recorded elevations and surface pressure at the start of the 3D timestep

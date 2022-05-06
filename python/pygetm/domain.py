@@ -1036,49 +1036,21 @@ class Domain(_pygetm.Domain):
                 inside = not inside
         return inside
 
-    def update_depth_and_thicknesses(self):
-        """Update surface elevations and layer thicknesses for the 3D time step, starting from elevations at the end of the most recent 2D time step.
-        Note: this uses sea level on T grid as computed by the 2D time step. This has to be up to date in the halos too!
-        """
-        # Store current elevations as previous elevations (on the 3D time step)
-        self.T.zio.all_values[...] = self.T.zin.all_values
-        self.U.zio.all_values[...] = self.U.zin.all_values
-        self.V.zio.all_values[...] = self.V.zin.all_values
-        self.X.zio.all_values[...] = self.X.zin.all_values
-
-        # Synchronize new elevations on the 3D time step to those of the 2D time step that has just completed.
-        self.T.zin.all_values[...] = self.T.z.all_values
-
-        # Update elevations on U, V, X grids by averaging zio and zin; then derive total water depth D on all grids
-        self.update_depth(_3d=True)
-
-        # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
-        # This routine also sets ho to the previous value of hn
-        # All points (interior and halo) are processed, so ho and hn will be valid in halos after this completes,
-        # provided zin was valid in the halo beforehand.
-        self.do_vertical()
-
-        # Update thicknesses on advection grids. These must be at time=n+1/2
-        # That's already the case for the X grid, but for the T grid (now at t=n+1) we explicitly compute thicknesses at time=n+1/2.
-        # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
-        # fortunately these values are not needed for advection.
-        self.h_T_half.all_values[...] = 0.5 * (self.T.ho.all_values + self.T.hn.all_values)
-        self.UU.hn.all_values[:, :, :-1] = self.h_T_half.all_values[:, :, 1:]
-        self.VV.hn.all_values[:, :-1, :] = self.h_T_half.all_values[:, 1:, :]
-        self.UV.hn.all_values[:, :, :] = self.VU.hn.all_values[:, :, :] = self.X.hn.all_values[:, 1:, 1:]
-
-        if self.depth.saved:
-            # Update pressure (dbar) at layer centers, assuming it is equal to depth in m
-            _pygetm.thickness2center_depth(self.T.mask, self.T.hn, self.depth)
-
-        if self.open_boundaries.zc.saved:
-            # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
-            self.open_boundaries.zc.all_values[...] = self.T.zc.all_values[:, self.open_boundaries.j, self.open_boundaries.i].T
-
     def update_depth(self, _3d: bool=False):
         """Use old and new surface elevation on T grid to update elevations on U, V, X grids
-        and subsequently update total water depth D on all grids. z_T (and zo_T) must be up to date in halos"""
+        and subsequently update total water depth D on all grids. z_T (and zo_T) must be up to date in halos.
+        If called with _3d=True, this will first synchronize the new 3D elevations with the 2D ones.
+        It will then also update layer thicknesses and layer center and interface depths."""
         if _3d:
+            # Store current elevations as previous elevations (on the 3D time step)
+            self.T.zio.all_values[...] = self.T.zin.all_values
+            self.U.zio.all_values[...] = self.U.zin.all_values
+            self.V.zio.all_values[...] = self.V.zin.all_values
+            self.X.zio.all_values[...] = self.X.zin.all_values
+
+            # Synchronize new elevations on the 3D time step to those of the 2D time step that has just completed.
+            self.T.zin.all_values[...] = self.T.z.all_values
+
             z_T, z_U, z_V, z_X, zo_T = self.T.zin, self.U.zin, self.V.zin, self.X.zin, self.T.zio
         else:
             z_T, z_U, z_V, z_X, zo_T = self.T.z, self.U.z, self.V.z, self.X.z, self.T.zo
@@ -1121,3 +1093,27 @@ class Domain(_pygetm.Domain):
         self.UU.D.all_values[:, :-1] = self.D_T_half.all_values[:, 1:]
         self.VV.D.all_values[:-1, :] = self.D_T_half.all_values[1:, :]
         self.UV.D.all_values[:, :] = self.VU.D.all_values[:, :] = self.X.D.all_values[1:, 1:]
+
+        if _3d:
+            # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
+            # This routine also sets ho to the previous value of hn
+            # All points (interior and halo) are processed, so ho and hn will be valid in halos after this completes,
+            # provided zin was valid in the halo beforehand.
+            self.do_vertical()
+
+            # Update thicknesses on advection grids. These must be at time=n+1/2
+            # That's already the case for the X grid, but for the T grid (now at t=n+1) we explicitly compute thicknesses at time=n+1/2.
+            # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
+            # fortunately these values are not needed for advection.
+            self.h_T_half.all_values[...] = 0.5 * (self.T.ho.all_values + self.T.hn.all_values)
+            self.UU.hn.all_values[:, :, :-1] = self.h_T_half.all_values[:, :, 1:]
+            self.VV.hn.all_values[:, :-1, :] = self.h_T_half.all_values[:, 1:, :]
+            self.UV.hn.all_values[:, :, :] = self.VU.hn.all_values[:, :, :] = self.X.hn.all_values[:, 1:, 1:]
+
+            if self.depth.saved:
+                # Update pressure (dbar) at layer centers, assuming it is equal to depth in m
+                _pygetm.thickness2center_depth(self.T.mask, self.T.hn, self.depth)
+
+            if self.open_boundaries.zc.saved:
+                # Update vertical coordinate at open boundary, used to interpolate inputs on z grid to dynamic model depths
+                self.open_boundaries.zc.all_values[...] = self.T.zc.all_values[:, self.open_boundaries.j, self.open_boundaries.i].T

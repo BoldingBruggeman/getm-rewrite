@@ -46,7 +46,7 @@ def test(name, periodic_x: bool=False, periodic_y: bool=False, tau_x: float=0., 
         sim.update_surface_pressure_gradient(domain.T.z, sp)
         sim.update_2d_momentum(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
         sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
-        sim.update_depth()
+        sim.domain.update_depth()
 
     success = check_range('U', sim.U, target_value=None if apply_bottom_friction else ntime * timestep * tau_x / pygetm.RHO0)
     success = check_range('V', sim.V, target_value=None if apply_bottom_friction else ntime * timestep * tau_y / pygetm.RHO0) and success

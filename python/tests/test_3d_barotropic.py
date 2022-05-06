@@ -39,7 +39,7 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
         sim.update_surface_pressure_gradient(domain.T.z, sp)
         sim.update_2d_momentum(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
         sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
-        sim.update_depth()
+        sim.domain.update_depth()
 
         if istep % mode_split == 0:
             sim.Ui.all_values[...] /= mode_split
