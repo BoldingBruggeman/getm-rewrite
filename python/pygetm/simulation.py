@@ -75,7 +75,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'D_T_half', 'h_T_half') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -129,6 +129,10 @@ class Simulation(_pygetm.Simulation):
             self.vk.all_values.fill(0.)
             self.ww.all_values.fill(0.)
             self.SS.fill(0.)
+
+        # Water depth and thicknesses on T grid that lag 1/2 time step behind tracer (i.e., they are in sync with U,V,X grids)
+        self.D_T_half = dom.T.array(fill=numpy.nan)
+        self.h_T_half = dom.T.array(fill=numpy.nan, z=CENTERS)
 
         self.update_depth()
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
@@ -557,7 +561,7 @@ class Simulation(_pygetm.Simulation):
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
     def advect_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffu1: core.Array, diffv1: core.Array, u1_ready: bool=False):
-        # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
+        # Advect and optionally diffuse depth-averaged u and v velocity (u1, v1),
         # using velocities reconstructed from transports interpolated to their own advection grids
         # Then reconstruct the resulting change in transports U and V and return this (advU, advV)
 
@@ -568,7 +572,8 @@ class Simulation(_pygetm.Simulation):
         if self.diffuse_momentum:
             # Compute velocity diffusion contribution to transport sources.
             # This uses depth-averaged velocities u1 and v1, which therefore have to be up to date
-            self.momentum_diffusion_driver(self.domain.T.D, self.domain.X.D, self.u1,self.v1, diffu1, diffv1)
+            # Water depths should be in sync with velocities, which means they should lag 1/2 a timestep behind the tracer/T grid
+            self.momentum_diffusion_driver(self.D_T_half, self.domain.X.D, self.u1,self.v1, diffu1, diffv1)
 
         itimestep = 1. / timestep
 
@@ -691,7 +696,9 @@ class Simulation(_pygetm.Simulation):
         numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
         if self.diffuse_momentum:
-            self.momentum_diffusion_driver(self.domain.T.hn, self.domain.X.hn, self.uk, self.vk, self.diffuk, self.diffvk)
+            # Note that thicknesses should be in sync with velocities uk and vk
+            # This means they should lag 1/2 a timestep behind the T grid (already the case for X)
+            self.momentum_diffusion_driver(self.h_T_half, self.domain.X.hn, self.uk, self.vk, self.diffuk, self.diffvk)
 
         # Compute slow (3D) advection contribution to 2D advection.
         # This is done by comparing the previously calculated depth-integrated 3D transport
@@ -717,7 +724,7 @@ class Simulation(_pygetm.Simulation):
         # Synchronize new elevations on the 3D time step to those of the 2D time step that has just completed.
         self.domain.T.zin.all_values[...] = self.domain.T.z.all_values
 
-        # Update elevations on U, V, X grids and total water depth D on all grids
+        # Update elevations on U, V, X grids by averaging zio and zin; then derive total water depth D on all grids
         self.update_depth(_3d=True)
 
         # Update layer thicknesses (hn) using bathymetry H and new elevations zin (on the 3D timestep)
@@ -730,9 +737,9 @@ class Simulation(_pygetm.Simulation):
         # That's already the case for the X grid, but for the T grid (now at t=n+1) we explicitly compute thicknesses at time=n+1/2.
         # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
         # fortunately these values are not needed for advection.
-        h_half = 0.5 * (self.domain.T.ho.all_values + self.domain.T.hn.all_values)
-        self.domain.UU.hn.all_values[:, :, :-1] = h_half[:, :, 1:]
-        self.domain.VV.hn.all_values[:, :-1, :] = h_half[:, 1:, :]
+        self.h_T_half.all_values[...] = 0.5 * (self.domain.T.ho.all_values + self.domain.T.hn.all_values)
+        self.domain.UU.hn.all_values[:, :, :-1] = self.h_T_half.all_values[:, :, 1:]
+        self.domain.VV.hn.all_values[:, :-1, :] = self.h_T_half.all_values[:, 1:, :]
         self.domain.UV.hn.all_values[:, :, :] = self.domain.VU.hn.all_values[:, :, :] = self.domain.X.hn.all_values[:, 1:, 1:]
 
         if self.pres.saved:
@@ -784,9 +791,9 @@ class Simulation(_pygetm.Simulation):
 
         # Update column depth on advection grids. These must be at time=n+1/2.
         # That's already the case for the X grid, but for the T grid we explicitly compute and use D at time=n+1/2.
-        D_T_half = self.domain.T.H.all_values + z_T_half.all_values
-        self.domain.UU.D.all_values[:, :-1] = D_T_half[:, 1:]
-        self.domain.VV.D.all_values[:-1, :] = D_T_half[1:, :]
+        numpy.add(self.domain.T.H.all_values, z_T_half.all_values, self.D_T_half.all_values)
+        self.domain.UU.D.all_values[:, :-1] = self.D_T_half.all_values[:, 1:]
+        self.domain.VV.D.all_values[:-1, :] = self.D_T_half.all_values[1:, :]
         self.domain.UV.D.all_values[:, :] = self.domain.VU.D.all_values[:, :] = self.domain.X.D.all_values[1:, 1:]
 
     @property
