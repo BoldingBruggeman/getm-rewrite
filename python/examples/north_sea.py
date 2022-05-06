@@ -4,44 +4,42 @@ import argparse
 import sys
 import datetime
 import os.path
+import argparse
+import pathlib
 
 import pygetm
 import pygetm.legacy
 import pygetm.input.tpxo
 
-import argparse
-import pathlib
-
 parser = argparse.ArgumentParser()
 parser.add_argument('setup_dir', type=pathlib.Path, help='Path to configuration files', default='.')
-parser.add_argument('--start', help='Similation start time - yyyy-mm-dd hh:mi:ss', default='2006-01-02 00:00:00')
-parser.add_argument('--stop', help='Similation stop time - yyyy-mm-dd hh:mi:ss', default='2007-01-01 00:00:00')
-parser.add_argument('--meteo_dir', type=pathlib.Path, help='Path to meteo forcing files')
+parser.add_argument('--start', help='Simulation start time - yyyy-mm-dd hh:mi:ss', default='2006-01-02 00:00:00')
+parser.add_argument('--stop', help='Simulation stop time - yyyy-mm-dd hh:mi:ss', default='2007-01-01 00:00:00')
+#parser.add_argument('--meteo_dir', type=pathlib.Path, help='Path to meteo forcing files')
 #parser.add_argument('--input_dir', type=pathlib.Path, help='Path to input files', default='input' )
 parser.add_argument('--tpxo9_dir', type=pathlib.Path, help='Path to TPXO9 configuration files')
 parser.add_argument('--tiling', type=argparse.FileType('r'), help='Path to tiling pickle file')
 parser.add_argument('--initial', action='store_true', help='Read initial salinity and temerature conditions from file')
 #parser.add_argument('--no_meteo', action='store_true', help='No meteo forcing')
-parser.add_argument('--no_boundaries', action='store_true', help='No open boundaries')
-parser.add_argument('--no_rivers', action='store_true', help='No river input')
+parser.add_argument('--no_boundaries', action='store_false', dest='boundaries', help='No open boundaries')
+parser.add_argument('--no_rivers', action='store_false', dest='rivers', help='No river input')
 parser.add_argument('--no_output', action='store_false', dest='output', help='Do not save any results to NetCDF')
-parser.add_argument('--debug_output', action='store_true', dest='debug_output', help='Do not save any results to NetCDF')
+parser.add_argument('--debug_output', action='store_true', help='Do not save any results to NetCDF')
 parser.add_argument('--profile', action='store_true', help='Save profiling data')
 args = parser.parse_args()
 
 simstart = datetime.datetime.strptime(args.start, '%Y-%m-%d %H:%M:%S')
 simstop = datetime.datetime.strptime(args.stop, '%Y-%m-%d %H:%M:%S')
-if args.setup_dir is None: args.setup_dir = '.' 
 #if args.input_dir is None: args.input_dir = os.path.join(args.setup_dir,'input')
 tiling = args.tiling if args.tiling is not None else None
-if args.meteo_dir is None: args.no_meteo = True
+#if args.meteo_dir is None: args.no_meteo = True
 profile = 'northsea' if args.profile is not None else None
 
 domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001)
 
-if not args.no_boundaries:
+if args.boundaries:
     pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, 'bdyinfo.dat'))
-if not args.no_rivers:
+if args.rivers:
     pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, 'riverinfo.dat'))
 
 sim = pygetm.Simulation(domain,
