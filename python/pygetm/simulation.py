@@ -8,6 +8,7 @@ import timeit
 import numpy
 import numpy.typing
 import cftime
+import enum
 
 from .constants import *
 from . import _pygetm
@@ -26,6 +27,23 @@ BAROTROPIC = BAROTROPIC_2D = 1
 BAROTROPIC_3D = 2
 FROZEN_DENSITY = 3
 BAROCLINIC = 4
+
+class VerticalCoordinates(enum.IntEnum):
+    SIGMA = 1
+#    Z = 2
+#    GVC = 3
+#    HYBRID = 4
+#    ADAPTIVE = 5
+
+class InternalPressure(enum.IntEnum):
+    BLUMBERG_MELLOR = 1
+#    BLUMBERG_MELLOR_LIN=2
+#    Z_INTERPOL=3
+#    SONG_WRIGHT=4
+#    CHU_FAN=5
+#    SHCHEPETKIN_MCWILLIAMS=6
+#    STELLING_VANKESTER=7
+
 
 class OpenBoundaries:
     __slots__ = '_tracer', '_type', 'values'
