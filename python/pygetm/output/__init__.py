@@ -86,7 +86,7 @@ class OutputManager(FieldManager):
         for file in self.files:
             file.save(seconds_passed, itimestep, time)
 
-    def close(self, seconds_passed: float, time: Optional[cftime.datetime]):
+    def close(self, seconds_passed: float, time: Optional[cftime.datetime]=None):
         for file in self.files:
             self._logger.debug('Closing %s' % file.path)
             file.close(seconds_passed, time)
