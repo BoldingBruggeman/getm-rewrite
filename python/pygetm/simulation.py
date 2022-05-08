@@ -145,11 +145,11 @@ class Simulation(_pygetm.Simulation):
         for name in Simulation._sealevel_arrays:
             setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=3))
 
+        self.U.all_values.fill(0.)
+        self.V.all_values.fill(0.)
+        self.u1.all_values.fill(0.)
+        self.v1.all_values.fill(0.)
         if runtype > BAROTROPIC_2D:
-            self.U.all_values.fill(0.)
-            self.V.all_values.fill(0.)
-            self.u1.all_values.fill(0.)
-            self.v1.all_values.fill(0.)
             self.pk.all_values.fill(0.)
             self.qk.all_values.fill(0.)
             self.uk.all_values.fill(0.)
