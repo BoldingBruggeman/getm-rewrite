@@ -117,10 +117,20 @@ class Simulation(_pygetm.Simulation):
             dom.T.lon.fabm_standard_name = 'longitude'
         if dom.T.lat is not None:
             dom.T.lat.fabm_standard_name = 'latitude'
+        dom.T.z.attrs['_part_of_state'] = True
+        dom.T.zo.attrs['_part_of_state'] = True
+        dom.T.zio.attrs['_part_of_state'] = True
+        dom.T.zin.attrs['_part_of_state'] = True
 
         array_args = {
-            'uk': dict(units='m s-1', long_name='velocity in Eastward direction', fill_value=FILL_VALUE),
-            'vk': dict(units='m s-1', long_name='velocity in Northward direction', fill_value=FILL_VALUE),
+            'U': dict(units='m s-1', long_name='depth-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+            'V': dict(units='m s-1', long_name='depth-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+            'u1': dict(units='m s-1', long_name='depth-averaged velocity in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+            'v1': dict(units='m s-1', long_name='depth-averaged velocity in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+            'pk': dict(units='m2 s-1', long_name='layer-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+            'qk': dict(units='m2 s-1', long_name='layer-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+            'uk': dict(units='m s-1', long_name='velocity in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+            'vk': dict(units='m s-1', long_name='velocity in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
             'ww': dict(units='m s-1', long_name='vertical velocity', fill_value=FILL_VALUE),
             'SS': dict(units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
         }
@@ -136,6 +146,12 @@ class Simulation(_pygetm.Simulation):
             setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=3))
 
         if runtype > BAROTROPIC_2D:
+            self.U.all_values.fill(0.)
+            self.V.all_values.fill(0.)
+            self.u1.all_values.fill(0.)
+            self.v1.all_values.fill(0.)
+            self.pk.all_values.fill(0.)
+            self.qk.all_values.fill(0.)
             self.uk.all_values.fill(0.)
             self.vk.all_values.fill(0.)
             self.ww.all_values.fill(0.)
@@ -310,6 +326,9 @@ class Simulation(_pygetm.Simulation):
 
         # Update inputs and forcing variables based on the current time and state
         self.update_forcing(macro_active=True)
+
+        self.update_2d_momentum_diagnostics()
+        self.update_3d_momentum_diagnostics(self.macrotimestep, self.turbulence.num)
 
         if self.apply_bottom_friction:
             self.bottom_friction_3d()
@@ -512,7 +531,7 @@ class Simulation(_pygetm.Simulation):
                 ps = pstats.Stats(pr, stream=f).sort_stats(pstats.SortKey.TIME)
                 ps.print_stats()
         self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
-        self.output_manager.close()
+        self.output_manager.close(self.timestep * self.istep, self.time)
 
     def add_rivers_3d(self):
         """Update layer thicknesses and tracer concentrations to account for river inflow."""
@@ -631,6 +650,13 @@ class Simulation(_pygetm.Simulation):
         self.Ui.all_values += self.U.all_values
         self.Vi.all_values += self.V.all_values
 
+    def update_2d_momentum_diagnostics(self, skip_coriolis: bool=False):
+        """Update 2D momentum diagsnotics, including the Coriolis terms that will drive the next 2D update.
+        This is already done as part of the momentum update itself, so needed only when starting from a restart."""
+        if not skip_coriolis:
+            self.coriolis_fu()
+            self.coriolis_fv()
+
     def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         """Update depth-explicit transports (pk, qk) and velocities (uk, vk). This will also update their halos."""
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids.
@@ -663,7 +689,17 @@ class Simulation(_pygetm.Simulation):
             self.coriolis_fpk()
         self._u3dfirst = not self._u3dfirst
 
-        # Infer vertical velocity from horizontal transports and desired layer height change.
+        self.update_3d_momentum_diagnostics(timestep, viscosity, skip_coriolis=True)
+
+    def update_3d_momentum_diagnostics(self, timestep: float, viscosity: core.Array, skip_coriolis: bool=False):
+        """Update 3D momentum diagsnotics, including the slow terms that will drive the 2D updates over the next,
+        macrotimestep, and the bottom friction and Coriolis terms that will drive the next 3D update.
+        NB the Coriolis update is already done as part of the momentum update itself, so needed only when starting from a restart."""
+        if not skip_coriolis:
+            self.coriolis_fpk()
+            self.coriolis_fqk()
+
+        # Infer vertical velocity from horizontal transports and desired layer height change (ho -> hn).
         # This is done at all points surrounding U and V points, so no further halo exchange of w is needed
         # to support interpolation to U and V grids later on. This does require that transports are up to date in halos.
         self.w_3d(timestep)
@@ -672,8 +708,8 @@ class Simulation(_pygetm.Simulation):
 
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by layer heights
         # Both velocities and U/V thicknesses are now at time 1/2
-        numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
-        numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
+        numpy.divide(self.pk.all_values, self.pk.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
+        numpy.divide(self.qk.all_values, self.qk.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
         # Use updated velocities (uk, vk) to compute shear frequency (SS) at T points (interior only, not in halos)
         self.update_shear_frequency(viscosity)
@@ -700,8 +736,8 @@ class Simulation(_pygetm.Simulation):
         self.advqk.all_values[...] = (self.vk.all_values * self.vadv.h - self.qk.all_values) * itimestep
 
         # Restore velocity at time=1/2 (the final value at the end of the current timestep)
-        numpy.divide(self.pk.all_values, self.U.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
-        numpy.divide(self.qk.all_values, self.V.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
+        numpy.divide(self.pk.all_values, self.pk.grid.hn.all_values, where=self.pk.grid.mask.all_values != 0, out=self.uk.all_values)
+        numpy.divide(self.qk.all_values, self.qk.grid.hn.all_values, where=self.qk.grid.mask.all_values != 0, out=self.vk.all_values)
 
         if self.diffuse_momentum:
             # Calculate the momentum trends (diffpk, diffqk) associated with diffusion of 3D u and v velocity

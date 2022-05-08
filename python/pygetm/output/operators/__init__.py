@@ -40,26 +40,37 @@ class FieldCollection:
         self.default_dtype = default_dtype
         self._updatable = []
 
-    def request(self, name: Union[str, Iterable[str]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: bool=False, time_average: bool=False, generate_unique_name: bool=False):
-        if not isinstance(name, str):
+    def request(self, field: Union[str, pygetm.core.Array, Iterable[Union[str, pygetm.core.Array]]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: Optional[bool]=None, time_average: bool=False, generate_unique_name: bool=False):
+        if isinstance(field, str):
+            if field not in self.field_manager.fields:
+                raise Exception('Unknown field "%s" requested. Available: %s' % (field, ', '.join(self.field_manager.fields)))
+            array = self.field_manager.fields[field]
+        elif isinstance(field, pygetm.core.Array):
+            array = field
+        else:
             # Multiple names requested; call request for each individually
-            assert output_name is None, 'request is called with multiple names: %s. Therefore, output_name cannot be specified.' % (name,)
-            for n in name:
-                self.request(n, dtype=dtype, mask=mask, time_average=time_average)
+            if output_name is not None:
+                raise Exception('Trying to add multiple fields to %s. In that case, output_name cannot be specified.' % (self,))
+            for f in field:
+                self.request(f, dtype=dtype, mask=mask, time_average=time_average)
             return
 
-        assert name in self.field_manager.fields, 'Unknown field "%s" requested. Available: %s' % (name, ', '.join(self.field_manager.fields))
-
         if output_name is None:
-            output_name = name
+            if array.name is None:
+                raise Exception('Trying to add an unnamed variable to %s. In this case, output_name must be provided' % self)
+            output_name = array.name
             if generate_unique_name:
                 i = 0
                 while output_name in self.fields:
-                    output_name = '%s_%i' % (name, i)
+                    output_name = '%s_%i' % (array.name, i)
                     i += 1
-        assert output_name not in self.fields, 'A variable with name "%s" has already been added to %s.' % (output_name, self)
 
-        array = self.field_manager.fields[name]
+        if mask is None:
+            mask = array.attrs.get('_mask_output', False)
+
+        if output_name in self.fields:
+            raise Exception('A variable with name "%s" has already been added to %s.' % (output_name, self))
+
         array.saved = True
         if dtype is None and array.dtype == float:
             dtype = self.default_dtype

@@ -141,4 +141,4 @@ if args.profile:
 else:
     main()
 
-outman.close()
+outman.close(Nmax * timestep)

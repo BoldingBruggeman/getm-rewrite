@@ -12,8 +12,8 @@ class Turbulence:
     def initialize(self, grid: domain.Grid):
         self.grid = grid
         self.logger = grid.domain.root_logger.getChild(self.__class__.__name__)
-        self.nuh = grid.array(z=INTERFACES, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=FILL_VALUE)
-        self.num = grid.array(z=INTERFACES, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=FILL_VALUE)
+        self.nuh = grid.array(z=INTERFACES, name='nuh', units='m2 s-1', long_name='turbulent diffusivity of heat', fill_value=FILL_VALUE, attrs={'_part_of_state': True})
+        self.num = grid.array(z=INTERFACES, name='num', units='m2 s-1', long_name='turbulent diffusivity of momentum', fill_value=FILL_VALUE, attrs={'_part_of_state': True})
         self.nuh.fill(0.)
         self.num.fill(0.)
 
@@ -30,10 +30,10 @@ class GOTM(Turbulence):
         self.mix = _pygotm.Mixing(grid.nz, b'' if self.nml_path is None else self.nml_path.encode('ascii'))
         self.nuh.fill(self.mix.nuh[:, numpy.newaxis, numpy.newaxis])
         self.num.fill(self.mix.num[:, numpy.newaxis, numpy.newaxis])
-        self.tke = grid.array(fill=self.mix.tke[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='tke', units='m2 s-2', long_name='turbulent kinetic energy')
-        self.tkeo = grid.array(fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='tkeo', units='m2 s-2', long_name='turbulent kinetic energy at previous timestep')
-        self.eps = grid.array(fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='eps', units='m2 s-3', long_name='energy dissipation rate')
-        self.L = grid.array(fill=self.mix.L[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='L', units='m', long_name='turbulence length scale')
+        self.tke = grid.array(fill=self.mix.tke[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='tke', units='m2 s-2', long_name='turbulent kinetic energy', attrs={'_part_of_state': True})
+        self.tkeo = grid.array(fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='tkeo', units='m2 s-2', long_name='turbulent kinetic energy at previous timestep', attrs={'_part_of_state': True})
+        self.eps = grid.array(fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='eps', units='m2 s-3', long_name='energy dissipation rate', attrs={'_part_of_state': True})
+        self.L = grid.array(fill=self.mix.L[:, numpy.newaxis, numpy.newaxis], z=INTERFACES, name='L', units='m', long_name='turbulence length scale', attrs={'_part_of_state': True})
         self.log()
 
     def log(self):

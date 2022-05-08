@@ -94,6 +94,6 @@ class NetCDFFile(File):
         if self.nc is not None and self.sync_interval is not None and self.itime % self.sync_interval == 0:
             self.nc.sync()
 
-    def close(self):
+    def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if self.nc is not None:
             self.nc.close()
