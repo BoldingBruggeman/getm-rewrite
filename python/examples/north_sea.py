@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('setup_dir', type=pathlib.Path, help='Path to configuration files', default='.')
 parser.add_argument('--start', help='Simulation start time - yyyy-mm-dd hh:mi:ss', default='2006-01-02 00:00:00')
 parser.add_argument('--stop', help='Simulation stop time - yyyy-mm-dd hh:mi:ss', default='2007-01-01 00:00:00')
-#parser.add_argument('--meteo_dir', type=pathlib.Path, help='Path to meteo forcing files')
+parser.add_argument('--meteo_dir', type=pathlib.Path, help='Path to ERA5 meteo forcing files')
 #parser.add_argument('--input_dir', type=pathlib.Path, help='Path to input files', default='input' )
 parser.add_argument('--tpxo9_dir', type=pathlib.Path, help='Path to TPXO9 configuration files')
 parser.add_argument('--tiling', type=argparse.FileType('r'), help='Path to tiling pickle file')
@@ -42,11 +42,17 @@ if args.boundaries:
 if args.rivers:
     pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, 'riverinfo.dat'))
 
+# Select between original or ERA5 meteo forcing
+if args.meteo_dir:
+    airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.DEW_POINT_TEMPERATURE)
+else:
+    airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.SPECIFIC_HUMIDITY)
+
 sim = pygetm.Simulation(domain,
         runtype=pygetm.BAROCLINIC,
         advection_scheme=pygetm.AdvectionScheme.HSIMT,
         gotm=os.path.join(args.setup_dir, 'gotmturb.nml'),
-        airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.SPECIFIC_HUMIDITY),
+        airsea=airsea,
         internal_pressure_method=pygetm.InternalPressure.BLUMBERG_MELLOR,
 #    fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
 )
@@ -86,14 +92,24 @@ if sim.runtype == pygetm.BAROCLINIC:
     sim.temp.set(11.6)
     sim.salt.set(35.2)
 
-sim.logger.info('Setting up ERA meteorological forcing')
-met_path = os.path.join(args.setup_dir, 'Forcing/Meteo/CFSR.daymean.2006.nc')
-sim.airsea.tcc.set(pygetm.input.from_nc(met_path, 'tcc'))
-sim.airsea.t2m.set(pygetm.input.from_nc(met_path, 't2'))
-sim.airsea.qa.set(pygetm.input.from_nc(met_path, 'sh'))
-sim.airsea.sp.set(pygetm.input.from_nc(met_path, 'slp'))
-sim.airsea.u10.set(pygetm.input.from_nc(met_path, 'u10'))
-sim.airsea.v10.set(pygetm.input.from_nc(met_path, 'v10'))
+if args.meteo_dir:
+    sim.logger.info('Setting up ERA5 meteorological forcing')
+    ERA_path = os.path.join(args.meteo_dir, 'era5_2006.nc')
+    sim.airsea.u10.set(pygetm.input.from_nc(ERA_path, 'u10'))
+    sim.airsea.v10.set(pygetm.input.from_nc(ERA_path, 'v10'))
+    sim.airsea.t2m.set(pygetm.input.from_nc(ERA_path, 't2m') - 273.15)
+    sim.airsea.d2m.set(pygetm.input.from_nc(ERA_path, 'd2m') - 273.15)
+    sim.airsea.sp.set(pygetm.input.from_nc(ERA_path, 'sp'))
+    sim.airsea.tcc.set(pygetm.input.from_nc(ERA_path, 'tcc'))
+else:
+    sim.logger.info('Setting up NS original meteorological forcing')
+    met_path = os.path.join(args.setup_dir, 'Forcing/Meteo/CFSR.daymean.2006.nc')
+    sim.airsea.tcc.set(pygetm.input.from_nc(met_path, 'tcc'))
+    sim.airsea.t2m.set(pygetm.input.from_nc(met_path, 't2'))
+    sim.airsea.qa.set(pygetm.input.from_nc(met_path, 'sh'))
+    sim.airsea.sp.set(pygetm.input.from_nc(met_path, 'slp'))
+    sim.airsea.u10.set(pygetm.input.from_nc(met_path, 'u10'))
+    sim.airsea.v10.set(pygetm.input.from_nc(met_path, 'v10'))
 
 if sim.fabm_model:
     sim.logger.info('Setting up FABM dependencies that GETM does not provide')
