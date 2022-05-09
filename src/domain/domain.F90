@@ -138,6 +138,8 @@ MODULE getm_domain
         !! elevation at T-points baroclinic time step
       real(real64), dimension(:,:), allocatable :: zio
         !! previous timstep
+      real(real64), dimension(:,:,:), allocatable :: gga
+        !! scaling of total water depth to layer heights - used by GVC
       real(real64), dimension(:,:,:), allocatable :: hn
         !! layer heights - new time step
       real(real64), dimension(:,:,:), allocatable :: ho
