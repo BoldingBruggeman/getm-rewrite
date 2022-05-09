@@ -24,13 +24,11 @@ class File(operators.FieldCollection):
         self.next = None
         self.interval_in_dt = isinstance(interval, int)
         self.interval = interval if self.interval_in_dt else interval.total_seconds()
+        self.save_on_close_only = self.interval_in_dt and self.interval == -1
         self.path = path
 
-    def close(self):
-        self._logger.debug('Closing')
-
     def start(self, itimestep: int, time: Optional[cftime.datetime], save: bool):
-        if save:
+        if save and not self.save_on_close_only:
             self._logger.debug('Saving initial state')
             self.save_now(0., time)
         now = itimestep if self.interval_in_dt else 0.
@@ -39,14 +37,25 @@ class File(operators.FieldCollection):
     def save(self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime]):
         for field in self._updatable:
             field.update()
+        if self.save_on_close_only:
+            return
         now = itimestep if self.interval_in_dt else seconds_passed
         if now >= self.next:
             self._logger.debug('Saving')
             self.save_now(seconds_passed, time)
             self.next += self.interval
 
+    def close(self, seconds_passed: float, time: Optional[cftime.datetime]):
+        if self.save_on_close_only:
+            self.save_now(seconds_passed, time)
+        self._logger.debug('Closing')
+        self.close_now(seconds_passed, time)
+
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         raise NotImplementedError
+
+    def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
+        pass
 
 class OutputManager(FieldManager):
     def __init__(self, rank: int, logger: Optional[logging.Logger]=None):
@@ -62,6 +71,13 @@ class OutputManager(FieldManager):
         self.files.append(file)
         return file
 
+    def add_restart(self, path: str, **kwargs):
+        kwargs.setdefault('interval', -1)
+        file = self.add_netcdf_file(path, **kwargs)
+        for field in self.fields.values():
+            if field.attrs.get('_part_of_state'):
+                file.request(field)
+
     def start(self, itimestep: int=0, time: Optional[cftime.datetime]=None, save: bool=True):
         for file in self.files:
             file.start(itimestep, time, save)
@@ -70,7 +86,7 @@ class OutputManager(FieldManager):
         for file in self.files:
             file.save(seconds_passed, itimestep, time)
 
-    def close(self):
+    def close(self, seconds_passed: float, time: Optional[cftime.datetime]=None):
         for file in self.files:
             self._logger.debug('Closing %s' % file.path)
-            file.close()
+            file.close(seconds_passed, time)

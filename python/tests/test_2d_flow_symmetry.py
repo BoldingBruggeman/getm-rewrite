@@ -90,7 +90,7 @@ def test(name: str, periodic_x: bool=False, periodic_y: bool=False, tau_x: float
         sim.domain.update_depth()
         sim.output_manager.save(istep * timestep, istep)
 
-    sim.output_manager.close()
+    sim.output_manager.close(istep * timestep)
 
     E_input = (E_input * domain.T.area).global_sum()
 
