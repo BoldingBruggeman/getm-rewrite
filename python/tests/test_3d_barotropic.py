@@ -39,8 +39,8 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
         sim.domain.update_depth()
 
         if istep % mode_split == 0:
-            sim.Ui.all_values[...] /= mode_split
-            sim.Vi.all_values[...] /= mode_split
+            sim.Ui.all_values[...] = sim.Ui_tmp / mode_split
+            sim.Vi.all_values[...] = sim.Vi_tmp / mode_split
             sim.domain.update_depth(True)
             sim.update_surface_pressure_gradient(domain.T.zio, sp)
 
@@ -65,8 +65,8 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
             new_tot = (t * domain.T.hn).values.sum()
             if not pygetm.debug.check_equal('layer thicknesses', adv.h[:,2:-2,2:-2], domain.T.hn.values, rtol=1e-14, atol=1e-14):
                 return False
-            sim.Ui.all_values[...] = 0
-            sim.Vi.all_values[...] = 0
+            sim.Ui_tmp[...] = 0
+            sim.Vi_tmp[...] = 0
     return pygetm.debug.check_equal('tracer total before and after simulation', new_tot, pre_tot) and pygetm.debug.check_equal('total volume before and after simulation', z_sum_ini, domain.T.z.ma.sum(), atol=1e-14, rtol=1e-14)
 
 if __name__ == '__main__':
