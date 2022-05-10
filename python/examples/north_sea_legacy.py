@@ -3,7 +3,6 @@
 import argparse
 import datetime
 import os.path
-import argparse
 
 import pygetm
 import pygetm.legacy
