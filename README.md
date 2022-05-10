@@ -71,10 +71,12 @@ To update this repository including its submodules (GOTM, FABM, etc.), make sure
 ```
 git pull
 git submodule update --init --recursive
-conda env update -f environment.yml
+conda env update -f <ENVIROMENT_YML>
 conda activate pygetm
 source ./install
 ```
+
+In the above, replace `<ENVIROMENT_YML>` with the name of the environment file you used previously: `environment.yml` for stand-alone conda environments, or `environment-min.yml` for a setup that uses the local MPI implementation and Fortran compiler.
 
 ## Using the model
 
