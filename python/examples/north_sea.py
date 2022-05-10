@@ -25,7 +25,9 @@ parser.add_argument('--no_boundaries', action='store_false', dest='boundaries', 
 parser.add_argument('--no_rivers', action='store_false', dest='rivers', help='No river input')
 parser.add_argument('--no_output', action='store_false', dest='output', help='Do not save any results to NetCDF')
 parser.add_argument('--debug_output', action='store_true', help='Do not save any results to NetCDF')
-parser.add_argument('--profile', action='store_true', help='Save profiling data')
+parser.add_argument('--profile', help='File to save profiling report to')
+parser.add_argument('--save_restart', help='File to save restart to')
+parser.add_argument('--load_restart', help='File to load restart from')
 args = parser.parse_args()
 
 simstart = datetime.datetime.strptime(args.start, '%Y-%m-%d %H:%M:%S')
@@ -33,7 +35,6 @@ simstop = datetime.datetime.strptime(args.stop, '%Y-%m-%d %H:%M:%S')
 #if args.input_dir is None: args.input_dir = os.path.join(args.setup_dir,'input')
 tiling = args.tiling if args.tiling is not None else None
 #if args.meteo_dir is None: args.no_meteo = True
-profile = 'northsea' if args.profile is not None else None
 
 domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001)
 
@@ -141,7 +142,13 @@ if args.output:
         if sim.fabm_model:
             output.request(('par', 'med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
 
-sim.start(simstart, timestep=60., split_factor=30, report=60, profile=profile)
+if args.save_restart:
+    sim.output_manager.add_restart(args.save_restart)
+
+if args.load_restart:
+    simstart = sim.load_restart(args.load_restart)
+
+sim.start(simstart, timestep=60., split_factor=30, report=60, profile=args.profile)
 while sim.time < simstop:
     sim.advance()
 sim.finish()

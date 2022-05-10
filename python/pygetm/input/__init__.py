@@ -2,6 +2,7 @@ from typing import Iterable, List, Mapping, Union, Optional, Mapping, Sequence, 
 import glob
 import numbers
 import logging
+import enum
 
 import numpy
 import numpy.typing
@@ -692,6 +693,11 @@ def debug_nc_reads(logger: Optional[logging.Logger]=None):
             return super()._getitem(key)
     xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
 
+class OnGrid(enum.Enum):
+    NONE = enum.auto()
+    HORIZONTAL = enum.auto()
+    ALL = enum.auto()
+
 class InputManager:
     def __init__(self):
         self.fields = []
@@ -703,7 +709,7 @@ class InputManager:
         _logger.setLevel(logging.DEBUG)
         debug_nc_reads(_logger)
 
-    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False, mask: bool=False):
+    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: Union[bool, OnGrid]=False, include_halos: Optional[bool]=None, climatology: bool=False, mask: bool=False):
         """Link an array to the provided input. If this input is constant in time, the value of the array will be set immediately.
         If the input is time-dependent, the array and its linked input will be registered with the input manager; the array
         will then be updated to the current time when InputManager.update is called."""
@@ -722,6 +728,8 @@ class InputManager:
 
         if include_halos is None:
             include_halos = array.attrs.get('_require_halos', False) or array.attrs.get('_part_of_state', False)
+        if not isinstance(on_grid, OnGrid):
+            on_grid = OnGrid.HORIZONTAL if on_grid else OnGrid.NONE
 
         grid = array.grid
 
@@ -747,7 +755,7 @@ class InputManager:
             # The target is a normal 2D (horizontal-only) or 3D (depth-explicit) array
             # The source data can either be on the native model grid, or at an arbitrary lon, lat grid.
             # In the latter case, we interpolate in space.
-            if not on_grid:
+            if on_grid == OnGrid.NONE:
                 # interpolate horizontally to local array INCLUDING halos
                 target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2, exclude_global_halos=True)
                 lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
@@ -770,7 +778,7 @@ class InputManager:
                 itimedim = value.dims.index(value.getm.time.dims[0])
                 value = value[tuple([0 if idim == itimedim else slice(None) for idim in range(value.ndim)])]
 
-        if array.z:
+        if array.z and on_grid != OnGrid.ALL:
             # The target is a depth-explicit array.
             # The source must be defined on z coordinates and interpolated to our [time-varying] depths
             if array.on_boundary:

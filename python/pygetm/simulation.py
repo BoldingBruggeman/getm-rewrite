@@ -10,6 +10,8 @@ import numpy.typing
 import cftime
 import enum
 
+import xarray
+
 from .constants import *
 from . import _pygetm
 from . import core
@@ -18,6 +20,7 @@ from . import parallel
 from . import output
 from . import operators
 from . import pyfabm
+import pygetm.input
 import pygetm.mixing
 import pygetm.density
 import pygetm.airsea
@@ -86,7 +89,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp') + _time_arrays
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -123,8 +126,10 @@ class Simulation(_pygetm.Simulation):
         dom.T.zin.attrs['_part_of_state'] = True
 
         array_args = {
-            'U': dict(units='m s-1', long_name='depth-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
-            'V': dict(units='m s-1', long_name='depth-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+            'U': dict(units='m2 s-1', long_name='depth-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+            'V': dict(units='m2 s-1', long_name='depth-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+            'Ui': dict(units='m2 s-1', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+            'Vi': dict(units='m2 s-1', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
             'u1': dict(units='m s-1', long_name='depth-averaged velocity in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
             'v1': dict(units='m s-1', long_name='depth-averaged velocity in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
             'pk': dict(units='m2 s-1', long_name='layer-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
@@ -149,13 +154,17 @@ class Simulation(_pygetm.Simulation):
         self.V.all_values.fill(0.)
         self.u1.all_values.fill(0.)
         self.v1.all_values.fill(0.)
+        self.Ui.all_values.fill(0.)
+        self.Vi.all_values.fill(0.)
+        self.Ui_tmp = numpy.zeros_like(self.Ui.all_values)
+        self.Vi_tmp = numpy.zeros_like(self.Vi.all_values)
         if runtype > BAROTROPIC_2D:
             self.pk.all_values.fill(0.)
             self.qk.all_values.fill(0.)
             self.uk.all_values.fill(0.)
             self.vk.all_values.fill(0.)
             self.ww.all_values.fill(0.)
-            self.SS.fill(0.)
+            self.SS.fill(0.)             # for surface/bottom interfaces, which are not updated
 
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
@@ -276,6 +285,20 @@ class Simulation(_pygetm.Simulation):
         self.tracers.append(tracer)
         return tracer
 
+    def load_restart(self, path: str, time: Optional[cftime.datetime]=None, **kwargs):
+        kwargs.setdefault('decode_times', True)
+        kwargs['use_cftime'] = True
+        with xarray.open_dataset(path, **kwargs) as ds:
+            time_coord = ds['zt'].getm.time.values
+            assert time_coord.size == 1, 'Currently a restart file should contain a single time point only'
+        with xarray.open_dataset(path, **kwargs) as ds:
+            for name, field in self.output_manager.fields.items():
+                if field.attrs.get('_part_of_state', False):
+                    if name not in ds:
+                        raise Exception('Field %s is part of state but not found in %s' % path)
+                    field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
+        return time_coord[0]
+
     def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
         """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
         and after the FABM model has been provided with all dependencies"""
@@ -289,6 +312,14 @@ class Simulation(_pygetm.Simulation):
         self.time = time
         self.istep = 0
         self.report = report
+
+        # Ensure transports and velocities are 0 in masked points
+        # NB velocities will be computed from transports, but only in unmasked points, so zeroing them here is needed.
+        zero_masked = [self.U, self.V, self.u1, self.v1]
+        if self.runtype > BAROTROPIC_2D:
+            zero_masked += [self.Ui, self.Vi, self.pk, self.qk, self.uk, self.vk, self.ww]
+        for array in zero_masked:
+            array.all_values[..., array.grid.mask.all_values == 0] = 0.
 
         if self.fabm_model:
             # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
@@ -325,13 +356,21 @@ class Simulation(_pygetm.Simulation):
                 variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
 
         # Update inputs and forcing variables based on the current time and state
-        self.update_forcing(macro_active=True)
-
+        z_backup = self.domain.T.z.all_values.copy()
+        self.domain.T.z.all_values[...] = self.domain.T.zo.all_values
+        self.domain.update_depth(_3d=False)
         self.update_2d_momentum_diagnostics()
-        self.update_3d_momentum_diagnostics(self.macrotimestep, self.turbulence.num)
 
-        if self.apply_bottom_friction:
-            self.bottom_friction_3d()
+        if self.runtype > BAROTROPIC_2D:
+            # Ensure old and new thicknesses are consistent with zio/zin
+            self.domain.T.z.all_values[...] = self.domain.T.zio.all_values
+            self.domain.update_depth(_3d=True)
+            self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
+            self.domain.update_depth(_3d=True)
+            self.update_3d_momentum_diagnostics(self.macrotimestep, self.turbulence.num)
+
+        self.domain.T.z.all_values[...] = z_backup
+        self.update_forcing(macro_active=True)
 
         # Start output manager
         self.output_manager.start(self.istep, self.time, save=save)
@@ -370,9 +409,12 @@ class Simulation(_pygetm.Simulation):
             self.logger.info(self.time)
 
         if self.runtype > BAROTROPIC_2D and macro_active:
-            # Depth-integrated transports have been summed over all microtimesteps. Now average them.
-            self.Ui.all_values *= 1. / self.split_factor
-            self.Vi.all_values *= 1. / self.split_factor
+            # Depth-integrated transports have been summed over all microtimesteps.
+            # Now average them, then reset depth-integrated transports that will be incremented over newly starting 3D timestep.
+            numpy.multiply(self.Ui_tmp, 1. / self.split_factor, out=self.Ui.all_values)
+            numpy.multiply(self.Vi_tmp, 1. / self.split_factor, out=self.Vi.all_values)
+            self.Ui_tmp.fill(0.)
+            self.Vi_tmp.fill(0.)
 
             # Use previous source terms for biogeochemistry (valid for the start of the current macrotimestep)
             # to update tracers. This should be done before the tracer concentrations change due to transport
@@ -439,10 +481,6 @@ class Simulation(_pygetm.Simulation):
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
                 
             self.report_domain_integrals()
-
-            # Reset depth-integrated transports that will be incremented over subsequent 3D timestep.
-            self.Ui.all_values.fill(0.)
-            self.Vi.all_values.fill(0.)
 
         # Update all inputs and fluxes that will drive the next state update
         self.update_forcing(macro_active)
@@ -647,8 +685,8 @@ class Simulation(_pygetm.Simulation):
             self.coriolis_fu()
         self._ufirst = not self._ufirst
 
-        self.Ui.all_values += self.U.all_values
-        self.Vi.all_values += self.V.all_values
+        self.Ui_tmp += self.U.all_values
+        self.Vi_tmp += self.V.all_values
 
     def update_2d_momentum_diagnostics(self, skip_coriolis: bool=False):
         """Update 2D momentum diagsnotics, including the Coriolis terms that will drive the next 2D update.
