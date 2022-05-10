@@ -64,6 +64,18 @@ cmake --build . --config Release
 cmake --install .
 ```
 
+## Staying up to date
+
+To update this repository including its submodules (GOTM, FABM, etc.), make sure you are in the getm-rewrite directory and execute:
+
+```
+git pull
+git submodule update --init --recursive
+conda env update -f environment.yml
+conda activate pygetm
+source ./install
+```
+
 ## Using the model
 
 You should always activate the correct Python environemnt before you use the model with `conda activate pygetm`.
