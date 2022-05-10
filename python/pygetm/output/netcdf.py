@@ -30,7 +30,7 @@ class NetCDFFile(File):
     def __repr__(self) -> str:
         return 'NetCDFFile(\'%s\')' % self.path
 
-    def _create(self, time: Optional[cftime.datetime]):
+    def _create(self, seconds_passed: float, time: Optional[cftime.datetime]):
         self.created = True
 
         if self.is_root or self.sub:
@@ -55,7 +55,7 @@ class NetCDFFile(File):
             if time is not None:
                 self.nctime.units = 'seconds since %s' % self.time_reference.strftime('%Y-%m-%d %H:%M:%S')
                 self.nctime.calendar = time.calendar
-                self.time_offset = (time - self.time_reference).total_seconds()
+                self.time_offset = (time - self.time_reference).total_seconds() - seconds_passed
             else:
                 self.nctime.units = 's'
             self.ncvars = []
@@ -84,7 +84,7 @@ class NetCDFFile(File):
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if not self.created:
-            self._create(time)
+            self._create(seconds_passed, time)
         if self.nc is not None:
             self.nctime[self.itime] = self.time_offset + seconds_passed
         for field in self.fields.values():
