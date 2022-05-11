@@ -77,8 +77,8 @@ contains
       real(c_double), intent(inout), dimension(nx, ny, nz + 1) :: tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d
 
       real(c_double) :: h(0:nz), NN_loc(0:nz), SS_loc(0:nz)
-
       integer i, j
+
       do j = jstart, jstop
          do i = istart, istop
             if (mask(i, j) == 1) then
