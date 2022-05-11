@@ -101,7 +101,7 @@ END SUBROUTINE do_gvc
 
 !-----------------------------------------------------------------------------
 
-MODULE SUBROUTINE scaling(grid,kk,Dmin,Dgamma)
+SUBROUTINE scaling(grid,kk,Dmin,Dgamma)
    !! A wrapper for vertical coordinate calculations
 
    IMPLICIT NONE
@@ -149,7 +149,7 @@ END SUBROUTINE scaling
 
 !-----------------------------------------------------------------------------
 
-MODULE SUBROUTINE update(grid,Dmax,Dgamma,dt)
+SUBROUTINE update(grid,Dmax,Dgamma,dt)
    !! A wrapper for vertical coordinate calculations
 
    IMPLICIT NONE
