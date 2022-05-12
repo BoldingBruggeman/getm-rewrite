@@ -874,7 +874,7 @@ class Domain(_pygetm.Domain):
         # Water depth and thicknesses on T grid that lag 1/2 time step behind tracer (i.e., they are in sync with U,V,X grids)
         self.D_T_half = self.T.array(fill=numpy.nan)
         self.h_T_half = self.T.array(fill=numpy.nan, z=CENTERS)
-        self.depth = self.T.array(z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='pressure', fill_value=FILL_VALUE)
+        self.depth = self.T.array(z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='depth', fill_value=FILL_VALUE)
 
         self.initialized = True
 

@@ -244,6 +244,7 @@ class Simulation(_pygetm.Simulation):
                     self.tracer_totals.append(ar)
 
             self.pres = dom.depth
+            self.pres.fabm_standard_name = 'pressure'
 
         self.sst = dom.T.array(name='sst', units='degrees_Celsius', long_name='sea surface temperature', fill_value=FILL_VALUE)
 
@@ -330,9 +331,9 @@ class Simulation(_pygetm.Simulation):
 
             # Transfer GETM fields with a standard name to FABM
             for field in self.domain.field_manager.fields.values():
-                if field.fabm_standard_name:
+                for fabm_standard_name in field.attrs.get('_fabm_standard_names', []):
                     try:
-                        variable = self.fabm_model.dependencies.find(field.fabm_standard_name)
+                        variable = self.fabm_model.dependencies.find(fabm_standard_name)
                     except KeyError:
                         continue
                     field.saved = True

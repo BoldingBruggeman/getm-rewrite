@@ -25,6 +25,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self.attrs['units'] = units
         if long_name:
             self.attrs['long_name'] = long_name
+        if fabm_standard_name:
+            self.attrs.setdefault('_fabm_standard_names', set()).add(fabm_standard_name)
         self._fill_value = fill_value if fill_value is None or dtype is None else numpy.array(fill_value, dtype=dtype)
         self._ma = None
         self.mapped_field: Optional[xarray.DataArray] = None
@@ -33,9 +35,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._ndim = None if shape is None else len(shape)
         self._size = None if shape is None else numpy.prod(shape)
         self._dtype = dtype
-        self.fabm_standard_name = fabm_standard_name
         self.constant = constant
         self.values = None
+
+    def set_fabm_standard_name(self, fabm_standard_name):
+        self.attrs.setdefault('_fabm_standard_names', set()).add(fabm_standard_name)
+    fabm_standard_name =  property(fset=set_fabm_standard_name)
 
     def finish_initialization(self):
         """This is called by the underlying cython implementation after the array receives a value (self.all_values is valid)"""
