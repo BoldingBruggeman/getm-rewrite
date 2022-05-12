@@ -102,6 +102,7 @@ class Simulation(_pygetm.Simulation):
         dom.field_manager = self.output_manager
 
         self.input_manager.set_logger(self.logger.getChild('input_manager'))
+        pyfabm.logger = self.logger.getChild('FABM')
 
         # Disable bottom friction if physical bottom roughness is 0 everywhere
         if apply_bottom_friction and (numpy.ma.array(dom.z0b_min, mask=dom.mask==0) == 0.).any():
