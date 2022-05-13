@@ -21,17 +21,17 @@ find_package(Python3 COMPONENTS Interpreter Development NumPy)
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/modules")
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/modules")
 
-add_subdirectory(../extern/python-otps2 python-otps2)
+add_subdirectory(../extern/python-otps2 python-otps2 EXCLUDE_FROM_ALL)
 
-add_subdirectory(../extern/pygsw pygsw)
-add_subdirectory(airsea pyairsea)
+add_subdirectory(../extern/pygsw pygsw EXCLUDE_FROM_ALL)
+add_subdirectory(airsea pyairsea EXCLUDE_FROM_ALL)
 
 set(GOTM_BUILD_LIBRARIES_ONLY ON)
 set(GOTM_USE_FABM OFF CACHE BOOL "Use FABM" FORCE)
 set(GOTM_USE_NetCDF OFF CACHE BOOL "Use NetCDF" FORCE)
 add_subdirectory(../extern/gotm gotm EXCLUDE_FROM_ALL)
 
-set(PYFABM_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyfabm CACHE STRING "Dircotry to write pyfabm library to" FORCE)
+set(PYFABM_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyfabm CACHE STRING "Directory to write pyfabm library to" FORCE)
 set(PYFABM_DIM_COUNT 3 CACHE STRING "Number of FABM dimensions" FORCE)
 set(FABM_FORCED_REAL_KIND c_double)
 add_compile_definitions(_FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_MASKED_VALUE_=0 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
@@ -93,5 +93,11 @@ add_custom_command(OUTPUT wheel.stamp
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)
 
+add_dependencies(wheel otps2_wheel pygsw_wheel airsea_wheel)
+
 # Let pip install the wheel
-install(CODE "execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install --no-index --find-links=${CMAKE_CURRENT_BINARY_DIR}/dist --user --force-reinstall --upgrade pygetm WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist)")
+option(PYGETM_USER_INSTALL "Install with pip --user" OFF)
+if(PYGETM_USER_INSTALL)
+  SET(EXTRA_PIP_ARGS "--user")
+endif()
+install(CODE "execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install --no-index --find-links=${CMAKE_CURRENT_BINARY_DIR}/dist --find-links=${CMAKE_CURRENT_BINARY_DIR}/pyairsea/dist --find-links=${CMAKE_CURRENT_BINARY_DIR}/pygsw/dist --find-links=${CMAKE_CURRENT_BINARY_DIR}/python-otps2/dist ${EXTRA_PIP_ARGS} --force-reinstall --upgrade pygetm pyairsea pygsw otps2  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist)")
