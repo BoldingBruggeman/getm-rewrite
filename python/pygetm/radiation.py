@@ -15,16 +15,24 @@ JERLOV_II = 5
 JERLOV_III = 6
 
 class Radiation:
+    """Base class that provides heating due to shortwave absorption throughout the water column.
+    When using this class directly, heating is effectively prescribed, not calculated.
+    In this case, the heating per layer defaults to zero; assign to swr_abs or call swr_abs.set to change this."""
     def __init__(self, grid: domain.Grid):
         self.grid = grid
         self.logger = grid.domain.root_logger.getChild('radiation')
         self.swr_abs = grid.array(name='swr_abs', units='W m-2', long_name='heating due to shortwave absorption (layer-integrated)', z=CENTERS, fill_value=FILL_VALUE)
+        self.swr_abs.fill(0.)
 
     def __call__(self, swr: core.Array):
         """Compute heating due to shortwave radiation throughout the water column"""
         pass
 
 class TwoBand(Radiation):
+    """Two-band (visible and non-visible) model for shortwave radiation and absorption throughout the water column.
+    It is driven by downwelling shortwave radiation just below the water surface, in combination with
+    the fraction of shortwave radiation that is non-visible, and the attenuation coefficients for the visible and non-visble fractions.
+    All of these can vary spatially, but the non-visible fraction and attenuation coefficients can vary only horizontally, not vertically."""
     def __init__(self, grid: domain.Grid, jerlov_type: Optional[int]=None):
         super().__init__(grid)
         self.A = grid.array(name='A', units='1', long_name='non-visible fraction of shortwave radiation', fill_value=FILL_VALUE)
@@ -40,8 +48,10 @@ class TwoBand(Radiation):
         self.par0 = grid.array(name='par0', units='W m-2', long_name='surface photosynthetically active radiation', fabm_standard_name='surface_downwelling_photosynthetic_radiative_flux', fill_value=FILL_VALUE)
 
     def set_jerlov_type(self, jerlov_type: int):
-        """Derive non-visible fraction of shortwave radiation (A), attenuation length of non-visible shortwave radiation (g1),
-        and attenuation length of visible shortwave radiation (g2) from the Jerlov water type"""
+        """Derive non-visible fraction of shortwave radiation (A), attenuation coefficients of non-visible shortwave radiation (kc1),
+        and attenuation length of visible shortwave radiation (kc2) from the Jerlov water type"""
+        # Note that attentuation in the dictionary below is described by a length scale (g1, g2 in GOTM/old GETM)
+        # Its reciprocal is then calculated to set kc1, kc2.
         A, g1, g2 = {
             JERLOV_I:   (0.58, 0.35, 23. ),
             JERLOV_1:   (0.68, 1.2,  28. ),

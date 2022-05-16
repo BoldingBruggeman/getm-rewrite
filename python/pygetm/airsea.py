@@ -18,6 +18,9 @@ class HumidityMeasure(enum.IntEnum):
     SPECIFIC_HUMIDITY = 4     #: specific humidity in kg kg-1
 
 class Fluxes:
+    """Base class that provides air-water fluxes of heat and momentum, as well as surface air pressure.
+    When using this class directly, these fluxes (stresses taux and tauy, surface heat flux shf, air pressure sp,
+    and net downwelling shortwave radiation swr) are prescribed, not calculated."""
     def initialize(self, domain: pygetm.domain.Domain):
         self.logger = domain.root_logger.getChild('airsea')
 
@@ -30,7 +33,7 @@ class Fluxes:
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
         self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
 
-        # Forcing variables for processes operating over the 3D timestep; these lag behind the 2D forcing variables defined above.
+        # Forcing variables for processes operating over the 3D/macro timestep; these lag behind the 2D forcing variables defined above.
         self.spo = domain.T.array()
         self.taux_Uo = domain.U.array()
         self.tauy_Vo = domain.V.array()
@@ -49,6 +52,7 @@ class Fluxes:
         self.tauy.interp(self.tauy_V)
 
 class FluxesFromMeteo(Fluxes):
+    """Calculate air-water fluxes of heat and momentum, as well as surface air pressure, using the pyairsea library."""
     def __init__(self, longwave_method: int=1, albedo_method: int=1, humidity_measure: HumidityMeasure=HumidityMeasure.DEW_POINT_TEMPERATURE, calculate_swr: bool=True):
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
