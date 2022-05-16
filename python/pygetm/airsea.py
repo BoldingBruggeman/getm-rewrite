@@ -11,10 +11,11 @@ from .constants import FILL_VALUE
 CPA = 1008.
 
 class HumidityMeasure(enum.IntEnum):
-    RELATIVE_HUMIDITY = 1
-    WET_BULB_TEMPERATURE = 2
-    DEW_POINT_TEMPERATURE = 3
-    SPECIFIC_HUMIDITY = 4
+    """Measure used to specify air humidity"""
+    RELATIVE_HUMIDITY = 1     #: relative humidity in %
+    WET_BULB_TEMPERATURE = 2  #: wet bulb temperature in in degrees Celsius
+    DEW_POINT_TEMPERATURE = 3 #: dewpoint temperature in in degrees Celsius
+    SPECIFIC_HUMIDITY = 4     #: specific humidity in kg kg-1
 
 class Fluxes:
     def initialize(self, domain: pygetm.domain.Domain):
