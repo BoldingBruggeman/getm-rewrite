@@ -5,7 +5,7 @@ sphinx:
   configuration: python/docs/source/conf.py
 
 conda:
-  file: environment.yml
+  environment: environment.yml
 
 build:
   os: "ubuntu-20.04"
