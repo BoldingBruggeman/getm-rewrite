@@ -14,7 +14,7 @@ conda:
 build:
   os: "ubuntu-20.04"
   tools:
-    python: "3.10"
+    python: "miniconda3-4.7"
   jobs:
     post_install:
       - bash ./install
