@@ -1,0 +1,8 @@
+# .readthedocs.yml
+
+sphinx:
+  builder: html
+  configuration: python/docs/source/conf.py
+
+conda:
+  file: environment.yml
