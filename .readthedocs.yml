@@ -4,6 +4,10 @@ sphinx:
   builder: html
   configuration: python/docs/source/conf.py
 
+submodules:
+  include: all
+  recursive: true
+
 conda:
   environment: environment.yml
 
@@ -13,4 +17,4 @@ build:
     python: "3.10"
   jobs:
     post_install:
-      - conda activate pygetm ; bash ./install
+      - bash ./install
