@@ -903,6 +903,22 @@ class Domain(_pygetm.Domain):
     def mask_shallow(self, minimum_depth: float):
         self.mask[self.H < minimum_depth] = 0
 
+    def limit_velocity_depth(self, critical_depth: Optional[float]=None):
+        """Decrease bathymetric depth of velocity (U, V) points to the minimum of the bathymetric depth of both neighboring T points,
+        wherever one of these two points is shallower than the specified critical depth.
+        
+        Args:
+            critical_depth: neighbor depth below which the depth of velocity points is restricted. If not provided, Dcrit is used.
+        """
+        if critical_depth is None:
+            critical_depth = self.Dcrit
+        tdepth = self.H_[1::2, 1::2]
+        Vchange = numpy.logical_or(tdepth[1:, :] <= critical_depth, tdepth[:-1, :] <= critical_depth)
+        self.H_[2:-2:2, 1::2][Vchange] = numpy.minimum(tdepth[1:, :], tdepth[:-1, :])[Vchange]
+        Uchange = numpy.logical_or(tdepth[:, 1:] <= critical_depth, tdepth[:, :-1] <= critical_depth)
+        self.H_[1::2, 2:-2:2][Uchange] = numpy.minimum(tdepth[:, 1:], tdepth[:, :-1])[Uchange]
+        self.logger.info('limit_velocity_depth has decreased depth in %i U points (%i currently unmasked), %i V points (%i currently unmasked).' % (Uchange.sum(), Uchange.sum(where=self.mask_[1::2, 2:-2:2] != 0), Vchange.sum(), Vchange.sum(where=self.mask_[2:-2:2, 1::2] != 0)))
+
     def mask_rectangle(self, xmin: Optional[float]=None, xmax: Optional[float]=None, ymin: Optional[float]=None, ymax: Optional[float]=None, value: int=0):
         assert not self.initialized, 'adjust_mask cannot be called after the domain has been initialized.'
         selected = numpy.ones(self.mask.shape, dtype=bool)
@@ -913,10 +929,30 @@ class Domain(_pygetm.Domain):
         if ymax is not None: selected = numpy.logical_and(selected, y <= ymax)
         self.mask[selected] = value
 
-    def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, show_rivers: bool=True, editable: bool=False):
+    def plot(self, fig=None, show_H: bool=True, show_mesh: bool=True, show_rivers: bool=True, editable: bool=False, sub: bool=False):
+        """Plot the domain, optionally including bathymetric depth, mesh and river positions.
+        
+        Args:
+            fig: MatPlotLib figure instance to plot to
+            show_H: show bathymetry as color map
+            show_mesh: show model grid
+            show_rivers: show rivers with ]position and name
+            editable: allow interactive selection of rectangular regions in the domain plot that are subsequently masked out
+            sub: plot the subdomain, not the global domain
+
+        Returns:
+            MatPlotLib figure instance
+        """
         import matplotlib.pyplot
         import matplotlib.collections
         import matplotlib.widgets
+        if self.glob is not self and not sub:
+            # We need to plot the global domain; not the current subdomain.
+            # If we are the root, divert the plot command to the global domain. Otherwise just ignore this and return.
+            if self.glob:
+                self.glob.plot(fig, show_H, show_mesh, show_rivers, editable)
+            return
+
         if fig is None:
             fig, ax = matplotlib.pyplot.subplots(figsize=(0.15 * self.nx, 0.15 * self.ny))
         else:
