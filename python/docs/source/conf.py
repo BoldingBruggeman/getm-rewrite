@@ -18,8 +18,8 @@
 # -- Project information -----------------------------------------------------
 
 project = 'pygetm'
-copyright = '2022, Author'
-author = 'Author'
+copyright = '2022, Bolding & Bruggeman ApS'
+author = 'Bolding & Bruggeman ApS'
 
 
 # -- General configuration ---------------------------------------------------
