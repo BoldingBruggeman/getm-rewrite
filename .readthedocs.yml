@@ -17,5 +17,4 @@ build:
     python: "miniconda3-4.7"
   jobs:
     post_install:
-      - conda install sphinx_rtd_theme
       - bash ./install
