@@ -45,7 +45,7 @@ class Grid(_pygetm.Grid):
     _all_arrays = tuple(['_%s' % n for n in _fortran_arrays] + ['_%si' % n for n in _coordinate_arrays] + ['_%si_' % n for n in _coordinate_arrays])
     __slots__ = _all_arrays + ('halo', 'type', 'ioffset', 'joffset', 'postfix', 'ugrid', 'vgrid', '_sin_rot', '_cos_rot', 'rotation', 'nbdyp', 'overlap')
 
-    array_args = {
+    _array_args = {
         'x': dict(units='m', constant=True, fill_value=FILL_VALUE),
         'y': dict(units='m', constant=True, fill_value=FILL_VALUE),
         'lon': dict(units='degrees_north', long_name='longitude', constant=True, fill_value=FILL_VALUE),
@@ -89,7 +89,7 @@ class Grid(_pygetm.Grid):
         self._cos_rot: Optional[numpy.ndarray] = None
 
         for name in self._readonly_arrays:
-            self.setup_array(name, register=False)
+            self._setup_array(name, register=False)
         self._iarea.all_values[...] = 1. / self._area.all_values
         self._idx.all_values[...] = 1. / self._dx.all_values
         self._idy.all_values[...] = 1. / self._dy.all_values
@@ -101,18 +101,18 @@ class Grid(_pygetm.Grid):
             if name in self._readonly_arrays:
                 getattr(self, name).register()
             else:
-                self.setup_array(name)
+                self._setup_array(name)
         self.rotation = core.Array.create(grid=self, dtype=self.x.dtype, name='rotation' + self.postfix, units='rad', long_name='grid rotation with respect to true North')
-        self.setup_array(name, self.rotation)
+        self._setup_array(name, self.rotation)
         self.zc.all_values.fill(0.)
         self.zf.all_values.fill(0.)
         self.z0b.all_values[...] = self.z0b_min.all_values
         self.nbdyp = nbdyp
 
-    def setup_array(self, name: str, array: Optional[core.Array]=None, register: bool=True):
+    def _setup_array(self, name: str, array: Optional[core.Array]=None, register: bool=True):
         if array is None:
             # No array provided, so it must live in Fortran; retrieve it
-            array = core.Array(name=name + self.postfix, **self.array_args[name])
+            array = core.Array(name=name + self.postfix, **self._array_args[name])
             setattr(self, '_%s' % name, self.wrap(array, name.encode('ascii'), register=register))
 
         # Obtain corresponding array on the supergrid. If this does not exist, we are done
@@ -183,7 +183,15 @@ class Grid(_pygetm.Grid):
         return j + local_slice[-2].start, i + local_slice[-1].start
 
 for membername in Grid._all_arrays:
-    setattr(Grid, membername[1:], property(operator.attrgetter(membername)))
+    info = Grid._array_args.get(membername[1:], {})
+    long_name = info.get('long_name')
+    units = info.get('units')
+    doc = ''
+    if long_name:
+        doc = long_name
+        if units:
+            doc += ' (%s)' % units
+    setattr(Grid, membername[1:], property(operator.attrgetter(membername), doc=doc))
 
 def read_centers_to_supergrid(ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None):
     if dtype is None:
@@ -264,7 +272,7 @@ def interfaces_to_supergrid_2d(data, out: Optional[numpy.ndarray]=None) -> numpy
     return out
 
 def create_cartesian(x, y, nz: int, interfaces=False, **kwargs) -> 'Domain':
-    """Create Cartesian domain from 1D arrays with longitudes and latitudes."""
+    """Create Cartesian domain from 1D arrays with x coordinates and  y coordinates."""
     assert x.ndim == 1, 'x coordinate must be one-dimensional'
     assert y.ndim == 1, 'y coordinate must be one-dimensional'
 
@@ -290,7 +298,7 @@ def create_spherical(lon, lat, nz: int, interfaces=False, **kwargs) -> 'Domain':
     return Domain.create(nx, ny, nz, lon=lon, lat=lat[:, numpy.newaxis], spherical=True, **kwargs)
 
 def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, maxlat: float, resolution: float, nz: int, **kwargs) -> 'Domain':
-    """Create spherical domain longitude range, latitude range and desired resolution in m."""
+    """Create spherical domain encompassing the specified longitude range and latitude range and desired resolution in m."""
     assert maxlon > minlon, 'Maximum longitude %s must be greater than minimum longitude %s' % (maxlon, minlon)
     assert maxlat > minlat, 'Maximum latitude %s must be greater than minimum latitude %s' % (maxlat, minlat)
     assert resolution > 0, 'Desired resolution must be greater than 0, but is %s m' % (resolution,)

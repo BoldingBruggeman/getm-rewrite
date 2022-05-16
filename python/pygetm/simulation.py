@@ -89,7 +89,22 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'SS', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp') + _time_arrays
+
+    _array_args = {
+        'U': dict(units='m2 s-1', long_name='depth-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+        'V': dict(units='m2 s-1', long_name='depth-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+        'Ui': dict(units='m2 s-1', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+        'Vi': dict(units='m2 s-1', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+        'u1': dict(units='m s-1', long_name='depth-averaged velocity in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+        'v1': dict(units='m s-1', long_name='depth-averaged velocity in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+        'pk': dict(units='m2 s-1', long_name='layer-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+        'qk': dict(units='m2 s-1', long_name='layer-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
+        'uk': dict(units='m s-1', long_name='velocity in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+        'vk': dict(units='m s-1', long_name='velocity in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
+        'ww': dict(units='m s-1', long_name='vertical velocity', fill_value=FILL_VALUE),
+        'SS': dict(units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
+    }
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
@@ -126,30 +141,15 @@ class Simulation(_pygetm.Simulation):
         dom.T.zio.attrs['_part_of_state'] = True
         dom.T.zin.attrs['_part_of_state'] = True
 
-        array_args = {
-            'U': dict(units='m2 s-1', long_name='depth-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
-            'V': dict(units='m2 s-1', long_name='depth-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
-            'Ui': dict(units='m2 s-1', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
-            'Vi': dict(units='m2 s-1', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
-            'u1': dict(units='m s-1', long_name='depth-averaged velocity in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
-            'v1': dict(units='m s-1', long_name='depth-averaged velocity in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
-            'pk': dict(units='m2 s-1', long_name='layer-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
-            'qk': dict(units='m2 s-1', long_name='layer-integrated transport in Northward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
-            'uk': dict(units='m s-1', long_name='velocity in Eastward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
-            'vk': dict(units='m s-1', long_name='velocity in Northward direction', fill_value=FILL_VALUE, attrs={'_mask_output': True}),
-            'ww': dict(units='m s-1', long_name='vertical velocity', fill_value=FILL_VALUE),
-            'SS': dict(units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
-        }
-
         self.domain.open_boundaries.z = self.wrap(self.domain.open_boundaries.z, b'zbdy', source=3)
         self.domain.open_boundaries.u = self.wrap(self.domain.open_boundaries.u, b'bdyu', source=1)
         self.domain.open_boundaries.v = self.wrap(self.domain.open_boundaries.v, b'bdyv', source=1)
         for name in Simulation._momentum_arrays:
-            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=1))
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **Simulation._array_args.get(name, {})), name.encode('ascii'), source=1))
         for name in Simulation._pressure_arrays:
-            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=2))
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **Simulation._array_args.get(name, {})), name.encode('ascii'), source=2))
         for name in Simulation._sealevel_arrays:
-            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **array_args.get(name, {})), name.encode('ascii'), source=3))
+            setattr(self, '_%s' % name, self.wrap(core.Array(name=name, **Simulation._array_args.get(name, {})), name.encode('ascii'), source=3))
 
         self.U.all_values.fill(0.)
         self.V.all_values.fill(0.)
@@ -169,8 +169,9 @@ class Simulation(_pygetm.Simulation):
 
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
+        #: Provider of air-water fluxes of heat and momentum. This must inherit from pygetm.airsea.Fluxes and should be provided as argument airsea to Simulation.
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
-        assert isinstance(self.airsea, pygetm.airsea.Fluxes)
+        assert isinstance(self.airsea, pygetm.airsea.Fluxes), 'airsea argument should be of type pygetm.airsea.Fluxes, but is %s' % type(self.airsea)
         self.airsea.initialize(self.domain)
 
         self.fwf = dom.T.array(name='fwf', units='m s-1', long_name='freshwater flux', fill_value=FILL_VALUE)
@@ -188,10 +189,16 @@ class Simulation(_pygetm.Simulation):
         self.vua3d = dom.VU.array(fill=numpy.nan, z=CENTERS)
         self.vva3d = dom.VV.array(fill=numpy.nan, z=CENTERS)
 
+        #: List of tracers that are to be transported. Optionally they can have sources, open boundary conditions and riverine concentrations set.
         self.tracers: List[Tracer] = []
-        self.tracer_totals = []
 
+        #: List of variables for which the domain-integrated total needs to be reported. These can be depth-integrated (2D) or depth-explicit (3D).
+        self.tracer_totals: List[core.Array] = []
+
+        #: Whether to start the depth-integrated (2D) momentum update with u (as opposed to v)
         self._ufirst = False
+
+        #: Whether to start the depth-explicit (3D) momentum update with u (as opposed to v)
         self._u3dfirst = False
 
         self.fabm_model = None
@@ -302,7 +309,9 @@ class Simulation(_pygetm.Simulation):
         return time_coord[0]
 
     def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
-        """This should be called after the output configuration is complete (because we need toknow when variables need to be saved),
+        """Start a simulation by configuring the time, zeroing velcoities, updating diagnostics to match the start time, and optionally saving output.
+
+        This should be called after the output configuration is complete (because we need to know when variables need to be saved),
         and after the FABM model has been provided with all dependencies"""
         if isinstance(time, datetime.datetime):
             time = cftime.datetime(time.year, time.month, time.day, time.hour, time.minute, time.second, time.microsecond)
@@ -661,8 +670,16 @@ class Simulation(_pygetm.Simulation):
 
     def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, u1_ready: bool=False):
         """Update depth-integrated transports (U, V) and depth-averaged velocities (u1, v1).
-        This will also update their halos. Note that velocities u1 and v1 are assumed to be in sync
-        with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D)"""
+        This will also update their halos.
+        
+        Args:
+            timestep: time step (s)
+            tausx: surface stress (Pa) in x direction
+            tausy: surface stress (Pa) in y direction
+            dpdx: surface pressure gradient (dimensionless) in x direction
+            dpdx: surface pressure gradient (dimensionless) in y direction
+            u1_ready: velocities u1 and v1 are in sync with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D)
+        """
 
         # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
         # store the resulting change in transports U and V (advU, advV),
@@ -691,7 +708,7 @@ class Simulation(_pygetm.Simulation):
         self.Vi_tmp += self.V.all_values
 
     def update_2d_momentum_diagnostics(self, skip_coriolis: bool=False):
-        """Update 2D momentum diagsnotics, including the Coriolis terms that will drive the next 2D update.
+        """Update 2D momentum diagnostics, including the Coriolis terms that will drive the next 2D update.
         This is already done as part of the momentum update itself, so needed only when starting from a restart."""
         if not skip_coriolis:
             self.coriolis_fu()
@@ -804,5 +821,17 @@ class Simulation(_pygetm.Simulation):
         vel2_D2 = U**2 + V**2
         return 0.5 * rho0 * dom.T.area * vel2_D2 / dom.T.D
 
+# Expose all Fortran arrays that are a member of Simulation as read-only properties
+# The originals are members with and underscore as prefix, ad therefore not visible to the user
+# This ensures the user will not accidentally disconnect the Python variable from th underlying Fortran libraries/data
 for membername in Simulation._all_fortran_arrays:
-    setattr(Simulation, membername[1:], property(operator.attrgetter(membername)))
+    attrs = Simulation._array_args.get(membername[1:], {})
+    long_name = attrs.get('long_name')
+    units = attrs.get('units')
+    doc = ''
+    if long_name is not None:
+        doc = long_name
+        if units:
+           doc += ' (%s)' % units 
+    prop = property(operator.attrgetter(membername), doc=doc)
+    setattr(Simulation, membername[1:], prop)

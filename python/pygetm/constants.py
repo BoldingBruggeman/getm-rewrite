@@ -1,6 +1,6 @@
-CP = 3985.
+CP = 3985.       #: specific heat capacity of seawater
 RHO0 = 1025.
-GRAVITY = 9.81
+GRAVITY = 9.81   #: gravitational acceleration
 
 CENTERS = 1
 INTERFACES = 2
