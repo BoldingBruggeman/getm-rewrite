@@ -31,8 +31,8 @@ END INTERFACE
 
 ENUM, BIND(C)
    ENUMERATOR :: method_sigma=1
-   ENUMERATOR :: method_gvc=2
-   ENUMERATOR :: method_adaptive=3
+   ENUMERATOR :: method_gvc=3
+   ENUMERATOR :: method_adaptive=5
 END ENUM
 
 !-----------------------------------------------------------------------------
