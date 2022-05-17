@@ -166,7 +166,7 @@ SUBROUTINE update(grid,Dmax,Dgamma,dt)
 !KB   real(real64) :: Lstart,Lstop
 !-----------------------------------------------------------------------------
 !KB   call cpu_time(Lstart)
-   grid%ho=grid%hn
+!JB   grid%ho=grid%hn
    do j=grid%l(2),grid%u(2)
       do i=grid%l(1),grid%u(1)
          if (grid%mask(i,j) > 0) then
