@@ -107,6 +107,9 @@ class Grid(_pygetm.Grid):
         self.zc.all_values.fill(0.)
         self.zf.all_values.fill(0.)
         self.z0b.all_values[...] = self.z0b_min.all_values
+        self.zo.all_values[...] = self.z.all_values
+        self.zio.all_values[...] = self.z.all_values
+        self.zin.all_values[...] = self.z.all_values
         self.nbdyp = nbdyp
 
     def _setup_array(self, name: str, array: Optional[core.Array]=None, register: bool=True):
