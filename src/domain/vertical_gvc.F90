@@ -184,7 +184,7 @@ SUBROUTINE update(grid,Dmax,Dgamma,dt)
                zz=-grid%H(i,j)
 !KB - check for r
                do k=1,grid%kmax-1
-                  grid%hn(i,j,k)=(grid%ho(i,j,k)*r+HH*(grid%gga(i,j,k)-grid%gga(i,j,k-1)))/(r+1._real64)
+                  grid%hn(i,j,k)=(grid%ho(i,j,k)*r+HH*grid%gga(i,j,k))/(r+1._real64)
                   zz=zz+grid%hn(i,j,k)
                end do
                grid%hn(i,j,grid%kmax)=grid%zin(i,j)-zz
