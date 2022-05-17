@@ -128,7 +128,7 @@ class Simulation(_pygetm.Simulation):
         if not self.diffuse_momentum:
             self.logger.info('Diffusion of momemntum if off because Am is 0')
 
-        assert not dom.initialized
+        assert not dom._initialized
         super().__init__(dom, runtype, internal_pressure_method=internal_pressure_method, Am0=Am)
         self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
         dom.T.hn.fabm_standard_name = 'cell_thickness'
@@ -195,18 +195,15 @@ class Simulation(_pygetm.Simulation):
         #: List of variables for which the domain-integrated total needs to be reported. These can be depth-integrated (2D) or depth-explicit (3D).
         self.tracer_totals: List[core.Array] = []
 
-        #: Whether to start the depth-integrated (2D) momentum update with u (as opposed to v)
-        self._ufirst = False
-
-        #: Whether to start the depth-explicit (3D) momentum update with u (as opposed to v)
-        self._u3dfirst = False
+        self._ufirst = False   #: Whether to start the depth-integrated (2D) momentum update with u (as opposed to v)
+        self._u3dfirst = False #: Whether to start the depth-explicit (3D) momentum update with u (as opposed to v)
 
         self.fabm_model = None
 
         if runtype > BAROTROPIC_2D:
             self.tracer_advection = operators.Advection(dom.T, scheme=advection_scheme)
 
-            # Turbulence and associated fields
+            #: Provider of turbulent viscosity and diffusivity. This must inherit from pygetm.mixing.Turbulence and should be provided as argument turbulence to Simulation.
             self.turbulence = turbulence or pygetm.mixing.GOTM(nml_path=gotm)
             self.turbulence.initialize(self.domain.T)
             self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
@@ -295,6 +292,7 @@ class Simulation(_pygetm.Simulation):
         return tracer
 
     def load_restart(self, path: str, time: Optional[cftime.datetime]=None, **kwargs):
+        """Load the model state from a restart file."""
         kwargs.setdefault('decode_times', True)
         kwargs['use_cftime'] = True
         with xarray.open_dataset(path, **kwargs) as ds:
@@ -308,11 +306,20 @@ class Simulation(_pygetm.Simulation):
                     field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
         return time_coord[0]
 
-    def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: str=False):
-        """Start a simulation by configuring the time, zeroing velcoities, updating diagnostics to match the start time, and optionally saving output.
+    def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: Optional[str]=None):
+        """Start a simulation by configuring the time, zeroing velocities, updating diagnostics to match the start time, and optionally saving output.
 
         This should be called after the output configuration is complete (because we need to know when variables need to be saved),
-        and after the FABM model has been provided with all dependencies"""
+        and after the FABM model has been provided with all dependencies.
+        
+        Args:
+            time: start time
+            timestep: micro time step (s) used for 2D barotropic processes
+            split_factor: number of microtimesteps per macrotimestep
+            report: number of macrotimesteps between reproting of the current time, used as indicator of simulation progress
+            save: whether to save the model state and diagnostics at the very start of the simulation
+            profile: base name for profiling results (None to disable profiling)
+        """
         if isinstance(time, datetime.datetime):
             time = cftime.datetime(time.year, time.month, time.day, time.hour, time.minute, time.second, time.microsecond)
         self.logger.info('Starting simulation at %s' % time)
@@ -389,7 +396,7 @@ class Simulation(_pygetm.Simulation):
         # Record true start time for performance analysis
         self._start_time = timeit.default_timer()
 
-        # Start profiing if requested
+        # Start profiling if requested
         self._profile = None
         if profile:
             import cProfile
@@ -398,6 +405,8 @@ class Simulation(_pygetm.Simulation):
             pr.enable()
 
     def advance(self):
+        """Advance the model state by one microtimestep.
+        If this completes the current macrotimestep, the part of the state associated with that timestep will be advanced too."""
         # Update momentum from time=-1/2 to +1/2, using surface stresses and pressure gradients defined at time=0
         # Inputs and outputs on U and V grids. As depth-averaged velocities u1 and v1 are already in sync
         # with transports U and V and water depths D, we skip their computation by passing u1_ready=True
@@ -501,7 +510,12 @@ class Simulation(_pygetm.Simulation):
         return macro_active
 
     def update_forcing(self, macro_active: bool):
-        # Update all inputs
+        """Update all inputs and fluxes that will drive the next state update.
+        
+        Args:
+            macro_active: update all quantities associated with the macrotimestep
+        """
+        # Update all inputs.
         self.domain.input_manager.update(self.time, include_3d=macro_active)
 
         if self.runtype == BAROCLINIC and macro_active:
@@ -572,6 +586,7 @@ class Simulation(_pygetm.Simulation):
             self.airsea.tauy_Vo.all_values[...] = self.airsea.tauy_V.all_values
 
     def finish(self):
+        """Clean-up after simulation: save profiling result (if any), write output where appropriate (restarts), and close output files"""
         if self._profile:
             import pstats
             name, pr = self._profile
@@ -610,7 +625,11 @@ class Simulation(_pygetm.Simulation):
         self.fabm_model.get_vertical_movement(self.fabm_vertical_velocity)
 
     def update_fabm(self, timestep: float, repair: bool=True):
-        """Time-integrate source terms of all FABM state variables (3D pelagic tracers as well as bottom- and surface-attached variables)"""
+        """Time-integrate source terms of all FABM state variables (3D pelagic tracers as well as bottom- and surface-attached variables).
+        
+        Args:
+            timestep: time step (s)
+            repair: clip out-of-bound state variable values after update"""
         self.fabm_sources_interior *= timestep
         self.fabm_sources_surface *= timestep
         self.fabm_sources_bottom *= timestep
@@ -636,9 +655,20 @@ class Simulation(_pygetm.Simulation):
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
     def transport_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffu1: core.Array, diffv1: core.Array, u1_ready: bool=False):
-        # Advect and optionally diffuse depth-averaged u and v velocity (u1, v1),
-        # using velocities reconstructed from transports interpolated to their own advection grids
-        # Then reconstruct the resulting change in transports U and V and return this (advU, advV)
+        """Advect and optionally diffuse depth-averaged u and v velocity (u1, v1),
+        using velocities reconstructed from transports interpolated to their own advection grids.
+        Then reconstruct the resulting change in transports U and V and return this.
+
+        Args:
+            U: depth-integrated velocity (m2 s-1) in x direction
+            V: depth-integrated velocity (m2 s-1) in y direction
+            timestep: time step (s)
+            advU: array for storing the change in transport U due to advection (m2 s-2)
+            advV: array for storing the change in transport V due to advection (m2 s-2)
+            diffv1: array for storing the change in transport U due to diffusion (m2 s-2)
+            diffv1: array for storing the change in transport V due to diffusion (m2 s-2)
+            u1_ready: velocities u1 and v1 are in sync with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D) and do not needed recomputing
+        """
 
         if not u1_ready:
             numpy.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
@@ -678,7 +708,7 @@ class Simulation(_pygetm.Simulation):
             tausy: surface stress (Pa) in y direction
             dpdx: surface pressure gradient (dimensionless) in x direction
             dpdx: surface pressure gradient (dimensionless) in y direction
-            u1_ready: velocities u1 and v1 are in sync with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D)
+            u1_ready: velocities u1 and v1 are in sync with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D) and do not needed recomputing
         """
 
         # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
@@ -709,7 +739,10 @@ class Simulation(_pygetm.Simulation):
 
     def update_2d_momentum_diagnostics(self, skip_coriolis: bool=False):
         """Update 2D momentum diagnostics, including the Coriolis terms that will drive the next 2D update.
-        This is already done as part of the momentum update itself, so needed only when starting from a restart."""
+        NB the Coriolis update is already done as part of the momentum update itself, so needed only when starting from a restart.
+        
+        Args:
+            skip_coriolis: flag to indicate that Coriolis terms are already up-to-date and do not need recomputing"""
         if not skip_coriolis:
             self.coriolis_fu()
             self.coriolis_fv()
@@ -751,7 +784,13 @@ class Simulation(_pygetm.Simulation):
     def update_3d_momentum_diagnostics(self, timestep: float, viscosity: core.Array, skip_coriolis: bool=False):
         """Update 3D momentum diagsnotics, including the slow terms that will drive the 2D updates over the next,
         macrotimestep, and the bottom friction and Coriolis terms that will drive the next 3D update.
-        NB the Coriolis update is already done as part of the momentum update itself, so needed only when starting from a restart."""
+        NB the Coriolis update is already done as part of the momentum update itself, so needed only when starting from a restart.
+        
+        Args:
+            timestep: time step (s)
+            viscosity: turbulent viscosity (T grid, layer interfaces, m2 s-1)
+            skip_coriolis: flag to indicate that Coriolis terms are already up-to-date and do not need recomputing
+        """
         if not skip_coriolis:
             self.coriolis_fpk()
             self.coriolis_fqk()

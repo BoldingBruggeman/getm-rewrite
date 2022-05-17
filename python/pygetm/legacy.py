@@ -3,9 +3,20 @@ from typing import Optional
 import numpy
 import netCDF4
 
-from . import domain
+import pygetm.domain
 
-def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffset: int=0, nx: Optional[int]=None, ny: Optional[int]=None, z0_const=0.01, **kwargs) -> domain.Domain:
+def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffset: int=0, nx: Optional[int]=None, ny: Optional[int]=None, z0_const=0.01, **kwargs) -> pygetm.domain.Domain:
+    """Create a domain object from a topo.nc file used by legacy GETM.
+    
+    Args:
+        path: NetCDF file with legacy domain topography
+        nlev: number of vertical layers
+        ioffset: starting point in x direction (default: 0 = start of the domain in the topo file)
+        joffset: starting point in y direction (default: 0 = start of the domain in the topo file)
+        nx: number of points to read in x direction (default: read till end of the domain in the topo file)
+        ny: number of points to read in y direction (default: read till end of the domain in the topo file)
+        z0_const: default value of physical bottom roughness (m) to use if not provided in topo file
+        """
     lon, lat, x, y, z0 = None, None, None, None, None
     with netCDF4.Dataset(path) as nc:
         nc.set_auto_mask(False)
@@ -31,9 +42,9 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
             lat = nclat[0] + (joffset - 0.5) * dlat + numpy.arange(2 * ny + 1) * (0.5 * dlat)
             lat = lat[:, numpy.newaxis]
 
-            H = domain.read_centers_to_supergrid(nc['bathymetry'], ioffset, joffset, nx, ny)
-            z0 = z0_const if 'z0' not in nc.variables else domain.read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny)
-            global_domain = domain.Domain.create(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=numpy.where(numpy.ma.getmaskarray(H), 0, 1), **kwargs)
+            H = pygetm.domain.read_centers_to_supergrid(nc['bathymetry'], ioffset, joffset, nx, ny)
+            z0 = z0_const if 'z0' not in nc.variables else pygetm.domain.read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny)
+            domain = pygetm.domain.Domain.create(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=numpy.where(numpy.ma.getmaskarray(H), 0, 1), **kwargs)
         elif grid_type == 3:
             # planar curvilinear
             raise NotImplementedError('No support yet for planar curvilinear coordinates')
@@ -42,7 +53,7 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
             raise NotImplementedError('No support yet for spherical curvilinear coordinates')
         else:
             raise NotImplementedError('Unknown grid_type %i found' % grid_type)
-    return global_domain
+    return domain
 
 class DatFile:
     """Support for reading GETM dat files with comments indicated by ! or #.
@@ -66,10 +77,16 @@ class DatFile:
     def __exit__(self, exc_type, exc_value, traceback):
         self.f.close()
 
-def load_bdyinfo(dom: domain.Domain, path: str, type_2d: Optional[int]=None, type_3d: Optional[int]=None):
-    """Add open boundaries from bdyinfo.dat to domain"""
+def load_bdyinfo(dom: pygetm.domain.Domain, path: str, type_2d: Optional[int]=None, type_3d: Optional[int]=None):
+    """Add open boundaries from bdyinfo.dat to domain.
+    
+    Args:
+        path: data file with open boundary information
+        type_2d: type of 2D open boundary condition to use. If provided, this overrides the type configured in the file.
+        type_3d: type of 3D open boundary condition to use. If provided, this overrides the type configured in the file.
+    """
     with DatFile(path) as f:
-        for side in (domain.WEST, domain.NORTH, domain.EAST, domain.SOUTH):
+        for side in (pygetm.domain.WEST, pygetm.domain.NORTH, pygetm.domain.EAST, pygetm.domain.SOUTH):
             n = int(f.get_line())
             for _ in range(n):
                 # Note: for Western and Eastern boundaries, l and m are indices in x and y dimensions, respectively, 
@@ -79,8 +96,12 @@ def load_bdyinfo(dom: domain.Domain, path: str, type_2d: Optional[int]=None, typ
                 l, mstart, mstop, type_2d_, type_3d_ = map(int, f.get_line().split())
                 dom.open_boundaries.add_by_index(side, l - 1, mstart - 1, mstop, type_2d_ if type_2d is None else type_2d, type_3d_ if type_3d is None else type_3d)
 
-def load_riverinfo(dom: domain.Domain, path: str):
-    """Add rivers from riverinfo.dat to domain"""
+def load_riverinfo(dom: pygetm.domain.Domain, path: str):
+    """Add rivers from riverinfo.dat to domain
+    
+    Args:
+        path: data file with river information
+    """
     with DatFile(path) as f:
         n = int(f.get_line())
         for _ in range(n):
