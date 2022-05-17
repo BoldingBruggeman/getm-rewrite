@@ -24,11 +24,13 @@ END INTERFACE
 
 ENUM, BIND(C)
    ENUMERATOR :: method_blumberg_mellor=1
-   ENUMERATOR :: method_shchepetkin_mcwilliams=2
-!   ENUMERATOR :: use_parabolic=1
-!   ENUMERATOR :: use_gotm=2
+!   ENUMERATOR :: BLUMBERG_MELLOR_LIN=2
+!   ENUMERATOR :: Z_INTERPOL=3
+!   ENUMERATOR :: SONG_WRIGHT=4
+!   ENUMERATOR :: CHU_FAN=5
+   ENUMERATOR :: method_shchepetkin_mcwilliams=6
+!   ENUMERATOR :: STELLING_VANKESTER=7
 END ENUM
-
 
 !-----------------------------------------------------------------------------
 
