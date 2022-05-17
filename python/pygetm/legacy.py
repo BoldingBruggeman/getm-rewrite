@@ -16,6 +16,7 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
         nx: number of points to read in x direction (default: read till end of the domain in the topo file)
         ny: number of points to read in y direction (default: read till end of the domain in the topo file)
         z0_const: default value of physical bottom roughness (m) to use if not provided in topo file
+        **kwargs: keyword arguments that are ultimately passed to :class:`pygetm.domain.Domain`
         """
     lon, lat, x, y, z0 = None, None, None, None, None
     with netCDF4.Dataset(path) as nc:

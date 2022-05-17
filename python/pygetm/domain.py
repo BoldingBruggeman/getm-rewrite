@@ -688,6 +688,25 @@ class Domain(_pygetm.Domain):
         return subdomain
 
     def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, Dmin: float=1., Dcrit: float=2., **kwargs):
+        """Create domain with coordinates, bathymetry, mask defined on the supergrid.
+
+        Args:
+            nx: number of tracer points in x direction
+            ny: number of tracer points in y direction
+            nz: number of vertical layers
+            lon: longitude (degreees East)
+            lat: latitude (degreees North)
+            x: x coordinate (m)
+            y: y coordinate (m)
+            spherical: grid is spherical (as opposed to Cartesian). If True, at least `lon` and `lat` must be provided. Otherwise at least `x` and `y` must be provided.
+            mask: initial mask (0: land, 1: water)
+            H: initial distance between bottom depth and some arbitrary depth reference (m, positive if bottom lies below the depth reference). Typically the depth reference is mean sea level.
+            z0: initial bottom roughness (m)
+            f: Coriolis parameter. By default this is calculated from latitude `lat` if provided.
+            tiling: subdomain decomposition
+            Dmin: minimum depth (m) for wet points. At this depth, all hydrodynamic terms except the pressure gradient and bottom friction are switched off.
+            Dcrit: depth (m) at which tapering of processes (all except pressure gradient and bottom friction) begins.
+        """
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
