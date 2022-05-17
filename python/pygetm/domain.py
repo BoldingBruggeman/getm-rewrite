@@ -644,7 +644,7 @@ class Domain(_pygetm.Domain):
         assert still_ok.all(), 'Rank %i: exchange_metric corrupted %i values: %s.' % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok)
 
     @staticmethod
-    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
+    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, Dmin: float=1., Dcrit: float=2., tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
         global_domain = None
         logger = logger or parallel.getLogger()
         parlogger = logger.getChild('parallel')
@@ -675,14 +675,14 @@ class Domain(_pygetm.Domain):
 
         # If on master node (possibly only node), create global domain object
         if tiling.rank == 0:
-            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo, logger=logger)
+            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo, Dmin=Dmin, Dcrit=Dcrit, logger=logger)
 
         # If there is only one node, return the global domain immediately
         if tiling.n == 1:
             return global_domain
 
         # Create the subdomain, and (if on root) attach a pointer to the global domain
-        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, logger=logger)
+        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, Dmin=Dmin, Dcrit=Dcrit, logger=logger)
         subdomain.glob = global_domain
 
         return subdomain
@@ -953,7 +953,7 @@ class Domain(_pygetm.Domain):
             # We need to plot the global domain; not the current subdomain.
             # If we are the root, divert the plot command to the global domain. Otherwise just ignore this and return.
             if self.glob:
-                self.glob.plot(fig, show_H, show_mesh, show_rivers, editable)
+                return self.glob.plot(fig, show_H, show_mesh, show_rivers, editable)
             return
 
         if fig is None:
