@@ -233,11 +233,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.values[key] = values
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int]:
         return self._shape
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         return self._ndim
 
     @property
@@ -248,11 +248,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return INTERFACES if nz == self.grid.nz_ + 1 else CENTERS
 
     @property
-    def size(self):
+    def size(self) -> int:
         return self._size
 
     @property
-    def dtype(self):
+    def dtype(self) -> numpy.typing.DTypeLike:
         return self._dtype
 
     @property

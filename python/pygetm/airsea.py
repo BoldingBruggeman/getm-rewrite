@@ -52,7 +52,9 @@ class Fluxes:
         self.tauy.interp(self.tauy_V)
 
 class FluxesFromMeteo(Fluxes):
-    """Calculate air-water fluxes of heat and momentum, as well as surface air pressure, using the pyairsea library."""
+    """Calculate air-water fluxes of heat and momentum, as well as surface air pressure, using the pyairsea library.
+    The heat flux is the sum of the sensible heat flux, the latent heat flux, and net downwelling longwave radiation
+    """
     def __init__(self, longwave_method: int=1, albedo_method: int=1, humidity_measure: HumidityMeasure=HumidityMeasure.DEW_POINT_TEMPERATURE, calculate_swr: bool=True):
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method

@@ -825,12 +825,14 @@ class Domain(_pygetm.Domain):
         self.Dcrit = 2.
         self.vertical_coordinates_method = VerticalCoordinates.SIGMA
 
-        self.initialized = False
+        self._initialized = False
         self.open_boundaries = OpenBoundaries(self)
         self.rivers = Rivers(self.T)
 
     def initialize(self, runtype: int, field_manager: Optional[output.FieldManager]=None):
-        assert not self.initialized, 'Domain has already been initialized'
+        """Initialize the domain. This updates the mask in order for it to be consistent across T, U, V, X grids.
+        Values for the mask, bathymetry, and bottom roughness are subsequently read-only."""
+        assert not self._initialized, 'Domain has already been initialized'
         if self.glob is not None and self.glob is not self:
             self.glob.initialize(runtype)
 
@@ -884,10 +886,10 @@ class Domain(_pygetm.Domain):
         self.h_T_half = self.T.array(fill=numpy.nan, z=CENTERS)
         self.depth = self.T.array(z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='depth', fill_value=FILL_VALUE)
 
-        self.initialized = True
+        self._initialized = True
 
     def set_bathymetry(self, depth, scale_factor=None):
-        assert not self.initialized, 'set_bathymetry cannot be called after the domain has been initialized.'
+        assert not self._initialized, 'set_bathymetry cannot be called after the domain has been initialized.'
         if not isinstance(depth, xarray.DataArray):
             # Depth is provided as raw data and therefore must be already on the supergrid
             self.H[...] = depth
@@ -910,6 +912,7 @@ class Domain(_pygetm.Domain):
         Args:
             critical_depth: neighbor depth below which the depth of velocity points is restricted. If not provided, Dcrit is used.
         """
+        assert not self._initialized, 'limit_velocity_depth cannot be called after the domain has been initialized.'
         if critical_depth is None:
             critical_depth = self.Dcrit
         tdepth = self.H_[1::2, 1::2]
@@ -920,7 +923,7 @@ class Domain(_pygetm.Domain):
         self.logger.info('limit_velocity_depth has decreased depth in %i U points (%i currently unmasked), %i V points (%i currently unmasked).' % (Uchange.sum(), Uchange.sum(where=self.mask_[1::2, 2:-2:2] != 0), Vchange.sum(), Vchange.sum(where=self.mask_[2:-2:2, 1::2] != 0)))
 
     def mask_rectangle(self, xmin: Optional[float]=None, xmax: Optional[float]=None, ymin: Optional[float]=None, ymax: Optional[float]=None, value: int=0):
-        assert not self.initialized, 'adjust_mask cannot be called after the domain has been initialized.'
+        assert not self._initialized, 'adjust_mask cannot be called after the domain has been initialized.'
         selected = numpy.ones(self.mask.shape, dtype=bool)
         x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
         if xmin is not None: selected = numpy.logical_and(selected, x >= xmin)
@@ -933,15 +936,15 @@ class Domain(_pygetm.Domain):
         """Plot the domain, optionally including bathymetric depth, mesh and river positions.
         
         Args:
-            fig: MatPlotLib figure instance to plot to
+            fig: Matplotlib figure instance to plot to. If not provided, a new figure is created.
             show_H: show bathymetry as color map
             show_mesh: show model grid
-            show_rivers: show rivers with ]position and name
+            show_rivers: show rivers with position and name
             editable: allow interactive selection of rectangular regions in the domain plot that are subsequently masked out
             sub: plot the subdomain, not the global domain
 
         Returns:
-            MatPlotLib figure instance
+            Matplotlib figure instance
         """
         import matplotlib.pyplot
         import matplotlib.collections
