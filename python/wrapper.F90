@@ -776,6 +776,25 @@ contains
       end do
    end subroutine
 
+   subroutine c_thickness2vertical_coordinates(nx, ny, nz, mask, bottom_depth, h, zc, zf) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz
+      integer(c_int), intent(in)        :: mask(nx, ny)
+      real(c_double), intent(in)        :: bottom_depth(nx, ny), h(nx, ny, nz)
+      real(c_double), intent(inout)     :: zc(nx, ny, nz), zf(nx, ny, 0:nz)
+
+      integer :: k
+
+      where (mask /= 0) zc(:,:,1) = -bottom_depth(:,:) + 0.5_c_double * h(:,:,1)
+      do k=2,nz
+         where (mask /= 0) zc(:,:,k) = zc(:,:,k-1) + 0.5_c_double * (h(:,:,k-1) + h(:,:,k))
+      end do
+
+      where (mask /= 0) zf(:,:,0) = -bottom_depth(:,:)
+      do k=1,nz
+         where (mask /= 0) zf(:,:,k) = zf(:,:,k-1) + h(:,:,k)
+      end do
+   end subroutine
+
    subroutine c_alpha(n, D, Dmin, Dcrit, mask, alpha) bind(c)
       integer(c_int), intent(in), value :: n
       integer(c_int), intent(in)        :: mask(n)

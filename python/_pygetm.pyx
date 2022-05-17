@@ -48,6 +48,7 @@ cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, 
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* top, double* out) nogil
 cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
+cdef extern void c_thickness2vertical_coordinates(int nx, int ny, int nz, int* mask, double* bottom_depth, double* h, double* zc, double* zf) nogil
 cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha)
 cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
 
@@ -435,6 +436,13 @@ def thickness2center_depth(Array mask not None, Array h not None, Array out=None
     assert mask.grid is out.grid and out.z == CENTERS
     c_thickness2center_depth(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>out.p)
     return out
+
+def thickness2vertical_coordinates(Array mask not None, Array H not None, Array h not None, Array zc not None, Array zf not None):
+    assert mask.grid is h.grid and h.z == CENTERS
+    assert mask.grid is H.grid and not H.z
+    assert mask.grid is zc.grid and zc.z == CENTERS
+    assert mask.grid is zf.grid and zf.z == INTERFACES
+    c_thickness2vertical_coordinates(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, <int *>mask.p, <double *>H.p, <double *>h.p, <double *>zc.p, <double *>zf.p)
 
 def alpha(Array D not None, double Dmin, double Dcrit, Array out not None):
     cdef Array mask

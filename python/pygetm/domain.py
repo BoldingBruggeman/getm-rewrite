@@ -1165,13 +1165,30 @@ class Domain(_pygetm.Domain):
             # This routine also sets ho to the previous value of hn
             # All points (interior and halo) are processed, so ho and hn will be valid in halos after this completes,
             # provided zin was valid in the halo beforehand.
+            self.T.ho.all_values[...] = self.T.hn.all_values
             self.do_vertical()
+
+            self.T.hn.update_halos()
+            self.h_T_half.all_values[...] = 0.5 * (self.T.ho.all_values + self.T.hn.all_values)
+
+            self.U.ho.all_values[...] = self.U.hn.all_values
+            self.h_T_half.interp(self.U.hn)
+            self.U.hn.update_halos(parallel.Neighbor.RIGHT)
+
+            self.V.ho.all_values[...] = self.V.hn.all_values
+            self.h_T_half.interp(self.V.hn)
+            self.V.hn.update_halos(parallel.Neighbor.TOP)
+
+            self.X.ho.all_values[...] = self.X.hn.all_values
+            self.h_T_half.interp(self.X.hn)
+
+            for grid in (self.T, self.U, self.V):
+                _pygetm.thickness2vertical_coordinates(grid.mask, grid.H, grid.hn, grid.zc, grid.zf)
 
             # Update thicknesses on advection grids. These must be at time=n+1/2
             # That's already the case for the X grid, but for the T grid (now at t=n+1) we explicitly compute thicknesses at time=n+1/2.
             # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips, respectively (the last strip of values within their halos);
             # fortunately these values are not needed for advection.
-            self.h_T_half.all_values[...] = 0.5 * (self.T.ho.all_values + self.T.hn.all_values)
             self.UU.hn.all_values[:, :, :-1] = self.h_T_half.all_values[:, :, 1:]
             self.VV.hn.all_values[:, :-1, :] = self.h_T_half.all_values[:, 1:, :]
             self.UV.hn.all_values[:, :, :] = self.VU.hn.all_values[:, :, :] = self.X.hn.all_values[:, 1:, 1:]
