@@ -87,7 +87,7 @@ class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'diffu1', 'diffv1', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'diffpk', 'diffqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB', 'SxA', 'SyA', 'SxD', 'SyD'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = ()
-    _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report'
+    _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report', 'report_totals'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', 'vertical_diffusion', 'tracer_advection', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp') + _time_arrays
 
@@ -306,7 +306,7 @@ class Simulation(_pygetm.Simulation):
                     field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
         return time_coord[0]
 
-    def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: int=10, save: bool=True, profile: Optional[str]=None):
+    def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: Union[int, datetime.timedelta]=10, report_totals: Union[int, datetime.timedelta]=datetime.timedelta(days=1), save: bool=True, profile: Optional[str]=None):
         """Start a simulation by configuring the time, zeroing velocities, updating diagnostics to match the start time, and optionally saving output.
 
         This should be called after the output configuration is complete (because we need to know when variables need to be saved),
@@ -329,7 +329,12 @@ class Simulation(_pygetm.Simulation):
         self.timedelta = datetime.timedelta(seconds=timestep)
         self.time = time
         self.istep = 0
+        if isinstance(report, datetime.timedelta):
+            report = int(round(report.total_seconds() / self.timestep))
         self.report = report
+        if isinstance(report_totals, datetime.timedelta):
+            report_totals = int(round(report_totals.total_seconds() / self.timestep))
+        self.report_totals = report_totals
 
         # Ensure transports and velocities are 0 in masked points
         # NB velocities will be computed from transports, but only in unmasked points, so zeroing them here is needed.
@@ -499,7 +504,8 @@ class Simulation(_pygetm.Simulation):
                     if tracer.source is not None:
                         tracer.source.all_values *= self.macrotimestep * tracer.source_scale
                     self.vertical_diffusion(self.turbulence.nuh, self.macrotimestep, tracer, ea4=tracer.source)
-                
+
+        if self.report_totals != 0 and self.istep % self.report_totals == 0:
             self.report_domain_integrals()
 
         # Update all inputs and fluxes that will drive the next state update
