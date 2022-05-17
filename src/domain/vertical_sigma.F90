@@ -68,7 +68,7 @@ MODULE SUBROUTINE do_sigma(self)
    !! why not ho=hn as zio=zin
    TGrid: associate( TG => self%T )
 !KB
-   TG%ho=TG%hn
+!JB   TG%ho=TG%hn
    do j=TG%l(2),TG%u(2)
       do i=TG%l(1),TG%u(1)
          if (TG%mask(i,j) > 0) then
