@@ -79,13 +79,12 @@ MODULE SUBROUTINE do_sigma(self)
    end do
    end associate TGrid
 
-#if 0
    !! why not ho=hn as zio=zin
    !! if zin and H are updated in halo zones - extend to all domain
    !! what about mask
    UGrid: associate( UG => self%U )
 !KB
-   UG%ho=UG%hn
+!JB   UG%ho=UG%hn
    do j=UG%l(2),UG%u(2)
       do i=UG%l(1),UG%u(1) ! requires zin is HALO-updated (-1)
          if (UG%mask(i,j) > 0) then
@@ -99,7 +98,7 @@ MODULE SUBROUTINE do_sigma(self)
    !! if zin and H are updated in halo zones - extend to all domain
    VGrid: associate( VG => self%V )
 !KB
-   VG%ho=VG%hn
+!JB   VG%ho=VG%hn
    do j=VG%l(2),VG%u(2)  ! requires zin is HALO-updated (-1)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
@@ -113,7 +112,7 @@ MODULE SUBROUTINE do_sigma(self)
    !! if zin and H are updated in halo zones - extend to all domain
    XGrid: associate( XG => self%X )
 !KB
-   XG%ho=XG%hn
+!JB   XG%ho=XG%hn
    do j=XG%l(2),XG%u(2)  ! requires zin is HALO-updated (-1)
       do i=XG%l(1),XG%u(1)
          if (XG%mask(i,j) > 0) then
@@ -123,7 +122,7 @@ MODULE SUBROUTINE do_sigma(self)
       end do
    end do
    end associate XGrid
-#endif
+
 END SUBROUTINE do_sigma
 
 !---------------------------------------------------------------------------
