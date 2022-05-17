@@ -316,7 +316,8 @@ class Simulation(_pygetm.Simulation):
             time: start time
             timestep: micro time step (s) used for 2D barotropic processes
             split_factor: number of microtimesteps per macrotimestep
-            report: number of macrotimesteps between reproting of the current time, used as indicator of simulation progress
+            report: time interval or number of microtimesteps between reporting of the current time, used as indicator of simulation progress
+            report_totals: time interval or number of microtimesteps between reporting of integrals over the global domain
             save: whether to save the model state and diagnostics at the very start of the simulation
             profile: base name for profiling results (None to disable profiling)
         """
