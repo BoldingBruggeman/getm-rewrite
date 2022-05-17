@@ -79,6 +79,7 @@ MODULE SUBROUTINE do_sigma(self)
    end do
    end associate TGrid
 
+#if 0
    !! why not ho=hn as zio=zin
    !! if zin and H are updated in halo zones - extend to all domain
    !! what about mask
@@ -122,6 +123,7 @@ MODULE SUBROUTINE do_sigma(self)
       end do
    end do
    end associate XGrid
+#endif
 END SUBROUTINE do_sigma
 
 !---------------------------------------------------------------------------
