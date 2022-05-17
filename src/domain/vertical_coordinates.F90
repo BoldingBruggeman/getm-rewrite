@@ -62,10 +62,10 @@ module SUBROUTINE init_vertical(self)
    select case (self%method_vertical_coordinates)
       case(method_sigma)
          call init_sigma(self)
-         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
+!KB         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
       case(method_gvc)
          call init_gvc(self)
-         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
+!KB         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
    end select
 END SUBROUTINE init_vertical
 
@@ -90,10 +90,10 @@ module SUBROUTINE do_vertical(self,dt)
    select case (self%method_vertical_coordinates)
       case(method_sigma)
          call do_sigma(self)
-         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
+!KB         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
       case(method_gvc)
          call do_gvc(self,dt)
-         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
+!KB         call depths(self,self%T); call depths(self,self%U); call depths(self,self%V)
    end select
 END SUBROUTINE do_vertical
 
