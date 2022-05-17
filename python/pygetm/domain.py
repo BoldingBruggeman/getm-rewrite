@@ -26,7 +26,7 @@ SOUTH = 4
 class VerticalCoordinates(enum.IntEnum):
     SIGMA = 1
 #    Z = 2
-#    GVC = 3
+    GVC = 3
 #    HYBRID = 4
 #    ADAPTIVE = 5
 
@@ -644,7 +644,7 @@ class Domain(_pygetm.Domain):
         assert still_ok.all(), 'Rank %i: exchange_metric corrupted %i values: %s.' % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok)
 
     @staticmethod
-    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, Dmin: float=1., Dcrit: float=2., tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
+    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, periodic_x: bool=False, periodic_y: bool=False, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
         global_domain = None
         logger = logger or parallel.getLogger()
         parlogger = logger.getChild('parallel')
@@ -653,7 +653,7 @@ class Domain(_pygetm.Domain):
         if tiling is None:
             # No tiling provided - autodetect
             mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
-            tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=parlogger, **kwargs)
+            tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=parlogger, periodic_x=periodic_x, periodic_y=periodic_y)
         elif isinstance(tiling, str):
             # Path to dumped Tiling object provided
             if not os.path.isfile(tiling):
@@ -663,31 +663,31 @@ class Domain(_pygetm.Domain):
         else:
             # Existing tiling object provided - transfer extent of global domain to determine subdomain sizes
             if isinstance(tiling, tuple):
-                tiling = parallel.Tiling(nrow=tiling[0], ncol=tiling[1], **kwargs)
+                tiling = parallel.Tiling(nrow=tiling[0], ncol=tiling[1], periodic_x=periodic_x, periodic_y=periodic_y)
             tiling.set_extent(nx, ny)
         tiling.report(parlogger)
 
         global_tiling = tiling
         if tiling.n > 1:
             # The global tiling object is a simple 1x1 partition
-            global_tiling = parallel.Tiling(nrow=1, ncol=1, ncpus=1, **kwargs)
+            global_tiling = parallel.Tiling(nrow=1, ncol=1, ncpus=1, periodic_x=periodic_x, periodic_y=periodic_y)
             global_tiling.set_extent(nx, ny)
 
         # If on master node (possibly only node), create global domain object
         if tiling.rank == 0:
-            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo, Dmin=Dmin, Dcrit=Dcrit, logger=logger)
+            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo, logger=logger, **kwargs)
 
         # If there is only one node, return the global domain immediately
         if tiling.n == 1:
             return global_domain
 
         # Create the subdomain, and (if on root) attach a pointer to the global domain
-        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, Dmin=Dmin, Dcrit=Dcrit, logger=logger)
+        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, logger=logger, **kwargs)
         subdomain.glob = global_domain
 
         return subdomain
 
-    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, Dmin: float=1., Dcrit: float=2., **kwargs):
+    def __init__(self, nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, Dmin: float=1., Dcrit: float=2., vertical_coordinate_method: VerticalCoordinates=VerticalCoordinates.SIGMA, ddl: float=0., ddu: float=2., Dgamma: float=0., gamma_surf: float=True, **kwargs):
         """Create domain with coordinates, bathymetry, mask defined on the supergrid.
 
         Args:
@@ -706,6 +706,11 @@ class Domain(_pygetm.Domain):
             tiling: subdomain decomposition
             Dmin: minimum depth (m) for wet points. At this depth, all hydrodynamic terms except the pressure gradient and bottom friction are switched off.
             Dcrit: depth (m) at which tapering of processes (all except pressure gradient and bottom friction) begins.
+            vertical_coordinate_method: type of vertical coordinate to use
+            ddl: dimensionless factor for zooming towards the bottom (0: no zooming, > 2: strong zooming)
+            ddl: dimensionless factor for zooming towards the surface (0: no zooming, > 2: strong zooming)
+            Dgamma: depth (m) range over which z-like coordinates should be used
+            gamma_surf: use z-like coordinates in surface layer (as opposed to bottom layer)
         """
         assert nx > 0, 'Number of x points is %i but must be > 0' % nx
         assert ny > 0, 'Number of y points is %i but must be > 0' % ny
@@ -842,7 +847,11 @@ class Domain(_pygetm.Domain):
 
         self.Dmin = Dmin
         self.Dcrit = Dcrit
-        self.vertical_coordinates_method = VerticalCoordinates.SIGMA
+        self.ddl = ddl
+        self.ddu = ddu
+        self.Dgamma = Dgamma
+        self.gamma_surf = gamma_surf
+        self.vertical_coordinate_method = vertical_coordinate_method
 
         self._initialized = False
         self.open_boundaries = OpenBoundaries(self)
@@ -896,7 +905,7 @@ class Domain(_pygetm.Domain):
         self.z_.flags.writeable = self.z.flags.writeable = False
         self.zo_.flags.writeable = self.zo.flags.writeable = False
 
-        _pygetm.Domain.initialize(self, runtype, Dmin=self.Dmin, method_vertical_coordinates=self.vertical_coordinates_method)
+        super().initialize(runtype, Dmin=self.Dmin, method_vertical_coordinates=self.vertical_coordinate_method, ddl=self.ddl, ddu=self.ddu, Dgamma=self.Dgamma, gamma_surf=self.gamma_surf)
 
         self.rivers.initialize()
 

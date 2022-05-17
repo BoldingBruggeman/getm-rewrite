@@ -306,17 +306,23 @@ contains
       end do
    end subroutine
 
-   subroutine domain_initialize(pdomain, runtype, Dmin, method_vertical_coordinates, maxdt) bind(c)
+   subroutine domain_initialize(pdomain, runtype, Dmin, method_vertical_coordinates, ddl, ddu, Dgamma, gamma_surf, maxdt) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
       integer(c_int), intent(in), value :: runtype
       real(c_double), intent(in), value :: Dmin
       integer(c_int), intent(in), value :: method_vertical_coordinates
+      real(c_double), intent(in), value :: ddl, ddu, Dgamma
+      integer(c_int), intent(in), value :: gamma_surf
       real(c_double), intent(out)       :: maxdt
 
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
       domain%Dmin = Dmin
+      domain%ddl = ddl
+      domain%ddu = ddu
+      domain%Dgamma = Dgamma
+      domain%gamma_surf = gamma_surf /= 0
       domain%method_vertical_coordinates = method_vertical_coordinates
       call domain%initialize(runtype)
       maxdt = domain%maxdt
