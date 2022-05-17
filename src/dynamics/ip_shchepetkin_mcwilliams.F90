@@ -160,7 +160,7 @@ stop
                                   )
                self%idpdx(i,j,k)=UG%hn(i,j,k)*UG%idx(i,j) &
                                  *(self%P(i+1,j,k)-self%P(i,j,k)+self%FC(i,j) &
-                                 -(UG%zio(i+1,j)-UG%zio(i,j))*0.5_real64*(buoy(i+1,j,TG%kmax)+buoy(i,j,TG%kmax)))
+                                 -(TG%zio(i+1,j)-TG%zio(i,j))*0.5_real64*(buoy(i+1,j,TG%kmax)+buoy(i,j,TG%kmax)))
             end if
          end do
       end do
@@ -230,7 +230,7 @@ end do
                                   )
                self%idpdy(i,j,k)=VG%hn(i,j,k)*VG%idy(i,j) &
                                  *(self%P(i,j+1,k)-self%P(i,j,k)+self%FC(i,j) &
-                                 -(VG%zio(i,j+1)-VG%zio(i,j))*0.5_real64*(buoy(i,j+1,TG%kmax)+buoy(i,j,TG%kmax)))
+                                 -(TG%zio(i,j+1)-TG%zio(i,j))*0.5_real64*(buoy(i,j+1,TG%kmax)+buoy(i,j,TG%kmax)))
             end if
          end do
       end do
