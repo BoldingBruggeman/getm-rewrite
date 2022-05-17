@@ -692,7 +692,7 @@ class Domain(_pygetm.Domain):
         spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0.,
         f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0.,
         logger: Optional[logging.Logger]=None, Dmin: float=1., Dcrit: float=2.,
-        vertical_coordinate_method: VerticalCoordinates=VerticalCoordinates.SIGMA, ddl: float=0., ddu: float=0., Dgamma: float=0., gamma_surf: float=True,
+        vertical_coordinate_method: VerticalCoordinates=VerticalCoordinates.SIGMA, ddl: float=0., ddu: float=0., Dgamma: float=0., gamma_surf: bool=True,
         **kwargs):
         """Create domain with coordinates, bathymetry, mask defined on the supergrid.
 
