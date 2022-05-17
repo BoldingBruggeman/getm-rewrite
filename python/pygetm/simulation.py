@@ -37,7 +37,7 @@ class InternalPressure(enum.IntEnum):
 #    Z_INTERPOL=3
 #    SONG_WRIGHT=4
 #    CHU_FAN=5
-#    SHCHEPETKIN_MCWILLIAMS=6
+    SHCHEPETKIN_MCWILLIAMS=6
 #    STELLING_VANKESTER=7
 
 
