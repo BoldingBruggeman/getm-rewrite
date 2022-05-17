@@ -192,7 +192,7 @@ end do
    call cpu_time(V_start)
 #endif
    do k=TG%kmax,1,-1
-      do j=TG%jmin-1,TG%jmax+1
+      do j=TG%jmin-1,TG%jmax+2
          do i=TG%imin,TG%imax
             self%dZx(i,j)=TG%zc(i,j,k)-TG%zc(i,j-1,k)
             self%dRx(i,j)=buoy(i,j,k)-buoy(i,j-1,k)
