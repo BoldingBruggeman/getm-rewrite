@@ -242,11 +242,13 @@ class Neighbor(enum.IntEnum):
     TOP_AND_BOTTOM = 9
     LEFT_AND_RIGHT = 10
     TOP_AND_RIGHT = 11     # for T to U/V grid interpolation
+    LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM = 12  # for T to U/V grid 2nd order interpolation
 
 GROUP2PARTS = {
     Neighbor.TOP_AND_BOTTOM: (Neighbor.TOP, Neighbor.BOTTOM),
     Neighbor.LEFT_AND_RIGHT: (Neighbor.LEFT, Neighbor.RIGHT),
     Neighbor.TOP_AND_RIGHT: (Neighbor.TOP, Neighbor.RIGHT),
+    Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM: (Neighbor.LEFT, Neighbor.RIGHT, Neighbor.TOP, Neighbor.BOTTOM),
 }
 
 class DistributedArray:

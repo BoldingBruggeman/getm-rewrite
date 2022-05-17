@@ -361,7 +361,7 @@ class Simulation(_pygetm.Simulation):
             except KeyError:
                 self._yearday = None
 
-            # Start FABM. This verifies whether all dependencies are fulfilled and freezes the set of dsiagsntoics that will be saved.
+            # Start FABM. This verifies whether all dependencies are fulfilled and freezes the set of diagnostics that will be saved.
             assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
 
             # Fill GETM placeholder arrays for all FABM diagnostics that will be computed/saved.
@@ -527,7 +527,7 @@ class Simulation(_pygetm.Simulation):
 
             # Update density, buoyancy and internal pressure to keep them in sync with T and S.
             self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
-            self.rho.update_halos(parallel.Neighbor.TOP_AND_RIGHT)   # valid rho around all U and V needed for internal pressure; not yet valid becasue T&S were not valid in halos when rho was calculated
+            self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)   # valid rho around all U and V needed for internal pressure; not yet valid because T&S were not valid in halos when rho was calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
             self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
             self.update_internal_pressure_gradient(self.buoy, self.SxB, self.SyB)
 
