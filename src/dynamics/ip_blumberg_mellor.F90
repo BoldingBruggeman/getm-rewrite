@@ -24,7 +24,6 @@ MODULE SUBROUTINE blumberg_mellor(self,buoy)
 
 !  Local variables
    integer :: i,j,k
-   real(real64) :: dxm1,dym1
    real(real64) :: grdl,grdu,buoyl,buoyu,prgr,dxz,dyz
    real(real64) :: U_time,V_time
 !-----------------------------------------------------------------------
@@ -38,23 +37,24 @@ MODULE SUBROUTINE blumberg_mellor(self,buoy)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) > 0) then
-            dxm1=1._real64/UG%dx(i,j)
-            grdl=(buoy(i+1,j,UG%kmax)-buoy(i,j,UG%kmax))*dxm1
+            grdl=(buoy(i+1,j,UG%kmax)-buoy(i,j,UG%kmax))*UG%idx(i,j)
             buoyl=0.5*(buoy(i+1,j,UG%kmax)+buoy(i,j,UG%kmax))
             prgr=grdl*0.5_real64*UG%hn(i,j,UG%kmax)
             self%idpdx(i,j,UG%kmax)=UG%hn(i,j,UG%kmax)*prgr
             do k=UG%kmax-1,1,-1
                grdu=grdl
-               grdl=(buoy(i+1,j,k)-buoy(i,j,k))*dxm1
+               grdl=(buoy(i+1,j,k)-buoy(i,j,k))*UG%idx(i,j)
                buoyu=buoyl
                buoyl=0.5_real64*(buoy(i+1,j,k)+buoy(i,j,k))
-               dxz=(TG%zf(i+1,j,k)-TG%zf(i,j,k))*dxm1
+               dxz=(TG%zf(i+1,j,k)-TG%zf(i,j,k))*UG%idx(i,j)
                prgr=prgr+0.5_real64*(grdu+grdl)*0.5_real64*(UG%hn(i,j,k)+UG%hn(i,j,k+1))-dxz*(buoyu-buoyl)
                self%idpdx(i,j,k)=UG%hn(i,j,k)*prgr
             end do
          end if
       end do
    end do
+!KBwrite(200,*) minloc(self%idpdy),minval(self%idpdy)
+!KBwrite(200,*) maxloc(self%idpdy),maxval(self%idpdy)
    call cpu_time(U_stop)
    U_time=U_time+U_stop-U_start
    end block UBlock
@@ -67,23 +67,24 @@ MODULE SUBROUTINE blumberg_mellor(self,buoy)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) > 0) then
-            dym1 = 1._real64/VG%dy(i,j)
-            grdl=(buoy(i,j+1,VG%kmax)-buoy(i,j,VG%kmax))*dym1
+            grdl=(buoy(i,j+1,VG%kmax)-buoy(i,j,VG%kmax))*VG%idy(i,j)
             buoyl=0.5_real64*(buoy(i,j+1,VG%kmax)+buoy(i,j,VG%kmax))
             prgr=grdl*0.5_real64*VG%hn(i,j,VG%kmax)
             self%idpdy(i,j,VG%kmax)=VG%hn(i,j,VG%kmax)*prgr
             do k=VG%kmax-1,1,-1
                grdu=grdl
-               grdl=(buoy(i,j+1,k)-buoy(i,j,k))*dym1
+               grdl=(buoy(i,j+1,k)-buoy(i,j,k))*VG%idy(i,j)
                buoyu=buoyl
                buoyl=0.5_real64*(buoy(i,j+1,k)+buoy(i,j,k))
-               dyz=(TG%zf(i,j+1,k)-TG%zf(i,j,k))*dym1
+               dyz=(TG%zf(i,j+1,k)-TG%zf(i,j,k))*VG%idy(i,j)
                prgr=prgr+0.5_real64*(grdu+grdl)*0.5_real64*(VG%hn(i,j,k)+VG%hn(i,j,k+1))-dyz*(buoyu-buoyl)
                self%idpdy(i,j,k)=VG%hn(i,j,k)*prgr
             end do
          end if
       end do
    end do
+!KBwrite(201,*) minloc(self%idpdy),minval(self%idpdy)
+!KBwrite(201,*) maxloc(self%idpdy),maxval(self%idpdy)
    call cpu_time(V_stop)
    V_time=V_time+V_stop-V_start
    end block Vblock
