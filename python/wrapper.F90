@@ -222,6 +222,8 @@ contains
          case ('SyA');   p = c_loc(momentum%SyA); grid_type = 3
          case ('SxD');   p = c_loc(momentum%SxD); grid_type = 2
          case ('SyD');   p = c_loc(momentum%SyD); grid_type = 3
+         case ('SxF');   p = c_loc(momentum%SxF); grid_type = 2
+         case ('SyF');   p = c_loc(momentum%SyF); grid_type = 3
          end select
       case (2)
          call c_f_pointer(obj, pressure)
