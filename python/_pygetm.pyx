@@ -365,16 +365,6 @@ cdef class Simulation:
         assert tausy.grid is self.domain.T, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.T.postfix, tausy.grid.postfix)
         momentum_stresses(self.pmomentum, <double *>tausx.p, <double *>tausy.p)
 
-#   call self%velocities_3d()
-#   call self%uv_advection_3d(dt)
-##if 0
-#   call self%uv_diffusion_3d(dt) !KB - makes model go wrong
-##else
-#if (associated(self%logs)) call self%logs%info('*** missing uv_diffusion_3d() ***',level=0)
-##endif
-#   call self%shear_frequency(viscosity)
-#   call self%stresses(tausx,tausy)
-
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T
         assert sp.grid is self.domain.T
