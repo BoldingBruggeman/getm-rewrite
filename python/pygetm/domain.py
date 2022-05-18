@@ -60,9 +60,9 @@ class Grid(_pygetm.Grid):
         'D': dict(units='m', long_name='water depth', fill_value=FILL_VALUE),
         'mask': dict(constant=True, fill_value=0),
         'z': dict(units='m', long_name='elevation', fill_value=FILL_VALUE),
-        'zo': dict(units='m', long_name='elevation at previous time step', fill_value=FILL_VALUE),
-        'zin': dict(units='m', long_name='elevation at 3d time step', fill_value=FILL_VALUE),
-        'zio': dict(units='m', long_name='elevation at previous 3d time step', fill_value=FILL_VALUE),
+        'zo': dict(units='m', long_name='elevation at previous microtimestep', fill_value=FILL_VALUE),
+        'zin': dict(units='m', long_name='elevation at macrotimestep', fill_value=FILL_VALUE),
+        'zio': dict(units='m', long_name='elevation at previous macrotimestep', fill_value=FILL_VALUE),
         'area': dict(units='m2', long_name='grid cell area', constant=True, fill_value=FILL_VALUE),
         'iarea': dict(units='m-2', long_name='inverse of grid cell area', constant=True, fill_value=FILL_VALUE),
         'cor': dict(units='1', long_name='Coriolis parameter', constant=True, fill_value=FILL_VALUE),
@@ -128,7 +128,7 @@ class Grid(_pygetm.Grid):
         valid = self.domain.mask_[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2] > 0
         values = source[self.joffset:self.joffset + 2 * nj:2, self.ioffset:self.ioffset + 2 * ni:2]
         array.all_values.fill(numpy.nan)
-        slc = valid if name in ('z', 'zo',  'z0b_min') else (Ellipsis,)
+        slc = valid if name in ('z', 'z0b_min') else (Ellipsis,)
         array.all_values[:values.shape[0], :values.shape[1]][slc] = values[slc]
         if has_bounds and name in self._coordinate_arrays:
             # Generate interface coordinates. These are not represented in Fortran as they are only needed for plotting.
@@ -596,7 +596,7 @@ class Domain(_pygetm.Domain):
 
         return domain
 
-    def exchange_metric(self, data, relative_in_x: bool=False, relative_in_y: bool=False, fill_value=numpy.nan):
+    def _exchange_metric(self, data, relative_in_x: bool=False, relative_in_y: bool=False, fill_value=numpy.nan):
         if not self.tiling:
             return
 
@@ -644,10 +644,10 @@ class Domain(_pygetm.Domain):
 
         valid_after = numpy.logical_not(numpy.isnan(data))
         still_ok = numpy.where(valid_before, valid_after, True)
-        assert still_ok.all(), 'Rank %i: exchange_metric corrupted %i values: %s.' % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok)
+        assert still_ok.all(), 'Rank %i: _exchange_metric corrupted %i values: %s.' % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok)
 
     @staticmethod
-    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, periodic_x: bool=False, periodic_y: bool=False, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
+    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, periodic_x: bool=False, periodic_y: bool=False, z: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
         global_domain = None
         logger = logger or parallel.getLogger()
         parlogger = logger.getChild('parallel')
@@ -678,7 +678,7 @@ class Domain(_pygetm.Domain):
 
         # If on master node (possibly only node), create global domain object
         if tiling.rank == 0:
-            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, zo=zo, logger=logger, **kwargs)
+            global_domain = Domain(nx, ny, nz, lon, lat, x, y, spherical, tiling=global_tiling, mask=mask, H=H, z0=z0, f=f, z=z, logger=logger, **kwargs)
 
         # If there is only one node, return the global domain immediately
         if tiling.n == 1:
@@ -693,7 +693,7 @@ class Domain(_pygetm.Domain):
     def __init__(self, nx: int, ny: int, nz: int,
         lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None,
         spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0.,
-        f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0., zo: Optional[numpy.ndarray]=0.,
+        f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, z: Optional[numpy.ndarray]=0.,
         logger: Optional[logging.Logger]=None, Dmin: float=1., Dcrit: float=2.,
         vertical_coordinate_method: VerticalCoordinates=VerticalCoordinates.SIGMA, ddl: float=0., ddu: float=0., Dgamma: float=0., gamma_surf: bool=True,
         **kwargs):
@@ -770,7 +770,7 @@ class Domain(_pygetm.Domain):
                             interfaces_to_supergrid_2d(source_on_X, out=data_int)
                         except ValueError:
                             raise Exception('Cannot array broadcast to supergrid (%i x %i) or X grid (%i x %i)' % ((ny * 2 + 1, nx * 2 + 1, ny + 1, nx + 1)))
-                self.exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
+                self._exchange_metric(data, relative_in_x, relative_in_y, fill_value=fill_value)
             data.flags.writeable = data_int.flags.writeable = writeable
             return data_int, data
 
@@ -781,7 +781,6 @@ class Domain(_pygetm.Domain):
         self.lat, self.lat_ = setup_metric(lat, optional=True, relative_in_y=True, writeable=False)
         self.H, self.H_ = setup_metric(H)
         self.z, self.z_ = setup_metric(z)       # elevation
-        self.zo, self.zo_ = setup_metric(zo)    # elevaton on previous time step
         self.z0b_min, self.z0b_min_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=numpy.intc, fill_value=0)
 
@@ -803,8 +802,8 @@ class Domain(_pygetm.Domain):
 
         # Halo exchange for dx, dy, needed to ensure the outer strips of the halos are valid
         # Those outermost strips could not be computed by central-differencing the coordinates as that would require points outside the domain.
-        self.exchange_metric(self.dx_)
-        self.exchange_metric(self.dy_)
+        self._exchange_metric(self.dx_)
+        self._exchange_metric(self.dy_)
 
         self.dx_.flags.writeable = self.dx.flags.writeable = False
         self.dy_.flags.writeable = self.dy.flags.writeable = False
@@ -826,7 +825,7 @@ class Domain(_pygetm.Domain):
         else:
             # Rotation with respect to y axis - assumes y axis always point to true North (can be valid on for infinitesimally small domain)
             self.rotation_[1:-1,1:-1] = supergrid_rotation(self.x_, self.y_)
-        self.exchange_metric(self.rotation_)
+        self._exchange_metric(self.rotation_)
         self.rotation.flags.writeable = False
 
         self.area, self.area_ = setup_metric(self.dx * self.dy, writeable=False)
@@ -878,7 +877,7 @@ class Domain(_pygetm.Domain):
         self.mask_[2:-2:2, 1::2][numpy.logical_and(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
         self.mask_[1::2, 2:-2:2][numpy.logical_and(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
         self.mask_[2:-2:2, 2:-2:2][numpy.logical_and(numpy.logical_and(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_and(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
-        self.exchange_metric(self.mask_, fill_value=0)
+        self._exchange_metric(self.mask_, fill_value=0)
 
         if field_manager is not None:
             self.field_manager = field_manager
@@ -892,7 +891,7 @@ class Domain(_pygetm.Domain):
         mask_[2:-2:2, 1::2][numpy.logical_or(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
         mask_[1::2, 2:-2:2][numpy.logical_or(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
         mask_[2:-2:2, 2:-2:2][numpy.logical_or(numpy.logical_or(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0), numpy.logical_or(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0))] = 0
-        self.exchange_metric(mask_, fill_value=0)
+        self._exchange_metric(mask_, fill_value=0)
         self.mask_[...] = mask_
 
         for grid in self.grids.values():
@@ -912,7 +911,6 @@ class Domain(_pygetm.Domain):
         self.z0b_min_.flags.writeable = self.z0b_min.flags.writeable = False
         self.mask_.flags.writeable = self.mask.flags.writeable = False
         self.z_.flags.writeable = self.z.flags.writeable = False
-        self.zo_.flags.writeable = self.zo.flags.writeable = False
 
         super().initialize(runtype, Dmin=self.Dmin, method_vertical_coordinates=self.vertical_coordinate_method, ddl=self.ddl, ddu=self.ddu, Dgamma=self.Dgamma, gamma_surf=self.gamma_surf)
 
@@ -1100,7 +1098,17 @@ class Domain(_pygetm.Domain):
             self.V.add_to_netcdf(nc, postfix='v')
             self.X.add_to_netcdf(nc, postfix='x')
 
-    def contains(self, x: float, y: float, include_halos: bool=False):
+    def contains(self, x: float, y: float, include_halos: bool=False) -> bool:
+        """Determine whether the domain contains the specified point.
+        
+        Args:
+            x: native x coordinate (longitude for spherical grids, Cartesian coordinate in m otherwise)
+            y: native y coordinate (latitude for spherical grids, Cartesian coordinate in m otherwise)
+            include_halos: whether to also search the halos
+
+        Returns:
+            True if the point falls within the domain, False otherwise
+        """
         local_slice, _, _, _ = self.tiling.subdomain2slices(halo_sub=4, halo_glob=4, scale=2, share=1, exclude_halos=not include_halos, exclude_global_halos=True)
         allx, ally = (self.lon_, self.lat_) if self.spherical else (self.x_, self.y_)
         allx, ally = allx[local_slice], ally[local_slice]
