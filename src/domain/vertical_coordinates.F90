@@ -54,11 +54,11 @@ module SUBROUTINE init_vertical(self)
 !  Local variables
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('init_vertical()',level=2)
-
+#if 0
    where (self%T%mask > 0)
       self%T%zin=self%T%z
    end where
-
+#endif
    select case (self%method_vertical_coordinates)
       case(method_sigma)
          call init_sigma(self)
