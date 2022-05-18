@@ -47,7 +47,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report', 'report_totals', 'default_time_reference'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp', '_initialized_variables') + _time_arrays
 
     _array_args = {
         'U': dict(units='m2 s-1', long_name='depth-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
@@ -98,6 +98,7 @@ class Simulation(_pygetm.Simulation):
         dom.T.zo.attrs['_part_of_state'] = True
         dom.T.zio.attrs['_part_of_state'] = True
         dom.T.zin.attrs['_part_of_state'] = True
+        dom.T.ho.attrs['_part_of_state'] = True    # ho cannot be computed from zio, because rivers modify ho-from-zio before it is stored
 
         self.domain.open_boundaries.z = self.wrap(self.domain.open_boundaries.z, b'zbdy', source=3)
         self.domain.open_boundaries.u = self.wrap(self.domain.open_boundaries.u, b'bdyu', source=1)
@@ -228,6 +229,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
 
         self.default_time_reference: Optional[cftime.datetime] = None
+        self._initialized_variables = set()
 
     def __getitem__(self, key: str) -> core.Array:
         return self.output_manager.fields[key]
@@ -255,6 +257,7 @@ class Simulation(_pygetm.Simulation):
                     if name not in ds:
                         raise Exception('Field %s is part of state but not found in %s' % path)
                     field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
+                    self._initialized_variables.add(name)
         self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
         return time_coord[0]
 
@@ -340,10 +343,13 @@ class Simulation(_pygetm.Simulation):
         if self.runtype > BAROTROPIC_2D:
             # Ensure old and new thicknesses are consistent with zio/zin
             zin_backup = self.domain.T.zin.all_values.copy()
+            ho_T_backup = self.domain.T.ho.all_values.copy()
             self.domain.T.z.all_values[...] = self.domain.T.zio.all_values
             self.domain.update_depth(_3d=True)  # this moves zio into zin
             self.domain.T.z.all_values[...] = zin_backup
             self.domain.update_depth(_3d=True)  # this moves our zin backup into zin, and at the same time moves the current zin (originally zio) to zio
+            if 'hot' in self._initialized_variables:
+                self.domain.T.ho.all_values[...] = ho_T_backup
             self.update_3d_momentum_diagnostics(self.macrotimestep, self.turbulence.num)
 
         self.domain.T.z.all_values[...] = z_backup
