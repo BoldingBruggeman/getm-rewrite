@@ -65,63 +65,71 @@ MODULE SUBROUTINE do_sigma(self)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('do_sigma()',level=3)
 
-   !! why not ho=hn as zio=zin
+#if 0
    TGrid: associate( TG => self%T )
-!KB
-!JB   TG%ho=TG%hn
    do j=TG%l(2),TG%u(2)
       do i=TG%l(1),TG%u(1)
          if (TG%mask(i,j) > 0) then
-!KB            TG%ho(i,j,:)=(TG%zio(i,j)+TG%H(i,j))*dga(:)
             TG%hn(i,j,1:self%T%kmax)=TG%D(i,j)*dga(:)
          end if
       end do
    end do
    end associate TGrid
 
-   !! why not ho=hn as zio=zin
-   !! if zin and H are updated in halo zones - extend to all domain
-   !! what about mask
    UGrid: associate( UG => self%U )
-!KB
-!JB   UG%ho=UG%hn
    do j=UG%l(2),UG%u(2)
-      do i=UG%l(1),UG%u(1) ! requires zin is HALO-updated (-1)
+      do i=UG%l(1),UG%u(1)
          if (UG%mask(i,j) > 0) then
-!KB            UG%ho(i,j,:)=(UG%zio(i,j)+UG%H(i,j))*dga(:)
             UG%hn(i,j,1:self%U%kmax)=UG%D(i,j)*dga(:)
          end if
       end do
    end do
    end associate UGrid
 
-   !! if zin and H are updated in halo zones - extend to all domain
    VGrid: associate( VG => self%V )
-!KB
-!JB   VG%ho=VG%hn
-   do j=VG%l(2),VG%u(2)  ! requires zin is HALO-updated (-1)
+   do j=VG%l(2),VG%u(2)
       do i=VG%l(1),VG%u(1)
          if (VG%mask(i,j) > 0) then
-!KB            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
             VG%hn(i,j,1:self%V%kmax)=VG%D(i,j)*dga(:)
          end if
       end do
    end do
    end associate VGrid
 
-   !! if zin and H are updated in halo zones - extend to all domain
    XGrid: associate( XG => self%X )
-!KB
-!JB   XG%ho=XG%hn
-   do j=XG%l(2),XG%u(2)  ! requires zin is HALO-updated (-1)
+   do j=XG%l(2),XG%u(2)
       do i=XG%l(1),XG%u(1)
          if (XG%mask(i,j) > 0) then
-!KB            VG%ho(i,j,:)=(VG%zio(i,j)+VG%H(i,j))*dga(:)
             XG%hn(i,j,1:self%X%kmax)=XG%D(i,j)*dga(:)
          end if
       end do
    end do
    end associate XGrid
+#else
+   TGrid: associate( TG => self%T )
+   do concurrent (i=TG%l(1):TG%u(1), j=TG%l(2):TG%u(2), TG%mask(i,j) > 0)
+      TG%hn(i,j,1:self%T%kmax)=TG%D(i,j)*dga(:)
+   end do
+   end associate TGrid
+
+   UGrid: associate( UG => self%U )
+   do concurrent (i=UG%l(1):UG%u(1), j=UG%l(2):UG%u(2), UG%mask(i,j) > 0)
+      UG%hn(i,j,1:self%T%kmax)=UG%D(i,j)*dga(:)
+   end do
+   end associate UGrid
+
+   VGrid: associate( VG => self%V )
+   do concurrent (i=VG%l(1):VG%u(1), j=VG%l(2):VG%u(2), VG%mask(i,j) > 0)
+      VG%hn(i,j,1:self%T%kmax)=VG%D(i,j)*dga(:)
+   end do
+   end associate VGrid
+
+   XGrid: associate( XG => self%X )
+   do concurrent (i=XG%l(1):XG%u(1), j=XG%l(2):XG%u(2), XG%mask(i,j) > 0)
+      XG%hn(i,j,1:self%T%kmax)=XG%D(i,j)*dga(:)
+   end do
+   end associate XGrid
+#endif
 
 END SUBROUTINE do_sigma
 
