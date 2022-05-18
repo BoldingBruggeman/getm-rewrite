@@ -227,6 +227,8 @@ class Simulation(_pygetm.Simulation):
         self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
         self.domain.update_depth(_3d=runtype > BAROTROPIC_2D)
 
+        self.default_time_reference: Optional[cftime.datetime] = None
+
     def __getitem__(self, key: str) -> core.Array:
         return self.output_manager.fields[key]
 
