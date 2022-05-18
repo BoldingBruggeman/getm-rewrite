@@ -1,4 +1,4 @@
-! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
+! Copyright (C) 2022 Bolding & Bruggeman and Hans Burchard
 
 SUBMODULE (getm_domain : vertical_coordinates_smod) vertical_sigma_smod
 
@@ -65,7 +65,6 @@ MODULE SUBROUTINE do_sigma(self)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('do_sigma()',level=3)
 
-#if 0
    TGrid: associate( TG => self%T )
    do j=TG%l(2),TG%u(2)
       do i=TG%l(1),TG%u(1)
@@ -105,31 +104,6 @@ MODULE SUBROUTINE do_sigma(self)
       end do
    end do
    end associate XGrid
-#else
-   TGrid: associate( TG => self%T )
-   do concurrent (i=TG%l(1):TG%u(1), j=TG%l(2):TG%u(2), TG%mask(i,j) > 0)
-      TG%hn(i,j,1:self%T%kmax)=TG%D(i,j)*dga(:)
-   end do
-   end associate TGrid
-
-   UGrid: associate( UG => self%U )
-   do concurrent (i=UG%l(1):UG%u(1), j=UG%l(2):UG%u(2), UG%mask(i,j) > 0)
-      UG%hn(i,j,1:self%T%kmax)=UG%D(i,j)*dga(:)
-   end do
-   end associate UGrid
-
-   VGrid: associate( VG => self%V )
-   do concurrent (i=VG%l(1):VG%u(1), j=VG%l(2):VG%u(2), VG%mask(i,j) > 0)
-      VG%hn(i,j,1:self%T%kmax)=VG%D(i,j)*dga(:)
-   end do
-   end associate VGrid
-
-   XGrid: associate( XG => self%X )
-   do concurrent (i=XG%l(1):XG%u(1), j=XG%l(2):XG%u(2), XG%mask(i,j) > 0)
-      XG%hn(i,j,1:self%T%kmax)=XG%D(i,j)*dga(:)
-   end do
-   end associate XGrid
-#endif
 
 END SUBROUTINE do_sigma
 
