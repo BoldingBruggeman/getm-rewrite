@@ -34,13 +34,13 @@ class Tracer(core.Array):
 
         Args:
             grid: the grid on which the tracer is defined
-            data: a NumPy array that will hold the values of the tracer. if not provided, a new one will be created.
+            data: a NumPy array that will hold the values of the tracer. If not provided, a new one will be created.
             source: array with source terms that after multiplication with source_scale must have tracer units per time, multiplied by layer thickness. Defaults to 0.
             surface_flux: array with surface flux values that after multiplication with source_scale must have tracer units per time, multiplied by layer thickness. Defaults to 0.
             source_scale: scale factor for sources and surface flux
-            vertical_velocity: array with vertical velcoities describing moved through the water (e.g., sinking or floating - not water movement itself). Defaults to 0.
-            rivers_follow_target_cell: tracer values in river water are assumed equal to those in the cell into which the river flows. This can be customized further by setting <TRACER>.rivers[<RIVERNAME>].follow_target_cell and/or  <TRACER>.rivers[<RIVERNAME>].values
-            **kwargs: keyword arguments to be passed to :class:`core.Array`
+            vertical_velocity: array with vertical velocities describing movement through the water, not water movement itself. Positive for upward movement (e.g. floating), negative for downward movement (e.g. sinking). Defaults to 0 (no movement independent of the water)).
+            rivers_follow_target_cell: tracer values in river water are assumed equal to those in the cell into which the river flows. This can be customized further by setting <TRACER>.rivers[<RIVERNAME>].follow_target_cell and/or <TRACER>.rivers[<RIVERNAME>].values
+            **kwargs: keyword arguments to be passed to :class:`pygetm.core.Array`
         """
         kwargs.setdefault('attrs', {}).update(_part_of_state=True, _3d_only=True)
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
