@@ -45,7 +45,7 @@ class Simulation(_pygetm.Simulation):
     _momentum_arrays = 'U', 'V', 'fU', 'fV', 'advU', 'advV', 'diffu1', 'diffv1', 'u1', 'v1', 'uk', 'vk', 'ru', 'rru', 'rv', 'rrv', 'pk', 'qk', 'ww', 'advpk', 'advqk', 'diffpk', 'diffqk', 'Ui', 'Vi', 'SS', 'fpk', 'fqk', 'ustar2_s', 'ustar2_b', 'SxB', 'SyB', 'SxA', 'SyA', 'SxD', 'SyD', 'SxF', 'SyF'
     _pressure_arrays = 'dpdx', 'dpdy', 'idpdx', 'idpdy'
     _sealevel_arrays = ()
-    _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report', 'report_totals'
+    _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report', 'report_totals', 'default_time_reference'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
     __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp') + _time_arrays
 
@@ -243,7 +243,9 @@ class Simulation(_pygetm.Simulation):
         kwargs.setdefault('decode_times', True)
         kwargs['use_cftime'] = True
         with xarray.open_dataset(path, **kwargs) as ds:
-            time_coord = ds['zt'].getm.time.values
+            timevar = ds['zt'].getm.time
+            time_coord = timevar.values
+            self.default_time_reference = cftime.num2date(0., units=timevar.encoding['units'], calendar=timevar.encoding['calendar'])
             assert time_coord.size == 1, 'Currently a restart file should contain a single time point only'
         with xarray.open_dataset(path, **kwargs) as ds:
             for name, field in self.output_manager.fields.items():
@@ -346,7 +348,7 @@ class Simulation(_pygetm.Simulation):
         self.update_forcing(macro_active=True)
 
         # Start output manager
-        self.output_manager.start(self.istep, self.time, save=save)
+        self.output_manager.start(self.istep, self.time, save=save, default_time_reference=self.default_time_reference)
 
         # Record true start time for performance analysis
         self._start_time = timeit.default_timer()

@@ -27,7 +27,7 @@ class File(operators.FieldCollection):
         self.save_on_close_only = self.interval_in_dt and self.interval == -1
         self.path = path
 
-    def start(self, itimestep: int, time: Optional[cftime.datetime], save: bool):
+    def start(self, itimestep: int, time: Optional[cftime.datetime], save: bool, default_time_reference: Optional[cftime.datetime]):
         if save and not self.save_on_close_only:
             self._logger.debug('Saving initial state')
             self.save_now(0., time)
@@ -78,9 +78,9 @@ class OutputManager(FieldManager):
             if field.attrs.get('_part_of_state'):
                 file.request(field)
 
-    def start(self, itimestep: int=0, time: Optional[cftime.datetime]=None, save: bool=True):
+    def start(self, itimestep: int=0, time: Optional[cftime.datetime]=None, save: bool=True, default_time_reference: Optional[cftime.datetime]=None):
         for file in self.files:
-            file.start(itimestep, time, save)
+            file.start(itimestep, time, save, default_time_reference or time)
 
     def save(self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime]=None):
         for file in self.files:
