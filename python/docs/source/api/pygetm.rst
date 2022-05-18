@@ -30,6 +30,7 @@ Submodules
    pygetm.radiation
    pygetm.simulation
    pygetm.subdiv
+   pygetm.tracer
 
 Module contents
 ---------------
