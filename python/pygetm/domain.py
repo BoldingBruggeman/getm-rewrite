@@ -592,7 +592,6 @@ class Domain(_pygetm.Domain):
         parallel.Scatter(tiling, domain.H_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.H_)
         parallel.Scatter(tiling, domain.z0b_min_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.z0b_min_)
         parallel.Scatter(tiling, domain.z_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.z_)
-        parallel.Scatter(tiling, domain.zo_, halo=halo, share=share, scale=2)(None if global_domain is None else global_domain.zo_)
 
         return domain
 
