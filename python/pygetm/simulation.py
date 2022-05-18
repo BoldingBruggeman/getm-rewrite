@@ -127,7 +127,7 @@ class Simulation(_pygetm.Simulation):
 
         self._cum_river_height_increase = numpy.zeros((len(self.domain.rivers),))
 
-        #: Provider of air-water fluxes of heat and momentum. This must inherit from pygetm.airsea.Fluxes and should be provided as argument airsea to Simulation.
+        #: Provider of air-water fluxes of heat and momentum. This must inherit from :class:`pygetm.airsea.Fluxes` and should be provided as argument airsea to :class:`Simulation`.
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
         assert isinstance(self.airsea, pygetm.airsea.Fluxes), 'airsea argument should be of type pygetm.airsea.Fluxes, but is %s' % type(self.airsea)
         self.airsea.initialize(self.domain)
@@ -159,7 +159,7 @@ class Simulation(_pygetm.Simulation):
         self.fabm_model = None
 
         if runtype > BAROTROPIC_2D:
-            #: Provider of turbulent viscosity and diffusivity. This must inherit from pygetm.mixing.Turbulence and should be provided as argument turbulence to Simulation.
+            #: Provider of turbulent viscosity and diffusivity. This must inherit from :class:`pygetm.mixing.Turbulence` and should be provided as argument turbulence to :class:`Simulation`.
             self.turbulence = turbulence or pygetm.mixing.GOTM(nml_path=gotm)
             self.turbulence.initialize(self.domain.T)
             self.NN = dom.T.array(fill=0., z=INTERFACES, name='NN', units='s-2', long_name='buoyancy frequency squared', fill_value=FILL_VALUE)
@@ -251,6 +251,7 @@ class Simulation(_pygetm.Simulation):
                     if name not in ds:
                         raise Exception('Field %s is part of state but not found in %s' % path)
                     field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
+        self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
         return time_coord[0]
 
     def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: Union[int, datetime.timedelta]=10, report_totals: Union[int, datetime.timedelta]=datetime.timedelta(days=1), save: bool=True, profile: Optional[str]=None):
@@ -334,10 +335,11 @@ class Simulation(_pygetm.Simulation):
 
         if self.runtype > BAROTROPIC_2D:
             # Ensure old and new thicknesses are consistent with zio/zin
+            zin_backup = self.domain.T.zin.all_values.copy()
             self.domain.T.z.all_values[...] = self.domain.T.zio.all_values
-            self.domain.update_depth(_3d=True)
-            self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
-            self.domain.update_depth(_3d=True)
+            self.domain.update_depth(_3d=True)  # this moves zio into zin
+            self.domain.T.z.all_values[...] = zin_backup
+            self.domain.update_depth(_3d=True)  # this moves our zin backup into zin, and at the same time moves the current zin (originally zio) to zio
             self.update_3d_momentum_diagnostics(self.macrotimestep, self.turbulence.num)
 
         self.domain.T.z.all_values[...] = z_backup
