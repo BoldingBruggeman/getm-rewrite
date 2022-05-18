@@ -1,7 +1,8 @@
-from typing import Optional, List
+from typing import Mapping, Optional, List
 import collections
 
 import numpy
+import numpy.typing
 
 from .constants import *
 from . import core
@@ -17,6 +18,7 @@ class OpenBoundaries:
 
     @property
     def type(self) -> int:
+        """Type of open boundary condition"""
         return self._type
 
     @type.setter
@@ -25,6 +27,7 @@ class OpenBoundaries:
         self.values = None if self._type == ZERO_GRADIENT else self._tracer.grid.array(name='%s_bdy' % self._tracer.name, z=CENTERS, on_boundary=True, attrs={'_3d_only': True})
 
     def update(self):
+        """Update the tracer at the open boundaries"""
         self._tracer.update_boundary(self._type, self.values)
 
 class Tracer(core.Array):
@@ -49,15 +52,16 @@ class Tracer(core.Array):
         self.wrap_ndarray(data)
         self.register()
         assert source is None or (source.grid is self.grid and source.z == CENTERS)
+        assert surface_flux is None or (surface_flux.grid is self.grid and not surface_flux.z)
         assert vertical_velocity is None or (vertical_velocity.grid is self.grid and vertical_velocity.z == CENTERS)
-        self.source = source
-        self.surface_flux = surface_flux
-        self.source_scale = source_scale
-        self.vertical_velocity = vertical_velocity
-        self.open_boundaries = OpenBoundaries(self)
-        self.river_values = numpy.zeros((len(grid.domain.rivers),))
-        self.river_follow = numpy.full((len(grid.domain.rivers),), rivers_follow_target_cell, dtype=bool)
-        self.rivers = {}
+        self.source: Optional[core.Array] = source
+        self.surface_flux: Optional[core.Array] = surface_flux
+        self.source_scale: float = source_scale
+        self.vertical_velocity: Optional[core.Array] = vertical_velocity
+        self.open_boundaries: OpenBoundaries = OpenBoundaries(self)
+        self.river_values: numpy.ndarray = numpy.zeros((len(grid.domain.rivers),))
+        self.river_follow: numpy.ndarray = numpy.full((len(grid.domain.rivers),), rivers_follow_target_cell, dtype=bool)
+        self.rivers: Mapping[str, domain.RiverTracer] = {}
         for iriver, river in enumerate(grid.domain.rivers.values()):
             river_tracer = domain.RiverTracer(grid, river.name, self.name, self.river_values[..., iriver], self.river_follow[..., iriver], units=self.units, attrs={'_3d_only': True})
             river._tracers[self.name] = river_tracer
@@ -65,7 +69,7 @@ class Tracer(core.Array):
 
 class TracerCollection(collections.Sequence):
     def __init__(self, grid: domain.Grid, advection_scheme: operators.AdvectionScheme, cnpar: float=1.):
-        self.grid = grid
+        self.grid: domain.Grid = grid
         self._tracers: List[Tracer] = []
         self._source = grid.array(z=CENTERS)
         self._advection = operators.Advection(grid, scheme=advection_scheme)
