@@ -28,9 +28,8 @@ CONTAINS
    call mm_s('dR',self%dR,l,self%domain%T%u,def=0._real64,stat=stat)
    call mm_s('dZ',self%dZ,self%dR,def=0._real64,stat=stat)
    call mm_s('P',self%P,self%domain%T%l,self%domain%T%u,def=0._real64,stat=stat)
-   call mm_s('FC',self%FC,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
-   call mm_s('dZx',self%dZx,self%FC,def=0._real64,stat=stat)
-   call mm_s('dRx',self%dRx,self%FC,def=0._real64,stat=stat)
+   call mm_s('dZx',self%dZx,self%domain%T%l(1:2),self%domain%T%u(1:2),def=0._real64,stat=stat)
+   call mm_s('dRx',self%dRx,self%dZx,def=0._real64,stat=stat)
    end subroutine init_shchepetkin_mcwilliams
 
 !-----------------------------------------------------------------------------
@@ -50,7 +49,6 @@ CONTAINS
 !  Local variables
    real(real64), parameter :: eps=1.e-10_real64
    integer :: i,j,k
-   real(real64) :: FC1
 #ifdef _TIMING_
    real(real64) :: P_time,U_time,V_time
 #endif
@@ -68,17 +66,10 @@ CONTAINS
    do j=TG%jmin,TG%jmax+1
       do i=TG%imin,TG%imax+1
          if (TG%mask(i,j) > 0) then
-!KB            do k=1,TG%kmax-1
             do k=TG%kmax-1,1,-1
                self%dR(i,j,k)=buoy(i,j,k+1)-buoy(i,j,k)
                self%dZ(i,j,k)=TG%zc(i,j,k+1)-TG%zc(i,j,k)
             end do
-#if 0
-write(99,*) i,j
-write(99,*) TG%zc(i,j,:)
-write(99,*) self%dZ(i,j,:)
-stop
-#endif
             self%dR(i,j,TG%kmax)=self%dR(i,j,TG%kmax-1)
             self%dZ(i,j,TG%kmax)=self%dZ(i,j,TG%kmax-1)
             self%dR(i,j,0)=self%dR(i,j,1)
@@ -117,6 +108,7 @@ stop
    Ublock: block
    real(real64) :: cff
    real(real64), parameter :: x=1._real64/12._real64
+   real(real64) :: FC
 #ifdef _TIMING_
    real(real64) :: U_start, U_stop
    call cpu_time(U_start)
@@ -150,34 +142,22 @@ stop
       do j=UG%jmin,UG%jmax
          do i=UG%imin,UG%imax
             if (UG%mask(i,j) > 0) then
-               self%FC(i,j) = 0.5*((buoy(i+1,j,k)+buoy(i,j,k))*(TG%zc(i+1,j,k)-TG%zc(i,j,k)) &
+               FC=0.5_real64*((buoy(i+1,j,k)+buoy(i,j,k))*(TG%zc(i+1,j,k)-TG%zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
-                             -0.2_real64*((self%dRx(i+1,j)-self%dRx(i,j)) &
-                                     *(TG%zc(i+1,j,k)-TG%zc(i,j,k)-x*(self%dZx(i+1,j)+self%dZx(i,j))) &
-                                     -(self%dZx(i+1,j)-self%dZx(i,j)) &
-                                     *( buoy(i+1,j,k)- buoy(i,j,k)-x*(self%dRx(i+1,j)+self%dRx(i,j)))) &
+                 -0.2_real64*((self%dRx(i+1,j)-self%dRx(i,j)) &
+                             *(TG%zc(i+1,j,k)-TG%zc(i,j,k)-x*(self%dZx(i+1,j)+self%dZx(i,j))) &
+                             -(self%dZx(i+1,j)-self%dZx(i,j)) &
+                             *( buoy(i+1,j,k)- buoy(i,j,k)-x*(self%dRx(i+1,j)+self%dRx(i,j)))) &
 #endif
-                                  )
+                             )
                self%idpdx(i,j,k)=UG%hn(i,j,k)*UG%idx(i,j) &
-                                 *(self%P(i+1,j,k)-self%P(i,j,k)+self%FC(i,j) &
+                                 *(self%P(i+1,j,k)-self%P(i,j,k)+FC &
                                  -(TG%zio(i+1,j)-TG%zio(i,j))*0.5_real64*(buoy(i+1,j,TG%kmax)+buoy(i,j,TG%kmax)))
             end if
          end do
       end do
-#if 0
-do j=UG%jmin,UG%jmax
-do i=UG%imin,UG%imax
-   if (UG%mask(i,j) == 2) then
-      write(103,*) i,j,self%idpdx(i,j,:)
-   end if
-end do
-end do
-#endif
       end associate UGrid
    end do
-!KBwrite(100,*) minloc(self%idpdx),minval(self%idpdx)
-!KBwrite(100,*) maxloc(self%idpdx),maxval(self%idpdx)
-!KBself%idpdx = 0._real64
 #ifdef _TIMING_
    call cpu_time(U_stop)
    U_time=U_time+U_stop-U_start
@@ -187,6 +167,7 @@ end do
    Vblock: block
    real(real64) :: cff,cff1,cff2
    real(real64), parameter :: x=1._real64/12._real64
+   real(real64) :: FC
 #ifdef _TIMING_
    real(real64) :: V_start, V_stop
    call cpu_time(V_start)
@@ -220,32 +201,31 @@ end do
       do j=VG%jmin,VG%jmax
          do i=VG%imin,VG%imax
             if (VG%mask(i,j) > 0) then
-               self%FC(i,j) = 0.5_real64*((buoy(i,j+1,k)+buoy(i,j,k))*(TG%zc(i,j+1,k)-TG%zc(i,j,k)) &
+               FC=0.5_real64*((buoy(i,j+1,k)+buoy(i,j,k))*(TG%zc(i,j+1,k)-TG%zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
-                             -0.2_real64*((self%dRx(i,j+1)-self%dRx(i,j)) &
-                                     *(TG%zc(i,j+1,k)-TG%zc(i,j,k)-x*(self%dZx(i,j+1)+self%dZx(i,j))) &
-                                     -(self%dZx(i,j+1)-self%dZx(i,j)) &
-                                     *(buoy(i,j+1,k)-buoy(i,j,k)-x*(self%dRx(i,j+1)+self%dRx(i,j)))) &
+                 -0.2_real64*((self%dRx(i,j+1)-self%dRx(i,j)) &
+                             *(TG%zc(i,j+1,k)-TG%zc(i,j,k)-x*(self%dZx(i,j+1)+self%dZx(i,j))) &
+                             -(self%dZx(i,j+1)-self%dZx(i,j)) &
+                             *(buoy(i,j+1,k)-buoy(i,j,k)-x*(self%dRx(i,j+1)+self%dRx(i,j)))) &
 #endif
-                                  )
+                             )
                self%idpdy(i,j,k)=VG%hn(i,j,k)*VG%idy(i,j) &
-                                 *(self%P(i,j+1,k)-self%P(i,j,k)+self%FC(i,j) &
+                                 *(self%P(i,j+1,k)-self%P(i,j,k)+FC &
                                  -(TG%zio(i,j+1)-TG%zio(i,j))*0.5_real64*(buoy(i,j+1,TG%kmax)+buoy(i,j,TG%kmax)))
             end if
          end do
       end do
       end associate VGrid
    end do
-!KBwrite(101,*) minloc(self%idpdy),minval(self%idpdy)
-!KBwrite(101,*) maxloc(self%idpdy),maxval(self%idpdy)
-!KBself%idpdy = 0._real64
 #ifdef _TIMING_
    call cpu_time(V_stop)
    V_time=V_time+V_stop-V_start
 #endif
    end block Vblock
    end associate TGrid
-!KB   write(34,*) P_time,U_time,V_time
+#ifdef _TIMING_
+   write(34,*) P_time,U_time,V_time
+#endif
    end subroutine shchepetkin_mcwilliams
 
 !---------------------------------------------------------------------------
