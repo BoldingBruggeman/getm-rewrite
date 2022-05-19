@@ -63,20 +63,20 @@ contains
    real(rk)                  :: s,s0,x
 
    ! Numbers from Table AI
-   real(rk), parameter, dimension(5) :: ae_d=(/ 0., 0.771, 0.867, 1.2  , 0.    /)
-   real(rk), parameter, dimension(5) :: ae_h=(/ 0., 0.927, 1.15 , 1.17 , 1.652 /)
-   real(rk), parameter, dimension(5) :: ae_e=(/ 0., 0.969, 1.18 , 1.196, 1.68  /)
+   real(rk), parameter, dimension(5) :: ae_d=(/ 0._rk, 0.771_rk, 0.867_rk, 1.2_rk  , 0._rk    /)
+   real(rk), parameter, dimension(5) :: ae_h=(/ 0._rk, 0.927_rk, 1.15_rk , 1.17_rk , 1.652_rk /)
+   real(rk), parameter, dimension(5) :: ae_e=(/ 0._rk, 0.969_rk, 1.18_rk , 1.196_rk, 1.68_rk  /)
 
-   real(rk), parameter, dimension(5) :: be_d=(/ 1.08 , 0.0858, 0.0667, 0.025 ,  0.073 /)
-   real(rk), parameter, dimension(5) :: be_h=(/ 1.185, 0.0546, 0.01  , 0.0075, -0.017 /)
-   real(rk), parameter, dimension(5) :: be_e=(/ 1.23 , 0.0521, 0.01  , 0.008 , -0.016 /)
+   real(rk), parameter, dimension(5) :: be_d=(/ 1.08_rk , 0.0858_rk, 0.0667_rk, 0.025_rk ,  0.073_rk /)
+   real(rk), parameter, dimension(5) :: be_h=(/ 1.185_rk, 0.0546_rk, 0.01_rk  , 0.0075_rk, -0.017_rk /)
+   real(rk), parameter, dimension(5) :: be_e=(/ 1.23_rk , 0.0521_rk, 0.01_rk  , 0.008_rk , -0.016_rk /)
 
-   real(rk), parameter, dimension(5) :: ce_h=(/ 0., 0., 0., -0.00045, 0. /)
-   real(rk), parameter, dimension(5) :: ce_e=(/ 0., 0., 0., -0.0004 , 0. /)
+   real(rk), parameter, dimension(5) :: ce_h=(/ 0._rk, 0._rk, 0._rk, -0.00045_rk, 0._rk /)
+   real(rk), parameter, dimension(5) :: ce_e=(/ 0._rk, 0._rk, 0._rk, -0.0004_rk , 0._rk /)
 
-   real(rk), parameter, dimension(5) :: pe_d=(/ -0.15 , 1., 1., 1., 1. /)
-   real(rk), parameter, dimension(5) :: pe_h=(/ -0.157, 1., 1., 1., 1. /)
-   real(rk), parameter, dimension(5) :: pe_e=(/ -0.16 , 1., 1., 1., 1. /)
+   real(rk), parameter, dimension(5) :: pe_d=(/ -0.15_rk , 1._rk, 1._rk, 1._rk, 1._rk /)
+   real(rk), parameter, dimension(5) :: pe_h=(/ -0.157_rk, 1._rk, 1._rk, 1._rk, 1._rk /)
+   real(rk), parameter, dimension(5) :: pe_e=(/ -0.16_rk , 1._rk, 1._rk, 1._rk, 1._rk /)
 !EOP
 !-----------------------------------------------------------------------
 !BOC

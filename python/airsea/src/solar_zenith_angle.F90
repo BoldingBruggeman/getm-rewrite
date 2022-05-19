@@ -28,9 +28,9 @@ contains
 !  Original author(s): Karsten Bolding
 !
 ! !LOCAL VARIABLES:
-   real(rk), parameter       :: pi=3.14159265358979323846
-   real(rk), parameter       :: deg2rad=pi/180.
-   real(rk), parameter       :: rad2deg=180./pi
+   real(rk), parameter       :: pi=3.14159265358979323846_rk
+   real(rk), parameter       :: deg2rad=pi/180._rk
+   real(rk), parameter       :: rad2deg=180._rk/pi
 
    real(rk)                  :: rlon,rlat
    real(rk)                  :: yrdays

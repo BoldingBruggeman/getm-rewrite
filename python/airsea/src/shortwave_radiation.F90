@@ -46,14 +46,14 @@ contains
 !  Original author(s): Karsten Bolding & Hans Burchard
 !
 ! !LOCAL VARIABLES:
-   real(rk), parameter       :: pi=3.14159265358979323846
-   real(rk), parameter       :: deg2rad=pi/180.
-   real(rk), parameter       :: rad2deg=180./pi
+   real(rk), parameter       :: pi=3.14159265358979323846_rk
+   real(rk), parameter       :: deg2rad=pi/180._rk
+   real(rk), parameter       :: rad2deg=180._rk/pi
 
-   real(rk), parameter       :: solar=1350.
-   real(rk), parameter       :: eclips=23.439*deg2rad
-   real(rk), parameter       :: tau=0.7
-   real(rk), parameter       :: aozone=0.09
+   real(rk), parameter       :: solar=1350._rk
+   real(rk), parameter       :: eclips=23.439_rk*deg2rad
+   real(rk), parameter       :: tau=0.7_rk
+   real(rk), parameter       :: aozone=0.09_rk
 
    real(rk)                  :: coszen,sunbet
    real(rk)                  :: qatten,qzer,qdir,qdiff,qtot,qshort

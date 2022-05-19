@@ -19,16 +19,16 @@
    integer, public, parameter :: rk = selected_real_kind(13)
 !
 ! !PUBLIC DATA MEMBERS:
-   real(rk), public, parameter         :: cpa=1008.
-   real(rk), public, parameter         :: cpw=3985.
-   real(rk), public, parameter         :: emiss=0.97
-   real(rk), public, parameter         :: bolz=5.67e-8
-   real(rk), public, parameter         :: kelvin=273.15
-   real(rk), public, parameter         :: const06=0.62198
-   real(rk), public, parameter         :: rgas = 287.1    !
-   real(rk), public, parameter         :: g = 9.81        ! [m/s2]
-   real(rk), public, parameter         :: rho_0 = 1025.   ! [kg/m3]
-   real(rk), public, parameter         :: kappa = 0.41    ! von Karman
+   real(rk), public, parameter         :: cpa=1008._rk
+   real(rk), public, parameter         :: cpw=3985._rk
+   real(rk), public, parameter         :: emiss=0.97_rk
+   real(rk), public, parameter         :: bolz=5.67e-8_rk
+   real(rk), public, parameter         :: kelvin=273.15_rk
+   real(rk), public, parameter         :: const06=0.62198_rk
+   real(rk), public, parameter         :: rgas = 287.1_rk    !
+   real(rk), public, parameter         :: g = 9.81_rk        ! [m/s2]
+   real(rk), public, parameter         :: rho_0 = 1025._rk   ! [kg/m3]
+   real(rk), public, parameter         :: kappa = 0.41_rk    ! von Karman
 !   real(rk), public                    :: es
 !   real(rk), public                    :: ea
 !   real(rk), public                    :: qs
