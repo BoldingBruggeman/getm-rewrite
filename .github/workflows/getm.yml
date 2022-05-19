@@ -59,21 +59,21 @@ jobs:
           conda activate pygetm
           cd python/examples
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --no_rivers --debug_output
-          mv -f north_sea_2d.nc north_sea_2d_ref.nc
-          mv -f north_sea_3d.nc north_sea_3d_ref.nc
+          mv -v north_sea_2d.nc north_sea_2d_ref.nc
+          mv -v north_sea_3d.nc north_sea_3d_ref.nc
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-03 00:00:00" --no_boundaries --no_rivers --debug_output --save_restart res.nc
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --no_rivers --debug_output --load_restart res.nc
           pygetm-compare-nc north_sea_2d.nc north_sea_2d_ref.nc --itime1 -1 --itime2 -1 -v
           pygetm-compare-nc north_sea_3d.nc north_sea_3d_ref.nc --itime1 -1 --itime2 -1 -v
       - name: Test North Sea restarts with rivers
         run: |
-          rm *.nc
           source ${CONDA}/etc/profile.d/conda.sh
           conda activate pygetm
           cd python/examples
+          rm -fv *.nc
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --debug_output
-          mv -f north_sea_2d.nc north_sea_2d_ref.nc
-          mv -f north_sea_3d.nc north_sea_3d_ref.nc
+          mv -v north_sea_2d.nc north_sea_2d_ref.nc
+          mv -v north_sea_3d.nc north_sea_3d_ref.nc
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-03 00:00:00" --no_boundaries --debug_output --save_restart res.nc
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --debug_output --load_restart res.nc
           pygetm-compare-nc north_sea_2d.nc north_sea_2d_ref.nc --itime1 0 --itime2 24 -v
