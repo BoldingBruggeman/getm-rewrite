@@ -87,30 +87,25 @@ contains
 ! Transfer coefficient for heat and momentum
 !   if (w .lt. 0.3) then
    if (w .lt. 2.2_rk) then
-      x = log(w + 0.01)
-      cdd = (be_d(1) * exp(pe_d(1) * x)) * 1.0e-3_rk
-      chd = (be_h(1) * exp(pe_h(1) * x)) * 1.0e-3_rk
-      ced = (be_e(1) * exp(pe_e(1) * x)) * 1.0e-3_rk
+      cdd = (be_d(1) * w**pe_d(1)) * 1.0e-3_rk
+      chd = (be_h(1) * w**pe_h(1)) * 1.0e-3_rk
+      ced = (be_e(1) * w**pe_e(1)) * 1.0e-3_rk
    else if (w .lt. 5.0_rk) then
-      x = exp(log(w))
-      cdd = (ae_d(2) + be_d(2) * x) * 1.0e-3_rk
-      chd = (ae_h(2) + be_h(2) * x) * 1.0e-3_rk
-      ced = (ae_e(2) + be_e(2) * x) * 1.0e-3_rk
+      cdd = (ae_d(2) + be_d(2) * w) * 1.0e-3_rk
+      chd = (ae_h(2) + be_h(2) * w) * 1.0e-3_rk
+      ced = (ae_e(2) + be_e(2) * w) * 1.0e-3_rk
    else if (w .lt. 8.0_rk) then
-      x = exp(log(w))
-      cdd = (ae_d(3) + be_d(3) * x) * 1.0e-3_rk
-      chd = (ae_h(3) + be_h(3) * x) * 1.0e-3_rk
-      ced = (ae_e(3) + be_e(3) * x) * 1.0e-3_rk
+      cdd = (ae_d(3) + be_d(3) * w) * 1.0e-3_rk
+      chd = (ae_h(3) + be_h(3) * w) * 1.0e-3_rk
+      ced = (ae_e(3) + be_e(3) * w) * 1.0e-3_rk
    else if (w .lt. 25.0_rk) then
-      x = exp(log(w))
-      cdd = (ae_d(4) + be_d(4) * x) * 1.0e-3_rk
-      chd = (ae_h(4) + be_h(4) * x +ce_h(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
-      ced = (ae_e(4) + be_e(4) * x +ce_e(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
+      cdd = (ae_d(4) + be_d(4) * w) * 1.0e-3_rk
+      chd = (ae_h(4) + be_h(4) * w + ce_h(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
+      ced = (ae_e(4) + be_e(4) * w + ce_e(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
    else
-      x = exp(log(w))
-      cdd = (ae_d(5) + be_d(5) * x) * 1.0e-3_rk
-      chd = (ae_h(5) + be_h(5) * x) * 1.0e-3_rk
-      ced = (ae_e(5) + be_e(5) * x) * 1.0e-3_rk
+      cdd = (ae_d(5) + be_d(5) * w) * 1.0e-3_rk
+      chd = (ae_h(5) + be_h(5) * w) * 1.0e-3_rk
+      ced = (ae_e(5) + be_e(5) * w) * 1.0e-3_rk
    end if
 
    if(s .lt. 0._rk) then
