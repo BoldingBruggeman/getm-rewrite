@@ -33,7 +33,8 @@ def compare_at_time(path1: str, path2: str, itime1: int, itime2: int, verbose: b
             mismatch = numpy.ma.filled(values1 != values2, False)
             if mismatch.any():
                 success = False
-                print('%s: %i mismatches (out of %i)' % (name, mismatch.sum(), mismatch.size))
+                iworst = numpy.ma.filled(numpy.abs(values1 - values2), 0.).ravel().argmax()
+                print('%s: %i mismatches (out of %i) - maximum absolute difference %s vs %s' % (name, mismatch.sum(), mismatch.size, values1.flat[iworst], values2.flat[iworst]))
             elif verbose:
                 print('%s: identical' % name)
     return success
