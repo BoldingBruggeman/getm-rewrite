@@ -80,7 +80,7 @@ contains
 !  The albedo monthly values are from  Graham Cogley (1979)
 !  applied bilinear interpolation in latitude and time.
 !  Likely the search of the indices used to look up values in the
-!  different tables icould be optimized. This is a reference implementation
+!  different tables could be optimized. This is a reference implementation
 !  based on code provided by Adolf Stips, JRC.
 !
 ! !INPUT PARAMETERS:
@@ -136,7 +136,7 @@ contains
    dzen=(za(jab)-zen)/dz
    dti=(yd-tim(tab))/dt
 
-!  interploate the two latitudes
+!  interpolate the two latitudes
    jab1=min(jab+1,10)
    tab1 = tab+1
    if (tab1 .gt. 12) tab1 = 1
@@ -145,7 +145,7 @@ contains
 
 !  interpolate the time
    x=r1+dti*(r2-r1)
-   albedo_cogley=(dmax1(dmin1(x,1d0),0d0))
+   albedo_cogley = max(min(x, 1.0_rk), 0.0_rk)
 
    end function albedo_cogley
 !EOC

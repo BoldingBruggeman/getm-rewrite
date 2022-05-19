@@ -81,51 +81,51 @@ contains
 !-----------------------------------------------------------------------
 !BOC
 !  Stability
-   s0=0.25*(sst-airt)/(w+1.0e-10)**2
-   s=s0*abs(s0)/(abs(s0)+0.01)
+   s0 = 0.25_rk * (sst - airt) / (w + 1.0e-10_rk)**2
+   s = s0 * abs(s0) / (abs(s0) + 0.01_rk)
 
 ! Transfer coefficient for heat and momentum
 !   if (w .lt. 0.3) then
-   if (w .lt. 2.2) then
-      x = log(w+0.01)
-      cdd=(be_d(1)*exp(pe_d(1)*x))*1.0e-3
-      chd=(be_h(1)*exp(pe_h(1)*x))*1.0e-3
-      ced=(be_e(1)*exp(pe_e(1)*x))*1.0e-3
-   else if (w .lt. 5.0) then
+   if (w .lt. 2.2_rk) then
+      x = log(w + 0.01)
+      cdd = (be_d(1) * exp(pe_d(1) * x)) * 1.0e-3_rk
+      chd = (be_h(1) * exp(pe_h(1) * x)) * 1.0e-3_rk
+      ced = (be_e(1) * exp(pe_e(1) * x)) * 1.0e-3_rk
+   else if (w .lt. 5.0_rk) then
       x = exp(log(w))
-      cdd=(ae_d(2)+be_d(2)*x)*1.0e-3
-      chd=(ae_h(2)+be_h(2)*x)*1.0e-3
-      ced=(ae_e(2)+be_e(2)*x)*1.0e-3
-   else if (w .lt. 8.0) then
+      cdd = (ae_d(2) + be_d(2) * x) * 1.0e-3_rk
+      chd = (ae_h(2) + be_h(2) * x) * 1.0e-3_rk
+      ced = (ae_e(2) + be_e(2) * x) * 1.0e-3_rk
+   else if (w .lt. 8.0_rk) then
       x = exp(log(w))
-      cdd=(ae_d(3)+be_d(3)*x)*1.0e-3
-      chd=(ae_h(3)+be_h(3)*x)*1.0e-3
-      ced=(ae_e(3)+be_e(3)*x)*1.0e-3
-   else if (w .lt. 25.0) then
+      cdd = (ae_d(3) + be_d(3) * x) * 1.0e-3_rk
+      chd = (ae_h(3) + be_h(3) * x) * 1.0e-3_rk
+      ced = (ae_e(3) + be_e(3) * x) * 1.0e-3_rk
+   else if (w .lt. 25.0_rk) then
       x = exp(log(w))
-      cdd=(ae_d(4)+be_d(4)*x)*1.0e-3
-      chd=(ae_h(4)+be_h(4)*x+ce_h(4)*(w-8.0)**2)*1.0e-3
-      ced=(ae_e(4)+be_e(4)*x+ce_e(4)*(w-8.0)**2)*1.0e-3
+      cdd = (ae_d(4) + be_d(4) * x) * 1.0e-3_rk
+      chd = (ae_h(4) + be_h(4) * x +ce_h(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
+      ced = (ae_e(4) + be_e(4) * x +ce_e(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
    else
       x = exp(log(w))
-      cdd=(ae_d(5)+be_d(5)*x)*1.0e-3
-      chd=(ae_h(5)+be_h(5)*x)*1.0e-3
-      ced=(ae_e(5)+be_e(5)*x)*1.0e-3
+      cdd = (ae_d(5) + be_d(5) * x) * 1.0e-3_rk
+      chd = (ae_h(5) + be_h(5) * x) * 1.0e-3_rk
+      ced = (ae_e(5) + be_e(5) * x) * 1.0e-3_rk
    end if
 
-   if(s .lt. 0.) then
-      if (s .gt. -3.3) then
-         x = 0.1+0.03*s+0.9*exp(4.8*s)
+   if(s .lt. 0._rk) then
+      if (s .gt. -3.3_rk) then
+         x = 0.1_rk + 0.03_rk * s + 0.9_rk * exp(4.8_rk * s)
       else
-         x = 0.0
+         x = 0.0_rk
       end if
-      cdd=x*cdd
-      chd=x*chd
-      ced=x*ced
+      cdd = x * cdd
+      chd = x * chd
+      ced = x * ced
    else
-      cdd=cdd*(1.0+0.47*sqrt(s))
-      chd=chd*(1.0+0.63*sqrt(s))
-      ced=ced*(1.0+0.63*sqrt(s))
+      cdd = cdd * (1.0_rk + 0.47_rk * sqrt(s))
+      chd = chd * (1.0_rk + 0.63_rk * sqrt(s))
+      ced = ced * (1.0_rk + 0.63_rk * sqrt(s))
    end if
 
    end subroutine kondo

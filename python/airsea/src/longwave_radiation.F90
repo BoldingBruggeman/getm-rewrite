@@ -8,8 +8,12 @@ module mod_longwave_radiation
 
    public clark, hastenrath, bignami, berliand, josey1, josey2
 
-contains
+   contains
 
+   ! According to Clark et al. (1974), this table is from:
+   ! JOHNSON, J. H.. G. A. FLITTNER, and M. W. CLINE (1965)
+   ! Automatic data processing program for marine synoptic radio weather reports.
+   ! U.S. Fish Wildl. Serv., Spec. Sci. Rep. Fish. 503, iv + 74 p.
    real(rk) elemental function cloud_correction_factor(dlat)
       real(rk), intent(in)  :: dlat
 
@@ -40,96 +44,94 @@ contains
       ! latitude may lie outside the natural range. That should not trigger
       ! out-of-bound array access.
       if (dlat >= -90._rk .and. dlat <= 90._rk) then
-         cloud_correction_factor = ccf(nint(abs(dlat))+1)
+         cloud_correction_factor = ccf(nint(abs(dlat)) + 1)
       else
          cloud_correction_factor = 1._rk
       end if
    end function
 
-   ! Clark et al. (1974) formula.
-   elemental subroutine clark(dlat,tw,ta,cloud,ea,ql)
-      real(rk), intent(in)  :: dlat,tw,ta,cloud,ea
+   ! Clark et al. (1974) formula, https://swfsc-publications.fisheries.noaa.gov/publications/CR/1974/7406.PDF
+   elemental subroutine clark(dlat, tw, ta, cloud, ea, ql)
+      real(rk), intent(in)  :: dlat, tw, ta, cloud, ea
       real(rk), intent(out) :: ql
-      real(rk)              :: x1,x2,x3,ccf
+      real(rk)              :: x1, x2, x3, ccf
 
       ccf = cloud_correction_factor(dlat)
 
-      ! unit of ea is Pascal, must hPa
+      ! unit of vapor pressure ea is Pascal, must hPa (= mbar)
       ! Black body defect term, clouds, water vapor correction
-      x1=(1.0-ccf*cloud*cloud)*(tw**4)
-      x2=(0.39-0.05*sqrt(ea*0.01))
+      x1 = (1.0_rk - ccf * cloud * cloud) * tw**4
+      x2 = 0.39_rk - 0.05_rk * sqrt(ea * 0.01_rk)
       ! temperature jump term
-      x3=4.0*(tw**3)*(tw-ta)
-      ql=-emiss*bolz*(x1*x2+x3)
+      x3 = 4.0_rk * tw**3 * (tw - ta)
+      ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
    ! Hastenrath and Lamb (1978) formula.
-   elemental subroutine hastenrath(dlat,tw,ta,cloud,qa,ql)
-      real(rk), intent(in)  :: dlat,tw,ta,cloud,qa
+   elemental subroutine hastenrath(dlat, tw, ta, cloud, qa, ql)
+      real(rk), intent(in)  :: dlat, tw, ta, cloud, qa
       real(rk), intent(out) :: ql
-      real(rk)              :: x1,x2,x3,ccf
+      real(rk)              :: x1, x2, x3, ccf
 
       ccf = cloud_correction_factor(dlat)
 
-      ! qa in g(water)/kg(wet air)
-      x1=(1.0-ccf*cloud*cloud)*(tw**4)
-      x2=(0.39-0.056*sqrt(1000.0*qa))
-      x3=4.0*(tw**3)*(tw-ta)
-      ql=-emiss*bolz*(x1*x2+x3)
+      ! unit of specific humidity qa is kg/kg, must be g(water)/kg(wet air)
+      x1 = (1.0_rk - ccf * cloud * cloud) * tw**4
+      x2 = 0.39_rk - 0.056_rk * sqrt(1000.0_rk * qa)
+      x3 = 4.0_rk * tw**3 * (tw - ta)
+      ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
-   ! Bignami et al. (1995) formula (Med Sea).
-   elemental subroutine bignami(dlat,tw,ta,cloud,ea,ql)
-      real(rk), intent(in)  :: dlat,tw,ta,cloud,ea
+   ! Bignami et al. (1995) formula (Med Sea), https://doi.org/10.1029/94JC02496
+   elemental subroutine bignami(dlat, tw, ta, cloud, ea, ql)
+      real(rk), intent(in)  :: dlat, tw, ta, cloud, ea
       real(rk), intent(out) :: ql
-      real(rk)              :: x1,x2,x3,ccf
+      real(rk)              :: x1, x2, x3, ccf
 
-      ccf = cloud_correction_factor(dlat)
-
-      ! unit of ea is Pascal, must hPa
-      ccf=0.1762
-      x1=(1.0+ccf*cloud*cloud)*ta**4
-      x2=(0.653+0.00535*(ea*0.01))
-      x3= emiss*(tw**4)
-      ql=-bolz*(-x1*x2+x3)
+      ! unit of vapor pressure ea is Pascal, must hPa (= mbar)
+      ccf = 0.1762_rk
+      x1 = (1.0_rk + ccf * cloud * cloud) * ta**4
+      x2 = 0.653_rk + 0.00535_rk * (ea * 0.01_rk)
+      x3 = emiss * tw**4
+      ql = -bolz * (-x1 * x2 + x3)
    end subroutine
 
    ! Berliand & Berliand (1952) formula (ROMS).
-   elemental subroutine berliand(tw,ta,cloud,ea,ql)
-      real(rk), intent(in)  :: tw,ta,cloud,ea
+   elemental subroutine berliand(tw, ta, cloud, ea, ql)
+      real(rk), intent(in)  :: tw, ta, cloud, ea
       real(rk), intent(out) :: ql
-      real(rk)              :: x1,x2,x3
+      real(rk)              :: x1, x2, x3
 
-      x1=(1.0-0.6823*cloud*cloud)*ta**4
-      x2=(0.39-0.05*sqrt(0.01*ea))
-      x3=4.0*ta**3*(tw-ta)
-      ql=-emiss*bolz*(x1*x2+x3)
+      x1 = (1.0_rk - 0.6823_rk * cloud * cloud) * ta**4
+      x2 = 0.39_rk - 0.05_rk * sqrt(0.01_rk * ea)
+      x3 = 4.0_rk * ta**3 * (tw - ta)
+      ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
    ! Josey et.al. 2003 - (J1,9)
-   elemental subroutine josey1(tw,ta,cloud,ql)
-      real(rk), intent(in)  :: tw,ta,cloud
+   elemental subroutine josey1(tw, ta, cloud, ql)
+      real(rk), intent(in)  :: tw, ta, cloud
       real(rk), intent(out) :: ql
-      real(rk)              :: x1,x2,x3
+      real(rk)              :: x1, x2, x3
 
-      x1=emiss*tw**4
-      x2=(10.77*cloud+2.34)*cloud-18.44
-      x3=0.955*(ta+x2)**4
-      ql=-bolz*(x1-x3)
+      x1 = emiss * tw**4
+      x2 = (10.77_rk * cloud + 2.34_rk) * cloud - 18.44_rk
+      x3 = 0.955_rk * (ta + x2)**4
+      ql = -bolz * (x1 - x3)
    end subroutine
 
    ! Josey et.al. 2003 - (J2,14)
-   elemental subroutine josey2(tw,ta,cloud,ea,ql)
-      real(rk), intent(in)  :: tw,ta,cloud,ea
+   elemental subroutine josey2(tw, ta, cloud, ea, ql)
+      real(rk), intent(in)  :: tw, ta, cloud, ea
       real(rk), intent(out) :: ql
       real(rk)              :: x1,x2,x3
 
-      x1=emiss*tw**4
+      x1 = emiss * tw**4
       ! AS avoid zero trap, limit to about 1% rel. humidity ~ 10Pa
-      x2=34.07+4157.0/(log(2.1718e10/max(ea, 10._rk)))
-      x2=(10.77*cloud+2.34)*cloud-18.44+0.84*(x2-ta+4.01)
-      x3=0.955*(ta+x2)**4
-      ql=-bolz*(x1-x3)
+      x2 = 34.07_rk + 4157.0_rk / (log(2.1718e10_rk / max(ea, 10._rk)))
+      x2 = (10.77_rk * cloud + 2.34_rk) * cloud - 18.44_rk + 0.84_rk * (x2 - ta + 4.01_rk)
+      x3 = 0.955_rk * (ta + x2)**4
+      ql = -bolz * (x1 - x3)
    end subroutine
 
 end module
