@@ -944,7 +944,8 @@ class Domain(_pygetm.Domain):
         wherever one of these two points is shallower than the specified critical depth.
         
         Args:
-            critical_depth: neighbor depth below which the depth of velocity points is restricted. If not provided, Dcrit is used.
+            critical_depth: neighbor depth at which the limiting starts. If neighbor are shallower than this value,
+                the depth of velocity points is restricted. If not provided, ``self.Dcrit`` is used.
         """
         assert not self._initialized, 'limit_velocity_depth cannot be called after the domain has been initialized.'
         if critical_depth is None:
@@ -970,7 +971,7 @@ class Domain(_pygetm.Domain):
         """Plot the domain, optionally including bathymetric depth, mesh and river positions.
         
         Args:
-            fig: Matplotlib figure instance to plot to. If not provided, a new figure is created.
+            fig: :class:`matplotlib.figure.Figure` instance to plot to. If not provided, a new figure is created.
             show_H: show bathymetry as color map
             show_mesh: show model grid
             show_rivers: show rivers with position and name
@@ -978,7 +979,7 @@ class Domain(_pygetm.Domain):
             sub: plot the subdomain, not the global domain
 
         Returns:
-            Matplotlib figure instance for processes with rank=0 or if sub=True, otherwise None
+            :class:`matplotlib.figure.Figure` instance for processes with rank 0 or if ``sub`` is ``True``, otherwise ``None``
         """
         import matplotlib.pyplot
         import matplotlib.collections
@@ -1129,9 +1130,18 @@ class Domain(_pygetm.Domain):
 
     def update_depth(self, _3d: bool=False):
         """Use old and new surface elevation on T grid to update elevations on U, V, X grids
-        and subsequently update total water depth D on all grids. z_T (and zo_T) must be up to date in halos.
-        If called with _3d=True, this will first synchronize the new 3D elevations with the 2D ones.
-        It will then also update layer thicknesses and layer center and interface depths."""
+        and subsequently update total water depth ``D`` on all grids.
+
+        Args:
+            _3d: update elevations of the macrotimestep (``zin``) rather than elevations of the microtimestep (``z``).
+                This first synchronizes the elevations of the macrotimestep on the T grid (``self.T.zin``)
+                with those of the microtimestep (``self.T.z``). It also updates layer thicknesses ``hn``,
+                layer center depths ``zc`` and interface depths ``zf`` on all grids.
+
+        This routine will ensure values are up to date in the domain interior and in the halos,
+        but that this requires that ``self.T.z`` (and old elevations ``self.T.zo`` or ``self.T.zio``)
+        are already up to date in halos.
+        """
         if _3d:
             # Store current elevations as previous elevations (on the 3D time step)
             self.T.zio.all_values[...] = self.T.zin.all_values

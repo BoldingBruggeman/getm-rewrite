@@ -268,13 +268,14 @@ class Simulation(_pygetm.Simulation):
         and after the FABM model has been provided with all dependencies.
         
         Args:
-            time: start time
+            time (:class:`cftime.datetime`): start time
             timestep: micro time step (s) used for 2D barotropic processes
             split_factor: number of microtimesteps per macrotimestep
             report: time interval or number of microtimesteps between reporting of the current time, used as indicator of simulation progress
             report_totals: time interval or number of microtimesteps between reporting of integrals over the global domain
             save: whether to save the model state and diagnostics at the very start of the simulation
-            profile: base name for profiling results (None to disable profiling)
+            profile: base name for the file to write profiling results to. The proces rank and extension ``.prof`` will be appended,
+                so that the final name becomes ``<profile>-<rank>.prof``. If the argument is not provided, profiling is disabled.
         """
         if isinstance(time, datetime.datetime):
             time = cftime.datetime(time.year, time.month, time.day, time.hour, time.minute, time.second, time.microsecond)

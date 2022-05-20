@@ -63,11 +63,16 @@ html_theme = 'sphinx_rtd_theme'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+napoleon_include_special_with_doc = True
 
 # -- Extension configuration -------------------------------------------------
 autoclass_content = 'both'
 
-intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3', None),
+    'cftime': ('https://unidata.github.io/cftime', None),
+    'matplotlib': ('http://matplotlib.sourceforge.net/', None),
+}
 
 # -- Options for todo extension ----------------------------------------------
 
