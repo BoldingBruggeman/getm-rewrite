@@ -83,7 +83,7 @@ class Simulation(_pygetm.Simulation):
         self.apply_bottom_friction = apply_bottom_friction
         self.diffuse_momentum = Am > 0.
         if not self.diffuse_momentum:
-            self.logger.info('Diffusion of momemntum if off because Am is 0')
+            self.logger.info('Diffusion of momentum if off because Am is 0')
 
         assert not dom._initialized
         super().__init__(dom, runtype, internal_pressure_method=internal_pressure_method, Am0=Am)
@@ -470,7 +470,9 @@ class Simulation(_pygetm.Simulation):
             import pstats
             name, pr = self._profile
             pr.disable()
-            with open('%s-%03i.prof' % (name, self.domain.tiling.rank), 'w') as f:
+            profile_path = '%s-%03i.prof' % (name, self.domain.tiling.rank)
+            self.logger.info('Writing profiling report to %s' % (profile_path,))
+            with open(profile_path, 'w') as f:
                 ps = pstats.Stats(pr, stream=f).sort_stats(pstats.SortKey.TIME)
                 ps.print_stats()
         self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
@@ -497,7 +499,7 @@ class Simulation(_pygetm.Simulation):
         self._cum_river_height_increase.fill(0.)
 
     def report_domain_integrals(self):
-        """Write totals of selected variables over the global domain (those in list self.tracer_totals) to the log."""
+        """Write totals of selected variables over the global domain (those in :attr:`tracer_totals`) to the log."""
         total_volume = (self.domain.T.D * self.domain.T.area).global_sum(where=self.domain.T.mask != 0)
         if total_volume is not None:
             self.logger.info('Integrals over global domain:')
@@ -513,19 +515,19 @@ class Simulation(_pygetm.Simulation):
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
     def transport_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffu1: core.Array, diffv1: core.Array, u1_ready: bool=False):
-        """Advect and optionally diffuse depth-averaged u and v velocity (u1, v1),
+        """Advect and optionally diffuse depth-averaged u and v velocity (:attr:`u1` and :attr:`v1`, computed from inputs ``U`` and ``V`` if needed),
         using velocities reconstructed from transports interpolated to their own advection grids.
-        Then reconstruct the resulting change in transports U and V and return this.
+        Then reconstruct the resulting change in transports ``U`` and ``V`` and return this.
 
         Args:
             U: depth-integrated velocity (m2 s-1) in x direction
             V: depth-integrated velocity (m2 s-1) in y direction
             timestep: time step (s)
-            advU: array for storing the change in transport U due to advection (m2 s-2)
-            advV: array for storing the change in transport V due to advection (m2 s-2)
-            diffv1: array for storing the change in transport U due to diffusion (m2 s-2)
-            diffv1: array for storing the change in transport V due to diffusion (m2 s-2)
-            u1_ready: velocities u1 and v1 are in sync with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D) and do not needed recomputing
+            advU: array for storing the change in transport ``U`` due to advection (m2 s-2)
+            advV: array for storing the change in transport ``V`` due to advection (m2 s-2)
+            diffv1: array for storing the change in transport ``U`` due to diffusion (m2 s-2)
+            diffv1: array for storing the change in transport ``V`` due to diffusion (m2 s-2)
+            u1_ready: velocities :attr:`u1` and :attr:`v1` are in sync with current transports and water depths (``u1=U/U.grid.D`` and ``v1=V/V.grid.D``) and do not needed recomputing
         """
 
         if not u1_ready:
@@ -557,7 +559,7 @@ class Simulation(_pygetm.Simulation):
         advV.all_values[...] = (self.v1.all_values * self.vadv.D - V.all_values) * itimestep
 
     def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, u1_ready: bool=False):
-        """Update depth-integrated transports (U, V) and depth-averaged velocities (u1, v1).
+        """Update depth-integrated transports (:attr:`U`, :attr:`V`) and depth-averaged velocities (:attr:`u1`, :attr:`v1`).
         This will also update their halos.
         
         Args:
@@ -566,7 +568,7 @@ class Simulation(_pygetm.Simulation):
             tausy: surface stress (Pa) in y direction
             dpdx: surface pressure gradient (dimensionless) in x direction
             dpdx: surface pressure gradient (dimensionless) in y direction
-            u1_ready: velocities u1 and v1 are in sync with current transports and water depths (u1=U/U.grid.D and v1=V/V.grid.D) and do not needed recomputing
+            u1_ready: velocities :attr:`u1` and :attr:`v1` are in sync with current transports and water depths (``u1=U/U.grid.D`` and ``v1=V/V.grid.D``) and do not needed recomputing
         """
 
         # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
@@ -606,7 +608,8 @@ class Simulation(_pygetm.Simulation):
             self.coriolis_fv()
 
     def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
-        """Update depth-explicit transports (pk, qk) and velocities (uk, vk). This will also update their halos."""
+        """Update depth-explicit transports (:attr:`pk`, :attr:`qk`) and velocities (:attr:`uk`, :attr:`vk`).
+        This will also update their halos."""
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids.
         # For that, information from the halos is used.
         viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
@@ -640,9 +643,11 @@ class Simulation(_pygetm.Simulation):
         self.update_3d_momentum_diagnostics(timestep, viscosity, skip_coriolis=True)
 
     def update_3d_momentum_diagnostics(self, timestep: float, viscosity: core.Array, skip_coriolis: bool=False):
-        """Update 3D momentum diagsnotics, including the slow terms that will drive the 2D updates over the next,
-        macrotimestep, and the bottom friction and Coriolis terms that will drive the next 3D update.
-        NB the Coriolis update is already done as part of the momentum update itself, so needed only when starting from a restart.
+        """Update 3D momentum diagnostics, including the vertical velocity :attr:`ww`,
+        the slow terms that will drive the 2D updates over the next macrotimestep,
+        and the bottom friction and Coriolis terms that will drive the next 3D update.
+        NB the Coriolis update is already done as part of the momentum update itself,
+        so needed only when starting from a restart.
         
         Args:
             timestep: time step (s)
@@ -709,6 +714,13 @@ class Simulation(_pygetm.Simulation):
         self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
         self.SxD.all_values[...] = self.diffpk.all_values.sum(axis=0) - self.SxD.all_values
         self.SyD.all_values[...] = self.diffqk.all_values.sum(axis=0) - self.SyD.all_values
+
+        if self.apply_bottom_friction:
+            # Note: bottom_friction_2d below operates on u1 and v1, which are been calculated form accumulated transports Ui and Vi by transport_2d_momentum
+            # It also uses and U.D and V.D, which are already in sync with u1 and v1 (i.e., they are at time=1/2, in sync with U.zin/U.hn/V.zin/V.hn)
+            self.bottom_friction_2d()
+            self.SxF.all_values[...] = self.rru.all_values * self.uk.all_values[0, ...] - self.ru.all_values * self.u1.all_values
+            self.SyF.all_values[...] = self.rrv.all_values * self.vk.all_values[0, ...] - self.rv.all_values * self.v1.all_values
 
     @property
     def Ekin(self, rho0: float=RHO0):
