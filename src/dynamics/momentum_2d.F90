@@ -1,6 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
-!!{!./pages/momentum_2d.md!}
+!!{!./code/dynamics/momentum_2d.md!}
 
 SUBMODULE (getm_momentum) momentum_2d_smod
 

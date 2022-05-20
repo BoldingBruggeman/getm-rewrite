@@ -2,6 +2,8 @@
 
 SUBMODULE (getm_domain : vertical_coordinates_smod) vertical_sigma_smod
 
+!!{!./code/domain/vertical_sigma.md!}
+
 !-----------------------------------------------------------------------------
 
 CONTAINS

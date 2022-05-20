@@ -1,11 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
-!! @note
-!! loop boundaries in w_momentum
-!! @endnote
-
-
-!!{!./pages/momentum_3d.md!}
+!!{!./code/dynamics/momentum_3d.md!}
 
 SUBMODULE (getm_momentum) momentum_3d_smod
 
@@ -143,6 +138,8 @@ END SUBROUTINE uvw_momentum_3d
 MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
    !! solve the 3D momentum equation in the local x-direction
 
+!!{!./code/dynamics/pk_3d.md!}
+
    IMPLICIT NONE
 
 !  Subroutine arguments
@@ -246,6 +243,8 @@ END SUBROUTINE pk_3d
 
 MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
    !! solve the 3D momentum equation in the local y-direction
+
+!!{!./code/dynamics/qk_3d.md!}
 
    IMPLICIT NONE
 
