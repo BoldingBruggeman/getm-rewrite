@@ -8,7 +8,7 @@ from . import core
 from . import parallel
 from .constants import FILL_VALUE
 
-CPA = 1008.
+CPA = 1008.  #: specific heat capacity of air (J kg-1 K-1)
 
 class HumidityMeasure(enum.IntEnum):
     """Measure used to specify air humidity"""
@@ -111,7 +111,7 @@ class FluxesFromMeteo(Fluxes):
         pyairsea.longwave_radiation(self.longwave_method, self.lat.all_values, sst_K, t2m_K, self.tcc.all_values, self.ea.all_values, self.qa.all_values, self.ql.all_values)
 
     def update_shortwave_radiation(self, time: cftime.datetime):
-        """Update net downwelling shortwave radiation (swr). This represnts the value just below the water surface (i.e., what is left after reflection)"""
+        """Update net downwelling shortwave radiation (swr). This represents the value just below the water surface (i.e., what is left after reflection)"""
         hh = time.hour + time.minute / 60. + time.second / 3600.
         yday = time.timetuple()[-2]
         pyairsea.solar_zenith_angle(yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values)

@@ -24,7 +24,9 @@ class Turbulence:
         pass
 
 class GOTM(Turbulence):
-    """Calculate the turbulent viscosity (num) and diffusivity (nuh) using the General Ocean Turbulence Model (GOTM)."""
+    """Calculate the turbulent viscosity (num) and diffusivity (nuh) using the `General Ocean Turbulence Model (GOTM)
+    <https://gotm.net>`_.
+   """
     def __init__(self, nml_path: Optional[str]=None):
         super().__init__()
         self.nml_path = nml_path

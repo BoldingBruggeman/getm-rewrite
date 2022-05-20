@@ -978,7 +978,7 @@ class Domain(_pygetm.Domain):
             sub: plot the subdomain, not the global domain
 
         Returns:
-            Matplotlib figure instance
+            Matplotlib figure instance for processes with rank=0 or if sub=True, otherwise None
         """
         import matplotlib.pyplot
         import matplotlib.collections
@@ -1180,7 +1180,7 @@ class Domain(_pygetm.Domain):
 
         # Update total water depth on advection grids. These must be 1/2 timestep behind the T grid.
         # That's already the case for the X grid, but for the T grid we explicitly compute and use the average of old and new D.
-        numpy.add(self.T.H.all_values, z_T_half.all_values, self.D_T_half.all_values)
+        numpy.add(self.T.H.all_values, z_T_half.all_values, out=self.D_T_half.all_values)
         self.UU.D.all_values[:, :-1] = self.D_T_half.all_values[:, 1:]
         self.VV.D.all_values[:-1, :] = self.D_T_half.all_values[1:, :]
         self.UV.D.all_values[:, :] = self.VU.D.all_values[:, :] = self.X.D.all_values[1:, 1:]
