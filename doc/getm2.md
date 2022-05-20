@@ -28,8 +28,6 @@ exclude: main.F90
          momentum_register.F90
          shear.F90
          velocities.F90
-         uv_coriolis.F90
-         bottom_friction.F90
          update_depths.F90
          x2uvc.F90
 output_dir: ./html

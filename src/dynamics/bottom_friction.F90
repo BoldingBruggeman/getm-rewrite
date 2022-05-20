@@ -1,7 +1,6 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
-!! @note
-!! check with GETM
-!! @endnote
+
+!!{!./code/dynamics/bottom_friction.md!}
 
 SUBMODULE (getm_momentum) bottom_friction_smod
 
@@ -10,7 +9,8 @@ CONTAINS
 !---------------------------------------------------------------------------
 
 MODULE SUBROUTINE bottom_friction_2d(self,runtype)
-   !!
+
+!!{!./code/dynamics/bottom_friction_2d.md!}
 
    IMPLICIT NONE
 
@@ -96,6 +96,9 @@ END SUBROUTINE bottom_friction_2d
 !---------------------------------------------------------------------------
 
 MODULE SUBROUTINE bottom_friction_3d(self)
+
+!!{!./code/dynamics/bottom_friction_3d.md!}
+
    !!
    !! @note
    !! is it assumed the velocity profile is resolved - as there is no effort to calculate

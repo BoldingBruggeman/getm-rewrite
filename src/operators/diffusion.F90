@@ -1,5 +1,7 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
+!!{!./code/operators/diffusion.md!}
+
 ! https://www.tek-tips.com/viewthread.cfm?qid=1726162
 ! https://pdfs.semanticscholar.org/0798/fa452cda22b0b501cf1388a021931efe1686.pdf
 

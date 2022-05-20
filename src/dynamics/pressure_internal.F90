@@ -1,5 +1,7 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
+!!{!./code/dynamics/pressure_internal.md!}
+
 SUBMODULE (getm_pressure) pressure_internal_smod
 
 INTERFACE

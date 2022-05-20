@@ -349,6 +349,9 @@ END SUBROUTINE qk_3d
 !---------------------------------------------------------------------------
 
 MODULE SUBROUTINE w_momentum_3d(self,dt)
+
+!!{!./code/dynamics/w_momentum_3d.md!}
+
    !! Solve the vertical momemtum equation - w
 
    IMPLICIT NONE

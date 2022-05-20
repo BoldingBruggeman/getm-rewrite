@@ -1,5 +1,7 @@
 ! Copyright (C) 2020 Bolding & Bruggeman and Hans Burchard
 
+!!{!./code/dynamics/momentum.md!}
+
 !> In this module, the temperature equation is processed by
 !> reading in the namelist {\tt temp} and initialising the temperature field
 !> (this is done in {\tt init\_temperature}),

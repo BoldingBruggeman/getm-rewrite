@@ -170,6 +170,8 @@ END SUBROUTINE uv_momentum_2d
 
 MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
 
+!!{!./code/dynamics/u_2d.md!}
+
    IMPLICIT NONE
 
 !  Subroutine arguments
@@ -220,6 +222,8 @@ END SUBROUTINE u_2d
 !---------------------------------------------------------------------------
 
 MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
+
+!!{!./code/dynamics/v_2d.md!}
 
    IMPLICIT NONE
 
