@@ -272,7 +272,6 @@ class Simulation(_pygetm.Simulation):
         z_backup = self.domain.T.z.all_values.copy()
         self.domain.T.z.all_values[...] = self.domain.T.zo.all_values
         self.domain.update_depth(_3d=False)
-        self.update_2d_momentum_diagnostics()
 
         if self.runtype > BAROTROPIC_2D:
             # Ensure old and new thicknesses are consistent with zio/zin
@@ -305,11 +304,13 @@ class Simulation(_pygetm.Simulation):
 
     def advance(self):
         """Advance the model state by one microtimestep.
-        If this completes the current macrotimestep, the part of the state associated with that timestep will be advanced too."""
-        # Update momentum from time=-1/2 to +1/2, using surface stresses and pressure gradients defined at time=0
-        # Inputs and outputs on U and V grids. As depth-averaged velocities u1 and v1 are already in sync
-        # with transports U and V and water depths D, we skip their computation by passing u1_ready=True
-        self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy, u1_ready=True)
+        If this completes the current macrotimestep, the part of the state associated with that timestep will be advanced too.
+        """
+
+        # Update transports U and V from time=-1/2 to +1/2, using surface stresses and pressure gradients defined at time=0
+        # Inputs and outputs are on U and V grids. Stresses and pressure gradients have already been updated by the call to
+        # update_forcing at the end of the previous time step.
+        self.update_2d_momentum(self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy)
 
         # Update surface elevation on T grid from time=0 to time=1 using transports U and V at time=1/2 and
         # freshwater fluxes at time=0. Exchange elevation halos so that depths and thicknesses can be computed
@@ -328,13 +329,6 @@ class Simulation(_pygetm.Simulation):
             self.logger.info(self.time)
 
         if self.runtype > BAROTROPIC_2D and macro_active:
-            # Depth-integrated transports have been summed over all microtimesteps.
-            # Now average them, then reset depth-integrated transports that will be incremented over newly starting 3D timestep.
-            numpy.multiply(self.Ui_tmp, 1. / self.split_factor, out=self.Ui.all_values)
-            numpy.multiply(self.Vi_tmp, 1. / self.split_factor, out=self.Vi.all_values)
-            self.Ui_tmp.fill(0.)
-            self.Vi_tmp.fill(0.)
-
             # Use previous source terms for biogeochemistry (valid for the start of the current macrotimestep)
             # to update tracers. This should be done before the tracer concentrations change due to transport
             # or rivers, as the source terms are only valid for the current tracer concentrations.
@@ -345,13 +339,14 @@ class Simulation(_pygetm.Simulation):
             # between start and end of the current macrotimestep.
             self.add_rivers_3d()
 
-            # Update 3D elevations and layer thicknesses. New elevation on T grid will match elevation at end of 2D timestep,
-            # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 macrotimestep behind. Old
-            # elevations zio and thicknesses ho will be one macrotimestep behind new elevations zin and thicknesses hn.
+            # Update 3D elevations and layer thicknesses. New elevation zin on T grid will match elevation at end of the microtimestep,
+            # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 MACROtimestep behind, as they
+            # are calculated by averaging zio and zin. Old elevations zio and thicknesses ho will store the previous values of zin and hn,
+            # and thus are one macrotimestep behind new elevations zin and thicknesses hn.
             self.domain.update_depth(_3d=True)
 
             # Update presssure gradient for start of the 3D time step
-            # Note that we use previously-recorded elevations and surface pressure at the start of the 3D timestep
+            # Note that we use previously-recorded elevations and surface pressure at the start of the current macrotimestep
             self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.spo)
 
             # Update momentum from time=-1/2 to 1/2 of the macrotimestep, using forcing defined at time=0
@@ -376,19 +371,20 @@ class Simulation(_pygetm.Simulation):
                 #self.domain.T.z0b.all_values[1:, 1:] = 0.5 * (numpy.maximum(self.domain.U.z0b.all_values[1:, 1:], self.domain.U.z0b.all_values[1:, :-1]) + numpy.maximum(self.domain.V.z0b.all_values[:-1, 1:], self.domain.V.z0b.all_values[1:, :-1]))
                 self.turbulence(self.macrotimestep, self.ustar_s, self.ustar_b, self.z0s, self.domain.T.z0b, self.NN, self.SS)
 
+                # Advect and diffuse tracers. Source terms are optionally handled too, as part of the diffusion update.
                 self.tracers.advance(self.macrotimestep, self.uk, self.vk, self.ww, self.turbulence.nuh)
 
         if self.report_totals != 0 and self.istep % self.report_totals == 0:
             self.report_domain_integrals()
 
         # Update all inputs and fluxes that will drive the next state update
-        self.update_forcing(macro_active)
+        self.update_forcing(macro_active, skip_2d_coriolis=True)
 
         self.output_manager.save(self.timestep * self.istep, self.istep, self.time)
 
         return macro_active
 
-    def update_forcing(self, macro_active: bool):
+    def update_forcing(self, macro_active: bool, skip_2d_coriolis: bool=False):
         """Update all inputs and fluxes that will drive the next state update.
         
         Args:
@@ -423,16 +419,7 @@ class Simulation(_pygetm.Simulation):
         # and water depths will be representative for 1/2 a MICROtimestep ago.
         self.domain.update_depth()
 
-        # Calculate 2D (depth-averaged) velocities using updated water depths
-        # Note that as long as transports U and V are 0 in masked points=, u1 and v1 will be too,
-        # provided D contains only non-zero finite values
-        numpy.divide(self.U.all_values, self.U.grid.D.all_values, out=self.u1.all_values)
-        numpy.divide(self.V.all_values, self.V.grid.D.all_values, out=self.v1.all_values)
-
-        # Calculate bottom friction using updated depth-averaged velocities u1 and v1
-        # Warning: this uses velocities u1 and v1 at masked points, which therefore need to be kept at 0
-        if self.apply_bottom_friction:
-            self.bottom_friction_2d()
+        self.update_2d_momentum_diagnostics(self.timestep, skip_coriolis=skip_2d_coriolis)
 
         # Update freshwater fluxes (TODO: add precipitation)
         self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = self.domain.rivers.flow * self.domain.rivers.iarea
@@ -514,31 +501,33 @@ class Simulation(_pygetm.Simulation):
             if total is not None:
                 self.logger.info('  %s: %.15e %s m3 (per volume: %s %s)' % (var.name, total, var.units, total / total_volume, var.units))
 
-    def transport_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffu1: core.Array, diffv1: core.Array, u1_ready: bool=False):
-        """Advect and optionally diffuse depth-averaged u and v velocity (:attr:`u1` and :attr:`v1`, computed from inputs ``U`` and ``V`` if needed),
-        using velocities reconstructed from transports interpolated to their own advection grids.
-        Then reconstruct the resulting change in transports ``U`` and ``V`` and return this.
+    def transport_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffU: core.Array, diffV: core.Array):
+        """Advect and optionally diffuse depth-integrated transports in x and y direction (arguments ``U`` and ``V``).
+        From these, first the depth-averaged velocities are calculated and stored in :attr:`u1` and :attr:`v1`.
+        This routine also updates bottom friction :attr:`ru` and  :attr:`rv`.
 
         Args:
             U: depth-integrated velocity (m2 s-1) in x direction
             V: depth-integrated velocity (m2 s-1) in y direction
-            timestep: time step (s)
+            timestep: time step (s) to calculate advection over
             advU: array for storing the change in transport ``U`` due to advection (m2 s-2)
             advV: array for storing the change in transport ``V`` due to advection (m2 s-2)
-            diffv1: array for storing the change in transport ``U`` due to diffusion (m2 s-2)
-            diffv1: array for storing the change in transport ``V`` due to diffusion (m2 s-2)
-            u1_ready: velocities :attr:`u1` and :attr:`v1` are in sync with current transports and water depths (``u1=U/U.grid.D`` and ``v1=V/V.grid.D``) and do not needed recomputing
+            diffU: array for storing the change in transport ``U`` due to diffusion (m2 s-2)
+            diffV: array for storing the change in transport ``V`` due to diffusion (m2 s-2)
         """
-
-        if not u1_ready:
-            numpy.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
-            numpy.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
+        numpy.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
+        numpy.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
 
         if self.diffuse_momentum:
             # Compute velocity diffusion contribution to transport sources.
             # This uses depth-averaged velocities u1 and v1, which therefore have to be up to date
             # Water depths should be in sync with velocities, which means they should lag 1/2 a timestep behind the tracer/T grid
-            self.momentum_diffusion_driver(self.domain.D_T_half, self.domain.X.D, self.u1,self.v1, diffu1, diffv1)
+            self.momentum_diffusion_driver(self.domain.D_T_half, self.domain.X.D, self.u1,self.v1, diffU, diffV)
+
+        # Calculate bottom friction (ru and rv) using updated depth-averaged velocities u1 and v1
+        # Warning: this uses velocities u1 and v1 at masked points, which therefore need to be kept at 0
+        if self.apply_bottom_friction:
+            self.bottom_friction_2d()
 
         itimestep = 1. / timestep
 
@@ -558,7 +547,11 @@ class Simulation(_pygetm.Simulation):
         self.vadv(self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True)
         advV.all_values[...] = (self.v1.all_values * self.vadv.D - V.all_values) * itimestep
 
-    def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, u1_ready: bool=False):
+        # Restore depth-averaged velocities as they need to be valid on exit
+        numpy.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
+        numpy.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
+
+    def update_2d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array):
         """Update depth-integrated transports (:attr:`U`, :attr:`V`) and depth-averaged velocities (:attr:`u1`, :attr:`v1`).
         This will also update their halos.
         
@@ -568,16 +561,9 @@ class Simulation(_pygetm.Simulation):
             tausy: surface stress (Pa) in y direction
             dpdx: surface pressure gradient (dimensionless) in x direction
             dpdx: surface pressure gradient (dimensionless) in y direction
-            u1_ready: velocities :attr:`u1` and :attr:`v1` are in sync with current transports and water depths (``u1=U/U.grid.D`` and ``v1=V/V.grid.D``) and do not needed recomputing
         """
-
-        # Advect depth-averaged u and v velocity (u1, v1) from t-1/2 to t+1/2,
-        # store the resulting change in transports U and V (advU, advV),
-        # to be taken into account by transport update further down.
-        # Since self.u1=self.U/self.U.grid.D (and same for v1/V), we state that with u1_ready=True
-        self.transport_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1, u1_ready=u1_ready)
-
-        # Update 2D transports from t-1/2 to t+1/2
+        # Update 2D transports from t-1/2 to t+1/2. This uses advection, diffusion and bottom friction terms
+        # (advU, advV, diffu1, diffv1, ru, rv) that were calculated by the call to update_2d_momentum_diagnostics
         if self._ufirst:
             self.u_2d(timestep, tausx, dpdx)
             self.U.update_halos()
@@ -597,19 +583,33 @@ class Simulation(_pygetm.Simulation):
         self.Ui_tmp += self.U.all_values
         self.Vi_tmp += self.V.all_values
 
-    def update_2d_momentum_diagnostics(self, skip_coriolis: bool=False):
+    def update_2d_momentum_diagnostics(self, timestep: float, skip_coriolis: bool=False):
         """Update 2D momentum diagnostics, including the Coriolis terms that will drive the next 2D update.
         NB the Coriolis update is already done as part of the momentum update itself, so needed only when starting from a restart.
         
         Args:
-            skip_coriolis: flag to indicate that Coriolis terms are already up-to-date and do not need recomputing"""
+            timestep: time step (s) to calculate advection of momentum over
+            skip_coriolis: flag to indicate that Coriolis terms are already up-to-date and do not need recomputing
+        """
         if not skip_coriolis:
             self.coriolis_fu()
             self.coriolis_fv()
 
+        # Calculate sources of transports U and V due to advection (advU, advV) and diffusion (diffu1, diffv1)
+        # Transports generally come in at time=-1/2 and are then advanced to time+1/2
+        self.transport_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1)
+
     def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         """Update depth-explicit transports (:attr:`pk`, :attr:`qk`) and velocities (:attr:`uk`, :attr:`vk`).
-        This will also update their halos."""
+        This will also update their halos.
+        """
+        # Depth-integrated transports have been summed over all microtimesteps.
+        # Average them, then reset depth-integrated transports that will be incremented over the next macrotimestep.
+        numpy.multiply(self.Ui_tmp, 1. / self.split_factor, out=self.Ui.all_values)
+        numpy.multiply(self.Vi_tmp, 1. / self.split_factor, out=self.Vi.all_values)
+        self.Ui_tmp.fill(0.)
+        self.Vi_tmp.fill(0.)
+
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids.
         # For that, information from the halos is used.
         viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
@@ -716,9 +716,8 @@ class Simulation(_pygetm.Simulation):
         self.SyD.all_values[...] = self.diffqk.all_values.sum(axis=0) - self.SyD.all_values
 
         if self.apply_bottom_friction:
-            # Note: bottom_friction_2d below operates on u1 and v1, which are been calculated form accumulated transports Ui and Vi by transport_2d_momentum
-            # It also uses and U.D and V.D, which are already in sync with u1 and v1 (i.e., they are at time=1/2, in sync with U.zin/U.hn/V.zin/V.hn)
-            self.bottom_friction_2d()
+            # Note: ru and rv have been updated by transport_2d_momentum, using accumulated transports Ui and Vi (representative for t=1/2, just like uk, vk, rru, rrv)
+            # Slow bottom friction (stress/density) is derived by taking the difference between 3D bottom friction and the inferred ru and rv.
             self.SxF.all_values[...] = self.rru.all_values * self.uk.all_values[0, ...] - self.ru.all_values * self.u1.all_values
             self.SyF.all_values[...] = self.rrv.all_values * self.vk.all_values[0, ...] - self.rv.all_values * self.v1.all_values
 
