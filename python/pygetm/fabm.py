@@ -1,0 +1,125 @@
+import itertools
+from typing import List
+
+import numpy
+import cftime
+
+from . import domain
+from . import pyfabm
+from . import core
+from . import tracer
+
+class FABM:
+    def __init__(self, path: str='fabm.yaml', repair: bool=True):
+        self.path = path
+        self.repair = repair
+
+    def initialize(self, domain: domain.Domain, tracer_collection: tracer.TracerCollection, tracer_totals: List[core.Array]):
+        self.domain = domain
+        
+        def variable_to_array(variable, send_data: bool=False, **kwargs):
+            ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_path, fill_value=variable.missing_value, dtype=self.model.fabm.dtype, grid=self.domain.T, **kwargs)
+            if send_data:
+                ar.wrap_ndarray(variable.data)
+            ar.register()
+            return ar
+
+        shape = self.domain.T.hn.all_values.shape
+        self.model = pyfabm.Model(self.path, shape=shape, libname='fabm_c',
+            start=(0, self.domain.halo, self.domain.halo), stop=(shape[0], shape[1] - self.domain.halo, shape[2] - self.domain.halo))
+        self.sources_interior = numpy.zeros_like(self.model.interior_state)
+        self.sources_surface = numpy.zeros_like(self.model.surface_state)
+        self.sources_bottom = numpy.zeros_like(self.model.bottom_state)
+        self.vertical_velocity = numpy.zeros_like(self.model.interior_state)
+        for i, variable in enumerate(self.model.interior_state_variables):
+            ar_w = core.Array(grid=self.domain.T)
+            ar_w.wrap_ndarray(self.vertical_velocity[i, ...])
+            tracer_collection.add(data=variable.data, vertical_velocity=ar_w, name=variable.output_name, units=variable.units, long_name=variable.long_path, 
+                fill_value=variable.missing_value, rivers_follow_target_cell=variable.no_river_dilution)
+        for variable in itertools.chain(self.model.surface_state_variables, self.model.bottom_state_variables):
+            ar = variable_to_array(variable, send_data=True, attrs={'_part_of_state': True})
+        self._interior_diagnostic_arrays = [variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.model.interior_diagnostic_variables]
+        self._horizontal_diagnostic_arrays = [variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.model.horizontal_diagnostic_variables]
+        self.model.link_mask(self.domain.T.mask.all_values)
+        self.model.link_cell_thickness(self.domain.T.hn.all_values)
+
+        self.conserved_quantity_totals = numpy.empty((len(self.model.conserved_quantities),) + self.domain.T.H.all_values.shape, dtype=self.sources_interior.dtype)
+        for i, variable in enumerate(self.model.conserved_quantities):
+            ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.model.fabm.dtype, grid=self.domain.T)
+            ar.wrap_ndarray(self.conserved_quantity_totals[i, ...])
+            tracer_totals.append(ar)
+
+    def start(self, time: cftime.datetime):
+        # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
+        # This MUST be done before calling self.model.start
+        for variable, ar in zip(itertools.chain(self.model.interior_diagnostic_variables, self.model.horizontal_diagnostic_variables), itertools.chain(self._interior_diagnostic_arrays, self._horizontal_diagnostic_arrays)):
+            variable.save = ar.saved
+
+        # Transfer GETM fields with a standard name to FABM
+        for field in self.domain.field_manager.fields.values():
+            for standard_name in field.attrs.get('_fabm_standard_names', []):
+                try:
+                    variable = self.model.dependencies.find(standard_name)
+                except KeyError:
+                    continue
+                field.saved = True
+                variable.link(field.all_values)
+
+        try:
+            self._yearday = self.model.dependencies.find('number_of_days_since_start_of_the_year')
+            self._yearday.value = (time - cftime.datetime(time.year, 1, 1)).total_seconds() / 86400.
+        except KeyError:
+            self._yearday = None
+
+        # Start FABM. This verifies whether all dependencies are fulfilled and freezes the set of diagnostics that will be saved.
+        assert self.model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
+
+        # Fill GETM placeholder arrays for all FABM diagnostics that will be computed/saved.
+        for variable, ar in zip(itertools.chain(self.model.interior_diagnostic_variables, self.model.horizontal_diagnostic_variables), itertools.chain(self._interior_diagnostic_arrays, self._horizontal_diagnostic_arrays)):
+            if ar.saved:
+                ar.wrap_ndarray(variable.data)
+
+        # Apply mask to state variables
+        for variable in itertools.chain(self.model.interior_state_variables, self.model.surface_state_variables, self.model.bottom_state_variables):
+            variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
+
+    def get_dependency(self, name: str) -> core.Array:
+        """Retrieve the array that will hold values for the specified FABM dependency.
+        This array can subequently be assigned a value or be linked to a time/space-varying input with <ARRAY>.set.
+        
+        Args:
+            name: name of the FABM dependency
+        """
+        variable = self.model.dependencies.find(name)
+        if len(variable.shape) == 0:
+            return variable
+        arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_path, z=len(variable.shape) == 3)
+        variable.link(arr.all_values)
+        return arr
+
+    def update_sources(self, time: cftime.datetime):
+        """Update sources, vertical velocities, and diagnostics.
+        This does not update the state variables themselves; that is done by ``advance``
+        """
+        if self._yearday:
+            self._yearday.value = (time - cftime.datetime(time.year, 1, 1)).total_seconds() / 86400.
+        self.model.get_sources(out=(self.sources_interior, self.sources_surface, self.sources_bottom))
+        self.model.get_vertical_movement(self.vertical_velocity)
+
+    def update_totals(self):
+        """Ensure sums of conserved quantities are up to date."""
+        self.model.get_conserved_quantities(out=self.conserved_quantity_totals)
+
+    def advance(self, timestep: float):
+        """Time-integrate source terms of all state variables (3D pelagic tracers as well as bottom- and surface-attached variables).
+        
+        Args:
+            timestep: time step (s)
+        """
+        self.sources_interior *= timestep
+        self.sources_surface *= timestep
+        self.sources_bottom *= timestep
+        self.model.interior_state += self.sources_interior
+        self.model.surface_state += self.sources_surface
+        self.model.bottom_state += self.sources_bottom
+        self.model.check_state(repair=self.repair)

@@ -26,6 +26,7 @@ import pygetm.mixing
 import pygetm.density
 import pygetm.airsea
 import pygetm.radiation
+import pygetm.fabm
 
 BAROTROPIC = BAROTROPIC_2D = 1
 BAROTROPIC_3D = 2
@@ -47,7 +48,7 @@ class Simulation(_pygetm.Simulation):
     _sealevel_arrays = ()
     _time_arrays = 'timestep', 'macrotimestep', 'split_factor', 'timedelta', 'time', 'istep', 'report', 'report_totals', 'default_time_reference'
     _all_fortran_arrays = tuple(['_%s' % name for name in _momentum_arrays + _pressure_arrays + _sealevel_arrays]) + ('uadv', 'vadv', 'uua', 'uva', 'vua', 'vva', 'uua3d', 'uva3d', 'vua3d', 'vva3d')
-    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm_model', '_fabm_interior_diagnostic_arrays', '_fabm_horizontal_diagnostic_arrays', 'fabm_sources_interior', 'fabm_sources_surface', 'fabm_sources_bottom', 'fabm_vertical_velocity', 'fabm_conserved_quantity_totals', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp', '_initialized_variables') + _time_arrays
+    __slots__ = _all_fortran_arrays + ('output_manager', 'input_manager', 'fabm', '_yearday', 'tracers', 'tracer_totals', 'logger', 'airsea', 'turbulence', 'density', 'buoy', 'temp', 'salt', 'pres', 'rad', 'par', 'par0', 'rho', 'sst', 'sss', 'NN', 'ustar_s', 'ustar_b', 'taub', 'z0s', 'z0b', 'fwf', '_cum_river_height_increase', '_start_time', '_profile', 'radiation', '_ufirst', '_u3dfirst', 'diffuse_momentum', 'apply_bottom_friction', 'Ui_tmp', 'Vi_tmp', '_initialized_variables') + _time_arrays
 
     _array_args = {
         'U': dict(units='m2 s-1', long_name='depth-integrated transport in Eastward direction', fill_value=FILL_VALUE, attrs={'_part_of_state': True, '_mask_output': True}),
@@ -148,8 +149,8 @@ class Simulation(_pygetm.Simulation):
         self.vua3d = dom.VU.array(fill=numpy.nan, z=CENTERS)
         self.vva3d = dom.VV.array(fill=numpy.nan, z=CENTERS)
 
-        #: List of tracers that are to be transported. Optionally they can have sources, open boundary conditions and riverine concentrations set.
-        self.tracers = tracer.TracerCollection(self.domain.T, advection_scheme=advection_scheme)
+        #: Collection of tracers that are to be transported. Optionally they can have sources, open boundary conditions and riverine concentrations set.
+        self.tracers: tracer.TracerCollection = tracer.TracerCollection(self.domain.T, advection_scheme=advection_scheme)
 
         #: List of variables for which the domain-integrated total needs to be reported. These can be depth-integrated (2D) or depth-explicit (3D).
         self.tracer_totals: List[core.Array] = []
@@ -157,7 +158,7 @@ class Simulation(_pygetm.Simulation):
         self._ufirst = False   #: Whether to start the depth-integrated (2D) momentum update with u (as opposed to v)
         self._u3dfirst = False #: Whether to start the depth-explicit (3D) momentum update with u (as opposed to v)
 
-        self.fabm_model = None
+        self.fabm = None
 
         if runtype > BAROTROPIC_2D:
             #: Provider of turbulent viscosity and diffusivity. This must inherit from :class:`pygetm.mixing.Turbulence` and should be provided as argument turbulence to :class:`Simulation`.
@@ -170,37 +171,10 @@ class Simulation(_pygetm.Simulation):
             self.taub = dom.T.array(fill=0., name='taub', units='Pa', long_name='bottom shear stress', fill_value=FILL_VALUE, fabm_standard_name='bottom_stress')
 
             if fabm:
-                def fabm_variable_to_array(variable, send_data: bool=False, **kwargs):
-                    ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_path, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T, **kwargs)
-                    if send_data:
-                        ar.wrap_ndarray(variable.data)
-                    ar.register()
-                    return ar
-
-                shape = self.domain.T.hn.all_values.shape
-                self.fabm_model = pyfabm.Model(fabm if isinstance(fabm, str) else 'fabm.yaml', shape=shape, libname='fabm_c',
-                    start=(0, self.domain.halo, self.domain.halo), stop=(shape[0], shape[1] - self.domain.halo, shape[2] - self.domain.halo))
-                self.fabm_sources_interior = numpy.zeros_like(self.fabm_model.interior_state)
-                self.fabm_sources_surface = numpy.zeros_like(self.fabm_model.surface_state)
-                self.fabm_sources_bottom = numpy.zeros_like(self.fabm_model.bottom_state)
-                self.fabm_vertical_velocity = numpy.zeros_like(self.fabm_model.interior_state)
-                for i, variable in enumerate(self.fabm_model.interior_state_variables):
-                    ar_w = core.Array(grid=self.domain.T)
-                    ar_w.wrap_ndarray(self.fabm_vertical_velocity[i, ...])
-                    self.tracers.add(data=variable.data, vertical_velocity=ar_w, name=variable.output_name, units=variable.units, long_name=variable.long_path, 
-                        fill_value=variable.missing_value, rivers_follow_target_cell=variable.no_river_dilution)
-                for variable in itertools.chain(self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
-                    ar = fabm_variable_to_array(variable, send_data=True, attrs={'_part_of_state': True})
-                self._fabm_interior_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.fabm_model.interior_diagnostic_variables]
-                self._fabm_horizontal_diagnostic_arrays = [fabm_variable_to_array(variable, shape=self.domain.T.H.shape) for variable in self.fabm_model.horizontal_diagnostic_variables]
-                self.fabm_model.link_mask(self.domain.T.mask.all_values)
-                self.fabm_model.link_cell_thickness(self.domain.T.hn.all_values)
-
-                self.fabm_conserved_quantity_totals = numpy.empty((len(self.fabm_model.conserved_quantities),) + self.domain.T.H.all_values.shape, dtype=self.fabm_sources_interior.dtype)
-                for i, variable in enumerate(self.fabm_model.conserved_quantities):
-                    ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_name, fill_value=variable.missing_value, dtype=self.fabm_model.fabm.dtype, grid=self.domain.T)
-                    ar.wrap_ndarray(self.fabm_conserved_quantity_totals[i, ...])
-                    self.tracer_totals.append(ar)
+                if not isinstance(fabm, pygetm.fabm.FABM):
+                    fabm = pygetm.fabm.FABM(fabm if isinstance(fabm, str) else 'fabm.yaml')
+                self.fabm = fabm
+                self.fabm.initialize(self.domain, self.tracers, self.tracer_totals)
 
             self.pres = dom.depth
             self.pres.fabm_standard_name = 'pressure'
@@ -233,14 +207,6 @@ class Simulation(_pygetm.Simulation):
 
     def __getitem__(self, key: str) -> core.Array:
         return self.output_manager.fields[key]
-
-    def get_fabm_dependency(self, name: str):
-        variable = self.fabm_model.dependencies.find(name)
-        if len(variable.shape) == 0:
-            return variable
-        arr = self.domain.T.array(name=variable.output_name, units=variable.units, long_name=variable.long_path, z=len(variable.shape) == 3)
-        variable.link(arr.all_values)
-        return arr
 
     def load_restart(self, path: str, time: Optional[cftime.datetime]=None, **kwargs):
         """Load the model state from a restart file."""
@@ -301,39 +267,8 @@ class Simulation(_pygetm.Simulation):
         for array in zero_masked:
             array.all_values[..., array.grid.mask.all_values == 0] = 0.
 
-        if self.fabm_model:
-            # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
-            # This MUST be done before calling self.fabm_model.start
-            for variable, ar in zip(itertools.chain(self.fabm_model.interior_diagnostic_variables, self.fabm_model.horizontal_diagnostic_variables), itertools.chain(self._fabm_interior_diagnostic_arrays, self._fabm_horizontal_diagnostic_arrays)):
-                variable.save = ar.saved
-
-            # Transfer GETM fields with a standard name to FABM
-            for field in self.domain.field_manager.fields.values():
-                for fabm_standard_name in field.attrs.get('_fabm_standard_names', []):
-                    try:
-                        variable = self.fabm_model.dependencies.find(fabm_standard_name)
-                    except KeyError:
-                        continue
-                    field.saved = True
-                    variable.link(field.all_values)
-
-            try:
-                self._yearday = self.fabm_model.dependencies.find('number_of_days_since_start_of_the_year')
-                self._yearday.value = (self.time - cftime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
-            except KeyError:
-                self._yearday = None
-
-            # Start FABM. This verifies whether all dependencies are fulfilled and freezes the set of diagnostics that will be saved.
-            assert self.fabm_model.start(), 'FABM failed to start. Likely its configuration is incomplete.'
-
-            # Fill GETM placeholder arrays for all FABM diagnostics that will be computed/saved.
-            for variable, ar in zip(itertools.chain(self.fabm_model.interior_diagnostic_variables, self.fabm_model.horizontal_diagnostic_variables), itertools.chain(self._fabm_interior_diagnostic_arrays, self._fabm_horizontal_diagnostic_arrays)):
-                if ar.saved:
-                    ar.wrap_ndarray(variable.data)
-
-            # Apply mask to state variables
-            for variable in itertools.chain(self.fabm_model.interior_state_variables, self.fabm_model.surface_state_variables, self.fabm_model.bottom_state_variables):
-                variable.value[..., self.domain.T.mask.all_values == 0] = variable.missing_value
+        if self.fabm:
+            self.fabm.start(self.time)
 
         # Update inputs and forcing variables based on the current time and state
         z_backup = self.domain.T.z.all_values.copy()
@@ -405,8 +340,8 @@ class Simulation(_pygetm.Simulation):
             # Use previous source terms for biogeochemistry (valid for the start of the current macrotimestep)
             # to update tracers. This should be done before the tracer concentrations change due to transport
             # or rivers, as the source terms are only valid for the current tracer concentrations.
-            if self.fabm_model:
-                self.update_fabm(self.macrotimestep)
+            if self.fabm:
+                self.fabm.advance(self.macrotimestep)
 
             # Update layer thicknesses and tracer concentrations to account for river inflow
             # between start and end of the current macrotimestep.
@@ -523,8 +458,8 @@ class Simulation(_pygetm.Simulation):
 
             # Update source terms of biogeochemistry, using the new tracer concentrations
             # Do this last because FABM could depend on any of the variables computed before
-            if self.fabm_model:
-                self.update_fabm_sources()
+            if self.fabm:
+                self.fabm.update_sources(self.time)
 
             # Save forcing variables for the next baroclinic update
             self.airsea.spo.all_values[...] = self.airsea.sp.all_values
@@ -563,35 +498,14 @@ class Simulation(_pygetm.Simulation):
         self.domain.T.zin.all_values[self.domain.rivers.j, self.domain.rivers.i] += self._cum_river_height_increase
         self._cum_river_height_increase.fill(0.)
 
-    def update_fabm_sources(self):
-        """Update FABM sources, vertical velocities, and diagnostics. This does not update the state variables themselves; that is done by update_fabm"""
-        if self._yearday:
-            self._yearday.value = (self.time - cftime.datetime(self.time.year, 1, 1)).total_seconds() / 86400.
-        self.fabm_model.get_sources(out=(self.fabm_sources_interior, self.fabm_sources_surface, self.fabm_sources_bottom))
-        self.fabm_model.get_vertical_movement(self.fabm_vertical_velocity)
-
-    def update_fabm(self, timestep: float, repair: bool=True):
-        """Time-integrate source terms of all FABM state variables (3D pelagic tracers as well as bottom- and surface-attached variables).
-        
-        Args:
-            timestep: time step (s)
-            repair: clip out-of-bound state variable values after update"""
-        self.fabm_sources_interior *= timestep
-        self.fabm_sources_surface *= timestep
-        self.fabm_sources_bottom *= timestep
-        self.fabm_model.interior_state += self.fabm_sources_interior
-        self.fabm_model.surface_state += self.fabm_sources_surface
-        self.fabm_model.bottom_state += self.fabm_sources_bottom
-        self.fabm_model.check_state(repair=repair)
-
     def report_domain_integrals(self):
         """Write totals of selected variables over the global domain (those in list self.tracer_totals) to the log."""
         total_volume = (self.domain.T.D * self.domain.T.area).global_sum(where=self.domain.T.mask != 0)
         if total_volume is not None:
             self.logger.info('Integrals over global domain:')
             self.logger.info('  volume: %.15e m3' % total_volume)
-        if self.fabm_model:
-            self.fabm_model.get_conserved_quantities(out=self.fabm_conserved_quantity_totals)
+        if self.fabm:
+            self.fabm.update_totals()
         for var in self.tracer_totals:
             total = var * var.grid.area
             if total.ndim == 3:

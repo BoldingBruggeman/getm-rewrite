@@ -110,11 +110,11 @@ else:
     sim.airsea.u10.set(pygetm.input.from_nc(met_path, 'u10'))
     sim.airsea.v10.set(pygetm.input.from_nc(met_path, 'v10'))
 
-if sim.fabm_model:
+if sim.fabm:
     sim.logger.info('Setting up FABM dependencies that GETM does not provide')
     if sim.runtype == pygetm.BAROTROPIC_3D:
-        sim.get_fabm_dependency('temperature').set(5.)
-        sim.get_fabm_dependency('practical_salinity').set(35.)
+        sim.fabm.get_dependency('temperature').set(5.)
+        sim.fabm.get_dependency('practical_salinity').set(35.)
 
 if args.output:
     sim.logger.info('Setting up output')
@@ -137,7 +137,7 @@ if args.output:
         output.request(('temp', 'salt', 'rho', 'NN', 'rad', 'sst', 'hnt', 'nuh',))
         if args.debug_output:
             output.request(('idpdx', 'idpdy' ))
-        if sim.fabm_model:
+        if sim.fabm:
             output.request(('par', 'med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
 
 if args.save_restart:

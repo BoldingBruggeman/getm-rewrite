@@ -23,6 +23,7 @@ Submodules
    pygetm.debug
    pygetm.density
    pygetm.domain
+   pygetm.fabm
    pygetm.legacy
    pygetm.mixing
    pygetm.operators

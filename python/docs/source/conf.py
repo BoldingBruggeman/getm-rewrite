@@ -70,8 +70,10 @@ autoclass_content = 'both'
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
+    'numpy': ('http://docs.scipy.org/doc/numpy/', None),
     'cftime': ('https://unidata.github.io/cftime', None),
     'matplotlib': ('http://matplotlib.sourceforge.net/', None),
+    'xarray': ('https://xarray.pydata.org/en/stable', None),
 }
 
 # -- Options for todo extension ----------------------------------------------
