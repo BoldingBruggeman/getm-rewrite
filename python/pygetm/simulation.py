@@ -20,7 +20,6 @@ from . import parallel
 from . import output
 from . import operators
 from . import tracer
-from . import pyfabm
 import pygetm.input
 import pygetm.mixing
 import pygetm.density
@@ -76,7 +75,6 @@ class Simulation(_pygetm.Simulation):
         dom.field_manager = self.output_manager
 
         self.input_manager.set_logger(self.logger.getChild('input_manager'))
-        pyfabm.logger = self.logger.getChild('FABM')
 
         # Disable bottom friction if physical bottom roughness is 0 everywhere
         if apply_bottom_friction and (numpy.ma.array(dom.z0b_min, mask=dom.mask==0) == 0.).any():
@@ -174,7 +172,7 @@ class Simulation(_pygetm.Simulation):
                 if not isinstance(fabm, pygetm.fabm.FABM):
                     fabm = pygetm.fabm.FABM(fabm if isinstance(fabm, str) else 'fabm.yaml')
                 self.fabm = fabm
-                self.fabm.initialize(self.domain, self.tracers, self.tracer_totals)
+                self.fabm.initialize(self.domain, self.tracers, self.tracer_totals, self.logger.getChild('FABM'))
 
             self.pres = dom.depth
             self.pres.fabm_standard_name = 'pressure'

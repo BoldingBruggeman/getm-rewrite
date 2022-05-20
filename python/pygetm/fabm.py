@@ -1,4 +1,5 @@
 import itertools
+import logging
 from typing import List
 
 import numpy
@@ -14,9 +15,10 @@ class FABM:
         self.path = path
         self.repair = repair
 
-    def initialize(self, domain: domain.Domain, tracer_collection: tracer.TracerCollection, tracer_totals: List[core.Array]):
+    def initialize(self, domain: domain.Domain, tracer_collection: tracer.TracerCollection, tracer_totals: List[core.Array], logger: logging.Logger):
         self.domain = domain
-        
+        pyfabm.logger = logger
+
         def variable_to_array(variable, send_data: bool=False, **kwargs):
             ar = core.Array(name=variable.output_name, units=variable.units, long_name=variable.long_path, fill_value=variable.missing_value, dtype=self.model.fabm.dtype, grid=self.domain.T, **kwargs)
             if send_data:
