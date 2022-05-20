@@ -76,7 +76,7 @@ CONTAINS
             self%dZ(i,j,0)=self%dZ(i,j,1)
 
             do k=TG%kmax,1,-1
-               cff=2.0*self%dR(i,j,k)*self%dR(i,j,k-1)
+               cff=2._real64*self%dR(i,j,k)*self%dR(i,j,k-1)
                if (cff > eps) then
                   self%dR(i,j,k)=cff/(self%dR(i,j,k)+self%dR(i,j,k-1))
                else
@@ -123,13 +123,13 @@ CONTAINS
 
       do j=TG%jmin,TG%jmax
          do i=TG%imin,TG%imax+1
-            cff=2.0*self%dZx(i,j)*self%dZx(i+1,j)
+            cff=2._real64*self%dZx(i,j)*self%dZx(i+1,j)
             if (cff > eps) then
                self%dZx(i,j)=cff/(self%dZx(i,j)+self%dZx(i+1,j))
             else
                self%dZx(i,j)=0._real64
             end if
-            cff=2.0*self%dRx(i,j)*self%dRx(i+1,j)
+            cff=2._real64*self%dRx(i,j)*self%dRx(i+1,j)
             if (cff > eps) then
                self%dRx(i,j)=cff/(self%dRx(i,j)+self%dRx(i+1,j))
             else
