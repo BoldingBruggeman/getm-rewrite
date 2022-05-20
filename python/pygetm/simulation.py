@@ -353,7 +353,7 @@ class Simulation(_pygetm.Simulation):
             # For this purpose, surface stresses at the end of the previous macrotimestep were saved (taux_Uo, tauy_Vo)
             # Pressure gradients dpdx and dpdy have just been updated to match the start of the current macrotimestep
             # Internal pressure idpdx and idpdy were calculated at the end of the previous macrotimestep and are therefore ready as-is.
-            self.update_3d_momentum(self.macrotimestep, self.airsea.taux_Uo, self.airsea.tauy_Vo, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
+            self.update_3d_momentum(self.macrotimestep, self.split_factor, self.airsea.taux_Uo, self.airsea.tauy_Vo, self.dpdx, self.dpdy, self.idpdx, self.idpdy, self.turbulence.num)
 
             if self.runtype == BAROCLINIC:
                 # Update total stresses (x and y combined) and calculate the friction velocities (m s-1)
@@ -599,14 +599,25 @@ class Simulation(_pygetm.Simulation):
         # Transports generally come in at time=-1/2 and are then advanced to time+1/2
         self.transport_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1)
 
-    def update_3d_momentum(self, timestep: float, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
+    def update_3d_momentum(self, timestep: float, split_factor: int, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         """Update depth-explicit transports (:attr:`pk`, :attr:`qk`) and velocities (:attr:`uk`, :attr:`vk`).
         This will also update their halos.
+        
+        Args:
+            timestep: (macro) time step (s)
+            split_factor: number of microtimesteps per macrotimestep
+            tausx: surface stress (Pa) in x direction
+            tausy: surface stress (Pa) in y direction
+            dpdx: surface pressure gradient (dimensionless) in x direction
+            dpdy: surface pressure gradient (dimensionless) in y direction
+            idpdx: internal pressure gradient (m2 s-2) in x direction
+            idpdy: internal pressure gradient (m2 s-2) in y direction
+            viscosity: turbulent viscosity (m2 s-1)
         """
         # Depth-integrated transports have been summed over all microtimesteps.
         # Average them, then reset depth-integrated transports that will be incremented over the next macrotimestep.
-        numpy.multiply(self.Ui_tmp, 1. / self.split_factor, out=self.Ui.all_values)
-        numpy.multiply(self.Vi_tmp, 1. / self.split_factor, out=self.Vi.all_values)
+        numpy.multiply(self.Ui_tmp, 1. / split_factor, out=self.Ui.all_values)
+        numpy.multiply(self.Vi_tmp, 1. / split_factor, out=self.Vi.all_values)
         self.Ui_tmp.fill(0.)
         self.Vi_tmp.fill(0.)
 
