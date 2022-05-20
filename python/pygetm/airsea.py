@@ -19,8 +19,8 @@ class HumidityMeasure(enum.IntEnum):
 
 class Fluxes:
     """Base class that provides air-water fluxes of heat and momentum, as well as surface air pressure.
-    When using this class directly, these fluxes (stresses taux and tauy, surface heat flux shf, air pressure sp,
-    and net downwelling shortwave radiation swr) are prescribed, not calculated."""
+    When using this class directly, these fluxes (stresses ``taux`` and ``tauy``, surface heat flux ``shf``, air pressure ``sp``,
+    and net downwelling shortwave radiation ``swr``) are prescribed, not calculated."""
     def initialize(self, domain: pygetm.domain.Domain):
         self.logger = domain.root_logger.getChild('airsea')
 
@@ -41,8 +41,9 @@ class Fluxes:
         self._ready = False
 
     def __call__(self, time: cftime.datetime, sst: core.Array, sss: core.Array, calculate_heat_flux: bool) -> None:
-        """Update surface flux of momentum (taux_U at U grid, tauy_V at V grid, taux and tauy at T grid)
-        and optionally the surface heat flux (shf) and net downwelling shortwave flux (swr)"""
+        """Update surface flux of momentum (``taux_U`` at U grid, ``tauy_V`` at V grid, ``taux`` and ``tauy`` at T grid)
+        and optionally the surface heat flux (``shf``) and net downwelling shortwave flux (``swr``)
+        """
         if not self._ready:
             assert self.taux.require_set(self.logger) * self.tauy.require_set(self.logger) * self.sp.require_set(self.logger) * (not calculate_heat_flux or self.shf.require_set(self.logger)) * (not calculate_heat_flux or self.swr.require_set(self.logger))
             self._ready = True
@@ -101,17 +102,22 @@ class FluxesFromMeteo(Fluxes):
         self.cd_sensible = domain.T.array()
 
     def update_humidity(self, sst: core.Array):
-        """Update humidity metrics (saturation vapor pressure es, actual vapor pressure ea, saturation specific humidity qs, actual specific humidity qa) and air density (rhoa)"""
+        """Update humidity metrics: saturation vapor pressure ``es``, actual vapor pressure ``ea``,
+        saturation specific humidity ``qs``, actual specific humidity ``qa`` and air density ``rhoa``
+        """
         pyairsea.humidity(self.humidity_measure, self.hum.all_values, self.sp.all_values, sst.all_values, self.t2m.all_values, self.es.all_values, self.ea.all_values, self.qs.all_values, self.qa.all_values, self.rhoa.all_values)
 
     def update_longwave_radiation(self, sst: core.Array):
-        """Update net downwelling longwave radiation (ql)"""
+        """Update net downwelling longwave radiation ``ql``
+        """
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
         pyairsea.longwave_radiation(self.longwave_method, self.lat.all_values, sst_K, t2m_K, self.tcc.all_values, self.ea.all_values, self.qa.all_values, self.ql.all_values)
 
     def update_shortwave_radiation(self, time: cftime.datetime):
-        """Update net downwelling shortwave radiation (swr). This represents the value just below the water surface (i.e., what is left after reflection)"""
+        """Update net downwelling shortwave radiation ``swr``.
+        This represents the value just below the water surface (i.e., what is left after reflection).
+        """
         hh = time.hour + time.minute / 60. + time.second / 3600.
         yday = time.timetuple()[-2]
         pyairsea.solar_zenith_angle(yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values)
@@ -120,7 +126,8 @@ class FluxesFromMeteo(Fluxes):
         self.swr.all_values *= 1. - self.albedo.all_values
 
     def update_transfer_coefficients(self, sst: core.Array):
-        """Update transfer coefficients for momentum (cd_mom), latent heat (cd_latent) and sensible heat (cd_sensible)"""
+        """Update transfer coefficients for momentum (``cd_mom``), latent heat (``cd_latent``) and sensible heat (``cd_sensible``)
+        """
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
         numpy.sqrt(self.u10.all_values**2 + self.v10.all_values**2, out=self.w.all_values)

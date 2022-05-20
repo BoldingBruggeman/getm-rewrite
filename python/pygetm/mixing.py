@@ -9,9 +9,9 @@ from . import _pygotm
 from .constants import *
 
 class Turbulence:
-    """Base class that provides the turbulent viscosity (num) and diffusivity (nuh).
+    """Base class that provides the turbulent viscosity ``num`` and diffusivity ``nuh``.
     When using this class directly, viscosity and diffusivity are prescribed, not calculated.
-    In this case, both default to zero; assign to num/nuh or call num.set/nuh.set to change this."""
+    In this case, both default to zero; assign to ``num``/``nuh`` or call ``num.set``/``nuh.set`` to change this."""
     def initialize(self, grid: domain.Grid):
         self.grid = grid
         self.logger = grid.domain.root_logger.getChild(self.__class__.__name__)
@@ -24,7 +24,7 @@ class Turbulence:
         pass
 
 class GOTM(Turbulence):
-    """Calculate the turbulent viscosity (num) and diffusivity (nuh) using the `General Ocean Turbulence Model (GOTM)
+    """Calculate the turbulent viscosity ``num`` and diffusivity ``nuh`` using the `General Ocean Turbulence Model (GOTM)
     <https://gotm.net>`_.
    """
     def __init__(self, nml_path: Optional[str]=None):
