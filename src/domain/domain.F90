@@ -210,6 +210,11 @@ MODULE getm_domain
       integer, allocatable :: bdy_index(:)
       integer, allocatable :: bdy_map(:,:)
 
+      real(real64), dimension(:), allocatable  :: dga
+      real(real64), dimension(:), allocatable :: beta
+      real(real64), dimension(:), allocatable :: sigma
+      integer :: kk
+
       contains
 
       procedure :: configure => domain_configure

@@ -2,10 +2,6 @@
 
 SUBMODULE (getm_domain : vertical_coordinates_smod) vertical_gvc_smod
 
-   real(real64), dimension(:), allocatable :: beta
-   real(real64), dimension(:), allocatable :: sigma
-   integer :: kk
-
 !-----------------------------------------------------------------------------
 
 CONTAINS
@@ -29,25 +25,25 @@ MODULE SUBROUTINE init_gvc(self)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('init_vertical_gvc()',level=3)
 
-   allocate(beta(0:self%T%kmax),stat=stat)     ! dimensionless beta-coordinate
+   allocate(self%beta(0:self%T%kmax),stat=stat)     ! dimensionless beta-coordinate
    if (stat /= 0) STOP 'coordinates: Error allocating (beta)'
-   allocate(sigma(0:self%T%kmax),stat=stat)    ! dimensionless sigma-coordinate
+   allocate(self%sigma(0:self%T%kmax),stat=stat)    ! dimensionless sigma-coordinate
    if (stat /= 0) STOP 'coordinates: Error allocating (sigma)'
 
-   beta(0)=  -1._real64
-   sigma(0)= -1._real64
+   self%beta(0)=  -1._real64
+   self%sigma(0)= -1._real64
    if (self%ddu < 0._real64) self%ddu=0._real64
    if (self%ddl < 0._real64) self%ddl=0._real64
 
    do k=1,self%T%kmax
-      beta(k)=tanh((self%ddl+self%ddu)*k/float(self%T%kmax)-self%ddl)+tanh(self%ddl)
-      beta(k)=beta(k)/(tanh(self%ddl)+tanh(self%ddu))-1._real64
-      sigma(k)=k/float(self%T%kmax)-1._real64
+      self%beta(k)=tanh((self%ddl+self%ddu)*k/float(self%T%kmax)-self%ddl)+tanh(self%ddl)
+      self%beta(k)=self%beta(k)/(tanh(self%ddl)+tanh(self%ddu))-1._real64
+      self%sigma(k)=k/float(self%T%kmax)-1._real64
    end do
    if (self%gamma_surf) then
-      kk=self%T%kmax
+      self%kk=self%T%kmax
    else
-      kk=1
+      self%kk=1
    end if
 
    l = self%T%l+(/0,0,-1/)
@@ -83,15 +79,15 @@ MODULE SUBROUTINE do_gvc(self,dt)
    real(real64) :: Dmax=0._real64 !KB
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('do_gvc()',level=3)
-   call update(self%T,kk,self%Dmin,Dmax,self%Dgamma,dt)
-   call update(self%U,kk,self%Dmin,Dmax,self%Dgamma,dt)
-   call update(self%V,kk,self%Dmin,Dmax,self%Dgamma,dt)
-   call update(self%X,kk,self%Dmin,Dmax,self%Dgamma,dt)
+   call update(self%T,self%beta,self%sigma,self%kk,self%Dmin,Dmax,self%Dgamma,dt)
+   call update(self%U,self%beta,self%sigma,self%kk,self%Dmin,Dmax,self%Dgamma,dt)
+   call update(self%V,self%beta,self%sigma,self%kk,self%Dmin,Dmax,self%Dgamma,dt)
+   call update(self%X,self%beta,self%sigma,self%kk,self%Dmin,Dmax,self%Dgamma,dt)
 END SUBROUTINE do_gvc
 
 !-----------------------------------------------------------------------------
 
-SUBROUTINE update(grid,kk,Dmin,Dmax,Dgamma,dt)
+SUBROUTINE update(grid,beta,sigma,kk,Dmin,Dmax,Dgamma,dt)
    !! A wrapper for vertical coordinate calculations
 
    IMPLICIT NONE
@@ -99,7 +95,7 @@ SUBROUTINE update(grid,kk,Dmin,Dmax,Dgamma,dt)
 !  Subroutine arguments
    class(type_getm_grid), intent(inout) :: grid
    integer, intent(in) :: kk
-   real(real64), intent(in) :: Dmin,Dmax,Dgamma,dt
+   real(real64), intent(in) :: beta(0:grid%kmax),sigma(0:grid%kmax),Dmin,Dmax,Dgamma,dt
 
 !  Local variables
    real(real64) :: HH,alpha,zz
