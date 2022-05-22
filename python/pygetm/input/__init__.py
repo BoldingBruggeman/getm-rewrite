@@ -1,4 +1,4 @@
-from typing import Iterable, List, Mapping, Union, Optional, Mapping, Sequence, Tuple
+from typing import Callable, Iterable, List, Mapping, Union, Optional, Mapping, Sequence, Tuple, TYPE_CHECKING
 import glob
 import numbers
 import logging
@@ -12,6 +12,9 @@ import cftime
 
 import pygetm.util.interpolate
 from pygetm.constants import CENTERS
+
+if TYPE_CHECKING:
+    import pygetm.core
 
 @xarray.register_dataarray_accessor('getm')
 class GETMAccessor:
@@ -64,7 +67,19 @@ def _open(path, preprocess=None, **kwargs):
     open_nc_files.append((key, ds))
     return ds
 
-def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess=None, **kwargs) -> xarray.DataArray:
+def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess: Optional[Callable[[xarray.Dataset], xarray.Dataset]]=None, **kwargs) -> xarray.DataArray:
+    """Obtain a variable from one or more NetCDF files that can be used as value provided to
+    :meth:`InputManager.add` and :meth:`pygetm.core.Array.set`.
+
+    Args:
+        paths: single file path, a pathname pattern containing `*` and/or `?`, or a sequence of file paths.
+            If multiple paths are provided (or the pattern resolves to multiple valid path names), the files
+            will be concatenated along their time dimension.
+        preprocess: function that transforms the :class:`xarray.Dataset` opened for every path provided.
+            This can be used to modify the datasets before concatenation in time is attempted,
+            for instance, to cut off time indices that overlap between files.
+        **kwargs: additional keyword arguments to be passed to :func:`xarray.open_dataset`
+    """
     kwargs.setdefault('decode_times', True)
     kwargs['use_cftime'] = True
     kwargs['cache'] = False
@@ -681,7 +696,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         return True
 
 def debug_nc_reads(logger: Optional[logging.Logger]=None):
-    """Hook into xarray so that every read from a NetCDF file is written to the log."""
+    """Hook into :mod:`xarray` so that every read from a NetCDF file is written to the log."""
     import xarray.backends.netCDF4_
     if logger is None:
         logger = logging.getLogger('pygetm.input')
@@ -694,9 +709,9 @@ def debug_nc_reads(logger: Optional[logging.Logger]=None):
     xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
 
 class OnGrid(enum.Enum):
-    NONE = enum.auto()
-    HORIZONTAL = enum.auto()
-    ALL = enum.auto()
+    NONE = enum.auto()        #: grids do not match. Spatially explicit data will require horizontal and - if vertically resolved - vertical interpolation.
+    HORIZONTAL = enum.auto()  #: horizontal grid matches, but vertical does not. Vertically resolved data will require vertical interpolation.
+    ALL = enum.auto()         #: horizontal and vertical grids match
 
 class InputManager:
     def __init__(self):
@@ -709,10 +724,28 @@ class InputManager:
         _logger.setLevel(logging.DEBUG)
         debug_nc_reads(_logger)
 
-    def add(self, array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: Union[bool, OnGrid]=False, include_halos: Optional[bool]=None, climatology: bool=False, mask: bool=False):
+    def add(self, array: pygetm.core.Array, value: Union[numbers.Number, numpy.ndarray, xarray.DataArray, LazyArray], periodic_lon: bool=True, on_grid: Union[bool, OnGrid]=False, include_halos: Optional[bool]=None, climatology: bool=False, mask: bool=False):
         """Link an array to the provided input. If this input is constant in time, the value of the array will be set immediately.
-        If the input is time-dependent, the array and its linked input will be registered with the input manager; the array
-        will then be updated to the current time when InputManager.update is called."""
+        
+        Args:
+            array: array to assign a value to
+            value: input to assign. If this is time-dependent, the combination of array and its linked input will be
+                registered; the array will then be updated to the current time when :meth:`update` is called.
+            periodic_lon: whether this input covers all longitudes (i.e., the entire globe in the horizontal) and therefore
+                has a periodic boundary. This enables efficient spatial interpolation across longitude bounds of the input,
+                for instance, accessing read 10 degrees West to 5 degrees East for an input that spans 0 to 360 degrees East.
+            on_grid: whether the input is defined on the same grid (horizontal-only, or both horizontal and vertical)
+                as the array that is being assigned to. if this if ``False``, the value will be spatially interpolated
+                to the array grid. ``True`` is equivalent to :attr:`OnGrid.HORIZONTAL`.
+            include_halos: whether to also update the halos of the array. If not provided, this default to ``True`` if
+                the array has attributes ``_require_halos`` or ``_part_of_state``; otherwise it defaults to ``False``.
+            climatology: whether the input describes a single climatological year (at any temporal resolution, e.g.,
+                monthly, daily) that is representative for any true year. This argument is relevant only if the provided
+                input is time-varying. It also requires that the input does not span more than one year.
+            mask: whether to set the array to its :attr:`pygetm.core.Array.fill_value` in all masked points.
+                If not provided, only missing values in the input (NaNs) will be set to the fill value.
+                This currently only has an effect when the input is non time-varying.
+        """
         if array.all_values is None or array.all_values.size == 0:
             # The target variable does not contain data. Typically this is because it specifies information on the open boundaries,
             # of which the current (sub)domain does not have any.

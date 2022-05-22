@@ -366,7 +366,7 @@ class River:
     def __iter__(self):
         return iter(self._tracers)
 
-class Rivers(collections.Mapping):
+class Rivers(collections.Mapping[str, River]):
     def __init__(self, grid: Grid):
         self.grid = grid
         self._rivers: List[River] = []
@@ -545,7 +545,7 @@ class OpenBoundaries(collections.Mapping):
         if self.domain.lat is not None:
             self.lat = self.domain.T.array(on_boundary=True, fill=self.domain.T.lat.all_values[self.j, self.i])
 
-        # The arrays below are placeholders that will be assigned data (from momemntum/sealevel Frotran modules) when linked to the Simulation
+        # The arrays below are placeholders that will be assigned data (from momemntum/sealevel Fortran modules) when linked to the Simulation
         self.z = core.Array(grid=self.domain.T, name='z_bdy', units='m', long_name='surface elevation at open boundaries')
         self.u = core.Array(grid=self.domain.T, name='u_bdy', long_name='Eastward velocity or transport at open boundaries')
         self.v = core.Array(grid=self.domain.T, name='v_bdy', long_name='Northward velocity or transport open boundaries')
@@ -725,10 +725,10 @@ class Domain(_pygetm.Domain):
         assert nz > 0, 'Number of z points is %i but must be > 0' % nz
         assert lat is not None or f is not None, 'Either lat of f must be provided to determine the Coriolis parameter.'
 
-        self.root_logger = logger if logger is not None else parallel.getLogger()
-        self.logger = self.root_logger.getChild('domain')
+        self.root_logger: logging.Logger = logger if logger is not None else parallel.getLogger()
+        self.logger: logging.Logger = self.root_logger.getChild('domain')
         self.field_manager: Optional[output.FieldManager] = None
-        self.input_manager = input.InputManager()
+        self.input_manager: input.InputManager = input.InputManager()
         self.glob: Optional['Domain'] = self
 
         self.logger.info('Domain size (T grid): %i x %i (%i cells)' % (nx, ny, nx * ny))

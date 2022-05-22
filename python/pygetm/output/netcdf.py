@@ -2,13 +2,10 @@ from typing import Optional
 import os.path
 import logging
 
-import numpy.typing
 import cftime
 import netCDF4
 
-from .. import core
 from . import FieldManager, File
-from .. import _pygetm
 from ..constants import INTERFACES
 
 class NetCDFFile(File):

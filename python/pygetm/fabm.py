@@ -52,6 +52,10 @@ class FABM:
             tracer_totals.append(ar)
 
     def start(self, time: cftime.datetime):
+        """Prepare FABM. This includes flagging which diagnostics need saving based on the output manager configuration,
+        offering fields registered with the field manager to FABM if they have a standard name assigned,
+        and subsequently verifying whether FABM has all its dependencies fulfilled.
+        """
         # Tell FABM which diagnostics are saved. FABM will allocate and manage memory only for those that are.
         # This MUST be done before calling self.model.start
         for variable, ar in zip(itertools.chain(self.model.interior_diagnostic_variables, self.model.horizontal_diagnostic_variables), itertools.chain(self._interior_diagnostic_arrays, self._horizontal_diagnostic_arrays)):
@@ -90,7 +94,7 @@ class FABM:
         This array can subsequently be assigned a value or be linked to a time/space-varying input with <ARRAY>.set.
         
         Args:
-            name: name of the FABM dependency
+            name: name of the dependency
         """
         variable = self.model.dependencies.find(name)
         if len(variable.shape) == 0:
@@ -101,7 +105,7 @@ class FABM:
 
     def update_sources(self, time: cftime.datetime):
         """Update sources, vertical velocities, and diagnostics.
-        This does not update the state variables themselves; that is done by ``advance``
+        This does not update the state variables themselves; that is done by :meth:`advance`
         """
         if self._yearday:
             self._yearday.value = (time - cftime.datetime(time.year, 1, 1)).total_seconds() / 86400.

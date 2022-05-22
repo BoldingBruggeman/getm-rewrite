@@ -33,12 +33,13 @@ FROZEN_DENSITY = 3
 BAROCLINIC = 4
 
 class InternalPressure(enum.IntEnum):
-    BLUMBERG_MELLOR = 1
+    OFF = 0                    #: internal pressure is disabled
+    BLUMBERG_MELLOR = 1        #: Blumberg and Mellor
 #    BLUMBERG_MELLOR_LIN=2
 #    Z_INTERPOL=3
 #    SONG_WRIGHT=4
 #    CHU_FAN=5
-    SHCHEPETKIN_MCWILLIAMS=6
+    SHCHEPETKIN_MCWILLIAMS=6   #: Shchepetkin and McWilliams (2003)
 #    STELLING_VANKESTER=7
 
 class Simulation(_pygetm.Simulation):
@@ -66,7 +67,7 @@ class Simulation(_pygetm.Simulation):
 
     def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
-        logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, A=0.7, g1=1., g2=15., internal_pressure_method=0, Am: float=0.):
+        logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, internal_pressure_method: InternalPressure=InternalPressure.OFF, Am: float=0.):
 
         self.logger = dom.root_logger
         self.logger.setLevel(log_level)
@@ -522,7 +523,7 @@ class Simulation(_pygetm.Simulation):
             # Compute velocity diffusion contribution to transport sources.
             # This uses depth-averaged velocities u1 and v1, which therefore have to be up to date
             # Water depths should be in sync with velocities, which means they should lag 1/2 a timestep behind the tracer/T grid
-            self.momentum_diffusion_driver(self.domain.D_T_half, self.domain.X.D, self.u1,self.v1, diffU, diffV)
+            self.momentum_diffusion_driver(self.domain.D_T_half, self.domain.X.D, self.u1, self.v1, diffU, diffV)
 
         # Calculate bottom friction (ru and rv) using updated depth-averaged velocities u1 and v1
         # Warning: this uses velocities u1 and v1 at masked points, which therefore need to be kept at 0
@@ -624,7 +625,7 @@ class Simulation(_pygetm.Simulation):
         # Do the halo exchange for viscosity, as this needs to be interpolated to the U and V grids.
         # For that, information from the halos is used.
         viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
-
+        
         # Update horizontal transports. Also update the halos so that transports (and more importantly, the velocities
         # derived subsequently) are valid there. Information from these halos is needed for many reasons:
         # - the Coriolis update requires horizontal velocities at the four points surrounding each U/V point

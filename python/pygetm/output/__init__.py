@@ -57,6 +57,10 @@ class File(operators.FieldCollection):
     def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         pass
 
+# Note: netcdf cannot be imported before FieldManager and File are defined, because both are imported by netcdf itself.
+# If this import statement came earlier, it would cause a circular dependency error.
+from . import netcdf
+
 class OutputManager(FieldManager):
     def __init__(self, rank: int, logger: Optional[logging.Logger]=None):
         FieldManager.__init__(self)
@@ -64,19 +68,19 @@ class OutputManager(FieldManager):
         self.files: List[File] = []
         self._logger = logger or logging.getLogger()
 
-    def add_netcdf_file(self, path: str, **kwargs):
+    def add_netcdf_file(self, path: str, **kwargs) -> netcdf.NetCDFFile:
         self._logger.debug('Adding NetCDF file %s' % path)
-        from . import netcdf
         file = netcdf.NetCDFFile(self, self._logger.getChild(path), path, rank=self.rank, **kwargs)
         self.files.append(file)
         return file
 
-    def add_restart(self, path: str, **kwargs):
+    def add_restart(self, path: str, **kwargs) -> netcdf.NetCDFFile:
         kwargs.setdefault('interval', -1)
         file = self.add_netcdf_file(path, **kwargs)
         for field in self.fields.values():
             if field.attrs.get('_part_of_state'):
                 file.request(field)
+        return file
 
     def start(self, itimestep: int=0, time: Optional[cftime.datetime]=None, save: bool=True, default_time_reference: Optional[cftime.datetime]=None):
         for file in self.files:

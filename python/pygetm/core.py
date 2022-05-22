@@ -1,5 +1,5 @@
 import numbers
-from typing import Optional, Union, Tuple, Literal, Mapping, Any
+from typing import Optional, Union, Tuple, Literal, Mapping, Any, TYPE_CHECKING
 import logging
 
 import numpy, numpy.lib.mixins, numpy.typing
@@ -9,10 +9,13 @@ from . import _pygetm
 from . import parallel
 from .constants import *
 
+if TYPE_CHECKING:
+    from . import domain
+
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     __slots__ = ('_xarray', '_scatter', '_gather', '_dist', '_name', 'attrs', '_fill_value', '_ma', 'mapped_field', 'saved', '_shape', '_ndim', '_size', '_dtype')
 
-    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid=None, fabm_standard_name: Optional[str]=None, constant: bool=False, attrs: Mapping[str, Any]={}):
+    def __init__(self, name: Optional[str]=None, units: Optional[str]=None, long_name: Optional[str]=None, fill_value: Optional[Union[float, int]]=None, shape: Optional[Tuple[int]]=None, dtype: Optional[numpy.typing.DTypeLike]=None, grid: 'domain.Grid'=None, fabm_standard_name: Optional[str]=None, constant: bool=False, attrs: Mapping[str, Any]={}):
         _pygetm.Array.__init__(self, grid)
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
@@ -136,7 +139,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return sum / count
 
     @staticmethod
-    def create(grid, fill: Optional[numpy.typing.ArrayLike]=None, z: Literal[None, True, False, CENTERS, INTERFACES]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, on_boundary: bool=False, **kwargs) -> 'Array':
+    def create(grid: 'domain.Grid', fill: Optional[numpy.typing.ArrayLike]=None, z: Literal[None, True, False, CENTERS, INTERFACES]=None, dtype: numpy.typing.DTypeLike=None, copy: bool=True, on_boundary: bool=False, **kwargs) -> 'Array':
         ar = Array(grid=grid, **kwargs)
         if fill is None and ar.fill_value is not None:
             fill = ar.fill_value
@@ -168,7 +171,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def ma(self) -> numpy.ma.MaskedArray:
         if self._ma is None:
-            mask = self.grid.mask.values == 0
+            if self.size == 0 or self.on_boundary:
+                mask = False
+            else:
+                mask = self.grid.mask.values == 0
             self._ma = numpy.ma.array(self.values, mask=numpy.broadcast_to(mask, self._shape))
         return self._ma
 
@@ -303,9 +309,16 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # one return value
             return self.create(self.grid, result)
 
-    def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], periodic_lon: bool=True, on_grid: bool=False, include_halos: Optional[bool]=None, climatology: bool=False, mask: bool=False):
-        """Link this array to a field or value managed by the input manager. This will perform temporal and spatial interpolation as required."""
-        self.grid.domain.input_manager.add(self, value, periodic_lon=periodic_lon, on_grid=on_grid, include_halos=include_halos, climatology=climatology, mask=mask)
+    def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], **kwargs):
+        """Link this array to a field or value managed by the input manager (:attr:`pygetm.domain.Domain.input_manager`).
+        This will perform temporal and spatial interpolation as required.
+        
+        Args:
+            value: value to assign to this array. If it is time-dependent (if you pass an instance of :class:`xarray.DataArray` with a time dimension),
+                the array's value will be updated whenever :meth:`pygetm.input.InputManager.update` is called.
+            **kwargs: keyword arguments passed to :meth:`pygetm.input.InputManager.add`
+        """
+        self.grid.domain.input_manager.add(self, value, **kwargs)
 
     def require_set(self, logger: Optional[logging.Logger]=None):
         """Assess whether all non-masked cells of this field have been set. If not, an error message is written to the log and False is returned."""
