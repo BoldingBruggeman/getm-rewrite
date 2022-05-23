@@ -310,12 +310,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return self.create(self.grid, result)
 
     def set(self, value: Union[float, numpy.ndarray, xarray.DataArray], **kwargs):
-        """Link this array to a field or value managed by the input manager (:attr:`pygetm.domain.Domain.input_manager`).
-        This will perform temporal and spatial interpolation as required.
+        """Link this array to a field or value using :attr:`~pygetm.domain.Domain.input_manager`,
+        which will perform temporal and spatial interpolation as required.
         
         Args:
             value: value to assign to this array. If it is time-dependent (if you pass an instance of :class:`xarray.DataArray` with a time dimension),
-                the array's value will be updated whenever :meth:`pygetm.input.InputManager.update` is called.
+                the array's value will be updated during the simulation whenever :meth:`pygetm.input.InputManager.update` is called.
             **kwargs: keyword arguments passed to :meth:`pygetm.input.InputManager.add`
         """
         self.grid.domain.input_manager.add(self, value, **kwargs)

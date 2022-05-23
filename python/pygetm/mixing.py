@@ -20,7 +20,7 @@ class Turbulence:
         self.nuh.fill(0.)
         self.num.fill(0.)
 
-    def __call__(self, timestep: float, ustar_s: core.Array, ustar_b: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
+    def advance(self, timestep: float, ustar_s: core.Array, ustar_b: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
         pass
 
 class GOTM(Turbulence):
@@ -48,7 +48,7 @@ class GOTM(Turbulence):
             if l:
                 self.logger.info(l)
 
-    def __call__(self, timestep: float, ustar_s: core.Array, ustar_b: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
+    def advance(self, timestep: float, ustar_s: core.Array, ustar_b: core.Array, z0s: core.Array, z0b: core.Array, NN: core.Array, SS: core.Array):
         """Update turbulent quantities and calculate turbulent diffusivity nuh and turbulent viscosity,
         using surface and bottom friction velocity (ustar_s, ustar_b, both in m s-1), surface and bottom hydrodynamic roughness (z0s, z0b, both in m)
         squared buoyancy frequency (NN in s-2), and squared shear frequency (SS in s-2)."""

@@ -376,12 +376,12 @@ cdef class Simulation:
         assert SyB.grid is self.domain.V and not SyB.z
         pressure_internal(self.ppressure, <double *>buoy.p, <double *>SxB.p, <double *>SyB.p)
 
-    def update_sealevel(self, double timestep, Array U not None, Array V not None, Array fwf not None):
+    def advance_surface_elevation(self, double timestep, Array U not None, Array V not None, Array fwf not None):
         assert U.grid is self.domain.U
         assert V.grid is self.domain.V
         sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p, <double *>fwf.p)
 
-    def update_sealevel_boundaries(self, double timestep):
+    def update_surface_elevation_boundaries(self, double timestep):
         sealevel_boundaries(self.psealevel, self.pmomentum, timestep)
 
     def update_shear_frequency(self, Array viscosity not None):

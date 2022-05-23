@@ -728,7 +728,7 @@ class Domain(_pygetm.Domain):
         self.root_logger: logging.Logger = logger if logger is not None else parallel.getLogger()
         self.logger: logging.Logger = self.root_logger.getChild('domain')
         self.field_manager: Optional[output.FieldManager] = None
-        self.input_manager: input.InputManager = input.InputManager()
+        self.input_manager: input.InputManager = input.InputManager()    #: input manager responsible for reading from NetCDF and for spatial and temporal interpolation
         self.glob: Optional['Domain'] = self
 
         self.logger.info('Domain size (T grid): %i x %i (%i cells)' % (nx, ny, nx * ny))

@@ -91,7 +91,7 @@ class FABM:
 
     def get_dependency(self, name: str) -> core.Array:
         """Retrieve the array that will hold values for the specified FABM dependency.
-        This array can subsequently be assigned a value or be linked to a time/space-varying input with <ARRAY>.set.
+        This array can subsequently be assigned a value or be linked to a time/space-varying input with :attr:`~pygetm.core.Array.set`.
         
         Args:
             name: name of the dependency

@@ -34,15 +34,15 @@ def test(tau_x: float=0., tau_y: float=0., timestep: float=10., ntime: int=360, 
     pre_tot = (t * domain.T.hn).values.sum()
     for istep, time in enumerate(times):
         sim.update_surface_pressure_gradient(domain.T.z, sp)
-        sim.update_2d_momentum(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
-        sim.update_sealevel(timestep, sim.U, sim.V, sim.fwf)
+        sim.advance_2d_momentum(timestep, tausx, tausy, sim.dpdx, sim.dpdy)
+        sim.advance_surface_elevation(timestep, sim.U, sim.V, sim.fwf)
         sim.domain.update_depth()
 
         if istep % mode_split == 0:
             sim.domain.update_depth(True)
             sim.update_surface_pressure_gradient(domain.T.zio, sp)
 
-            sim.update_3d_momentum(timestep * mode_split, mode_split, tausx, tausy, sim.dpdx, sim.dpdy, idpdx, idpdy, viscosity)
+            sim.advance_3d_momentum(timestep * mode_split, mode_split, tausx, tausy, sim.dpdx, sim.dpdy, idpdx, idpdy, viscosity)
 
             div = numpy.zeros(domain.T.hn.shape)
             U1 = (sim.pk * domain.U.dy).all_values[:, 2:-2, 1:-3]
