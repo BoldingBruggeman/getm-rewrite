@@ -30,8 +30,8 @@ class Fluxes:
         self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill_value=FILL_VALUE, attrs={'_require_halos': True})
         self.swr = domain.T.array(name='swr', long_name='surface net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_shortwave_flux', attrs={'_3d_only': True})
 
-        self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE)
-        self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE)
+        self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE, attrs={'_mask_output': True})
+        self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE, attrs={'_mask_output': True})
 
         # Forcing variables for processes operating over the 3D/macro timestep; these lag behind the 2D forcing variables defined above.
         self.spo = domain.T.array()
