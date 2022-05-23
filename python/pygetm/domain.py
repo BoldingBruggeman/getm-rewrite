@@ -366,7 +366,7 @@ class River:
     def __iter__(self):
         return iter(self._tracers)
 
-class Rivers(collections.Mapping[str, River]):
+class Rivers(Mapping[str, River]):
     def __init__(self, grid: Grid):
         self.grid = grid
         self._rivers: List[River] = []
