@@ -208,20 +208,12 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
       end do
    end do
 
-   !KB - could call with uk instead of doing scaling??
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
-         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            self%pk(i,j,:)=self%pk(i,j,:)/UG%ho(i,j,:)
-         end if
-      end do
-   end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,viscosity,self%pk, &
+   call self%vertical_diffusion%calculate(dt,self%cnpar,UG%mask,UG%ho,UG%hn,self%molecular,viscosity,self%uk, &
                                           ea2=self%ea2,ea4=self%ea4)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-            self%pk(i,j,:)=self%pk(i,j,:)*UG%hn(i,j,:)
+            self%pk(i,j,:)=self%uk(i,j,:)*UG%hn(i,j,:)
          end if
       end do
    end do
@@ -316,19 +308,12 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
       end do
    end do
 
-   do j=VG%jmin,VG%jmax
-      do i=VG%imin,VG%imax
-         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            self%qk(i,j,:)=self%qk(i,j,:)/VG%ho(i,j,:)
-         end if
-      end do
-   end do
-   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,viscosity,self%qk, &
+   call self%vertical_diffusion%calculate(dt,self%cnpar,VG%mask,VG%ho,VG%hn,self%molecular,viscosity,self%vk, &
                                           ea2=self%ea2,ea4=self%ea4)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-            self%qk(i,j,:)=self%qk(i,j,:)*VG%hn(i,j,:)
+            self%qk(i,j,:)=self%vk(i,j,:)*VG%hn(i,j,:)
          end if
       end do
    end do
