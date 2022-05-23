@@ -269,23 +269,37 @@ class Simulation(_pygetm.Simulation):
         if self.fabm:
             self.fabm.start(self.time)
 
-        # Update inputs and forcing variables based on the current time and state
+        # First (out of two) 2D depth update based on old elevations zo
         z_backup = self.domain.T.z.all_values.copy()
         self.domain.T.z.all_values[...] = self.domain.T.zo.all_values
         self.domain.update_depth(_3d=False)
 
         if self.runtype > BAROTROPIC_2D:
-            # Ensure old and new thicknesses are consistent with zio/zin
             zin_backup = self.domain.T.zin.all_values.copy()
             ho_T_backup = self.domain.T.ho.all_values.copy()
-            self.domain.T.z.all_values[...] = self.domain.T.zio.all_values
-            self.domain.update_depth(_3d=True)  # this moves zio into zin
-            self.domain.T.z.all_values[...] = zin_backup
-            self.domain.update_depth(_3d=True)  # this moves our zin backup into zin, and at the same time moves the current zin (originally zio) to zio
+
+            # First (out of two) 3D depth/thickness update based on zio.
+            # This serves to generate T.ho when T.zio is set, but T.ho is not available.
+            # Since we do not have the preceding (2 time steps before start) zi/h, we explicitly set them (here: T.zio/T.ho)
+            # to NaN to make it easier to detect algorithms depending on them.
+            # As a result of that, all new metrics on the U, V, X grids will be NaN too!
+            self.domain.T.z.all_values[...] = self.domain.T.zio.all_values  # to become T.zin when update_depth is called
+            self.domain.T.zio.fill(numpy.nan)
+            self.domain.T.ho.fill(numpy.nan)
+            self.domain.update_depth(_3d=True)
+
+            # Second 3D depth/thickness update based on zin.
+            # Override T.ho with user-provided value if available, since this may incorporate river inflow impacts that
+            # our previously calculated ho cannot account for.
+            # New metrics for U, V, X grids will be calculated from valid old and new metrics on T grid; therefore they will be valid too.
+            # However, old metrics (ho/zio) for U, V, X grids will still be NaN and should not be used.
+            self.domain.T.z.all_values[...] = zin_backup  # to become T.zin when update_depth is called
             if 'hot' in self._initialized_variables:
-                self.domain.T.ho.all_values[...] = ho_T_backup
+                self.domain.T.hn.all_values[...] = ho_T_backup
+            self.domain.update_depth(_3d=True)  # this moves our zin backup into zin, and at the same time moves the current zin (originally zio) to zio
             self.update_3d_momentum_diagnostics(self.macrotimestep, self.turbulence.num)
 
+        # Update all forcing, which includes the final 2D depth update based on (original) z
         self.domain.T.z.all_values[...] = z_backup
         self.update_forcing(macro_active=True)
 
