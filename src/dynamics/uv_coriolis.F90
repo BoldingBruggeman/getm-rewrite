@@ -182,11 +182,11 @@ MODULE SUBROUTINE coriolis_fpk(self)
                do i=VG%imin,VG%imax
                   self%work2d(i,j)=0._real64
                   if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
-                     self%work2d(i,j)=0.25_real64*sqrt(VG%ho(i,j,k))*( &
-                                      +self%pk(i  ,j  ,k)/sqrt(UG%ho(i  ,j  ,k)) &
-                                      +self%pk(i-1,j  ,k)/sqrt(UG%ho(i-1,j  ,k)) &
-                                      +self%pk(i  ,j+1,k)/sqrt(UG%ho(i  ,j+1,k)) &
-                                      +self%pk(i-1,j+1,k)/sqrt(UG%ho(i-1,j+1,k)))
+                     self%work2d(i,j)=0.25_real64*sqrt(VG%hn(i,j,k))*( &
+                                      +self%pk(i  ,j  ,k)/sqrt(UG%hn(i  ,j  ,k)) &
+                                      +self%pk(i-1,j  ,k)/sqrt(UG%hn(i-1,j  ,k)) &
+                                      +self%pk(i  ,j+1,k)/sqrt(UG%hn(i  ,j+1,k)) &
+                                      +self%pk(i-1,j+1,k)/sqrt(UG%hn(i-1,j+1,k)))
                      end if
                   end do
                end do
@@ -198,7 +198,7 @@ MODULE SUBROUTINE coriolis_fpk(self)
                if (self%domain%domain_type /= 1) then
                   cord_curv=(self%qk(i,j,k)*(XG%dy(i,j)-XG%dy(i-1,j)) &
                             -self%work2d(i,j)*(TG%dx(i,j+1)-TG%dx(i,j))) &
-                            /VG%ho(i,j,k)*VG%iarea(i,j)
+                            /VG%hn(i,j,k)*VG%iarea(i,j)
                end if
                self%fpk(i,j,k)=(cord_curv+VG%cor(i,j))*self%work2d(i,j)
             end if
@@ -250,11 +250,11 @@ MODULE SUBROUTINE coriolis_fqk(self)
                do i=UG%imin,UG%imax
                   self%work2d(i,j)=0._real64
                   if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
-                     self%work2d(i,j)=0.25_real64*sqrt(UG%ho(i,j,k))*( &
-                                      +self%qk(i  ,j  ,k)/sqrt(VG%ho(i  ,j  ,k)) &
-                                      +self%qk(i+1,j  ,k)/sqrt(VG%ho(i+1,j  ,k)) &
-                                      +self%qk(i  ,j-1,k)/sqrt(VG%ho(i  ,j-1,k)) &
-                                      +self%qk(i+1,j-1,k)/sqrt(VG%ho(i+1,j-1,k)))
+                     self%work2d(i,j)=0.25_real64*sqrt(UG%hn(i,j,k))*( &
+                                      +self%qk(i  ,j  ,k)/sqrt(VG%hn(i  ,j  ,k)) &
+                                      +self%qk(i+1,j  ,k)/sqrt(VG%hn(i+1,j  ,k)) &
+                                      +self%qk(i  ,j-1,k)/sqrt(VG%hn(i  ,j-1,k)) &
+                                      +self%qk(i+1,j-1,k)/sqrt(VG%hn(i+1,j-1,k)))
                      end if
                   end do
                end do
@@ -266,7 +266,7 @@ MODULE SUBROUTINE coriolis_fqk(self)
                if (self%domain%domain_type /= 1) then
                   cord_curv=(self%work2d(i,j)*(TG%dy(i+1,j)-TG%dy(i,j)) &
                             -self%pk(i,j,k)*(XG%dx(i,j)-XG%dx(i,j-1))) &
-                            /UG%ho(i,j,k)*UG%iarea(i,j)
+                            /UG%hn(i,j,k)*UG%iarea(i,j)
                end if
                self%fqk(i,j,k)=(cord_curv+UG%cor(i,j))*self%work2d(i,j)
             end if
