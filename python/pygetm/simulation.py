@@ -404,6 +404,8 @@ class Simulation(_pygetm.Simulation):
         
         Args:
             macro_active: update all quantities associated with the macrotimestep
+            skip_2d_coriolis: whether to skip the update of depth-integrated Coriolis terms,
+                typically because they have already been recalculated as part of the transport update
         """
         # Update all inputs.
         self.domain.input_manager.update(self.time, include_3d=macro_active)
@@ -423,7 +425,7 @@ class Simulation(_pygetm.Simulation):
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
-            self.density.get_potential_temperature(self.salt.isel(-1), self.temp.isel(-1), out=self.sst)
+            self.density.get_potential_temperature(self.sss, self.temp.isel(-1), out=self.sst)
 
             # Calculate squared buoyancy frequency NN (T grid, interfaces between layers)
             self.density.get_buoyancy_frequency(self.salt, self.temp, p=self.pres, out=self.NN)
@@ -432,14 +434,21 @@ class Simulation(_pygetm.Simulation):
         # This is based on old and new elevation (T grid) for the microtimestep.
         # Thus, for grids lagging 1/2 a timestep behind (U, V, X grids), the elevations
         # and water depths will be representative for 1/2 a MICROtimestep ago.
+        # Note that T grid elevations at the open boundary have not yet been updated,
+        # so the derived elevations and water depths calculaetd here will not take those into account.
+        # This is intentional: it ensures that the water depths are in sync with the already-updated transports,
+        # so that velocities can be calculated correctly.
+        # The call to update_sealevel_boundaries is made later.
         self.domain.update_depth()
 
+        # Calculate advection and diffusion tendencies of transports, bottom friction and, if needed, Coriolis terms
         self.update_2d_momentum_diagnostics(self.timestep, skip_coriolis=skip_2d_coriolis)
 
         # Update freshwater fluxes (TODO: add precipitation)
         self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = self.domain.rivers.flow * self.domain.rivers.iarea
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
+        # Note SST is the true in-situ/potential temperature. SSS currently is absolute salinity - not practical salinity.
         self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=macro_active and self.runtype == BAROCLINIC)
 
         # Update elevation at the open boundaries. This must be done before update_surface_pressure_gradient

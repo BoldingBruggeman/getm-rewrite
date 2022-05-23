@@ -719,7 +719,7 @@ class InputManager:
         self._logger = logging.getLogger()
 
     def debug_nc_reads(self):
-        """Hook into xarray so that every read from a NetCDF file is written to the log."""
+        """Hook into :mod:`xarray` so that every read from a NetCDF file is written to the log."""
         _logger = self._logger.getChild('nc')
         _logger.setLevel(logging.DEBUG)
         debug_nc_reads(_logger)
@@ -729,8 +729,8 @@ class InputManager:
         
         Args:
             array: array to assign a value to
-            value: input to assign. If this is time-dependent, the combination of array and its linked input will be
-                registered; the array will then be updated to the current time when :meth:`update` is called.
+            value: input to assign. If this is time-dependent, the combination of the array and its linked input will be
+                registered; the array will then be updated to the current time whenever :meth:`update` is called.
             periodic_lon: whether this input covers all longitudes (i.e., the entire globe in the horizontal) and therefore
                 has a periodic boundary. This enables efficient spatial interpolation across longitude bounds of the input,
                 for instance, accessing read 10 degrees West to 5 degrees East for an input that spans 0 to 360 degrees East.
@@ -843,7 +843,12 @@ class InputManager:
             self._logger.info('%s is set to time-invariant %s (minimum: %s, maximum: %s)' % (array.name, value.name, target.min(where=unmasked, initial=numpy.inf), target.max(where=unmasked, initial=-numpy.inf)))
 
     def update(self, time: cftime.datetime, include_3d: bool=True):
-        """Update all arrays linked to time-dependent inputs to the current time."""
+        """Update all arrays linked to time-dependent inputs to the current time.
+        
+        Args:
+            time: current time
+            include_3d: whether to also update arrays that were marked as only relevant for the macro (3D) time step
+        """
         numtime = time.toordinal(fractional=True)
         for name, source, target, update_always in self.fields:
             if include_3d or update_always:

@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, List
+from typing import Mapping, Optional, List, Sequence
 import collections
 
 import numpy
@@ -41,7 +41,7 @@ class Tracer(core.Array):
             source: array with source terms that after multiplication with ``source_scale`` must have tracer units per time, multiplied by layer thickness. Defaults to 0.
             surface_flux: array with surface flux values that after multiplication with ``source_scale`` must have tracer units per time, multiplied by layer thickness. Defaults to 0.
             source_scale: scale factor for sources and surface flux
-            vertical_velocity: array with vertical velocities describing movement through the water, not water movement itself. Positive for upward movement (e.g. floating), negative for downward movement (e.g. sinking). Defaults to 0 (no movement independent of the water).
+            vertical_velocity: array with vertical velocities (m s-1) describing movement through the water, not water movement itself. Positive for upward movement (e.g. floating), negative for downward movement (e.g. sinking). Defaults to 0 (no movement independent of the water).
             rivers_follow_target_cell: tracer values in river water are assumed equal to those in the cell into which the river flows. This can be customized further by setting <TRACER>.rivers[<RIVERNAME>].follow_target_cell and/or <TRACER>.rivers[<RIVERNAME>].values
             **kwargs: keyword arguments to be passed to :class:`pygetm.core.Array`
         """
@@ -67,7 +67,7 @@ class Tracer(core.Array):
             river._tracers[self.name] = river_tracer
             self.rivers[river.name] = river_tracer
 
-class TracerCollection(collections.Sequence):
+class TracerCollection(Sequence[Tracer]):
     def __init__(self, grid: domain.Grid, advection_scheme: operators.AdvectionScheme, cnpar: float=1.):
         self.grid: domain.Grid = grid
         self._tracers: List[Tracer] = []
@@ -99,9 +99,17 @@ class TracerCollection(collections.Sequence):
             u: velocity in x direction (m s-1)
             v: velocity in y direction (m s-1)
             w: velocity in z direction (m s-1)
-            diffusivity: turbulent diffusivity (m2 s-1)
+            diffusivity: vertical turbulent diffusivity (m2 s-1)
+
+        This uses operator splitting: advection and horizontal diffusion is done first,
+        vertical diffusion (and sources and surface fluxes, if provided) after.
+
+        Velocities ``u``, ``v``, ``w`` are expected to be positioned halfway in time between the old
+        and new tracer values (i.e., they should be 1/2 a timestep ahead of the tracers upon entry).
+        ``diffusivity`` is expected to be positioned at the same time as the new tracer values,
+        and should thus be 1/2 a timestep ahead of the advection velocities.
         """
-        # Advection of passive tracers (including biogeochemical ones)from time=0 to time=1 (macrotimestep),
+        # Advection of passive tracers (including biogeochemical ones) from time=0 to time=1 (macrotimestep),
         # using velocities defined at time=1/2
         w_tracers = []
         for tracer in self._tracers:
@@ -113,8 +121,10 @@ class TracerCollection(collections.Sequence):
             w_tracers.append(w_tracer)
         self._advection.apply_3d_batch(u, v, w, timestep, self._tracers, w_vars=w_tracers)
 
-        # Diffusion of passive tracers (including biogeochemical ones)
-        # This simultaneously time-integrates source terms, if specified - but BGC sources have already been handled separately.
+        # Vertical diffusion of passive tracers (including biogeochemical ones)
+        # This simultaneously time-integrates source terms and surface fluxes, if specified.
+        # However, sources of biogeochemical tracers (FABM) are typically dealt with elsewhere;
+        # these will not have their source attribute set for use here.
         for tracer in self._tracers:
             source = None
             if tracer.source is not None or tracer.surface_flux is not None:
