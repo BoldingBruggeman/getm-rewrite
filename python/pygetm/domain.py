@@ -312,24 +312,23 @@ def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, 
     ny = int(numpy.ceil((maxlat - minlat) / dlat)) + 1
     return create_spherical(numpy.linspace(minlon, maxlon, nx), numpy.linspace(minlat, maxlat, ny), nz=nz, interfaces=True, **kwargs)
 
-def load(path: str, nz: int, runtype: int):
+def load(path: str, nz: int, **kwargs):
     """Load domain from file.
     
     Args:
         path: NetCDF file to load from
         nz: number of vertical layers
-        runtype: run type
+        **kwargs: additional keyword arguments to pass to :class:`Domain`
     """
-    vars = {}
     with netCDF4.Dataset(path) as nc:
         for name in ('lon', 'lat', 'x', 'y', 'H', 'mask', 'z0b_min', 'cor'):
-            if name in nc.variables:
-                vars[name] = nc.variables[name][...]
-    spherical = 'lon' in vars
-    ny, nx = vars['lon' if spherical else 'x'].shape
+            if name in nc.variables and name not in kwargs:
+                kwargs[name] = nc.variables[name][...]
+    spherical = kwargs.get('spherical', 'lon' in kwargs)
+    ny, nx = kwargs['lon' if spherical else 'x'].shape
     nx = (nx - 1) // 2
     ny = (ny - 1) // 2
-    return Domain.create(nx, ny, nz, spherical=spherical, **vars)
+    return Domain.create(nx, ny, nz, spherical=spherical, **kwargs)
 
 class RiverTracer(core.Array):
     __slots__ = ('_follow',)
@@ -665,7 +664,7 @@ class Domain(_pygetm.Domain):
         assert still_ok.all(), 'Rank %i: _exchange_metric corrupted %i values: %s.' % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok)
 
     @staticmethod
-    def create(nx: int, ny: int, nz: int, runtype: int=1, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, periodic_x: bool=False, periodic_y: bool=False, z: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
+    def create(nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, periodic_x: bool=False, periodic_y: bool=False, z: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
         global_domain = None
         logger = logger or parallel.getLogger()
         parlogger = logger.getChild('parallel')
@@ -703,7 +702,7 @@ class Domain(_pygetm.Domain):
             return global_domain
 
         # Create the subdomain, and (if on root) attach a pointer to the global domain
-        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, runtype=runtype, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, logger=logger, **kwargs)
+        subdomain = Domain.partition(tiling, nx, ny, nz, global_domain, has_xy=x is not None, has_lonlat=lon is not None, spherical=spherical, logger=logger, **kwargs)
         subdomain.glob = global_domain
 
         return subdomain
