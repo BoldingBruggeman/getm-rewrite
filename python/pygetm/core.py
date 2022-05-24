@@ -70,6 +70,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return super().__repr__() + self.grid.postfix
 
     def update_halos(self, *args, **kwargs):
+        """Update halos by exchanging information with subdomain neighbors
+
+        Args:
+            *args: positional arguments passed to :meth:`parallel.DistributedArray.update_halos`
+            **kwargs: keyword arguments passed to :meth:`parallel.DistributedArray.update_halos`
+        """
         if not self.grid.domain.tiling:
             return
         if self._dist is None:
@@ -77,6 +83,13 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return self._dist.update_halos(*args, **kwargs)
 
     def update_halos_start(self, *args, **kwargs):
+        """Initiate a halo update. This has to be matched by a later call to :meth:`update_halos_finish`.
+        The halos will contains valid values only after that second call completes.
+
+        Args:
+            *args: positional arguments passed to :meth:`parallel.DistributedArray.update_halos_start`
+            **kwargs: keyword arguments passed to :meth:`parallel.DistributedArray.update_halos_start`
+        """
         if not self.grid.domain.tiling:
             return
         if self._dist is None:
@@ -84,6 +97,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return self._dist.update_halos_start(*args, **kwargs)
 
     def update_halos_finish(self, *args, **kwargs):
+        """Finish a halo update. This has to be preceded by corresponding call to :meth:`update_halos_start`.
+
+        Args:
+            *args: positional arguments passed to :meth:`parallel.DistributedArray.update_halos_finish`
+            **kwargs: keyword arguments passed to :meth:`parallel.DistributedArray.update_halos_finish`
+        """
         if not self.grid.domain.tiling:
             return
         if self._dist is None:

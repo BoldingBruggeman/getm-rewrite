@@ -65,7 +65,7 @@ class Simulation(_pygetm.Simulation):
         'SS': dict(units='s-2', long_name='shear frequency squared', fill_value=FILL_VALUE)
     }
 
-    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[bool, str, None]=None, gotm: Union[str, None]=None,
+    def __init__(self, dom: domain.Domain, runtype: int, advection_scheme: operators.AdvectionScheme=operators.AdvectionScheme.HSIMT, apply_bottom_friction: bool=True, fabm: Union[pygetm.fabm.FABM, bool, str, None]=None, gotm: Union[str, None]=None,
         turbulence: Optional[pygetm.mixing.Turbulence]=None, airsea: Optional[pygetm.airsea.Fluxes]=None, density: Optional[pygetm.density.Density]=None,
         logger: Optional[logging.Logger]=None, log_level: int=logging.INFO, internal_pressure_method: InternalPressure=InternalPressure.OFF, Am: float=0.):
 
@@ -434,8 +434,8 @@ class Simulation(_pygetm.Simulation):
         # Thus, for grids lagging 1/2 a timestep behind (U, V, X grids), the elevations
         # and water depths will be representative for 1/2 a MICROtimestep ago.
         # Note that T grid elevations at the open boundary have not yet been updated,
-        # so the derived elevations and water depths calculaetd here will not take those into account.
-        # This is intentional: it ensures that the water depths are in sync with the already-updated transports,
+        # so the derived elevations and water depths calculated here will not take those into account.
+        # This is intentional: it ensures that water depths on the U and V grids are in sync with the already-updated transports,
         # so that velocities can be calculated correctly.
         # The call to update_surface_elevation_boundaries is made later.
         self.domain.update_depth()
