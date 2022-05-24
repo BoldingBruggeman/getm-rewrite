@@ -44,7 +44,7 @@ def optimize(args, logger):
     if args.legacy:
         domain = legacy.domain_from_topo(args.path, nlev=1, logger=logger)
     else:
-        domain = pygetm.domain.load(args.path, 1)
+        domain = pygetm.domain.load(args.path, 1, logger=logger)
     domain.initialize(1)
 
     tiling = parallel.Tiling.autodetect(domain.T.mask, logger=logger, ncpus=args.ncpus)
