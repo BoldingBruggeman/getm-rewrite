@@ -350,9 +350,9 @@ class Simulation(_pygetm.Simulation):
             if self.fabm:
                 self.fabm.advance(self.macrotimestep)
 
-            # Update layer thicknesses and tracer concentrations to account for river inflow
+            # Update layer thicknesses and tracer concentrations to account for precipitation, evaporation and river inflow
             # between start and end of the current macrotimestep.
-            self.add_rivers_3d()
+            self.add_freshwater_inputs(self.macrotimestep)
 
             # Update 3D elevations and layer thicknesses. New elevation zin on T grid will match elevation at end of the microtimestep,
             # thicknesses on T grid will match. Elevation and thicknesses on U/V grids will be 1/2 MACROtimestep behind, as they
@@ -490,8 +490,20 @@ class Simulation(_pygetm.Simulation):
         self.logger.info('Time spent in main loop: %.3f s' % (timeit.default_timer() - self._start_time,))
         self.output_manager.close(self.timestep * self.istep, self.time)
 
-    def add_rivers_3d(self):
-        """Update layer thicknesses and tracer concentrations to account for river inflow."""
+    def add_freshwater_inputs(self, timestep: float):
+        """Update layer thicknesses and tracer concentrations to account for precipitation, evaporation and river inflow."""
+
+        # Precipitation and evaporation (surface layer only)
+        h_increase_pe = self.airsea.pe.all_values * timestep
+        h = self.domain.T.hn.all_values[-1, :, :]
+        h_new = h + h_increase_pe
+        for tracer in self.tracers:
+            if not tracer.precipitation_follows_target_cell:
+                tracer.all_values[-1, :, :] *= h / h_new
+        h[:, :] = h_new
+        self.domain.T.zin.all_values += h_increase_pe
+
+        # Rivers, potentially entering anywhere in the water column
         h = self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
         river_active = numpy.full(h.shape, True)
         # JB TODO: customize river_active by flagging layers where the river does not go with False
