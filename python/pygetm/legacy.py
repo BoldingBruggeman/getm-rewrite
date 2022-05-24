@@ -5,7 +5,7 @@ import netCDF4
 
 import pygetm.domain
 
-def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffset: int=0, nx: Optional[int]=None, ny: Optional[int]=None, z0_const=0.01, **kwargs) -> pygetm.domain.Domain:
+def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffset: int=0, nx: Optional[int]=None, ny: Optional[int]=None, **kwargs) -> pygetm.domain.Domain:
     """Create a domain object from a topo.nc file used by legacy GETM.
     
     Args:
@@ -15,9 +15,11 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
         joffset: starting point in y direction (default: 0 = start of the domain in the topo file)
         nx: number of points to read in x direction (default: read till end of the domain in the topo file)
         ny: number of points to read in y direction (default: read till end of the domain in the topo file)
-        z0_const: default value of physical bottom roughness (m) to use if not provided in topo file
         **kwargs: keyword arguments that are ultimately passed to :class:`pygetm.domain.Domain`
-        """
+
+    Bottom roughness ``z0`` can be prescribed with keyword argument ``z0``, which will be passed to :class:`pygetm.domain.Domain`.
+    This argument `must` be provided if the topo file does not contain bottom roughness ``z0``.
+    """
     lon, lat, x, y, z0 = None, None, None, None, None
     with netCDF4.Dataset(path) as nc:
         nc.set_auto_mask(False)
@@ -44,8 +46,11 @@ def domain_from_topo(path: str, nlev: Optional[int]=None, ioffset: int=0, joffse
             lat = lat[:, numpy.newaxis]
 
             H = pygetm.domain.read_centers_to_supergrid(nc['bathymetry'], ioffset, joffset, nx, ny)
-            z0 = z0_const if 'z0' not in nc.variables else pygetm.domain.read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny)
-            domain = pygetm.domain.Domain.create(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), z0=numpy.ma.filled(z0), spherical=True, mask=numpy.where(numpy.ma.getmaskarray(H), 0, 1), **kwargs)
+            if 'z0' not in kwargs:
+                if 'z0' not in nc.variables:
+                    raise Exception('Bottom roughness z0 is not present in %s; you need to provide it as keyword argument to domain_from_topo instead.')
+                kwargs['z0'] = numpy.ma.filled(pygetm.domain.read_centers_to_supergrid(nc['z0'], ioffset, joffset, nx, ny))
+            domain = pygetm.domain.Domain.create(nx, ny, nlev, lon=lon, lat=lat, H=numpy.ma.filled(H), spherical=True, mask=numpy.where(numpy.ma.getmaskarray(H), 0, 1), **kwargs)
         elif grid_type == 3:
             # planar curvilinear
             raise NotImplementedError('No support yet for planar curvilinear coordinates')

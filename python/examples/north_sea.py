@@ -35,7 +35,8 @@ tiling = args.tiling if args.tiling is not None else None
 #if args.meteo_dir is None: args.no_meteo = True
 
 domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001,
-    vertical_coordinate_method=pygetm.VerticalCoordinates.GVC, Dgamma=40., ddu=0.75, ddl = 0.5
+    vertical_coordinate_method=pygetm.VerticalCoordinates.GVC, Dgamma=40., ddu=0.75, ddl = 0.5, Dcrit=0.2, Dmin=0.05, 
+    z0=0.001
 )
 
 if args.boundaries:
