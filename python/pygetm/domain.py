@@ -922,7 +922,14 @@ class Domain(_pygetm.Domain):
 
         self._initialized = True
 
-    def set_bathymetry(self, depth, scale_factor=None):
+    def set_bathymetry(self, depth, scale_factor=None, periodic_lon: bool=False):
+        """Set bathymetric depth on supergrid. The bathymetric depth is the distance between some arbitrary depth reference
+        (often mean sea level) and the bottom, positive for greater depth.
+        
+        Args:
+            scale_factor: apply scale factor to provided depths
+            periodic_lon: depth source spans entire globe in longitude
+        """
         assert not self._initialized, 'set_bathymetry cannot be called after the domain has been initialized.'
         if not isinstance(depth, xarray.DataArray):
             # Depth is provided as raw data and therefore must be already on the supergrid
@@ -930,8 +937,8 @@ class Domain(_pygetm.Domain):
         else:
             # Depth is provided as xarray object that includes coordinates (we require CF compliant longitude, latitude)
             # Interpolate to target grid.
-            depth = input.limit_region(depth, self.lon.min(), self.lon.max(), self.lat.min(), self.lat.max())
-            depth = input.horizontal_interpolation(depth, self.lon, self.lat)            
+            depth = input.limit_region(depth, self.lon.min(), self.lon.max(), self.lat.min(), self.lat.max(), periodic_lon=periodic_lon)
+            depth = input.horizontal_interpolation(depth, self.lon, self.lat)
             self.H[...] = depth.values
         if scale_factor is not None:
             self.H *= scale_factor
