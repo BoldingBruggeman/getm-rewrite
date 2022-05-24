@@ -83,7 +83,7 @@ intersphinx_mapping = {
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
 
-if os.environ.get('READTHEDOCS', None) == 'True':
+if os.environ.get('READTHEDOCS', None) == 'True' and False:
     root = os.path.join(os.path.dirname(__file__), '../../..')
     outdir = tempfile.mkdtemp()
     forddir = os.path.join(outdir, 'fortran')
