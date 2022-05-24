@@ -86,7 +86,8 @@ todo_include_todos = True
 if os.environ.get('READTHEDOCS', None) == 'True':
     root = os.path.join(os.path.dirname(__file__), '../../..')
     outdir = tempfile.mkdtemp()
-    os.mkdir(outdir, 'fortran')
+    forddir = os.path.join(outdir, 'fortran')
+    os.mkdir(forddir)
     subprocess.call([sys.executable, '-m', 'ford', os.path.join(root, 'doc/getm2.md'),
-        '--src_dir', os.path.join(root, 'src'), '--output_dir', os.path.join(outdir, 'fortran')])
+        '--src_dir', os.path.join(root, 'src'), '--output_dir', forddir])
     html_extra_path = [outdir]
