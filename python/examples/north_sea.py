@@ -34,7 +34,9 @@ simstop = datetime.datetime.strptime(args.stop, '%Y-%m-%d %H:%M:%S')
 tiling = args.tiling if args.tiling is not None else None
 #if args.meteo_dir is None: args.no_meteo = True
 
-domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001)
+domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001,
+    vertical_coordinate_method=pygetm.VerticalCoordinates.GVC, Dgamma=40., ddu=0.75, ddl = 0.5
+)
 
 if args.boundaries:
     pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, 'bdyinfo.dat'))
@@ -43,17 +45,17 @@ if args.rivers:
 
 # Select between original or ERA5 meteo forcing
 if args.meteo_dir:
-    airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.DEW_POINT_TEMPERATURE)
+    airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.DEW_POINT_TEMPERATURE, calculate_evaporation=True)
 else:
-    airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.SPECIFIC_HUMIDITY)
+    airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.SPECIFIC_HUMIDITY, calculate_evaporation=True)
 
 sim = pygetm.Simulation(domain,
         runtype=pygetm.BAROCLINIC,
         advection_scheme=pygetm.AdvectionScheme.HSIMT,
         gotm=os.path.join(args.setup_dir, 'gotmturb.nml'),
         airsea=airsea,
-        internal_pressure_method=pygetm.InternalPressure.BLUMBERG_MELLOR,
-#    fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
+        internal_pressure_method=pygetm.InternalPressure.SHCHEPETKIN_MCWILLIAMS,
+#        fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
 )
 
 sim.logger.info('Setting up TPXO tidal boundary forcing')
@@ -100,6 +102,7 @@ if args.meteo_dir:
     sim.airsea.d2m.set(pygetm.input.from_nc(ERA_path, 'd2m') - 273.15)
     sim.airsea.sp.set(pygetm.input.from_nc(ERA_path, 'sp'))
     sim.airsea.tcc.set(pygetm.input.from_nc(ERA_path, 'tcc'))
+    sim.airsea.tp.set(pygetm.input.from_nc(ERA_path, 'tp'))
 else:
     sim.logger.info('Setting up NS original meteorological forcing')
     met_path = os.path.join(args.setup_dir, 'Forcing/Meteo/CFSR.daymean.2006.nc')
@@ -109,6 +112,7 @@ else:
     sim.airsea.sp.set(pygetm.input.from_nc(met_path, 'slp'))
     sim.airsea.u10.set(pygetm.input.from_nc(met_path, 'u10'))
     sim.airsea.v10.set(pygetm.input.from_nc(met_path, 'v10'))
+    sim.airsea.tp.set(pygetm.input.from_nc(met_path, 'precip'))
 
 if sim.fabm:
     sim.logger.info('Setting up FABM dependencies that GETM does not provide')
@@ -119,7 +123,7 @@ if sim.fabm:
 if args.output:
     sim.logger.info('Setting up output')
     output = sim.output_manager.add_netcdf_file('meteo.nc', interval=datetime.timedelta(hours=1), sync_interval=None)
-    output.request(('u10', 'v10', 'sp', 't2m', 'qa', 'tcc'))
+    output.request(('u10', 'v10', 'sp', 't2m', 'qa', 'tcc', 'e', 'tp', 'pe'))
     #output.request(('qe', 'qh', 'ql', 'swr', 'albedo', 'zen'))
     output = sim.output_manager.add_netcdf_file('north_sea_2d.nc', interval=datetime.timedelta(hours=1), sync_interval=None)
     output.request(('zt', 'Dt', 'u1', 'v1', 'tausxu', 'tausyv', ))
