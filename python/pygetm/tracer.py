@@ -31,8 +31,8 @@ class OpenBoundaries:
         self._tracer.update_boundary(self._type, self.values)
 
 class Tracer(core.Array):
-    __slots__ = 'source', 'surface_flux', 'source_scale', 'vertical_velocity', 'open_boundaries', 'river_values', 'river_follow', 'rivers'
-    def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, surface_flux: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, rivers_follow_target_cell: bool=False, **kwargs):
+    __slots__ = 'source', 'surface_flux', 'source_scale', 'vertical_velocity', 'open_boundaries', 'river_values', 'river_follow', 'rivers', 'precipitation_follows_target_cell'
+    def __init__(self, grid: domain.Grid, data: Optional[numpy.ndarray]=None, source: Optional[core.Array]=None, surface_flux: Optional[core.Array]=None, source_scale: float=1., vertical_velocity: Optional[core.Array]=None, rivers_follow_target_cell: bool=False, precipitation_follows_target_cell: bool=False, **kwargs):
         """A tracer transported by advection and diffusion, with optional source term, surface flux and vertical velocity (e.g., sinking, floating)
 
         Args:
@@ -61,6 +61,7 @@ class Tracer(core.Array):
         self.open_boundaries: OpenBoundaries = OpenBoundaries(self)
         self.river_values: numpy.ndarray = numpy.zeros((len(grid.domain.rivers),))
         self.river_follow: numpy.ndarray = numpy.full((len(grid.domain.rivers),), rivers_follow_target_cell, dtype=bool)
+        self.precipitation_follows_target_cell: bool = precipitation_follows_target_cell
         self.rivers: Mapping[str, domain.RiverTracer] = {}
         for iriver, river in enumerate(grid.domain.rivers.values()):
             river_tracer = domain.RiverTracer(grid, river.name, self.name, self.river_values[..., iriver], self.river_follow[..., iriver], units=self.units, attrs={'_3d_only': True})

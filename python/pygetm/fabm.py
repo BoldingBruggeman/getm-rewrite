@@ -37,7 +37,7 @@ class FABM:
             ar_w = core.Array(grid=self.domain.T)
             ar_w.wrap_ndarray(self.vertical_velocity[i, ...])
             tracer_collection.add(data=variable.data, vertical_velocity=ar_w, name=variable.output_name, units=variable.units, long_name=variable.long_path, 
-                fill_value=variable.missing_value, rivers_follow_target_cell=variable.no_river_dilution)
+                fill_value=variable.missing_value, rivers_follow_target_cell=variable.no_river_dilution, precipitation_follows_target_cell=variable.no_precipitation_dilution)
         for variable in itertools.chain(self.model.surface_state_variables, self.model.bottom_state_variables):
             ar = variable_to_array(variable, send_data=True, attrs={'_part_of_state': True})
         self._interior_diagnostic_arrays = [variable_to_array(variable, shape=self.domain.T.hn.shape) for variable in self.model.interior_diagnostic_variables]

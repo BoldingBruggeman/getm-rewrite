@@ -182,8 +182,9 @@ class Simulation(_pygetm.Simulation):
 
         if runtype == BAROCLINIC:
             self.radiation = pygetm.radiation.TwoBand(dom.T)
-            self.temp = self.tracers.add(name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE, source=self.radiation.swr_abs, surface_flux=self.airsea.shf, source_scale=1. / (RHO0 * CP), rivers_follow_target_cell=True)
-            self.salt = self.tracers.add(name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE, source=dom.T.array(fill=0., z=CENTERS))
+            self.temp = self.tracers.add(name='temp', units='degrees_Celsius', long_name='conservative temperature', fabm_standard_name='temperature', fill_value=FILL_VALUE,
+                source=self.radiation.swr_abs, surface_flux=self.airsea.shf, source_scale=1. / (RHO0 * CP), rivers_follow_target_cell=True, precipitation_follows_target_cell=True)
+            self.salt = self.tracers.add(name='salt', units='-', long_name='absolute salinity', fabm_standard_name='practical_salinity', fill_value=FILL_VALUE)
             self.pres.saved = True
             self.temp.fill(5.)
             self.salt.fill(35.)
