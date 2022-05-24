@@ -443,12 +443,13 @@ class Simulation(_pygetm.Simulation):
         # Calculate advection and diffusion tendencies of transports, bottom friction and, if needed, Coriolis terms
         self.update_2d_momentum_diagnostics(self.timestep, skip_coriolis=skip_2d_coriolis)
 
-        # Update freshwater fluxes (TODO: add precipitation)
-        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] = self.domain.rivers.flow * self.domain.rivers.iarea
-
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
         # Note SST is the true in-situ/potential temperature. SSS currently is absolute salinity - not practical salinity.
         self.airsea(self.time, self.sst, self.sss, calculate_heat_flux=macro_active and self.runtype == BAROCLINIC)
+
+        # Update depth-integrated freshwater fluxes (precipitation, evaporation, condensation, rivers)
+        self.fwf.all_values[...] = self.airsea.pe.all_values
+        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] += self.domain.rivers.flow * self.domain.rivers.iarea
 
         # Update elevation at the open boundaries. This must be done before update_surface_pressure_gradient
         self.update_surface_elevation_boundaries(self.timestep)

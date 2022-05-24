@@ -6,7 +6,7 @@ import pyairsea
 import pygetm.domain
 from . import core
 from . import parallel
-from .constants import FILL_VALUE
+from .constants import FILL_VALUE, RHO0
 
 CPA = 1008.  #: specific heat capacity of air (J kg-1 K-1)
 
@@ -29,6 +29,8 @@ class Fluxes:
         self.shf = domain.T.array(name='shf', units='W m-2', long_name='surface heat flux', fill_value=FILL_VALUE)
         self.sp = domain.T.array(name='sp', long_name='surface air pressure', units='Pa', fill_value=FILL_VALUE, attrs={'_require_halos': True})
         self.swr = domain.T.array(name='swr', long_name='surface net downwelling shortwave radiation', units='W m-2', fill_value=FILL_VALUE, fabm_standard_name='surface_downwelling_shortwave_flux', attrs={'_3d_only': True})
+        self.pe = domain.T.array(name='pe', long_name='net freshwater flux due to precipitation, condensation, evaporation', units='m s-1', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+        self.pe.fill(0.)
 
         self.taux_U = domain.U.array(name='tausxu', fill_value=FILL_VALUE, attrs={'_mask_output': True})
         self.tauy_V = domain.V.array(name='tausyv', fill_value=FILL_VALUE, attrs={'_mask_output': True})
@@ -56,11 +58,12 @@ class FluxesFromMeteo(Fluxes):
     """Calculate air-water fluxes of heat and momentum, as well as surface air pressure, using the pyairsea library.
     The heat flux is the sum of the sensible heat flux, the latent heat flux, and net downwelling longwave radiation
     """
-    def __init__(self, longwave_method: int=1, albedo_method: int=1, humidity_measure: HumidityMeasure=HumidityMeasure.DEW_POINT_TEMPERATURE, calculate_swr: bool=True):
+    def __init__(self, longwave_method: int=1, albedo_method: int=1, humidity_measure: HumidityMeasure=HumidityMeasure.DEW_POINT_TEMPERATURE, calculate_swr: bool=True, calculate_evaporation: bool=False):
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
         self.humidity_measure = humidity_measure
         self.calculate_swr = calculate_swr
+        self.calculate_evaporation = calculate_evaporation
 
     def initialize(self, domain: pygetm.domain.Domain):
         super().initialize(domain)
@@ -96,6 +99,9 @@ class FluxesFromMeteo(Fluxes):
         self.qe = domain.T.array(name='qe', long_name='latent heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
         self.qh = domain.T.array(name='qh', long_name='sensible heat flux', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
         self.ql = domain.T.array(name='ql', long_name='net downwelling longwave radiation', units='W m-2', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+
+        self.tp = domain.T.array(name='tp', long_name='total precipitation', units='m s-1', fill_value=FILL_VALUE, attrs={'_3d_only': True})
+        self.e = domain.T.array(name='e', long_name='evaporation minus condensation', units='m s-1', fill_value=FILL_VALUE, attrs={'_3d_only': True})
 
         self.cd_mom = domain.T.array()
         self.cd_latent = domain.T.array()
@@ -137,7 +143,7 @@ class FluxesFromMeteo(Fluxes):
         if not self._ready:
             assert (self.t2m.require_set(self.logger) * self.hum.require_set(self.logger)
                   * self.u10.require_set(self.logger) * self.v10.require_set(self.logger)
-                  * self.tcc.require_set(self.logger) * sst.require_set(self.logger))
+                  * self.tcc.require_set(self.logger) * sst.require_set(self.logger) * (not self.calculate_evaporation or self.tp.require_set(self.logger)))
 
         self.update_humidity(sst)
         self.update_transfer_coefficients(sst)
@@ -148,13 +154,16 @@ class FluxesFromMeteo(Fluxes):
 
         if calculate_heat_flux:
             L = 2.5e6 - 0.00234e6 * sst.all_values   # latent heat of vaporization (J/kg) at sea surface, note SST must be in degrees Celsius
-            self.qh.all_values[...] = -self.cd_sensible.all_values * CPA * self.rhoa.all_values * self.w.all_values * (sst.all_values - self.t2m.all_values)
-            self.qe.all_values[...] = -self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qs.all_values - self.qa.all_values)
+            self.qh.all_values[...] = self.cd_sensible.all_values * CPA * self.rhoa.all_values * self.w.all_values * (self.t2m.all_values - sst.all_values)
+            self.qe.all_values[...] = self.cd_latent.all_values * L * self.rhoa.all_values * self.w.all_values * (self.qa.all_values - self.qs.all_values)
             self.update_longwave_radiation(sst)
             self.shf.all_values[...] = self.qh.all_values + self.qe.all_values + self.ql.all_values
             self.shf.all_values[numpy.logical_and(sst.all_values < -0.0575 * sss.all_values, self.shf.all_values < 0)] = 0.
             if self.calculate_swr:
                 self.update_shortwave_radiation(time)
+            if self.calculate_evaporation:
+                numpy.multiply(self.qe.all_values, -1. / (RHO0 * L), out=self.e.all_values)
+                numpy.subtract(self.tp.all_values, self.e.all_values, out=self.pe.all_values)
 
         super().__call__(time, sst, sss, calculate_heat_flux)
 
