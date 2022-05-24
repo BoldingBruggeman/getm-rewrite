@@ -963,6 +963,11 @@ class Domain(_pygetm.Domain):
             self.H *= scale_factor
 
     def mask_shallow(self, minimum_depth: float):
+        """Mask all points shallower less the specified value.
+
+        Args:
+            minimum_depth: minimum bathmetric depth :attr:`H`; points that are shallower will be masked
+        """
         self.mask[self.H < minimum_depth] = 0
 
     def limit_velocity_depth(self, critical_depth: Optional[float]=None):

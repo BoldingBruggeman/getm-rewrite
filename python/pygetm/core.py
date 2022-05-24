@@ -70,11 +70,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return super().__repr__() + self.grid.postfix
 
     def update_halos(self, *args, **kwargs):
-        """Update halos by exchanging information with subdomain neighbors
+        """Update halos by exchanging information with subdomain neighbors.
+        This does the equivalent of :meth:`update_halos_start` followed by :meth:`update_halos_finish`.
 
         Args:
-            *args: positional arguments passed to :meth:`parallel.DistributedArray.update_halos`
-            **kwargs: keyword arguments passed to :meth:`parallel.DistributedArray.update_halos`
+            *args: positional arguments passed to :meth:`pygetm.parallel.DistributedArray.update_halos`
+            **kwargs: keyword arguments passed to :meth:`pygetm.parallel.DistributedArray.update_halos`
         """
         if not self.grid.domain.tiling:
             return
@@ -87,8 +88,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         The halos will contains valid values only after that second call completes.
 
         Args:
-            *args: positional arguments passed to :meth:`parallel.DistributedArray.update_halos_start`
-            **kwargs: keyword arguments passed to :meth:`parallel.DistributedArray.update_halos_start`
+            *args: positional arguments passed to :meth:`pygetm.parallel.DistributedArray.update_halos_start`
+            **kwargs: keyword arguments passed to :meth:`pygetm.parallel.DistributedArray.update_halos_start`
         """
         if not self.grid.domain.tiling:
             return
@@ -100,8 +101,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """Finish a halo update. This has to be preceded by corresponding call to :meth:`update_halos_start`.
 
         Args:
-            *args: positional arguments passed to :meth:`parallel.DistributedArray.update_halos_finish`
-            **kwargs: keyword arguments passed to :meth:`parallel.DistributedArray.update_halos_finish`
+            *args: positional arguments passed to :meth:`pygetm.parallel.DistributedArray.update_halos_finish`
+            **kwargs: keyword arguments passed to :meth:`pygetm.parallel.DistributedArray.update_halos_finish`
         """
         if not self.grid.domain.tiling:
             return
