@@ -18,3 +18,4 @@ build:
   jobs:
     post_install:
       - bash ./install
+      - pip install ford

@@ -10,8 +10,10 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
+import os
+import sys
+import subprocess
+import tempfile
 # sys.path.insert(0, 'C:\\Users\\jornb\\OneDrive\\Code\\getm-rewrite\\python\\pygetm')
 
 
@@ -80,3 +82,11 @@ intersphinx_mapping = {
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
+
+if os.environ.get('READTHEDOCS', None) == 'True':
+    root = os.path.join(os.path.dirname(__file__), '../../..')
+    outdir = tempfile.mkdtemp()
+    os.mkdir(outdir, 'fortran')
+    subprocess.call([sys.executable, '-m', 'ford', os.path.join(root, 'doc/getm2.md'),
+        '--src_dir', os.path.join(root, 'src'), '--output_dir', os.path.join(outdir, 'fortran')])
+    html_extra_path = [outdir]
