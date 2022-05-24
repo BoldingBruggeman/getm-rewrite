@@ -40,12 +40,11 @@ def main():
         pyplot.show()
 
 def optimize(args, logger):
-    if not args.legacy:
-        print('Currently only legacy topo files are supported. Supply --legacy')
-        sys.exit(2)
-
     logger.info('Reading topo from %s...' % args.path)
-    domain = legacy.domain_from_topo(args.path, nlev=1, logger=logger)
+    if args.legacy:
+        domain = legacy.domain_from_topo(args.path, nlev=1, logger=logger)
+    else:
+        domain = pygetm.domain.load(args.path, 1)
     domain.initialize(1)
 
     tiling = parallel.Tiling.autodetect(domain.T.mask, logger=logger, ncpus=args.ncpus)
