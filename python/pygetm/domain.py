@@ -294,10 +294,10 @@ def create_spherical(lon, lat, nz: int, interfaces=False, **kwargs) -> 'Domain':
 
     if interfaces:
         nx, ny = lon.size - 1, lat.size - 1
-        x, y = interfaces_to_supergrid_1d(lon), interfaces_to_supergrid_1d(lat)
+        lon, lat = interfaces_to_supergrid_1d(lon), interfaces_to_supergrid_1d(lat)
     else:
         nx, ny = lon.size, lat.size
-        x, y = center_to_supergrid_1d(lon), center_to_supergrid_1d(lat)
+        lon, lat = center_to_supergrid_1d(lon), center_to_supergrid_1d(lat)
     return Domain.create(nx, ny, nz, lon=lon, lat=lat[:, numpy.newaxis], spherical=True, **kwargs)
 
 def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, maxlat: float, resolution: float, nz: int, **kwargs) -> 'Domain':
