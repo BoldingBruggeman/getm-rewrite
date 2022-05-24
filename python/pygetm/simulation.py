@@ -494,6 +494,8 @@ class Simulation(_pygetm.Simulation):
         """Update layer thicknesses and tracer concentrations to account for precipitation, evaporation and river inflow."""
 
         # Precipitation and evaporation (surface layer only)
+        # First update halos for the net freshwater flux, as we need to ensure that the layer heights updated as a result remain valid in the halos.
+        self.airsea.pe.update_halos()
         h_increase_pe = self.airsea.pe.all_values * timestep
         h = self.domain.T.hn.all_values[-1, :, :]
         h_new = h + h_increase_pe
