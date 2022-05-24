@@ -312,6 +312,25 @@ def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, 
     ny = int(numpy.ceil((maxlat - minlat) / dlat)) + 1
     return create_spherical(numpy.linspace(minlon, maxlon, nx), numpy.linspace(minlat, maxlat, ny), nz=nz, interfaces=True, **kwargs)
 
+def load(path: str, nz: int, runtype: int):
+    """Load domain from file.
+    
+    Args:
+        path: NetCDF file to load from
+        nz: number of vertical layers
+        runtype: run type
+    """
+    vars = {}
+    with netCDF4.Dataset(path) as nc:
+        for name in ('lon', 'lat', 'x', 'y', 'H', 'mask', 'z0b_min', 'cor'):
+            if name in nc.variables:
+                vars[name] = nc.variables[name][...]
+    spherical = 'lon' in vars
+    ny, nx = vars['lon' if spherical else 'x'].shape
+    nx = (nx - 1) // 2
+    ny = (ny - 1) // 2
+    return Domain.create(nx, ny, nz, spherical=spherical, **vars)
+
 class RiverTracer(core.Array):
     __slots__ = ('_follow',)
     def __init__(self, grid, river_name: str, tracer_name: str, value: numpy.ndarray, follow: numpy.ndarray, **kwargs):
@@ -1065,7 +1084,19 @@ class Domain(_pygetm.Domain):
                     interactive=False)
         return fig
 
-    def save(self, path: str, full: bool=False):
+    def save(self, path: str, full: bool=False, sub: bool=False):
+        """Save grid to a NetCDF file that can be interpreted by :func:`load`.
+        
+        Args:
+            path: NetCDF file to save to
+        """
+        if self.glob is not self and not sub:
+            # We need to save the global domain; not the current subdomain.
+            # If we are the root, divert the plot command to the global domain. Otherwise just ignore this and return.
+            if self.glob:
+                self.glob.save(path, full)
+            return
+
         with netCDF4.Dataset(path, 'w') as nc:
             def create(name, units, long_name, values, coordinates: str, dimensions=('y', 'x')):
                 fill_value = None
@@ -1097,6 +1128,8 @@ class Domain(_pygetm.Domain):
             create_var('y', 'm', 'y', self.y, self.y_)
             create_var('H', 'm', 'undisturbed water depth', self.H, self.H_)
             create_var('mask', '', 'mask', self.mask, self.mask_)
+            create_var('z0b_min', 'm', 'bottom roughness', self.z0b_min, self.z0b_min_)
+            create_var('cor', '', 'Coriolis parameter', self.cor, self.cor_)
 
     def save_grids(self, path: str):
         with netCDF4.Dataset(path, 'w') as nc:
