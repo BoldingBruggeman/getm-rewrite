@@ -40,7 +40,8 @@ domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm
 )
 
 if args.boundaries:
-    pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, 'bdyinfo.dat'))
+    kwargs = {'type_2d': -4} if args.tpxo9_dir else {}
+    pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, 'bdyinfo.dat'), **kwargs)
 if args.rivers:
     pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, 'riverinfo.dat'))
 
@@ -68,11 +69,11 @@ if domain.open_boundaries:
         domain.open_boundaries.v.set(pygetm.input.from_nc(os.path.join(args.setup_dir, 'Forcing/2D/bdy.2d.2006.nc'), 'v'))
     else:
         sim.logger.info('set handling of TPXO boundary input')
-        bdy_lon = domain.T.lon.all_values[domain.bdy_j, domain.bdy_i]
-        bdy_lat = domain.T.lat.all_values[domain.bdy_j, domain.bdy_i]
-        sim.zbdy.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=args.tpxo9_dir), on_grid=True)
-        sim.bdyu.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='u', root=args.tpxo9_dir), on_grid=True)
-        sim.bdyv.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='v', root=args.tpxo9_dir), on_grid=True)
+        bdy_lon = domain.open_boundaries.lon
+        bdy_lat = domain.open_boundaries.lat
+        domain.open_boundaries.z.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=args.tpxo9_dir))
+        domain.open_boundaries.u.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='u', root=args.tpxo9_dir))
+        domain.open_boundaries.v.set(pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable='v', root=args.tpxo9_dir))
 
     if sim.runtype == pygetm.BAROCLINIC:
         sim.temp.open_boundaries.type = pygetm.SPONGE
