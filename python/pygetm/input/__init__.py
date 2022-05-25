@@ -777,11 +777,18 @@ class InputManager:
                 if array.z:
                     # open boundary arrays have z dimension last (fastest varying), but gridded 3D data have z first
                     value = transpose(value)
-            elif source_lon is not None and source_lat is not None:
+            elif source_lon is not None and source_lat is not None and source_lon.ndim > 0 and source_lat.ndim > 0:
                 # Spatially explicit input: interpolate horizontally to open boundary coordinates
-                lon, lat = grid.domain.open_boundaries.lon.all_values, grid.domain.open_boundaries.lat.all_values
-                value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
-                value = pygetm.input.horizontal_interpolation(value, lon, lat)
+                if source_lon.ndim != 1:
+                    raise Exception('Unsuitable shape %s of longitude coordinate %s. Off-grid boundary information can be used only if its longitude is 1D.' % (source_lon.shape, source_lon.name))
+                if source_lat.ndim != 1:
+                    raise Exception('Unsuitable shape %s of latitude coordinate %s. Off-grid boundary information can be used only if its latitude is 1D.' % (source_lat.shape, source_lat.name))
+                ilondim = value.dims.index(source_lon.dims[0])
+                ilatdim = value.dims.index(source_lat.dims[0])
+                if ilondim != ilatdim:
+                    lon, lat = grid.domain.open_boundaries.lon.all_values, grid.domain.open_boundaries.lat.all_values
+                    value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
+                    value = pygetm.input.horizontal_interpolation(value, lon, lat)
             idim = value.ndim - (2 if array.z else 1)
             if value.shape[idim] != grid.domain.open_boundaries.np:
                 # The source array covers all open boundaries (global domain).
