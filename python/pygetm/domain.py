@@ -444,9 +444,9 @@ class Rivers(Mapping[str, River]):
         return map(operator.attrgetter('name'), self._rivers)
 
 class OpenBoundary:
-    def __init__(self, name: str, side: int, l: int, mstart: int, mstop: int, mstart_: int, mstop_: int, type_2d: int, type_3d: int):
+    def __init__(self, name: str, side: Side, l: int, mstart: int, mstop: int, mstart_: int, mstop_: int, type_2d: int, type_3d: int):
         self.name = name
-        self.side = side
+        self.side = Side(side)
         self.l = l
         self.mstart = mstart
         self.mstop = mstop
@@ -465,7 +465,9 @@ class OpenBoundaries(collections.Mapping):
 
     def add_by_index(self, side: Side, l: int, mstart: int, mstop: int, type_2d: int, type_3d: int, name: Optional[str]=None):
         """Note that l, mstart, mstop are 0-based indices of a T point in the global domain.
-        mstop indicates the upper limit of the boundary - it is the first index that is EXcluded."""
+        mstop indicates the upper limit of the boundary - it is the first index that is EXcluded.
+        """
+
         assert not self._frozen, 'The open boundary collection has already been initialized'
         # NB below we convert to indices in the T grid of the current subdomain INCLUDING halos
         # We also limit the indices to the range valid for the current subdomain.
