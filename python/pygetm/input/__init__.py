@@ -322,7 +322,7 @@ class ConcatenatedArray(UnaryOperatorResult):
             slices[self.axis] -= input.shape[self.axis]
         assert False, 'Index out of bounds?'
 
-def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon=False, verbose=False) -> xarray.DataArray:
+def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon: bool=False, verbose: bool=False, require_2d: bool=True) -> xarray.DataArray:
     assert numpy.isfinite(minlon) and numpy.isfinite(maxlon), 'Longitude range %s - %s is not valid' % (minlon, maxlon)
     assert numpy.isfinite(minlat) and numpy.isfinite(maxlat), 'Latitude range %s - %s is not valid' % (minlat, maxlat)
     assert minlon <= maxlon, 'Minimum longitude %s must be smaller than, or equal to, maximum longitude %s.' % (minlon, maxlon)
@@ -342,6 +342,10 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
         print(imin, imax, source_lon.values.size, jmin, jmax, source_lat.values.size)
     assert (imin >= 0 and imax <= source_lon.values.size) or periodic_lon, 'Requested longitude section %s - %s is not fully covered by available range %s - %s' % (minlon, maxlon, source_lon.values[0], source_lon.values[-1])
     assert jmin >= 0 and jmax <= source_lat.values.size, 'Requested latitude section %s - %s is not fully covered by available range %s - %s' % (minlat, maxlat, source_lat.values[0], source_lat.values[-1])
+    if require_2d and jmin == jmax:
+        jmin, jmax = (jmin, jmax + 1) if jmin == 0 else (jmin - 1, jmax)
+    if require_2d and imin == imax:
+        imin, imax = (imin, imax + 1) if imin == 0 else (imin - 1, imax)
     add_left = imin < 0
     add_right = imax >= source_lon.values.size
     imin = max(imin, 0)
