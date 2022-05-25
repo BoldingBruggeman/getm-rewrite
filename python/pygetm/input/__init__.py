@@ -342,9 +342,9 @@ def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat:
         print(imin, imax, source_lon.values.size, jmin, jmax, source_lat.values.size)
     assert (imin >= 0 and imax <= source_lon.values.size) or periodic_lon, 'Requested longitude section %s - %s is not fully covered by available range %s - %s' % (minlon, maxlon, source_lon.values[0], source_lon.values[-1])
     assert jmin >= 0 and jmax <= source_lat.values.size, 'Requested latitude section %s - %s is not fully covered by available range %s - %s' % (minlat, maxlat, source_lat.values[0], source_lat.values[-1])
-    if require_2d and jmin == jmax:
+    if require_2d and jmax - jmin == 1:
         jmin, jmax = (jmin, jmax + 1) if jmin == 0 else (jmin - 1, jmax)
-    if require_2d and imin == imax:
+    if require_2d and imax - imin == 1:
         imin, imax = (imin, imax + 1) if imin == 0 else (imin - 1, imax)
     add_left = imin < 0
     add_right = imax >= source_lon.values.size
