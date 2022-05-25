@@ -1,6 +1,8 @@
 import argparse
 import sys
 import logging
+import cProfile
+import pstats
 
 from . import legacy
 from . import parallel
@@ -18,6 +20,7 @@ def main():
     optimize_parser.add_argument('path', help='path to topo file')
     optimize_parser.add_argument('ncpus', type=int, help='number of cores (active subdomains)')
     optimize_parser.add_argument('--pickle', help='path to save subdomain division to')
+    optimize_parser.add_argument('--profile', action='store_true')
     optimize_parser.set_defaults(func=optimize)
 
     show_parser = subparsers.add_parser('show', help='describe existing subdomain division')
@@ -28,7 +31,12 @@ def main():
         p.add_argument('--plot', action='store_true', help='plot subdomain decomposition')
 
     args = parser.parse_args()
-    tiling = args.func(args, logger)
+    if args.profile:
+        p = cProfile.Profile()
+        tiling = p.runcall(args.func, args, logger)
+        p.print_stats(sort=pstats.SortKey.TIME)
+    else:
+        tiling = args.func(args, logger)
 
     tiling.report(logging.getLogger())
     logger.info('Subdomain rank map:\n%s' % (tiling.map,))
