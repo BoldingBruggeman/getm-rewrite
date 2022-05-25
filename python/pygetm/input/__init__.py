@@ -735,7 +735,7 @@ class InputManager:
                 has a periodic boundary. This enables efficient spatial interpolation across longitude bounds of the input,
                 for instance, accessing read 10 degrees West to 5 degrees East for an input that spans 0 to 360 degrees East.
             on_grid: whether the input is defined on the same grid (horizontal-only, or both horizontal and vertical)
-                as the array that is being assigned to. if this if ``False``, the value will be spatially interpolated
+                as the array that is being assigned to. if this is ``False``, the value will be spatially interpolated
                 to the array grid. ``True`` is equivalent to :attr:`OnGrid.HORIZONTAL`.
             include_halos: whether to also update the halos of the array. If not provided, this default to ``True`` if
                 the array has attributes ``_require_halos`` or ``_part_of_state``; otherwise it defaults to ``False``.
@@ -770,12 +770,18 @@ class InputManager:
         if array.on_boundary:
             # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
             # or for only the open boundary points that fall within the local subdomain. Determine which of these.
+            source_lon, source_lat = value.getm.longitude, value.getm.latitude
             if value.ndim >= 2 and value.shape[-1] == grid.domain.nx and value.shape[-2] == grid.domain.ny:
                 # on-grid data for the global domain - extract data at open boundary points
                 value = isel(value, **{value.dims[-1]: grid.domain.open_boundaries.i_glob, value.dims[-2]: grid.domain.open_boundaries.j_glob})
                 if array.z:
                     # open boundary arrays have z dimension last (fastest varying), but gridded 3D data have z first
                     value = transpose(value)
+            elif source_lon is not None and source_lat is not None:
+                # Spatially explicit input: interpolate horizontally to open boundary coordinates
+                lon, lat = grid.domain.open_boundaries.lon.all_values, grid.domain.open_boundaries.lat.all_values
+                value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
+                value = pygetm.input.horizontal_interpolation(value, lon, lat)
             idim = value.ndim - (2 if array.z else 1)
             if value.shape[idim] != grid.domain.open_boundaries.np:
                 # The source array covers all open boundaries (global domain).
