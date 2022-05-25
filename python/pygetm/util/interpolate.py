@@ -12,6 +12,8 @@ class Linear2DGridInterpolator:
         assert xp.ndim == 1, 'source x coordinate must be 1D but has shape %s' % (xp.shape,)
         assert yp.ndim == 1, 'source y coordinate must be 1D but has shape %s' % (yp.shape,)
         self.nxp, self.nyp = xp.size, yp.size
+        assert self.nxp > 1, 'source x coordinate must have length > 1, but has length %i' % (self.nxp,)
+        assert self.nyp > 1, 'source y coordinate must have length > 1, but has length %i' % (self.nyp,)
         x, y = numpy.broadcast_arrays(x, y)
         dxp = numpy.diff(xp)
         dyp = numpy.diff(yp)
