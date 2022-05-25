@@ -48,14 +48,14 @@ class Grid(_pygetm.Grid):
     _array_args = {
         'x': dict(units='m', constant=True, fill_value=FILL_VALUE),
         'y': dict(units='m', constant=True, fill_value=FILL_VALUE),
-        'lon': dict(units='degrees_north', long_name='longitude', constant=True, fill_value=FILL_VALUE),
-        'lat': dict(units='degrees_east', long_name='latitude', constant=True, fill_value=FILL_VALUE),
+        'lon': dict(units='degrees_east', long_name='longitude', constant=True, fill_value=FILL_VALUE),
+        'lat': dict(units='degrees_north', long_name='latitude', constant=True, fill_value=FILL_VALUE),
         'dx': dict(units='m', constant=True, fill_value=FILL_VALUE),
         'dy': dict(units='m', constant=True, fill_value=FILL_VALUE),
         'idx': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
         'idy': dict(units='m-1', constant=True, fill_value=FILL_VALUE),
-        'dlon': dict(units='degrees_north', constant=True, fill_value=FILL_VALUE),
-        'dlat': dict(units='degrees_east', constant=True, fill_value=FILL_VALUE),
+        'dlon': dict(units='degrees_east', constant=True, fill_value=FILL_VALUE),
+        'dlat': dict(units='degrees_north', constant=True, fill_value=FILL_VALUE),
         'H': dict(units='m', long_name='water depth at rest', constant=True, fill_value=FILL_VALUE),
         'D': dict(units='m', long_name='water depth', fill_value=FILL_VALUE),
         'mask': dict(constant=True, fill_value=0),
@@ -312,8 +312,8 @@ def create_spherical_at_resolution(minlon: float, maxlon: float, minlat: float, 
     ny = int(numpy.ceil((maxlat - minlat) / dlat)) + 1
     return create_spherical(numpy.linspace(minlon, maxlon, nx), numpy.linspace(minlat, maxlat, ny), nz=nz, interfaces=True, **kwargs)
 
-def load(path: str, nz: int, **kwargs):
-    """Load domain from file.
+def load(path: str, nz: int, **kwargs) -> 'Domain':
+    """Load domain from file. Typically this is a file created by :meth:`Domain.save`.
     
     Args:
         path: NetCDF file to load from
@@ -725,15 +725,15 @@ class Domain(_pygetm.Domain):
             nx: number of tracer points in x direction
             ny: number of tracer points in y direction
             nz: number of vertical layers
-            lon: longitude (degreees East)
-            lat: latitude (degreees North)
+            lon: longitude (degrees East)
+            lat: latitude (degrees North)
             x: x coordinate (m)
             y: y coordinate (m)
-            spherical: grid is spherical (as opposed to Cartesian). If True, at least `lon` and `lat` must be provided. Otherwise at least `x` and `y` must be provided.
+            spherical: grid is spherical (as opposed to Cartesian). If True, at least ``lon`` and ``lat`` must be provided. Otherwise at least ``x`` and ``y`` must be provided.
             mask: initial mask (0: land, 1: water)
             H: initial distance between bottom depth and some arbitrary depth reference (m, positive if bottom lies below the depth reference). Typically the depth reference is mean sea level.
             z0: initial bottom roughness (m)
-            f: Coriolis parameter. By default this is calculated from latitude `lat` if provided.
+            f: Coriolis parameter. By default this is calculated from latitude ``lat`` if provided.
             tiling: subdomain decomposition
             Dmin: minimum depth (m) for wet points. At this depth, all hydrodynamic terms except the pressure gradient and bottom friction are switched off.
             Dcrit: depth (m) at which tapering of processes (all except pressure gradient and bottom friction) begins.
@@ -1000,8 +1000,8 @@ class Domain(_pygetm.Domain):
         wherever one of these two points is shallower than the specified critical depth.
         
         Args:
-            critical_depth: neighbor depth at which the limiting starts. If neighbor are shallower than this value,
-                the depth of velocity points is restricted. If not provided, ``self.Dcrit`` is used.
+            critical_depth: neighbor depth at which the limiting starts. If either neighbor (T grid) is shallower than this value,
+                the depth of velocity point (U or V grid) is restricted. If not provided, ``self.Dcrit`` is used.
         """
         assert not self._initialized, 'limit_velocity_depth cannot be called after the domain has been initialized.'
         if critical_depth is None:
