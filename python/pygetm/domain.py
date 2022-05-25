@@ -17,11 +17,11 @@ from . import output
 from . import input
 from .constants import FILL_VALUE, CENTERS, INTERFACES
 
-WEST  = 1
-NORTH = 2
-EAST  = 3
-SOUTH = 4
-
+class Side(enum.IntEnum):
+    WEST  = 1
+    NORTH = 2
+    EAST  = 3
+    SOUTH = 4
 
 class VerticalCoordinates(enum.IntEnum):
     SIGMA = 1
@@ -444,7 +444,8 @@ class Rivers(Mapping[str, River]):
         return map(operator.attrgetter('name'), self._rivers)
 
 class OpenBoundary:
-    def __init__(self, side: int, l: int, mstart: int, mstop: int, mstart_: int, mstop_: int, type_2d: int, type_3d: int):
+    def __init__(self, name: str, side: int, l: int, mstart: int, mstop: int, mstart_: int, mstop_: int, type_2d: int, type_3d: int):
+        self.name = name
         self.side = side
         self.l = l
         self.mstart = mstart
@@ -462,14 +463,14 @@ class OpenBoundaries(collections.Mapping):
         self._boundaries: List[OpenBoundary] = []
         self._frozen = False
 
-    def add_by_index(self, side: int, l: int, mstart: int, mstop: int, type_2d: int, type_3d: int):
+    def add_by_index(self, side: Side, l: int, mstart: int, mstop: int, type_2d: int, type_3d: int, name: Optional[str]=None):
         """Note that l, mstart, mstop are 0-based indices of a T point in the global domain.
         mstop indicates the upper limit of the boundary - it is the first index that is EXcluded."""
         assert not self._frozen, 'The open boundary collection has already been initialized'
         # NB below we convert to indices in the T grid of the current subdomain INCLUDING halos
         # We also limit the indices to the range valid for the current subdomain.
         xoffset, yoffset = self.domain.tiling.xoffset - self.domain.halox, self.domain.tiling.yoffset - self.domain.haloy
-        if side in (WEST, EAST):
+        if side in (Side.WEST, Side.EAST):
             l_offset, m_offset, l_max, m_max = xoffset, yoffset, self.domain.T.nx_, self.domain.T.ny_
         else:
             l_offset, m_offset, l_max, m_max = yoffset, xoffset, self.domain.T.ny_, self.domain.T.nx_
@@ -482,7 +483,9 @@ class OpenBoundaries(collections.Mapping):
             # Boundary lies completely outside current subdomain. Record it anyway, so we can later set up a
             # global -> local map of open boundary points
             l_loc, mstart_loc, mstop_loc = None, None, None
-        self._boundaries.append(OpenBoundary(side, l_loc, mstart_loc, mstop_loc, mstart_loc_, mstop_loc_, type_2d, type_3d))
+        if name is None:
+            name = str(len(self._boundaries))
+        self._boundaries.append(OpenBoundary(name, side, l_loc, mstart_loc, mstop_loc, mstart_loc_, mstop_loc_, type_2d, type_3d))
 
         if self.domain.glob is not None and self.domain.glob is not self.domain:
             self.domain.glob.open_boundaries.add_by_index(side, l, mstart, mstop, type_2d, type_3d)
@@ -497,7 +500,7 @@ class OpenBoundaries(collections.Mapping):
         bdyinfo, bdy_i, bdy_j = [], [], []
         side2count = {}
         self.local_to_global = []
-        for side in (WEST, NORTH, EAST, SOUTH):
+        for side in (Side.WEST, Side.NORTH, Side.EAST, Side.SOUTH):
             n = 0
             for boundary in [b for b in self._boundaries if b.side == side]:
                 if boundary.l is not None:
@@ -510,7 +513,7 @@ class OpenBoundaries(collections.Mapping):
                     # In the mask assignment below, mask=3 points are always in between mask=2 points.
                     # This will not be correct if the boundary only partially falls within this subdomain (i.e., it starts outside),
                     # but as this only affects points at the outer edge of the halo zone, it will be solved by the halo exchange of the mask later on.
-                    if side in (WEST, EAST):
+                    if side in (Side.WEST, Side.EAST):
                         t_mask = self.domain.mask_[1 + 2 * boundary.mstart:2 * boundary.mstop:2, 1 + boundary.l * 2]
                         vel_mask = self.domain.mask_[2 + 2 * boundary.mstart:2 * boundary.mstop:2, 1 + boundary.l * 2]
                         boundary.i = numpy.repeat(boundary.l, boundary.mstop - boundary.mstart)
@@ -521,7 +524,7 @@ class OpenBoundaries(collections.Mapping):
                         boundary.i = numpy.arange(boundary.mstart, boundary.mstop)
                         boundary.j = numpy.repeat(boundary.l, boundary.mstop - boundary.mstart)
                     if (t_mask == 0).any():
-                        self.domain.logger.error('%i of %i points of this open boundary are on land' % ((t_mask == 0).sum(), boundary.mstop - boundary.mstart))
+                        self.domain.logger.error('Open boundary %s: %i of %i points of this %sern boundary are on land' % (boundary.name, (t_mask == 0).sum(), boundary.mstop - boundary.mstart, side.name.capitalize()))
                         raise Exception()
                     t_mask[...] = 2
                     vel_mask[...] = 3
@@ -545,7 +548,7 @@ class OpenBoundaries(collections.Mapping):
         self.j = numpy.empty((0,), dtype=numpy.intc) if self.np == 0 else numpy.concatenate(bdy_j, dtype=numpy.intc)
         self.i_glob = self.i - self.domain.halox + self.domain.tiling.xoffset
         self.j_glob = self.j - self.domain.haloy + self.domain.tiling.yoffset
-        self.domain.logger.info('%i open boundaries (%i West, %i North, %i East, %i South)' % (len(bdyinfo), side2count[WEST], side2count[NORTH], side2count[EAST], side2count[SOUTH]))
+        self.domain.logger.info('%i open boundaries (%i West, %i North, %i East, %i South)' % (len(bdyinfo), side2count[Side.WEST], side2count[Side.NORTH], side2count[Side.EAST], side2count[Side.SOUTH]))
         if self.np > 0:
             if self.np == self.np_glob:
                 assert len(self.local_to_global) == 1 and self.local_to_global[0][0] == 0 and self.local_to_global[0][1] == self.np_glob
@@ -553,7 +556,7 @@ class OpenBoundaries(collections.Mapping):
             else:
                 self.domain.logger.info('global-to-local open boundary map: %s' % (self.local_to_global,))
             bdyinfo = numpy.stack(bdyinfo, axis=-1)
-            self.domain.initialize_open_boundaries(nwb=side2count[WEST], nnb=side2count[NORTH], neb=side2count[EAST], nsb=side2count[SOUTH], nbdyp=self.np, bdy_i=self.i - HALO, bdy_j=self.j - HALO, bdy_info=bdyinfo)
+            self.domain.initialize_open_boundaries(nwb=side2count[Side.WEST], nnb=side2count[Side.NORTH], neb=side2count[Side.EAST], nsb=side2count[Side.SOUTH], nbdyp=self.np, bdy_i=self.i - HALO, bdy_j=self.j - HALO, bdy_info=bdyinfo)
 
         # Coordinates of open boundary points
         self.zc = self.domain.T.array(z=CENTERS, on_boundary=True)

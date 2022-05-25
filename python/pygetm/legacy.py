@@ -92,7 +92,7 @@ def load_bdyinfo(dom: pygetm.domain.Domain, path: str, type_2d: Optional[int]=No
         type_3d: type of 3D open boundary condition to use. If provided, this overrides the type configured in the file.
     """
     with DatFile(path) as f:
-        for side in (pygetm.domain.WEST, pygetm.domain.NORTH, pygetm.domain.EAST, pygetm.domain.SOUTH):
+        for side in (pygetm.domain.Side.WEST, pygetm.domain.Side.NORTH, pygetm.domain.Side.EAST, pygetm.domain.Side.SOUTH):
             n = int(f.get_line())
             for _ in range(n):
                 # Note: for Western and Eastern boundaries, l and m are indices in x and y dimensions, respectively, 
