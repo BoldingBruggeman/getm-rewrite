@@ -490,57 +490,63 @@ cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoff
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.cdivision(True)
-cdef int[:, ::1] get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset):
-    cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
-    cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
-    cdef int[:, ::1] map
-    cdef int row, col
-    map = numpy.empty((nrow, ncol), dtype=numpy.intc)
-    for row in range(nrow):
-        for col in range(ncol):
-            map[row, col] = subdomain_count_cells(mask, max(0, xoffset + col * nx), min(mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(mask.shape[0], yoffset + (row + 1) * ny))
-    return map
+@cython.initializedcheck(False)
+cdef void get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int[::1] map, int* nrow, int* ncol) nogil:
+    cdef int row, col, i
+    nrow[0] = <int>ceil((mask.shape[0] - yoffset) / float(ny))
+    ncol[0] = <int>ceil((mask.shape[1] - xoffset) / float(nx))
+    i = 0
+    for row in range(nrow[0]):
+        for col in range(ncol[0]):
+            map[i] = subdomain_count_cells(mask, max(0, xoffset + col * nx), min(mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(mask.shape[0], yoffset + (row + 1) * ny))
+            i += 1
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.profile(False)
-cdef int get_from_map(const int[:, ::1] map, int row, int col) nogil:
-    if row < 0 or col < 0 or row >= map.shape[0] or col >= map.shape[1]:
+@cython.initializedcheck(False)
+cdef int get_from_map(const int[::1] map, int nrow, int ncol, int row, int col) nogil:
+    if row < 0 or col < 0 or row >= nrow or col >= ncol:
         return 0
-    return map[row, col]
+    return map[row * ncol + col]
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-cdef int get_cost(const int[:, ::1] map, int nx, int ny, int weight_unmasked, int weight_any, int weight_halo) nogil:
+@cython.initializedcheck(False)
+cdef int get_cost(const int[::1] map, int nrow, int ncol, int nx, int ny, int weight_unmasked, int weight_any, int weight_halo) nogil:
     cdef int row, col, nint, nout, max_cost
     cdef int halo = 2
     max_cost = 0
-    for row in range(map.shape[0]):
-        for col in range(map.shape[1]):
-            nint = map[row, col]  # unmasked cells only
+    for row in range(nrow):
+        for col in range(ncol):
+            nint = map[row * ncol + col]  # unmasked cells only
             nout = 0
-            if get_from_map(map, row - 1, col - 1) > 0: nout += halo * halo
-            if get_from_map(map, row + 1, col - 1) > 0: nout += halo * halo
-            if get_from_map(map, row - 1, col + 1) > 0: nout += halo * halo
-            if get_from_map(map, row + 1, col + 1) > 0: nout += halo * halo
-            if get_from_map(map, row - 1, col) > 0: nout += halo * nx
-            if get_from_map(map, row + 1, col) > 0: nout += halo * nx
-            if get_from_map(map, row, col - 1) > 0: nout += halo * ny
-            if get_from_map(map, row, col + 1) > 0: nout += halo * ny
+            if get_from_map(map, nrow, ncol, row - 1, col - 1) > 0: nout += halo * halo
+            if get_from_map(map, nrow, ncol, row + 1, col - 1) > 0: nout += halo * halo
+            if get_from_map(map, nrow, ncol, row - 1, col + 1) > 0: nout += halo * halo
+            if get_from_map(map, nrow, ncol, row + 1, col + 1) > 0: nout += halo * halo
+            if get_from_map(map, nrow, ncol, row - 1, col) > 0: nout += halo * nx
+            if get_from_map(map, nrow, ncol, row + 1, col) > 0: nout += halo * nx
+            if get_from_map(map, nrow, ncol, row, col - 1) > 0: nout += halo * ny
+            if get_from_map(map, nrow, ncol, row, col + 1) > 0: nout += halo * ny
             max_cost = max(max_cost, weight_unmasked * nint + weight_halo * nout)
     if nx % 4 != 0: max_cost *= 2  # penalize non-alignment
     return max_cost + weight_any * nx * ny     # add an overhead for all cells - unmasked or not
 
 def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus, int weight_unmasked, int weight_any, int weight_halo):
-    cdef int[:, ::1] map
+    cdef int[::1] map
+    cdef int nrow, ncol
     cost = -1
-    solution = None
+    map = numpy.empty(((mask.shape[1] // nx + 2) * (mask.shape[0] // ny + 2),), dtype=numpy.intc)
     for yoffset in range(1 - ny, 1):
         for xoffset in range(1 - nx, 1):
             if decomposition_is_valid(mask, nx, ny, xoffset, yoffset, ncpus):
-                map = get_map(mask, nx, ny, xoffset, yoffset)
-                current_cost = get_cost(map, nx, ny, weight_unmasked, weight_any, weight_halo)
+                get_map(mask, nx, ny, xoffset, yoffset, map, &nrow, &ncol)
+                current_cost = get_cost(map, nrow, ncol, nx, ny, weight_unmasked, weight_any, weight_halo)
                 if cost == -1 or current_cost < cost:
                     cost = current_cost
-                    solution = (xoffset, yoffset, cost, numpy.asarray(map))
-    return solution
+                    best_xoffset = xoffset
+                    best_yoffset = yoffset
+    if cost != -1:
+        get_map(mask, nx, ny, best_xoffset, best_yoffset, map, &nrow, &ncol)
+        return (best_xoffset, best_yoffset, cost, numpy.asarray(map[:nrow * ncol]).reshape(nrow, ncol))
