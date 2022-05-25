@@ -88,7 +88,6 @@ class Simulation(_pygetm.Simulation):
 
         assert not dom._initialized
         super().__init__(dom, runtype, internal_pressure_method=internal_pressure_method, Am0=Am)
-        self.logger.info('Maximum dt = %.3f s' % dom.maxdt)
         dom.T.hn.fabm_standard_name = 'cell_thickness'
         if dom.T.lon is not None:
             dom.T.lon.fabm_standard_name = 'longitude'

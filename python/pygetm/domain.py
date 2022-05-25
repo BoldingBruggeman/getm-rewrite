@@ -15,7 +15,7 @@ from . import core
 from . import parallel
 from . import output
 from . import input
-from .constants import FILL_VALUE, CENTERS, INTERFACES
+from .constants import FILL_VALUE, CENTERS, GRAVITY, INTERFACES
 
 class Side(enum.IntEnum):
     WEST  = 1
@@ -887,6 +887,25 @@ class Domain(_pygetm.Domain):
         self.open_boundaries = OpenBoundaries(self)
         self.rivers = Rivers(self.T)
 
+    def cfl_check(self, z: float=0., log: bool=True) -> float:
+        """Determine maximum time step for depth-integrated equations
+        
+        Args:
+            z: surface elevation (m) at rest
+            log: whether to write the maximum time step and its location to the log
+        """
+        mask = self.mask[1::2, 1::2] > 0
+        dx = self.dx[1::2, 1::2]
+        dy = self.dy[1::2, 1::2]
+        H = self.H[1::2, 1::2]
+        maxdts = dx * dy / numpy.sqrt(2. * GRAVITY * (H + z) * (dx**2 + dy**2), where=mask, out=numpy.ones_like(H))
+        maxdts[~mask] = numpy.inf
+        maxdt = maxdts.min()
+        if log:
+            j, i = numpy.unravel_index(numpy.argmin(maxdts), maxdts.shape)
+            self.logger.info('Maximum dt = %.3f s (i=%i, j=%i, bathymetric depth=%.3f m)' % (maxdt, i, j, H[j, i]))
+        return maxdt
+
     def initialize(self, runtype: int, field_manager: Optional[output.FieldManager]=None):
         """Initialize the domain. This updates the mask in order for it to be consistent across T, U, V, X grids.
         Values for the mask, bathymetry, and bottom roughness are subsequently read-only."""
@@ -943,6 +962,8 @@ class Domain(_pygetm.Domain):
         self.h_T_half = self.T.array(fill=numpy.nan, z=CENTERS)
         self.depth = self.T.array(z=CENTERS, name='pres', units='dbar', long_name='pressure', fabm_standard_name='depth', fill_value=FILL_VALUE)
 
+        self.cfl_check()
+
         self._initialized = True
 
     def set_bathymetry(self, depth, scale_factor=None, periodic_lon: bool=False):
@@ -993,6 +1014,17 @@ class Domain(_pygetm.Domain):
         self.logger.info('limit_velocity_depth has decreased depth in %i U points (%i currently unmasked), %i V points (%i currently unmasked).' % (Uchange.sum(), Uchange.sum(where=self.mask_[1::2, 2:-2:2] != 0), Vchange.sum(), Vchange.sum(where=self.mask_[2:-2:2, 1::2] != 0)))
 
     def mask_rectangle(self, xmin: Optional[float]=None, xmax: Optional[float]=None, ymin: Optional[float]=None, ymax: Optional[float]=None, value: int=0):
+        """Mask all points that fall within the specified rectangle.
+
+        Args:
+            xmin: lower x coordinate of the rectangle to mask (default: left boundary of the domain)
+            xmax: upper x coordinate of the rectangle to mask (default: right boundary of the domain)
+            ymin: lower y coordinate of the rectangle to mask (default: bottom boundary of the domain)
+            ymax: upper y coordinate of the rectangle to mask (default: top boundary of the domain)
+
+        Coordinates will be interpreted as longitude, latitude if the domain is configured as spherical;
+        otherwise they will be interpreted as Cartesian x and y (m).
+        """
         assert not self._initialized, 'adjust_mask cannot be called after the domain has been initialized.'
         selected = numpy.ones(self.mask.shape, dtype=bool)
         x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
