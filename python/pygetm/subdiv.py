@@ -1,15 +1,17 @@
 import argparse
-import sys
 import logging
 import cProfile
 import pstats
+
+import mpi4py
+rank = mpi4py.MPI.COMM_WORLD.rank
 
 from . import legacy
 from . import parallel
 import pygetm
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO if rank == 0 else logging.ERROR)
     logger = logging.getLogger()
 
     parser = argparse.ArgumentParser()
@@ -32,7 +34,7 @@ def main():
         p.add_argument('--plot', action='store_true', help='plot subdomain decomposition')
 
     args = parser.parse_args()
-    if args.profile:
+    if args.profile and rank == 0:
         p = cProfile.Profile()
         tiling, domain = p.runcall(args.func, args, logger)
         p.print_stats(sort=pstats.SortKey.TIME)
@@ -42,7 +44,7 @@ def main():
     tiling.report(logging.getLogger())
     logger.info('Subdomain rank map:\n%s' % (tiling.map,))
 
-    if args.plot:
+    if args.plot and rank == 0:
         from matplotlib import pyplot
         fig, ax = pyplot.subplots()
         tiling.plot(ax=ax, background=domain.T.H.ma)
@@ -51,14 +53,14 @@ def main():
 def optimize(args, logger):
     logger.info('Reading topo from %s...' % args.path)
     if args.legacy:
-        domain = legacy.domain_from_topo(args.path, nlev=1, logger=logger)
+        domain = legacy.domain_from_topo(args.path, nlev=1, logger=logger, glob=True)
     else:
-        domain = pygetm.domain.load(args.path, 1, logger=logger)
+        domain = pygetm.domain.load(args.path, 1, logger=logger, glob=True)
     domain.initialize(1)
 
     tiling = parallel.Tiling.autodetect(domain.T.mask, logger=logger, ncpus=args.ncpus, max_protrude=args.max_protrude)
 
-    if args.pickle:
+    if args.pickle and rank == 0:
         logger.info('Saving subdomain decomposition to %s...' % args.pickle)
         tiling.dump(args.pickle)
 

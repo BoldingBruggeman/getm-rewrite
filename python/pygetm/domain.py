@@ -669,13 +669,16 @@ class Domain(_pygetm.Domain):
         assert still_ok.all(), 'Rank %i: _exchange_metric corrupted %i values: %s.' % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok)
 
     @staticmethod
-    def create(nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, periodic_x: bool=False, periodic_y: bool=False, z: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, **kwargs):
+    def create(nx: int, ny: int, nz: int, lon: Optional[numpy.ndarray]=None, lat: Optional[numpy.ndarray]=None, x: Optional[numpy.ndarray]=None, y: Optional[numpy.ndarray]=None, spherical: bool=False, mask: Optional[numpy.ndarray]=1, H: Optional[numpy.ndarray]=None, z0: Optional[numpy.ndarray]=0., f: Optional[numpy.ndarray]=None, tiling: Optional[parallel.Tiling]=None, periodic_x: bool=False, periodic_y: bool=False, z: Optional[numpy.ndarray]=0., logger: Optional[logging.Logger]=None, glob: bool=False, **kwargs):
         global_domain = None
         logger = logger or parallel.getLogger()
         parlogger = logger.getChild('parallel')
 
         # Determine subdomain division
-        if tiling is None:
+        if glob:
+            tiling = parallel.Tiling(nrow=1, ncol=1, ncpus=1, periodic_x=periodic_x, periodic_y=periodic_y)
+            tiling.rank = 0
+        elif tiling is None:
             # No tiling provided - autodetect
             mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
             tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=parlogger, periodic_x=periodic_x, periodic_y=periodic_y)
