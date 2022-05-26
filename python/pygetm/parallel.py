@@ -420,21 +420,20 @@ def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None
     mask = numpy.ascontiguousarray(mask[jmin:jmax + 1, imin:imax + 1], dtype=numpy.intc)
     if logger:
         logger.info('Determining optimal subdomain decomposition of global domain of %i x %i (%i active cells) for %i cores' % (mask.shape[1], mask.shape[0], (mask != 0).sum(), ncpus))
-    ny_sub_start = 4
-    ny_sub_stop = mask.shape[0]
-    ny_sub_share = int(numpy.ceil((ny_sub_stop - ny_sub_start) / MPI.COMM_WORLD.size))
-    ny_sub_start = ny_sub_start + ny_sub_share * MPI.COMM_WORLD.rank
-    ny_sub_stop = min(ny_sub_stop, ny_sub_start + ny_sub_share)
-    for ny_sub in range(ny_sub_start, ny_sub_stop):
-        if logger and (ny_sub - ny_sub_start + 1) % 10 == 0:
-            logger.debug('%.1f %% complete' % (100 * (ny_sub - ny_sub_start) / (ny_sub_stop - ny_sub_start),))
+    nx_ny_combos = []
+    for ny_sub in range(4, mask.shape[0] + 1):
         for nx_sub in range(max(4, ny_sub // max_aspect_ratio), min(max_aspect_ratio * ny_sub, mask.shape[1] + 1)):
-            current_solution = _pygetm.find_subdiv_solutions(mask, nx_sub, ny_sub, ncpus, weight_unmasked, weight_any, weight_halo, max_protrude)
-            if current_solution:
-                xoffset, yoffset, current_cost, submap = current_solution
-                if cost is None or current_cost < cost:
-                    solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'xoffset': imin + xoffset, 'yoffset': jmin + yoffset, 'cost': current_cost, 'map': submap}
-                    cost = current_cost
+            nx_ny_combos.append((nx_sub, ny_sub))
+    chunk = int(numpy.ceil(len(nx_ny_combos) / MPI.COMM_WORLD.size))
+    istart = chunk * MPI.COMM_WORLD.rank
+    istop = min(istart + chunk, len(nx_ny_combos))
+    for nx_sub, ny_sub in nx_ny_combos[istart:istop]:
+        current_solution = _pygetm.find_subdiv_solutions(mask, nx_sub, ny_sub, ncpus, weight_unmasked, weight_any, weight_halo, max_protrude)
+        if current_solution:
+            xoffset, yoffset, current_cost, submap = current_solution
+            if cost is None or current_cost < cost:
+                solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'xoffset': imin + xoffset, 'yoffset': jmin + yoffset, 'cost': current_cost, 'map': submap}
+                cost = current_cost
     solutions = MPI.COMM_WORLD.allgather(solution)
     solution = min(filter(None, solutions), key=lambda x: x['cost'])
     if logger:
