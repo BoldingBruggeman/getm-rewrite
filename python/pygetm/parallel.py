@@ -34,10 +34,10 @@ def getLogger(log_level=logging.INFO, comm=MPI.COMM_WORLD):
 
 class Tiling:
     @staticmethod
-    def autodetect(mask, ncpus: Optional[int]=None, logger: Optional[logging.Logger]=None, **kwargs) -> 'Tiling':
+    def autodetect(mask, ncpus: Optional[int]=None, logger: Optional[logging.Logger]=None, max_protrude: float=0.5, **kwargs) -> 'Tiling':
         comm = kwargs.get('comm', MPI.COMM_WORLD)
         if comm.Get_rank() == 0:
-            solution = find_optimal_divison(mask, ncpus, logger=logger)
+            solution = find_optimal_divison(mask, ncpus, max_protrude=max_protrude, logger=logger)
         else:
             solution = None
         solution = comm.bcast(solution, root=0)
@@ -117,14 +117,12 @@ class Tiling:
             ny_sub = int(numpy.ceil(ny_glob / self.nrow))
 
         assert self.nx_glob is None, 'Domain extent has already been set.'
-        assert isinstance(nx_glob, int)
-        assert isinstance(ny_glob, int)
-        assert isinstance(nx_sub, int)
-        assert isinstance(ny_sub, int)
-        assert isinstance(xoffset_global, int)
-        assert isinstance(yoffset_global, int)
-        assert xoffset_global <= 0
-        assert yoffset_global <= 0
+        assert isinstance(nx_glob, (int, numpy.integer))
+        assert isinstance(ny_glob, (int, numpy.integer))
+        assert isinstance(nx_sub, (int, numpy.integer))
+        assert isinstance(ny_sub, (int, numpy.integer))
+        assert isinstance(xoffset_global, (int, numpy.integer))
+        assert isinstance(yoffset_global, (int, numpy.integer))
 
         self.nx_glob, self.ny_glob = nx_glob, ny_glob
         self.nx_sub, self.ny_sub = nx_sub, ny_sub
@@ -199,14 +197,18 @@ class Tiling:
         print('{:^3} [{:^3}] {:^3}'.format(p(self.left), self.rank, p(self.right)))
         print('{:^3}  {:^3}  {:^3}'.format(p(self.bottomleft), p(self.bottom), p(self.bottomright)))
 
-    def plot(self, ax=None):
+    def plot(self, ax=None, background: Optional[numpy.ndarray]=None):
         x = self.xoffset_global + numpy.arange(self.ncol + 1) * self.nx_sub
         y = self.yoffset_global + numpy.arange(self.nrow + 1) * self.ny_sub
         if ax is None:
             import matplotlib.pyplot
             fig, ax = matplotlib.pyplot.subplots()
         import matplotlib.patches
-        ax.add_patch(matplotlib.patches.Rectangle((0, 0), self.nx_glob, self.ny_glob, edgecolor='None', facecolor='C0', zorder=-1))
+        if background is not None:
+            assert background.shape == (self.ny_glob, self.nx_glob), 'Argument background has incorrrect shape %s. Expected %s' % (background.shape, (self.ny_glob, self.nx_glob))
+            ax.pcolormesh(numpy.arange(background.shape[1] + 1), numpy.arange(background.shape[0] + 1), background, alpha=0.5)
+        else:
+            ax.add_patch(matplotlib.patches.Rectangle((0, 0), self.nx_glob, self.ny_glob, edgecolor='None', facecolor='C0', zorder=-1))
         ax.pcolormesh(x, y, numpy.empty((self.nrow, self.ncol)), edgecolors='k', facecolor='none')
         for i in range(self.nrow):
             for j in range(self.ncol):
@@ -408,24 +410,29 @@ class Scatter:
         if self.recvbuf is not self.field:
             self.field[...] = self.recvbuf
 
-def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2, weight_unmasked: int=2, weight_any: int=1, weight_halo: int=10, logger: Optional[logging.Logger]=None) -> Optional[Mapping[str, Any]]:
+def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2, weight_unmasked: int=2, weight_any: int=1, weight_halo: int=10, max_protrude: float=0.5, logger: Optional[logging.Logger]=None) -> Optional[Mapping[str, Any]]:
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.Get_size()
     if ncpus == 1:
         return {'ncpus': 1, 'nx': mask.shape[1], 'ny': mask.shape[0], 'xoffset': 0, 'yoffset': 0, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
     cost, solution = None, None
-    mask = numpy.ascontiguousarray(mask, dtype=numpy.intc)
+    mask = numpy.asarray(mask)
+    mask_x, = mask.any(axis=0).nonzero()
+    mask_y, = mask.any(axis=1).nonzero()
+    imin, imax = mask_x[0], mask_x[-1]
+    jmin, jmax = mask_y[0], mask_y[-1]
+    mask = numpy.ascontiguousarray(mask[jmin:jmax + 1, imin:imax + 1], dtype=numpy.intc)
     if logger:
         logger.info('Determining optimal subdomain decomposition of global domain of %i x %i (%i active cells) for %i cores' % (mask.shape[1], mask.shape[0], (mask != 0).sum(), ncpus))
     for ny_sub in range(4, mask.shape[0] + 1):
         if logger and (ny_sub - 3) % 10 == 0:
             logger.info('%.1f %% complete' % (100 * (ny_sub - 4) / (mask.shape[0] + 1 - 4),))
         for nx_sub in range(max(4, ny_sub // max_aspect_ratio), min(max_aspect_ratio * ny_sub, mask.shape[1] + 1)):
-            current_solution = _pygetm.find_subdiv_solutions(mask, nx_sub, ny_sub, ncpus, weight_unmasked, weight_any, weight_halo)
+            current_solution = _pygetm.find_subdiv_solutions(mask, nx_sub, ny_sub, ncpus, weight_unmasked, weight_any, weight_halo, max_protrude)
             if current_solution:
                 xoffset, yoffset, current_cost, submap = current_solution
                 if cost is None or current_cost < cost:
-                    solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'xoffset': xoffset, 'yoffset': yoffset, 'cost': current_cost, 'map': submap}
+                    solution = {'ncpus': ncpus, 'nx': nx_sub, 'ny': ny_sub, 'xoffset': imin + xoffset, 'yoffset': jmin + yoffset, 'cost': current_cost, 'map': submap}
                     cost = current_cost
     if logger:
         logger.info('Optimal subdomain decomposition: %s' % solution)

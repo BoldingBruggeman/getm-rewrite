@@ -469,11 +469,13 @@ cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, in
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.cdivision(True)
-cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus) nogil:
+cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus, double max_protrude) nogil:
     cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
     cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
     cdef int free_cpus = ncpus
     cdef int row, col, i, j, n
+    if xoffset <= -nx * max_protrude or xoffset + ncol * nx - mask.shape[1] >= nx * max_protrude: return False
+    if yoffset <= -ny * max_protrude or yoffset + nrow * ny - mask.shape[0] >= ny * max_protrude: return False
     if (nrow == 1 and yoffset != 0) or (ncol == 1 and xoffset != 0): return False
     if (nrow == 2 and yoffset != 0 and yoffset + nrow * ny > mask.shape[0]): return False
     if (ncol == 2 and xoffset != 0 and xoffset + ncol * nx > mask.shape[1]): return False
@@ -533,14 +535,14 @@ cdef int get_cost(const int[::1] map, int nrow, int ncol, int nx, int ny, int we
     if nx % 4 != 0: max_cost *= 2  # penalize non-alignment
     return max_cost + weight_any * nx * ny     # add an overhead for all cells - unmasked or not
 
-def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus, int weight_unmasked, int weight_any, int weight_halo):
+def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus, int weight_unmasked, int weight_any, int weight_halo, double max_protrude):
     cdef int[::1] map
     cdef int nrow, ncol
     cost = -1
     map = numpy.empty(((mask.shape[1] // nx + 2) * (mask.shape[0] // ny + 2),), dtype=numpy.intc)
     for yoffset in range(1 - ny, 1):
         for xoffset in range(1 - nx, 1):
-            if decomposition_is_valid(mask, nx, ny, xoffset, yoffset, ncpus):
+            if decomposition_is_valid(mask, nx, ny, xoffset, yoffset, ncpus, max_protrude):
                 get_map(mask, nx, ny, xoffset, yoffset, map, &nrow, &ncol)
                 current_cost = get_cost(map, nrow, ncol, nx, ny, weight_unmasked, weight_any, weight_halo)
                 if cost == -1 or current_cost < cost:
