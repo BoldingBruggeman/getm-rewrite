@@ -63,6 +63,7 @@ class NetCDFFile(File):
                 if not field.constant:
                     dims = ('time',) + dims
                 ncvar = self.nc.createVariable(output_name, field.dtype, dims, fill_value=field.fill_value)
+                ncvar.set_auto_maskandscale(False)
                 for att, value in field.atts.items():
                     setattr(ncvar, att, value)
                 if field.coordinates:
