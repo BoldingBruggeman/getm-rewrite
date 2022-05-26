@@ -678,7 +678,7 @@ class Domain(_pygetm.Domain):
         if glob:
             tiling = parallel.Tiling(nrow=1, ncol=1, ncpus=1, periodic_x=periodic_x, periodic_y=periodic_y)
             tiling.rank = 0
-        elif tiling is None:
+        if tiling is None:
             # No tiling provided - autodetect
             mask = numpy.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
             tiling = parallel.Tiling.autodetect(mask=mask[1::2, 1::2], logger=parlogger, periodic_x=periodic_x, periodic_y=periodic_y)
