@@ -6,9 +6,9 @@ import pstats
 import mpi4py
 rank = mpi4py.MPI.COMM_WORLD.rank
 
-from . import legacy
-from . import parallel
 import pygetm
+import pygetm.legacy
+import pygetm.parallel
 
 def main():
     logging.basicConfig(level=logging.INFO if rank == 0 else logging.ERROR)
@@ -18,7 +18,6 @@ def main():
     subparsers = parser.add_subparsers(dest='cmd', required=True)
     
     optimize_parser = subparsers.add_parser('optimize', help='compute the optimal subdomain division')
-    optimize_parser.add_argument('--legacy', action='store_true')
     optimize_parser.add_argument('path', help='path to topo file')
     optimize_parser.add_argument('ncpus', type=int, help='number of cores (active subdomains)')
     optimize_parser.add_argument('--max_protrude', type=float, default=0.5, help='maximum fraction of the subdomain that can protrude from the global domain (and thus be empty)')
@@ -27,11 +26,13 @@ def main():
 
     show_parser = subparsers.add_parser('show', help='describe existing subdomain division')
     show_parser.add_argument('path', help='path to load subdomain division from')
+    show_parser.add_argument('--topo', help='path to topo file')
     show_parser.set_defaults(func=load)
 
     for p in (optimize_parser, show_parser):
         p.add_argument('--plot', action='store_true', help='plot subdomain decomposition')
         p.add_argument('--profile', action='store_true')
+        p.add_argument('--legacy', action='store_true')
 
     args = parser.parse_args()
     if args.profile and rank == 0:
@@ -47,18 +48,21 @@ def main():
     if args.plot and rank == 0:
         from matplotlib import pyplot
         fig, ax = pyplot.subplots()
-        tiling.plot(ax=ax, background=domain.T.H.ma)
+        tiling.plot(ax=ax, background=None if domain is None else domain.T.H.ma)
         pyplot.show()
 
-def optimize(args, logger):
-    logger.info('Reading topo from %s...' % args.path)
-    if args.legacy:
-        domain = legacy.domain_from_topo(args.path, nlev=1, logger=logger, glob=True)
+def load_topo(path: bool, legacy: bool, logger: logging.Logger):
+    logger.info('Reading topo from %s...' % path)
+    if legacy:
+        domain = pygetm.legacy.domain_from_topo(path, nlev=1, logger=logger, glob=True)
     else:
-        domain = pygetm.domain.load(args.path, 1, logger=logger, glob=True)
+        domain = pygetm.domain.load(path, 1, logger=logger, glob=True)
     domain.initialize(1)
+    return domain
 
-    tiling = parallel.Tiling.autodetect(domain.T.mask, logger=logger, ncpus=args.ncpus, max_protrude=args.max_protrude)
+def optimize(args, logger):
+    domain = load_topo(args.path, args.legacy, logger)
+    tiling = pygetm.parallel.Tiling.autodetect(domain.T.mask, logger=logger, ncpus=args.ncpus, max_protrude=args.max_protrude)
 
     if args.pickle and rank == 0:
         logger.info('Saving subdomain decomposition to %s...' % args.pickle)
@@ -67,7 +71,10 @@ def optimize(args, logger):
     return tiling, domain
 
 def load(args, logger):
-    return parallel.Tiling.load(args.path)
+    domain = None
+    if args.topo:
+        domain = load_topo(args.topo, args.legacy, logger)
+    return pygetm.parallel.Tiling.load(args.path), domain
 
 if __name__ == '__main__':
     main()
