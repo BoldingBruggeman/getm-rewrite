@@ -23,7 +23,6 @@ def main():
     optimize_parser.add_argument('ncpus', type=int, help='number of cores (active subdomains)')
     optimize_parser.add_argument('--max_protrude', type=float, default=0.5, help='maximum fraction of the subdomain that can protrude from the global domain (and thus be empty)')
     optimize_parser.add_argument('--pickle', help='path to save subdomain division to')
-    optimize_parser.add_argument('--profile', action='store_true')
     optimize_parser.set_defaults(func=optimize)
 
     show_parser = subparsers.add_parser('show', help='describe existing subdomain division')
@@ -32,6 +31,7 @@ def main():
 
     for p in (optimize_parser, show_parser):
         p.add_argument('--plot', action='store_true', help='plot subdomain decomposition')
+        p.add_argument('--profile', action='store_true')
 
     args = parser.parse_args()
     if args.profile and rank == 0:
