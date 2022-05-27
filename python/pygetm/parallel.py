@@ -35,7 +35,6 @@ def getLogger(log_level=logging.INFO, comm=MPI.COMM_WORLD):
 class Tiling:
     @staticmethod
     def autodetect(mask, ncpus: Optional[int]=None, logger: Optional[logging.Logger]=None, max_protrude: float=0.5, **kwargs) -> 'Tiling':
-        comm = kwargs.get('comm', MPI.COMM_WORLD)
         solution = find_optimal_divison(mask, ncpus, max_protrude=max_protrude, logger=logger)
         counts = solution['map']
         rank_map = numpy.full(counts.shape, -1, dtype=int)
@@ -409,25 +408,34 @@ class Scatter:
 def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None, max_aspect_ratio: int=2, weight_unmasked: int=2, weight_any: int=1, weight_halo: int=10, max_protrude: float=0.5, logger: Optional[logging.Logger]=None) -> Optional[Mapping[str, Any]]:
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.Get_size()
-    if ncpus == 1:
-        return {'ncpus': 1, 'nx': mask.shape[1], 'ny': mask.shape[0], 'xoffset': 0, 'yoffset': 0, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
-    cost, solution = None, None
+
+    # Determine mask extent excluding any outer fully masked strips
     mask = numpy.asarray(mask)
     mask_x, = mask.any(axis=0).nonzero()
     mask_y, = mask.any(axis=1).nonzero()
     imin, imax = mask_x[0], mask_x[-1]
     jmin, jmax = mask_y[0], mask_y[-1]
+
+    # If we only have 1 CPU, just use the full domain (except outer masked strips)
+    if ncpus == 1:
+        return {'ncpus': 1, 'nx': imax - imin + 1, 'ny': jmax - jmin + 1, 'xoffset': imin, 'yoffset': jmin, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
+
+    # Convert to contiguous mask that the cython code expects
     mask = numpy.ascontiguousarray(mask[jmin:jmax + 1, imin:imax + 1], dtype=numpy.intc)
-    if logger:
-        logger.info('Determining optimal subdomain decomposition of global domain of %i x %i (%i active cells) for %i cores' % (mask.shape[1], mask.shape[0], (mask != 0).sum(), ncpus))
+
+    # Determine potential number of subdomain combinations
     nx_ny_combos = []
     for ny_sub in range(4, mask.shape[0] + 1):
         for nx_sub in range(max(4, ny_sub // max_aspect_ratio), min(max_aspect_ratio * ny_sub, mask.shape[1] + 1)):
             nx_ny_combos.append((nx_sub, ny_sub))
-    chunk = int(numpy.ceil(len(nx_ny_combos) / MPI.COMM_WORLD.size))
-    istart = chunk * MPI.COMM_WORLD.rank
-    istop = min(istart + chunk, len(nx_ny_combos))
-    for nx_sub, ny_sub in nx_ny_combos[istart:istop]:
+    nx_ny_combos = numpy.array(nx_ny_combos, dtype=int)
+
+    if logger:
+        logger.info('Determining optimal subdomain decomposition of global domain of %i x %i (%i active cells) for %i cores' % (mask.shape[1], mask.shape[0], (mask != 0).sum(), ncpus))
+        logger.info('Trying %i possible subdomain sizes' % (nx_ny_combos.shape[0],))
+
+    cost, solution = None, None
+    for nx_sub, ny_sub in nx_ny_combos[MPI.COMM_WORLD.rank::MPI.COMM_WORLD.size]:
         current_solution = _pygetm.find_subdiv_solutions(mask, nx_sub, ny_sub, ncpus, weight_unmasked, weight_any, weight_halo, max_protrude)
         if current_solution:
             xoffset, yoffset, current_cost, submap = current_solution

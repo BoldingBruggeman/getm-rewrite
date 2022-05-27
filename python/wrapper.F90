@@ -38,6 +38,7 @@ contains
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
+      call domain%cleanup()
       deallocate(domain)
    end subroutine
 

@@ -37,10 +37,10 @@ def main():
     args = parser.parse_args()
     if args.profile and rank == 0:
         p = cProfile.Profile()
-        tiling, domain = p.runcall(args.func, args, logger)
+        tiling, background = p.runcall(args.func, args, logger)
         p.print_stats(sort=pstats.SortKey.TIME)
     else:
-        tiling, domain = args.func(args, logger)
+        tiling, background = args.func(args, logger)
 
     tiling.report(logging.getLogger())
     logger.info('Subdomain rank map:\n%s' % (tiling.map,))
@@ -48,7 +48,7 @@ def main():
     if args.plot and rank == 0:
         from matplotlib import pyplot
         fig, ax = pyplot.subplots()
-        tiling.plot(ax=ax, background=None if domain is None else domain.T.H.ma)
+        tiling.plot(ax=ax, background=background)
         pyplot.show()
 
 def load_topo(path: bool, legacy: bool, logger: logging.Logger):
@@ -58,23 +58,23 @@ def load_topo(path: bool, legacy: bool, logger: logging.Logger):
     else:
         domain = pygetm.domain.load(path, 1, logger=logger, glob=True)
     domain.initialize(1)
-    return domain
+    return domain.T.mask.values.copy(), domain.T.H.ma.copy()
 
 def optimize(args, logger):
-    domain = load_topo(args.path, args.legacy, logger)
-    tiling = pygetm.parallel.Tiling.autodetect(domain.T.mask, logger=logger, ncpus=args.ncpus, max_protrude=args.max_protrude)
+    mask, background = load_topo(args.path, args.legacy, logger)
+    tiling = pygetm.parallel.Tiling.autodetect(mask, logger=logger, ncpus=args.ncpus, max_protrude=args.max_protrude)
 
     if args.pickle and rank == 0:
         logger.info('Saving subdomain decomposition to %s...' % args.pickle)
         tiling.dump(args.pickle)
 
-    return tiling, domain
+    return tiling, background
 
 def load(args, logger):
-    domain = None
+    background = None
     if args.topo:
-        domain = load_topo(args.topo, args.legacy, logger)
-    return pygetm.parallel.Tiling.load(args.path), domain
+        _, background = load_topo(args.topo, args.legacy, logger)
+    return pygetm.parallel.Tiling.load(args.path), background
 
 if __name__ == '__main__':
     main()
