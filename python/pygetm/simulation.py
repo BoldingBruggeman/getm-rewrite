@@ -172,7 +172,7 @@ class Simulation(_pygetm.Simulation):
                 if not isinstance(fabm, pygetm.fabm.FABM):
                     fabm = pygetm.fabm.FABM(fabm if isinstance(fabm, str) else 'fabm.yaml')
                 self.fabm = fabm
-                self.fabm.initialize(self.domain, self.tracers, self.tracer_totals, self.logger.getChild('FABM'))
+                self.fabm.initialize(self.domain.T, self.tracers, self.tracer_totals, self.logger.getChild('FABM'))
 
             self.pres = dom.depth
             self.pres.fabm_standard_name = 'pressure'
