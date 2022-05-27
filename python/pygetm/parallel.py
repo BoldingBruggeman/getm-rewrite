@@ -409,16 +409,16 @@ def find_optimal_divison(mask: numpy.typing.ArrayLike, ncpus: Optional[int]=None
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.Get_size()
 
+    # If we only have 1 CPU, just use the full domain
+    if ncpus == 1:
+        return {'ncpus': 1, 'nx': mask.shape[1], 'ny': mask.shape[0], 'xoffset': 0, 'yoffset': 0, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
+
     # Determine mask extent excluding any outer fully masked strips
     mask = numpy.asarray(mask)
     mask_x, = mask.any(axis=0).nonzero()
     mask_y, = mask.any(axis=1).nonzero()
     imin, imax = mask_x[0], mask_x[-1]
     jmin, jmax = mask_y[0], mask_y[-1]
-
-    # If we only have 1 CPU, just use the full domain (except outer masked strips)
-    if ncpus == 1:
-        return {'ncpus': 1, 'nx': imax - imin + 1, 'ny': jmax - jmin + 1, 'xoffset': imin, 'yoffset': jmin, 'cost': 0, 'map': numpy.ones((1,1), dtype=numpy.intc)}
 
     # Convert to contiguous mask that the cython code expects
     mask = numpy.ascontiguousarray(mask[jmin:jmax + 1, imin:imax + 1], dtype=numpy.intc)
