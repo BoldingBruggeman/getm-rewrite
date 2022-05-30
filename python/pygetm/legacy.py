@@ -16,7 +16,7 @@ def domain_from_topo(
     **kwargs
 ) -> pygetm.domain.Domain:
     """Create a domain object from a topo.nc file used by legacy GETM.
-    
+
     Args:
         path: NetCDF file with legacy domain topography
         nlev: number of vertical layers
@@ -140,7 +140,7 @@ def load_bdyinfo(
     type_3d: Optional[int] = None,
 ):
     """Add open boundaries from bdyinfo.dat to domain.
-    
+
     Args:
         path: data file with open boundary information
         type_2d: type of 2D open boundary condition to use.

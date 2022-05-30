@@ -22,7 +22,7 @@ class Density:
     ) -> core.Array:
         """Calculate the square of the buoyancy frequency at layer interfaces from
         absolute salinity, conservative temperature and pressure at the layer centers.
-        
+
         Args:
             SA: absolute salinity
             ct: conservative temperature (degrees Celsius)
@@ -62,7 +62,7 @@ class Density:
     ) -> core.Array:
         """Calculate in-situ density from absolute salinity and conservative
         temperature. Inputs can be 2D or 3D.
-        
+
         Args:
             SA: absolute salinity
             ct: conservative temperature (degrees Celsius)
@@ -70,7 +70,7 @@ class Density:
                 approximate pressure.
             out: array to store density result in. If not provided,
                 a new array will be created.
-        
+
         Returns:
             array with density values (kg m-3)
         """
@@ -95,13 +95,13 @@ class Density:
     ) -> core.Array:
         """Calculate potential temperature from absolute salinity and conservative
         temperature. Inputs can be 2D or 3D.
-        
+
         Args:
             SA: absolute salinity
             ct: conservative temperature (degrees Celsius)
             out: array to store potential temperature result in. If not provided, a new
                 array will be created.
-        
+
         Returns:
             array with potential temperature values (degrees Celsius)
         """
@@ -120,7 +120,7 @@ class Density:
         and conservative temperature. The conversion happens in-place: absolute salinity
         will replace practical salinity, conservative temperature (degrees Celsius)
         will replace potential temperature.
-        
+
         Args:
             sp: practical salinity (PSU)
             pt: potential temperature (degrees Celsius)

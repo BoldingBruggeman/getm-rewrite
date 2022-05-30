@@ -990,7 +990,7 @@ def test_scaling(
                 % (p.returncode, log_path)
             )
             continue
-        m = re.search("Time spent in main loop: ([\d\.]+) s", p.stdout)
+        m = re.search("Time spent in main loop: ([\\d\\.]+) s", p.stdout)
         duration = float(m.group(1))
         print("%.3f s in main loop" % (duration,))
         ncpus.append(n)

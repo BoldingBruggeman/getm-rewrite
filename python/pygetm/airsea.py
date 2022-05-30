@@ -437,4 +437,3 @@ class FluxesFromMeteo(Fluxes):
                 )
 
         super().__call__(time, sst, sss, calculate_heat_flux)
-
