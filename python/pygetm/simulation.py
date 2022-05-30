@@ -95,9 +95,13 @@ class Simulation(_pygetm.Simulation):
             dom.T.lat.fabm_standard_name = 'latitude'
         dom.T.z.attrs['_part_of_state'] = True
         dom.T.zo.attrs['_part_of_state'] = True
-        dom.T.zio.attrs['_part_of_state'] = True
-        dom.T.zin.attrs['_part_of_state'] = True
-        dom.T.ho.attrs['_part_of_state'] = True    # ho cannot be computed from zio, because rivers modify ho-from-zio before it is stored
+        if self.runtype > BAROTROPIC_2D:
+            dom.T.zio.attrs['_part_of_state'] = True
+            dom.T.zin.attrs['_part_of_state'] = True
+            dom.T.ho.attrs['_part_of_state'] = True    # ho cannot be computed from zio, because rivers modify ho-from-zio before it is stored
+        if self.runtype == BAROTROPIC_2D:
+            dom.U.z0b.attrs['_part_of_state'] = True
+            dom.V.z0b.attrs['_part_of_state'] = True
 
         self.domain.open_boundaries.z = self.wrap(self.domain.open_boundaries.z, b'zbdy', source=3)
         self.domain.open_boundaries.u = self.wrap(self.domain.open_boundaries.u, b'bdyu', source=1)
@@ -394,15 +398,15 @@ class Simulation(_pygetm.Simulation):
             self.report_domain_integrals()
 
         # Update all inputs and fluxes that will drive the next state update
-        self.update_forcing(macro_active, skip_2d_coriolis=True)
+        self.update_forcing(macro_active, skip_2d_coriolis=True, update_z0b=self.runtype==BAROTROPIC_2D)
 
         self.output_manager.save(self.timestep * self.istep, self.istep, self.time)
 
         return macro_active
 
-    def update_forcing(self, macro_active: bool, skip_2d_coriolis: bool=False):
+    def update_forcing(self, macro_active: bool, skip_2d_coriolis: bool=False, update_z0b: bool=False):
         """Update all inputs and fluxes that will drive the next state update.
-        
+
         Args:
             macro_active: update all quantities associated with the macrotimestep
             skip_2d_coriolis: whether to skip the update of depth-integrated Coriolis terms,
@@ -443,7 +447,7 @@ class Simulation(_pygetm.Simulation):
         self.domain.update_depth()
 
         # Calculate advection and diffusion tendencies of transports, bottom friction and, if needed, Coriolis terms
-        self.update_2d_momentum_diagnostics(self.timestep, skip_coriolis=skip_2d_coriolis)
+        self.update_2d_momentum_diagnostics(self.timestep, skip_coriolis=skip_2d_coriolis, update_z0b=update_z0b)
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for x and y stresses respectively)
         # Note SST is the true in-situ/potential temperature. SSS currently is absolute salinity - not practical salinity.
@@ -557,7 +561,7 @@ class Simulation(_pygetm.Simulation):
         super().advance_surface_elevation(timestep, U, V, fwf)
         self.domain.T.z.update_halos()
 
-    def transport_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffU: core.Array, diffV: core.Array):
+    def transport_2d_momentum(self, U: core.Array, V: core.Array, timestep: float, advU: core.Array, advV: core.Array, diffU: core.Array, diffV: core.Array, update_z0b: bool):
         """Advect and optionally diffuse depth-integrated transports in x and y direction (arguments ``U`` and ``V``).
         From these, first the depth-averaged velocities are calculated and stored in :attr:`u1` and :attr:`v1`.
         This routine also updates bottom friction :attr:`ru` and  :attr:`rv`.
@@ -570,6 +574,7 @@ class Simulation(_pygetm.Simulation):
             advV: array for storing the change in transport ``V`` due to advection (m2 s-2)
             diffU: array for storing the change in transport ``U`` due to diffusion (m2 s-2)
             diffV: array for storing the change in transport ``V`` due to diffusion (m2 s-2)
+            update_z0b: whether to iteratively update hydrodynamic bottom roughness
         """
         numpy.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
         numpy.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
@@ -583,7 +588,7 @@ class Simulation(_pygetm.Simulation):
         # Calculate bottom friction (ru and rv) using updated depth-averaged velocities u1 and v1
         # Warning: this uses velocities u1 and v1 at masked points, which therefore need to be kept at 0
         if self.apply_bottom_friction:
-            self.bottom_friction_2d()
+            self.bottom_friction_2d(update_z0b)
 
         itimestep = 1. / timestep
 
@@ -639,7 +644,7 @@ class Simulation(_pygetm.Simulation):
         self.Ui_tmp += self.U.all_values
         self.Vi_tmp += self.V.all_values
 
-    def update_2d_momentum_diagnostics(self, timestep: float, skip_coriolis: bool=False):
+    def update_2d_momentum_diagnostics(self, timestep: float, skip_coriolis: bool=False, update_z0b: bool=False):
         """Update 2D momentum diagnostics, including the Coriolis terms that will drive the next 2D update.
         NB the Coriolis update is already done as part of the momentum update itself, so needed only when starting from a restart.
         
@@ -653,7 +658,7 @@ class Simulation(_pygetm.Simulation):
 
         # Calculate sources of transports U and V due to advection (advU, advV) and diffusion (diffu1, diffv1)
         # Transports generally come in at time=-1/2 and are then advanced to time+1/2
-        self.transport_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1)
+        self.transport_2d_momentum(self.U, self.V, timestep, self.advU, self.advV, self.diffu1, self.diffv1, update_z0b)
 
     def advance_3d_momentum(self, timestep: float, split_factor: int, tausx: core.Array, tausy: core.Array, dpdx: core.Array, dpdy: core.Array, idpdx: core.Array, idpdy: core.Array, viscosity: core.Array):
         """Update depth-explicit transports (:attr:`pk`, :attr:`qk`) and velocities (:attr:`uk`, :attr:`vk`).
@@ -776,7 +781,7 @@ class Simulation(_pygetm.Simulation):
         # (between centers of the current and next macrotime step) with the newly calculated
         # depth-integrated transport based on accumulated 2D transports (accumulated over the
         # current macrotimestep, and thus representative for its center).
-        self.transport_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA, self.SxD, self.SyD)
+        self.transport_2d_momentum(self.Ui, self.Vi, timestep, self.SxA, self.SyA, self.SxD, self.SyD, False)
         self.SxA.all_values[...] = self.advpk.all_values.sum(axis=0) - self.SxA.all_values
         self.SyA.all_values[...] = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
         self.SxD.all_values[...] = self.diffpk.all_values.sum(axis=0) - self.SxD.all_values

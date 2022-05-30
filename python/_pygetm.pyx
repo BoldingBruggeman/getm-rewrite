@@ -341,8 +341,8 @@ cdef class Simulation:
     def coriolis_fqk(self):
         momentum_uv_coriolis_3d(2, self.pmomentum)
 
-    def bottom_friction_2d(self):
-        momentum_bottom_friction_2d(self.pmomentum, self.runtype)
+    def bottom_friction_2d(self, int update_z0b):
+        momentum_bottom_friction_2d(self.pmomentum, 1 if update_z0b else 4)
 
     def bottom_friction_3d(self):
         momentum_bottom_friction_3d(self.pmomentum)
