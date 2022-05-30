@@ -78,13 +78,13 @@ class Momentum(pygetm._pygetm.Momentum):
     _array_args = {
         "U": dict(
             units="m2 s-1",
-            long_name="depth-integrated transport in Eastward direction",
+            long_name="depth-integrated transport in x direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
         "V": dict(
             units="m2 s-1",
-            long_name="depth-integrated transport in Northward direction",
+            long_name="depth-integrated transport in y direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
@@ -100,25 +100,25 @@ class Momentum(pygetm._pygetm.Momentum):
         ),
         "u1": dict(
             units="m s-1",
-            long_name="depth-averaged velocity in Eastward direction",
+            long_name="depth-averaged velocity in x direction",
             fill_value=FILL_VALUE,
             attrs={"_mask_output": True},
         ),
         "v1": dict(
             units="m s-1",
-            long_name="depth-averaged velocity in Northward direction",
+            long_name="depth-averaged velocity in y direction",
             fill_value=FILL_VALUE,
             attrs={"_mask_output": True},
         ),
         "pk": dict(
             units="m2 s-1",
-            long_name="layer-integrated transport in Eastward direction",
+            long_name="layer-integrated transport in x direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
         "qk": dict(
             units="m2 s-1",
-            long_name="layer-integrated transport in Northward direction",
+            long_name="layer-integrated transport in y direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
@@ -208,10 +208,12 @@ class Momentum(pygetm._pygetm.Momentum):
         self.vua3d = domain.VU.array(fill=np.nan, z=CENTERS)
         self.vva3d = domain.VV.array(fill=np.nan, z=CENTERS)
 
-        #: Whether to start the depth-integrated (2D) momentum update with u (as opposed to v)
+        #: Whether to start the depth-integrated (2D) momentum update with u
+        # (as opposed to v)
         self._ufirst = False
 
-        #: Whether to start the depth-explicit (3D) momentum update with u (as opposed to v)
+        #: Whether to start the depth-explicit (3D) momentum update with u
+        # (as opposed to v)
         self._u3dfirst = False
 
     def start(self):
@@ -282,8 +284,8 @@ class Momentum(pygetm._pygetm.Momentum):
         Args:
             timestep: time step (s) to calculate advection of momentum over
             skip_coriolis: flag to indicate that Coriolis terms are already up-to-date
-            and do not need recomputing, for instance,m after a recent call to
-            :meth:`advance_depth_integrated`
+                and do not need recomputing, for instance, after a recent call to
+                :meth:`advance_depth_integrated`
         """
         if not skip_coriolis:
             self.coriolis_fu()
@@ -329,6 +331,7 @@ class Momentum(pygetm._pygetm.Momentum):
             idpdy: internal pressure gradient (m2 s-2) in y direction
             viscosity: turbulent viscosity (m2 s-1)
         """
+
         # Depth-integrated transports have been summed over all microtimesteps.
         # Average them, then reset depth-integrated transports that will be incremented
         # over the next macrotimestep.
@@ -610,8 +613,8 @@ class Momentum(pygetm._pygetm.Momentum):
         np.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
 
 
-# Expose all Fortran arrays that are a member of Simulation as read-only properties
-# The originals are members with and underscore as prefix, ad therefore not visible to
+# Expose all Fortran arrays that are a member of Momentum as read-only properties
+# The originals are members with and underscore as prefix, and therefore not visible to
 # the user. This ensures the user will not accidentally disconnect the Python variable
 # from the underlying Fortran libraries/data
 for membername in Momentum._all_fortran_arrays:
