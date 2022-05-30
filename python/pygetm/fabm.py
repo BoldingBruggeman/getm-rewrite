@@ -2,7 +2,7 @@ import itertools
 import logging
 from typing import List
 
-import numpy
+import numpy as np
 import cftime
 
 from . import domain
@@ -52,10 +52,10 @@ class FABM:
         )
 
         # State variables
-        self.sources_interior = numpy.zeros_like(self.model.interior_state)
-        self.sources_surface = numpy.zeros_like(self.model.surface_state)
-        self.sources_bottom = numpy.zeros_like(self.model.bottom_state)
-        self.vertical_velocity = numpy.zeros_like(self.model.interior_state)
+        self.sources_interior = np.zeros_like(self.model.interior_state)
+        self.sources_surface = np.zeros_like(self.model.surface_state)
+        self.sources_bottom = np.zeros_like(self.model.bottom_state)
+        self.vertical_velocity = np.zeros_like(self.model.interior_state)
         for i, variable in enumerate(self.model.interior_state_variables):
             ar_w = core.Array(grid=grid)
             ar_w.wrap_ndarray(self.vertical_velocity[i, ...])
@@ -89,7 +89,7 @@ class FABM:
         self.model.link_cell_thickness(grid.hn.all_values)
 
         # Conserved quantities
-        self.conserved_quantity_totals = numpy.empty(
+        self.conserved_quantity_totals = np.empty(
             (len(self.model.conserved_quantities),) + shape[1:],
             dtype=self.sources_interior.dtype,
         )

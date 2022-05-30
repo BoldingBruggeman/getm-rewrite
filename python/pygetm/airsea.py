@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import cftime
 
 import pyairsea
@@ -336,7 +336,7 @@ class FluxesFromMeteo(Fluxes):
         t2m_K = self.t2m.all_values + 273.15
 
         # Wind speed
-        numpy.sqrt(
+        np.sqrt(
             self.u10.all_values ** 2 + self.v10.all_values ** 2, out=self.w.all_values
         )
 
@@ -417,7 +417,7 @@ class FluxesFromMeteo(Fluxes):
 
             # Limit heat flux to positive values (into water) where SST is at freezing
             self.shf.all_values[
-                numpy.logical_and(
+                np.logical_and(
                     sst.all_values < -0.0575 * sss.all_values, self.shf.all_values < 0
                 )
             ] = 0.0
@@ -429,10 +429,10 @@ class FluxesFromMeteo(Fluxes):
             # Evaporation (derived from latent heat flux)
             # and precipitation minus evaporation
             if self.calculate_evaporation:
-                numpy.multiply(
+                np.multiply(
                     self.qe.all_values, -1.0 / (RHO0 * L), out=self.e.all_values
                 )
-                numpy.subtract(
+                np.subtract(
                     self.tp.all_values, self.e.all_values, out=self.pe.all_values
                 )
 

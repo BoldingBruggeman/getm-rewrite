@@ -1,7 +1,7 @@
 from typing import Optional
 import itertools
 
-import numpy
+import numpy as np
 
 from . import core
 from . import domain
@@ -66,10 +66,10 @@ class GOTM(Turbulence):
         self.mix = _pygotm.Mixing(
             grid.nz, b"" if self.nml_path is None else self.nml_path.encode("ascii")
         )
-        self.nuh.fill(self.mix.nuh[:, numpy.newaxis, numpy.newaxis])
-        self.num.fill(self.mix.num[:, numpy.newaxis, numpy.newaxis])
+        self.nuh.fill(self.mix.nuh[:, np.newaxis, np.newaxis])
+        self.num.fill(self.mix.num[:, np.newaxis, np.newaxis])
         self.tke = grid.array(
-            fill=self.mix.tke[:, numpy.newaxis, numpy.newaxis],
+            fill=self.mix.tke[:, np.newaxis, np.newaxis],
             z=INTERFACES,
             name="tke",
             units="m2 s-2",
@@ -77,7 +77,7 @@ class GOTM(Turbulence):
             attrs={"_part_of_state": True},
         )
         self.tkeo = grid.array(
-            fill=self.mix.tkeo[:, numpy.newaxis, numpy.newaxis],
+            fill=self.mix.tkeo[:, np.newaxis, np.newaxis],
             z=INTERFACES,
             name="tkeo",
             units="m2 s-2",
@@ -85,7 +85,7 @@ class GOTM(Turbulence):
             attrs={"_part_of_state": True},
         )
         self.eps = grid.array(
-            fill=self.mix.eps[:, numpy.newaxis, numpy.newaxis],
+            fill=self.mix.eps[:, np.newaxis, np.newaxis],
             z=INTERFACES,
             name="eps",
             units="m2 s-3",
@@ -93,7 +93,7 @@ class GOTM(Turbulence):
             attrs={"_part_of_state": True},
         )
         self.L = grid.array(
-            fill=self.mix.L[:, numpy.newaxis, numpy.newaxis],
+            fill=self.mix.L[:, np.newaxis, np.newaxis],
             z=INTERFACES,
             name="L",
             units="m",

@@ -5,7 +5,7 @@ from . import domain
 from . import _pygetm
 from .constants import FILL_VALUE, INTERFACES, CENTERS
 
-import numpy
+import numpy as np
 
 JERLOV_I = 1
 JERLOV_1 = 2
@@ -151,7 +151,7 @@ class TwoBand(Radiation):
                 self.grid.mask, self.grid.hn, self.kc2, top=self.par0, out=self.par
             )
 
-        self.swr_abs.all_values[...] = numpy.diff(self.rad.all_values, axis=0)
+        self.swr_abs.all_values[...] = np.diff(self.rad.all_values, axis=0)
 
         # all remaining radiation is absorbed at the bottom and
         # injected in the water layer above it

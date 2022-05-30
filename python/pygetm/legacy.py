@@ -1,6 +1,6 @@
 from typing import Optional
 
-import numpy
+import numpy as np
 import netCDF4
 
 import pygetm.domain
@@ -37,7 +37,7 @@ def domain_from_topo(
     """
     with netCDF4.Dataset(path) as nc:
         nc.set_auto_mask(False)
-        grid_type = int(numpy.reshape(nc["grid_type"], ()))
+        grid_type = int(np.reshape(nc["grid_type"], ()))
         if grid_type == 1:
             # Cartesian
             raise NotImplementedError("No support yet for Cartesian coordinates")
@@ -56,16 +56,12 @@ def domain_from_topo(
 
             # Define lon, lat on supergrid
             lon = (
-                nclon[0]
-                + (ioffset - 0.5) * dlon
-                + numpy.arange(2 * nx + 1) * (0.5 * dlon)
+                nclon[0] + (ioffset - 0.5) * dlon + np.arange(2 * nx + 1) * (0.5 * dlon)
             )
             lat = (
-                nclat[0]
-                + (joffset - 0.5) * dlat
-                + numpy.arange(2 * ny + 1) * (0.5 * dlat)
+                nclat[0] + (joffset - 0.5) * dlat + np.arange(2 * ny + 1) * (0.5 * dlat)
             )
-            lat = lat[:, numpy.newaxis]
+            lat = lat[:, np.newaxis]
 
             H = pygetm.domain.read_centers_to_supergrid(
                 nc["bathymetry"], ioffset, joffset, nx, ny
@@ -76,7 +72,7 @@ def domain_from_topo(
                         "Bottom roughness z0 is not present in %s; you need to provide"
                         "it as keyword argument to domain_from_topo instead."
                     )
-                kwargs["z0"] = numpy.ma.filled(
+                kwargs["z0"] = np.ma.filled(
                     pygetm.domain.read_centers_to_supergrid(
                         nc["z0"], ioffset, joffset, nx, ny
                     )
@@ -87,9 +83,9 @@ def domain_from_topo(
                 nlev,
                 lon=lon,
                 lat=lat,
-                H=numpy.ma.filled(H),
+                H=np.ma.filled(H),
                 spherical=True,
-                mask=numpy.where(numpy.ma.getmaskarray(H), 0, 1),
+                mask=np.where(np.ma.getmaskarray(H), 0, 1),
                 **kwargs
             )
         elif grid_type == 3:

@@ -1,6 +1,6 @@
 from typing import Optional
 
-import numpy
+import numpy as np
 
 from . import core
 from . import _pygetm
@@ -131,9 +131,9 @@ class Density:
         if p is None:
             p = _pygetm.thickness2center_depth(sp.grid.mask, sp.grid.hn)
         assert p.grid is sp.grid
-        out = numpy.empty_like(sp.all_values)
-        lon = numpy.broadcast_to(sp.grid.lon.all_values, out.shape)
-        lat = numpy.broadcast_to(sp.grid.lat.all_values, out.shape)
+        out = np.empty_like(sp.all_values)
+        lon = np.broadcast_to(sp.grid.lon.all_values, out.shape)
+        lat = np.broadcast_to(sp.grid.lat.all_values, out.shape)
         pygsw.sa_from_sp(
             lon.ravel(),
             lat.ravel(),
