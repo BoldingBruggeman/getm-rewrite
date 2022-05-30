@@ -2,7 +2,7 @@ import argparse
 import timeit
 import cProfile
 
-import numpy
+import numpy as np
 import pygetm
 import pygetm.parallel
 
@@ -27,7 +27,7 @@ tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
 rank = tiling.rank
 
 outman = pygetm.output.OutputManager(rank=rank)
-subdomain = pygetm.domain.create_cartesian(numpy.linspace(-Lx/2, Lx/2, nx), numpy.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0., tiling=tiling)
+subdomain = pygetm.domain.create_cartesian(np.linspace(-Lx/2, Lx/2, nx), np.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0., tiling=tiling)
 halo = subdomain.halo
 subdomain.initialize(runtype=1, field_manager=outman)
 
@@ -39,12 +39,12 @@ if subdomain.glob:
 
 # Set up velocities
 period = 600
-omega = 2 * numpy.pi / period
+omega = 2 * np.pi / period
 cfl = 1.
 umax = omega * Lx / 2
 dt_cfl = cfl * min(Lx / nx, Ly / ny) / umax
-Nmax = args.n * round(2 * numpy.pi / omega / dt_cfl)
-tmax = args.n * 2 * numpy.pi / omega
+Nmax = args.n * round(2 * np.pi / omega / dt_cfl)
+tmax = args.n * 2 * np.pi / omega
 timestep = tmax / Nmax
 
 # Calculate u and v

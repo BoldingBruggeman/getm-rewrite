@@ -1,7 +1,6 @@
 from typing import Mapping, Optional, List, Sequence
 
-import numpy
-import numpy.typing
+import numpy as np
 
 from .constants import ZERO_GRADIENT, CENTERS, INTERFACES
 from . import core
@@ -56,7 +55,7 @@ class Tracer(core.Array):
     def __init__(
         self,
         grid: domain.Grid,
-        data: Optional[numpy.ndarray] = None,
+        data: Optional[np.ndarray] = None,
         source: Optional[core.Array] = None,
         surface_flux: Optional[core.Array] = None,
         source_scale: float = 1.0,
@@ -93,7 +92,7 @@ class Tracer(core.Array):
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
 
         if data is None:
-            data = numpy.full_like(grid.hn.all_values, numpy.nan)
+            data = np.full_like(grid.hn.all_values, np.nan)
         self.wrap_ndarray(data)
         self.register()
 
@@ -110,8 +109,8 @@ class Tracer(core.Array):
         self.source_scale: float = source_scale
         self.vertical_velocity: Optional[core.Array] = vertical_velocity
         self.open_boundaries: OpenBoundaries = OpenBoundaries(self)
-        self.river_values: numpy.ndarray = numpy.zeros((len(grid.domain.rivers),))
-        self.river_follow: numpy.ndarray = numpy.full(
+        self.river_values: np.ndarray = np.zeros((len(grid.domain.rivers),))
+        self.river_follow: np.ndarray = np.full(
             (len(grid.domain.rivers),), rivers_follow_target_cell, dtype=bool
         )
         self.precipitation_follows_target_cell: bool = precipitation_follows_target_cell

@@ -1,7 +1,7 @@
 import sys
 import argparse
 
-import numpy
+import numpy as np
 
 import pygetm
 import pygetm.domain
@@ -16,7 +16,7 @@ def test(
     apply_bottom_friction: bool = False,
 ):
     domain = pygetm.domain.create_cartesian(
-        500.0 * numpy.arange(100), 500.0 * numpy.arange(30), 50, f=0, H=50
+        500.0 * np.arange(100), 500.0 * np.arange(30), 50, f=0, H=50
     )
     sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_3D, advection_scheme=1)
     sim.logger.info(
@@ -34,11 +34,11 @@ def test(
     viscosity = domain.T.array(fill=0.0, z=pygetm.INTERFACES)
 
     t = domain.T.array(name="tracer", z=pygetm.CENTERS)
-    rng = numpy.random.default_rng()
+    rng = np.random.default_rng()
     rng.random(t.all_values.shape, out=t.all_values)
     adv = pygetm.operators.Advection(t.grid, scheme=1)
 
-    times = timestep * numpy.arange(ntime)
+    times = timestep * np.arange(ntime)
     mode_split = 10
     z_sum_ini = domain.T.z.ma.sum()
     pre_tot = (t * domain.T.hn).values.sum()
@@ -66,7 +66,7 @@ def test(
                 viscosity,
             )
 
-            div = numpy.zeros(domain.T.hn.shape)
+            div = np.zeros(domain.T.hn.shape)
             U1 = (sim.momentum.pk * domain.U.dy).all_values[:, 2:-2, 1:-3]
             U2 = (sim.momentum.pk * domain.U.dy).all_values[:, 2:-2, 2:-2]
             V1 = (sim.momentum.qk * domain.V.dx).all_values[:, 1:-3, 2:-2]
@@ -77,10 +77,10 @@ def test(
                 :, 2:-2, 2:-2
             ] / (timestep * mode_split)
             div = U1 - U2 + V1 - V2 + W1 - W2 - dH
-            maxtp = numpy.zeros_like(div)
+            maxtp = np.zeros_like(div)
             for ar in [U1, U2, V1, V2, W1, W2, dH]:
-                maxtp = numpy.maximum(maxtp, numpy.abs(ar))
-            reldiv = div / numpy.where(maxtp > 0.0, maxtp, 1.0)
+                maxtp = np.maximum(maxtp, np.abs(ar))
+            reldiv = div / np.where(maxtp > 0.0, maxtp, 1.0)
             if not pygetm.debug.check_zero(
                 "maximum divergence (as missing vertical velocity in m s-1)",
                 div / domain.T.area.values,

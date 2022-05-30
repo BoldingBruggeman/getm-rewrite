@@ -2,7 +2,7 @@ import sys
 import argparse
 from typing import Optional
 
-import numpy
+import numpy as np
 
 import pygetm
 
@@ -73,15 +73,15 @@ def test(
     # Set up rectangular domain (all points unmasked)
     extent = 50000
     domain = pygetm.domain.create_cartesian(
-        numpy.linspace(0, extent, 50),
-        numpy.linspace(0, extent, 52),
+        np.linspace(0, extent, 50),
+        np.linspace(0, extent, 52),
         1,
         f=0,
         H=50,
         periodic_x=periodic_x,
         periodic_y=periodic_y,
     )
-    distance_from_center = numpy.sqrt(
+    distance_from_center = np.sqrt(
         (domain.x - 0.5 * extent) ** 2 + (domain.y - 0.5 * extent) ** 2
     )
 

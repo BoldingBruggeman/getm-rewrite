@@ -1,12 +1,12 @@
 import sys
 
-import numpy
+import numpy as np
 import numpy.random
 
 import pygetm
 
 extent = 50000
-domain = pygetm.domain.create_cartesian(numpy.linspace(0, extent, 50), numpy.linspace(0, extent, 52), 25, f=0, H=50)
+domain = pygetm.domain.create_cartesian(np.linspace(0, extent, 50), np.linspace(0, extent, 52), 25, f=0, H=50)
 domain.mask[...] = numpy.random.random_sample(domain.mask.shape) > 0.5   # randomly mask half of the domain
 sim = pygetm.Simulation(domain, runtype=2)
 
@@ -19,19 +19,19 @@ cnpar = 1.
 nuh = domain.T.array(fill=1e-2, z=pygetm.INTERFACES)
 
 # Set diffusivity at all masked points to NaN
-nuh.all_values[:, domain.T.mask.all_values != 1] = numpy.nan
+nuh.all_values[:, domain.T.mask.all_values != 1] = np.nan
 
 # Set diffusivity at the very surface and bottom to NaN,
 # so we can later check that this value has not been propagated (used)
-nuh.all_values[0, ...] = numpy.nan
-nuh.all_values[-1, ...] = numpy.nan
+nuh.all_values[0, ...] = np.nan
+nuh.all_values[-1, ...] = np.nan
 
 tracer = domain.T.array(z=pygetm.CENTERS)
 tracer.values[...] = 0
 tracer.values[0, ...] = 1
 
-mask = numpy.broadcast_to(domain.T.mask.values != 1, tracer.shape)
-valid_tracer = numpy.ma.array(tracer.values, mask=mask)
+mask = np.broadcast_to(domain.T.mask.values != 1, tracer.shape)
+valid_tracer = np.ma.array(tracer.values, mask=mask)
 
 ini_min = tracer.values[...].min()
 ini_max = tracer.values[...].max()
@@ -42,7 +42,7 @@ tolerance = 1e-14
 for _ in range(nstep):
     vdif(nuh, dt, tracer)
 
-if not numpy.isfinite(tracer)[...].all():
+if not np.isfinite(tracer)[...].all():
     print('ERROR: tracer contains non-finite values after diffusion')
     sys.exit(1)
 
@@ -66,7 +66,7 @@ if global_min < ini_min:
     print('ERROR: final global minimum value %s below initial minimum %s' % (global_min, ini_min))
     sys.exit(1)
 
-delta = numpy.abs(valid_tracer.sum(axis=0) - 1)
+delta = np.abs(valid_tracer.sum(axis=0) - 1)
 max_delta = delta.max()
 if max_delta > tolerance:
     print('ERROR: difference between initial and final depth integral %s exceeds tolerance %s' % (max_delta, tolerance))
@@ -78,7 +78,7 @@ sources = domain.T.array(fill=1. / dt, z=pygetm.CENTERS) * dt * domain.T.hn  # n
 for _ in range(nstep):
     vdif(nuh, dt, tracer, ea4=sources)
 delta = valid_tracer / nstep - 1
-error = numpy.abs(delta).max()
+error = np.abs(delta).max()
 if error > tolerance:
     print('ERROR: error %s in tracer after using vertical diffusion solver to integrate sources exceeds tolerance %s' % (error, tolerance))
     sys.exit(1)
@@ -97,30 +97,30 @@ rel_delta_min = rel_delta.min(axis=(1, 2))
 rel_delta_max = rel_delta.max(axis=(1, 2))
 if (rel_delta_min - rel_delta_max).any():
     print('ERROR: relative error in tracer varies horizontally after using vertical diffusion solver to integrate relative sources: %s vs %s' % (rel_delta_min, rel_delta_max))
-rel_error = numpy.abs(rel_delta).max()
+rel_error = np.abs(rel_delta).max()
 if rel_error > tolerance:
     print('ERROR: maximum relative error %s in tracer after using vertical diffusion solver to integrate relative sources exceeds tolerance %s' % (rel_error, tolerance))
     sys.exit(1)
 
 # Now try without spatial gradient in tracer, but with variable diffusivity
 tolerance = 1e-11
-rng = numpy.random.default_rng()
+rng = np.random.default_rng()
 nuh.all_values[:, :, ] = 10.**rng.uniform(-6., 0., nuh.all_values.shape)
 
 # Set diffusivity at all masked points to NaN
-nuh.all_values[:, domain.T.mask.all_values != 1] = numpy.nan
+nuh.all_values[:, domain.T.mask.all_values != 1] = np.nan
 
 # Set diffusivity at the very surface and bottom to NaN,
 # so we can later check that this value has not been propagated (used)
-nuh.all_values[0, ...] = numpy.nan
-nuh.all_values[-1, ...] = numpy.nan
+nuh.all_values[0, ...] = np.nan
+nuh.all_values[-1, ...] = np.nan
 
 constant_value = 35.
-tracer.all_values[...] = numpy.nan
+tracer.all_values[...] = np.nan
 tracer.values[:, domain.T.mask.values == 1] = constant_value
 for _ in range(nstep):
     vdif(nuh, dt, tracer)
-error = numpy.abs(tracer.ma / constant_value - 1.).max()
+error = np.abs(tracer.ma / constant_value - 1.).max()
 if error > tolerance:
     print('ERROR: error %s in tracer after using vertical diffusion solver on tracer without gradient exceeds tolerance %s' % (error, tolerance))
     sys.exit(1)

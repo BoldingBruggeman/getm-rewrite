@@ -1,13 +1,13 @@
 import sys
 import argparse
 
-import numpy
+import numpy as np
 
 import pygetm
 
 
 def check_range(name, values, rtol=1e-12, atol=1e-12, target_value=None):
-    values = numpy.asarray(values)
+    values = np.asarray(values)
     print("  %s... " % name, end="", flush=True)
     absrange = values.max() - values.min()
     mean = values.mean()
@@ -51,8 +51,8 @@ def test(
 
     # Set up rectangular domain (all points unmasked)
     domain = pygetm.domain.create_cartesian(
-        500.0 * numpy.arange(100),
-        500.0 * numpy.arange(30),
+        500.0 * np.arange(100),
+        500.0 * np.arange(30),
         1,
         f=0,
         H=50,
