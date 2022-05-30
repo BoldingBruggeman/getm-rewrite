@@ -26,6 +26,7 @@ Submodules
    pygetm.fabm
    pygetm.legacy
    pygetm.mixing
+   pygetm.momentum
    pygetm.operators
    pygetm.parallel
    pygetm.radiation
