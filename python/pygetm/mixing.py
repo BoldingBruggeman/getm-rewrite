@@ -126,7 +126,7 @@ class GOTM(Turbulence):
         Args:
             timestep: time step (s)
             ustar_s: surface friction velocity (m s-1)
-            ustar_b, bottom friction velocity (m s-1)
+            ustar_b: bottom friction velocity (m s-1)
             z0s: hydrodynamic surface roughness (m)
             z0b: hydrodynamic bottom roughness (m)
             NN: squared buoyancy frequency (s-2)
