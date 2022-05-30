@@ -223,7 +223,9 @@ class Simulation(_pygetm.Simulation):
                         raise Exception('Field %s is part of state but not found in %s' % path)
                     field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
                     self._initialized_variables.add(name)
-        self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
+        if self.runtype > BAROTROPIC_2D:
+            # Restore elevation from before open boundary condition was applied
+            self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
         return time_coord[0]
 
     def start(self, time: Union[cftime.datetime, datetime.datetime], timestep: float, split_factor: int=1, report: Union[int, datetime.timedelta]=10, report_totals: Union[int, datetime.timedelta]=datetime.timedelta(days=1), save: bool=True, profile: Optional[str]=None):
@@ -301,7 +303,7 @@ class Simulation(_pygetm.Simulation):
 
         # Update all forcing, which includes the final 2D depth update based on (original) z
         self.domain.T.z.all_values[...] = z_backup
-        self.update_forcing(macro_active=True)
+        self.update_forcing(macro_active=self.runtype > BAROTROPIC_2D)
 
         # Start output manager
         self.output_manager.start(self.istep, self.time, save=save, default_time_reference=self.default_time_reference)

@@ -364,9 +364,13 @@ class FluxesFromMeteo(Fluxes):
                 * self.hum.require_set(self.logger)
                 * self.u10.require_set(self.logger)
                 * self.v10.require_set(self.logger)
-                * self.tcc.require_set(self.logger)
+                * (self.tcc.require_set(self.logger) or not calculate_heat_flux)
                 * sst.require_set(self.logger)
-                * (not self.calculate_evaporation or self.tp.require_set(self.logger))
+                * (
+                    not self.calculate_evaporation
+                    or self.tp.require_set(self.logger)
+                    or not calculate_heat_flux
+                )
             )
 
         # Air humidity
