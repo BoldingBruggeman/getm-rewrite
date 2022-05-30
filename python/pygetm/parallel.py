@@ -201,8 +201,8 @@ class Tiling:
         Args:
             nx_glob: x extent of the global domain
             ny_glob: y extent of the global domain
-            nx_glob: x extent of a subdomain
-            nx_glob: y extent of a subdomain
+            nx_sub: x extent of a subdomain
+            ny_sub: y extent of a subdomain
             xoffset_global: x offset of left-most subdomains
             yoffset_global: y offset of bottom-most subdomains
         """
@@ -278,6 +278,26 @@ class Tiling:
         Tuple[int, int],
         Tuple[int, int],
     ]:
+        """Determine the activate extent of a subdomain in terms of the slices spanned in
+        subdomain arrays and in global arrays
+
+        Args:
+            irow: row of the subdomain (default: current)
+            icol: column of the subdomain (default: current)
+            halo_sub: width of the halos in the subdomain array to be sliced
+            halo_glob: width of the halos in the global array to be sliced
+            scale: the extent of subdomain array relative to the subdomain extent
+                provided to :meth:`set_extent` (for instance, 2 for supergrid arrays)
+            share: the number of points shared by subdomains (for instance, 1 for
+                supergrid arrays and X grids)
+            exclude_halos: whether to excludes the halos of the subdomain from the slice
+            exclude_global_halos: whether to excludes the halos of the global domain
+                from the slice
+
+        Returns:
+            Tuple with the local slices, global slices, extent of a subdomain array, and
+            extent of a global array. The extents always include halos and shared points
+        """
         if irow is None:
             irow = self.irow
         if icol is None:
