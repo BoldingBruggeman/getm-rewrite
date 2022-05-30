@@ -13,7 +13,8 @@ class Turbulence:
     """Base class that provides the turbulent viscosity ``num`` and diffusivity ``nuh``.
     When using this class directly, viscosity and diffusivity are prescribed, not
     calculated. In this case, both default to zero; assign to ``num``/``nuh`` or call
-    ``num.set``/``nuh.set`` to change this."""
+    ``num.set``/``nuh.set`` to change this.
+    """
 
     def initialize(self, grid: domain.Grid):
         self.grid = grid
@@ -99,9 +100,11 @@ class GOTM(Turbulence):
             long_name="turbulence length scale",
             attrs={"_part_of_state": True},
         )
-        self.log()
+        self._log()
 
-    def log(self):
+    def _log(self):
+        """Copy lines written by GOTM to stdout/stderr to the log
+        """
         for line in itertools.chain(_pygotm.stdout, _pygotm.stderr):
             line = line.rstrip()
             if line:
@@ -117,11 +120,17 @@ class GOTM(Turbulence):
         NN: core.Array,
         SS: core.Array,
     ):
-        """Update turbulent quantities and calculate turbulent diffusivity nuh and
-        turbulent viscosity, using surface and bottom friction velocity (ustar_s,
-        ustar_b, both in m s-1), surface and bottom hydrodynamic roughness (z0s, z0b,
-        both in m) squared buoyancy frequency (NN in s-2), and squared shear frequency
-        (SS in s-2).
+        """Update turbulent quantities and calculate turbulent diffusivity ``nuh`` and
+        turbulent viscosity ``num``
+
+        Args:
+            timestep: time step (s)
+            ustar_s: surface friction velocity (m s-1)
+            ustar_b, bottom friction velocity (m s-1)
+            z0s: hydrodynamic surface roughness (m)
+            z0b: hydrodynamic bottom roughness (m)
+            NN: squared buoyancy frequency (s-2)
+            SS: squared shear frequency (s-2)
         """
         assert ustar_s.grid is self.grid and ustar_s.ndim == 2
         assert ustar_b.grid is self.grid and ustar_b.ndim == 2
@@ -163,4 +172,4 @@ class GOTM(Turbulence):
         # computed as the shear frequency SS is not available at the boundary.
         self.num.update_boundary(ZERO_GRADIENT)
 
-        self.log()
+        self._log()
