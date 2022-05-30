@@ -291,79 +291,17 @@ cdef class VerticalDiffusion:
 cdef class Simulation:
     cdef readonly Domain domain
     cdef readonly int runtype
-    cdef void* pmomentum
     cdef void* ppressure
     cdef void* psealevel
     cdef readonly int nx, ny
 
-    def __init__(self, Domain domain, int runtype, int internal_pressure_method=1, double Am0=0.):
+    def __init__(self, Domain domain, int runtype, int internal_pressure_method=1):
         self.domain = domain
         domain.initialize(runtype)
         self.runtype = runtype
-        self.pmomentum = momentum_create(runtype, domain.p, Am0)
         self.ppressure = pressure_create(runtype, domain.p, internal_pressure_method)
         self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
-
-    def u_2d(self, double timestep, Array tausx not None, Array dpdx not None):
-        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
-        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
-        momentum_u_2d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p)
-
-    def v_2d(self, double timestep, Array tausy not None, Array dpdy not None):
-        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
-        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
-        momentum_u_2d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p)
-
-    def coriolis_fu(self):
-        momentum_uv_coriolis(1, self.pmomentum)
-
-    def coriolis_fv(self):
-        momentum_uv_coriolis(2, self.pmomentum)
-
-    def pk_3d(self, double timestep, Array tausx not None, Array dpdx not None, Array idpdx not None, Array viscosity_u not None):
-        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
-        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
-        assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
-        assert viscosity_u.grid is self.domain.U and viscosity_u.z == INTERFACES, 'grid mismatch for viscosity_u: expected %s, got %s' % (self.domain.U.postfix, viscosity_u.grid.postfix)
-        momentum_u_3d(1, self.pmomentum, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
-
-    def qk_3d(self, double timestep, Array tausy not None, Array dpdy not None, Array idpdy not None, Array viscosity_v not None):
-        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
-        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
-        assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
-        assert viscosity_v.grid is self.domain.V and viscosity_v.z == INTERFACES, 'grid mismatch for viscosity_v: expected %s, got %s' % (self.domain.V.postfix, viscosity_v.grid.postfix)
-        momentum_u_3d(2, self.pmomentum, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
-
-    def coriolis_fpk(self):
-        momentum_uv_coriolis_3d(1, self.pmomentum)
-
-    def coriolis_fqk(self):
-        momentum_uv_coriolis_3d(2, self.pmomentum)
-
-    def bottom_friction_2d(self, int update_z0b):
-        momentum_bottom_friction_2d(self.pmomentum, 1 if update_z0b else 4)
-
-    def bottom_friction_3d(self):
-        momentum_bottom_friction_3d(self.pmomentum)
-
-    def w_3d(self, double timestep):
-        momentum_w_3d(self.pmomentum, timestep)
-
-    def momentum_diffusion_driver(self, Array h not None, Array hx not None, Array u not None, Array v not None, Array diffu not None, Array diffv not None):
-        assert h.grid is self.domain.T
-        assert hx.grid is self.domain.X
-        assert u.grid is self.domain.U
-        assert v.grid is self.domain.V
-        assert diffu.grid is self.domain.U
-        assert diffv.grid is self.domain.V
-        cdef int nk = h._array.shape[0] if h.z else 1
-        momentum_diffusion_driver(self.pmomentum, nk, <double*> h.p, <double*> hx.p, <double*> u.p, <double*> v.p, <double*> diffu.p, <double*> diffv.p)
-
-    def update_stresses(self, Array tausx not None, Array tausy not None):
-        assert tausx.grid is self.domain.T, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.T.postfix, tausx.grid.postfix)
-        assert tausy.grid is self.domain.T, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.T.postfix, tausy.grid.postfix)
-        momentum_stresses(self.pmomentum, <double *>tausx.p, <double *>tausy.p)
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T
@@ -381,20 +319,92 @@ cdef class Simulation:
         assert V.grid is self.domain.V
         sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p, <double *>fwf.p)
 
-    def update_surface_elevation_boundaries(self, double timestep):
-        sealevel_boundaries(self.psealevel, self.pmomentum, timestep)
-
-    def update_shear_frequency(self, Array viscosity not None):
-        assert viscosity.grid is self.domain.T and viscosity.z == INTERFACES, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.T.postfix, viscosity.grid.postfix)
-        momentum_shear_frequency(self.pmomentum, <double *>viscosity.p)
+    def update_surface_elevation_boundaries(self, double timestep, Momentum momentum):
+        sealevel_boundaries(self.psealevel, momentum.p, timestep)
 
     def wrap(self, Array ar not None, bytes name, int source):
-        cdef void* obj = self.pmomentum
+        assert source in (2, 3)
+        cdef void* obj = NULL
         if (source == 2):
             obj = self.ppressure
         elif (source == 3):
             obj = self.psealevel
         return ar.wrap_c_array(self.domain, source, obj, name)
+
+cdef class Momentum:
+    cdef void* p
+    cdef readonly Domain domain
+
+    def __init__(self, Domain domain, int runtype, double Am0=0.):
+        self.domain = domain
+        self.p = momentum_create(runtype, domain.p, Am0)
+
+    def u_2d(self, double timestep, Array tausx not None, Array dpdx not None):
+        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
+        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
+        momentum_u_2d(1, self.p, timestep, <double *>tausx.p, <double *>dpdx.p)
+
+    def v_2d(self, double timestep, Array tausy not None, Array dpdy not None):
+        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
+        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
+        momentum_u_2d(2, self.p, timestep, <double *>tausy.p, <double *>dpdy.p)
+
+    def coriolis_fu(self):
+        momentum_uv_coriolis(1, self.p)
+
+    def coriolis_fv(self):
+        momentum_uv_coriolis(2, self.p)
+
+    def pk_3d(self, double timestep, Array tausx not None, Array dpdx not None, Array idpdx not None, Array viscosity_u not None):
+        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
+        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
+        assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
+        assert viscosity_u.grid is self.domain.U and viscosity_u.z == INTERFACES, 'grid mismatch for viscosity_u: expected %s, got %s' % (self.domain.U.postfix, viscosity_u.grid.postfix)
+        momentum_u_3d(1, self.p, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
+
+    def qk_3d(self, double timestep, Array tausy not None, Array dpdy not None, Array idpdy not None, Array viscosity_v not None):
+        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
+        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
+        assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
+        assert viscosity_v.grid is self.domain.V and viscosity_v.z == INTERFACES, 'grid mismatch for viscosity_v: expected %s, got %s' % (self.domain.V.postfix, viscosity_v.grid.postfix)
+        momentum_u_3d(2, self.p, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
+
+    def coriolis_fpk(self):
+        momentum_uv_coriolis_3d(1, self.p)
+
+    def coriolis_fqk(self):
+        momentum_uv_coriolis_3d(2, self.p)
+
+    def bottom_friction_2d(self, int update_z0b):
+        momentum_bottom_friction_2d(self.p, 1 if update_z0b else 4)
+
+    def bottom_friction_3d(self):
+        momentum_bottom_friction_3d(self.p)
+
+    def w_3d(self, double timestep):
+        momentum_w_3d(self.p, timestep)
+
+    def momentum_diffusion_driver(self, Array h not None, Array hx not None, Array u not None, Array v not None, Array diffu not None, Array diffv not None):
+        assert h.grid is self.domain.T
+        assert hx.grid is self.domain.X
+        assert u.grid is self.domain.U
+        assert v.grid is self.domain.V
+        assert diffu.grid is self.domain.U
+        assert diffv.grid is self.domain.V
+        cdef int nk = h._array.shape[0] if h.z else 1
+        momentum_diffusion_driver(self.p, nk, <double*> h.p, <double*> hx.p, <double*> u.p, <double*> v.p, <double*> diffu.p, <double*> diffv.p)
+
+    def update_stresses(self, Array tausx not None, Array tausy not None):
+        assert tausx.grid is self.domain.T, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.T.postfix, tausx.grid.postfix)
+        assert tausy.grid is self.domain.T, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.T.postfix, tausy.grid.postfix)
+        momentum_stresses(self.p, <double *>tausx.p, <double *>tausy.p)
+
+    def update_shear_frequency(self, Array viscosity not None):
+        assert viscosity.grid is self.domain.T and viscosity.z == INTERFACES, 'grid mismatch for viscosity: expected %s, got %s' % (self.domain.T.postfix, viscosity.grid.postfix)
+        momentum_shear_frequency(self.p, <double *>viscosity.p)
+
+    def wrap(self, Array ar not None, bytes name):
+        return ar.wrap_c_array(self.domain, 1, self.p, name)
 
 def exponential_profile_1band_interfaces(Array mask not None, Array h not None, Array k not None, Array top not None, Array out=None):
     assert mask.grid is h.grid and h.z == CENTERS
