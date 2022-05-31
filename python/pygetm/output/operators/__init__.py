@@ -40,7 +40,7 @@ class FieldCollection:
         self.default_dtype = default_dtype
         self._updatable = []
 
-    def request(self, field: Union[str, pygetm.core.Array, Iterable[Union[str, pygetm.core.Array]]], output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: Optional[bool]=None, time_average: bool=False, generate_unique_name: bool=False):
+    def request(self, field: Union[str, pygetm.core.Array, Iterable[Union[str, pygetm.core.Array]]], *, output_name: Optional[str]=None, dtype: Optional[numpy.typing.DTypeLike]=None, mask: Optional[bool]=None, time_average: bool=False, generate_unique_name: bool=False):
         if isinstance(field, str):
             if field not in self.field_manager.fields:
                 raise Exception('Unknown field "%s" requested. Available: %s' % (field, ', '.join(self.field_manager.fields)))
