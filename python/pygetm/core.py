@@ -1,6 +1,7 @@
 import numbers
 from typing import Optional, Union, Tuple, Literal, Mapping, Any, TYPE_CHECKING
 import logging
+from functools import partial
 
 import numpy as np
 import numpy.lib.mixins
@@ -15,12 +16,15 @@ if TYPE_CHECKING:
     from . import domain
 
 
+def _noop(*args, **kwargs):
+    pass
+
+
 class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     __slots__ = (
         "_xarray",
         "_scatter",
         "_gather",
-        "_dist",
         "_name",
         "attrs",
         "_fill_value",
@@ -31,6 +35,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "_ndim",
         "_size",
         "_dtype",
+        "update_halos",
+        "update_halos_start",
+        "update_halos_finish",
+        "compare_halos",
     )
 
     def __init__(
@@ -50,7 +58,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._xarray: Optional[xarray.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
         self._gather: Optional[parallel.Gather] = None
-        self._dist: Optional[parallel.DistributedArray] = None
         assert (
             fill_value is None or np.ndim(fill_value) == 0
         ), "fill_value must be a scalar value"
@@ -104,6 +111,17 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._shape = self.values.shape
         self._size = self.values.size
 
+        if not self.grid.domain.tiling:
+            self.update_halos = _noop
+            self.update_halos_start = _noop
+            self.update_halos_finish = _noop
+            self.compare_halos = _noop
+        else:
+            self.update_halos = partial(self._distribute, "update_halos")
+            self.update_halos_start = partial(self._distribute, "update_halos_start")
+            self.update_halos_finish = partial(self._distribute, "update_halos_finish")
+            self.compare_halos = partial(self._distribute, "compare_halos")
+
     def register(self):
         assert self.grid is not None
         if self._name is not None:
@@ -117,82 +135,18 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
 
-    def update_halos(self, *args, **kwargs):
-        """Update halos by exchanging information with subdomain neighbors.
-        This does the equivalent of :meth:`update_halos_start` followed by
-        :meth:`update_halos_finish`.
-
-        Args:
-            *args: positional arguments passed to
-                :meth:`pygetm.parallel.DistributedArray.update_halos`
-            **kwargs: keyword arguments passed to
-                :meth:`pygetm.parallel.DistributedArray.update_halos`
-        """
-        if not self.grid.domain.tiling:
-            return
-        if self._dist is None:
-            self._dist = parallel.DistributedArray(
-                self.grid.domain.tiling,
-                self.all_values,
-                self.grid.halo,
-                overlap=self.grid.overlap,
-            )
-        return self._dist.update_halos(*args, **kwargs)
-
-    def update_halos_start(self, *args, **kwargs):
-        """Initiate a halo update. This has to be matched by a later call to
-        :meth:`update_halos_finish`. The halos will contains valid values only after
-        that second call completes.
-
-        Args:
-            *args: positional arguments passed to
-                :meth:`pygetm.parallel.DistributedArray.update_halos_start`
-            **kwargs: keyword arguments passed to
-                :meth:`pygetm.parallel.DistributedArray.update_halos_start`
-        """
-        if not self.grid.domain.tiling:
-            return
-        if self._dist is None:
-            self._dist = parallel.DistributedArray(
-                self.grid.domain.tiling,
-                self.all_values,
-                self.grid.halo,
-                overlap=self.grid.overlap,
-            )
-        return self._dist.update_halos_start(*args, **kwargs)
-
-    def update_halos_finish(self, *args, **kwargs):
-        """Finish a halo update. This has to be preceded by corresponding call to
-        :meth:`update_halos_start`.
-
-        Args:
-            *args: positional arguments passed to
-                :meth:`pygetm.parallel.DistributedArray.update_halos_finish`
-            **kwargs: keyword arguments passed to
-                :meth:`pygetm.parallel.DistributedArray.update_halos_finish`
-        """
-        if not self.grid.domain.tiling:
-            return
-        if self._dist is None:
-            self._dist = parallel.DistributedArray(
-                self.grid.domain.tiling,
-                self.all_values,
-                self.grid.halo,
-                overlap=self.grid.overlap,
-            )
-        return self._dist.update_halos_finish(*args, **kwargs)
-
-    def compare_halos(self, *args, **kwargs):
-        if not self.grid.domain.tiling:
-            return True
-        if self._dist is None:
-            self._dist = parallel.DistributedArray(
-                self.grid.domain.tiling,
-                self.all_values,
-                self.grid.halo,
-                overlap=self.grid.overlap,
-            )
-        return self._dist.compare_halos(*args, **kwargs)
+    def _distribute(self, method: str, *args, **kwargs) -> parallel.DistributedArray:
+        dist = parallel.DistributedArray(
+            self.grid.domain.tiling,
+            self.all_values,
+            self.grid.halo,
+            overlap=self.grid.overlap,
+        )
+        self.update_halos = dist.update_halos
+        self.update_halos_start = dist.update_halos_start
+        self.update_halos_finish = dist.update_halos_finish
+        self.compare_halos = dist.compare_halos
+        getattr(self, method)(*args, **kwargs)
 
     def scatter(self, global_data: Optional["Array"]):
         if self.grid.domain.tiling.n == 1:
