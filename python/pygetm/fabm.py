@@ -26,6 +26,13 @@ class FABM:
         self.grid = grid
         pyfabm.logger = logger
 
+        # Assign FABM standard names to grid arrays
+        grid.hn.fabm_standard_name = "cell_thickness"
+        if grid.lon is not None:
+            grid.lon.fabm_standard_name = "longitude"
+        if grid.lat is not None:
+            grid.lat.fabm_standard_name = "latitude"
+
         def variable_to_array(variable, send_data: bool = False, **kwargs):
             ar = core.Array(
                 name=variable.output_name,
