@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, List, Mapping
+from typing import MutableMapping, Optional, Tuple, List, Mapping
 import operator
 import logging
 import os.path
@@ -1421,7 +1421,7 @@ class Domain(_pygetm.Domain):
         self.logger: logging.Logger = self.root_logger.getChild("domain")
 
         #: collection of all model fields
-        self.field_manager: Optional[output.FieldManager] = None
+        self.fields: MutableMapping[str, core.Array] = {}
 
         #: input manager responsible for reading from NetCDF and for spatial and
         # temporal interpolation
@@ -1651,9 +1651,7 @@ class Domain(_pygetm.Domain):
             )
         return maxdt
 
-    def initialize(
-        self, runtype: int, field_manager: Optional[output.FieldManager] = None
-    ):
+    def initialize(self, runtype: int):
         """Initialize the domain. This updates the mask in order for it to be
         consistent across T, U, V, X grids. Values for the mask, bathymetry, and
         bottom roughness are subsequently read-only.
@@ -1678,10 +1676,6 @@ class Domain(_pygetm.Domain):
             )
         ] = 0
         self._exchange_metric(self.mask_, fill_value=0)
-
-        if field_manager is not None:
-            self.field_manager = field_manager
-        self.field_manager = self.field_manager or output.FieldManager()
 
         self.open_boundaries.initialize()
 

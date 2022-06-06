@@ -126,10 +126,11 @@ class Simulation(_pygetm.Simulation):
         self.logger = dom.root_logger
         self.logger.setLevel(log_level)
         self.output_manager = output.OutputManager(
-            rank=dom.tiling.rank, logger=self.logger.getChild("output_manager")
+            dom.fields,
+            rank=dom.tiling.rank,
+            logger=self.logger.getChild("output_manager"),
         )
         self.input_manager = dom.input_manager
-        dom.field_manager = self.output_manager
 
         self.input_manager.set_logger(self.logger.getChild("input_manager"))
 
@@ -231,8 +232,8 @@ class Simulation(_pygetm.Simulation):
 
         if runtype > BAROTROPIC_2D:
             #: Provider of turbulent viscosity and diffusivity. This must inherit from
-            # :class:`pygetm.mixing.Turbulence` and should be provided as argument
-            # turbulence to :class:`Simulation`.
+            #: :class:`pygetm.mixing.Turbulence` and should be provided as argument
+            #: turbulence to :class:`Simulation`.
             self.turbulence = turbulence or pygetm.mixing.GOTM(nml_path=gotm)
             self.turbulence.initialize(self.domain.T)
             self.NN = dom.T.array(

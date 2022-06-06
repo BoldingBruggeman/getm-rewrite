@@ -1,18 +1,19 @@
-from typing import Optional
+from typing import Optional, Mapping
 import os.path
 import logging
 
 import cftime
 import netCDF4
 
-from . import FieldManager, File
+from . import File
 from ..constants import INTERFACES
+import pygetm.core
 
 
 class NetCDFFile(File):
     def __init__(
         self,
-        field_manager: FieldManager,
+        available_fields: Mapping[str, pygetm.core.Array],
         logger: logging.Logger,
         path: str,
         rank: int,
@@ -39,7 +40,7 @@ class NetCDFFile(File):
                 coordinate.
             **kwargs: additional keyword arguments passed to :class:`pygetm.output.File`
         """
-        super().__init__(field_manager, logger, path=path, **kwargs)
+        super().__init__(available_fields, logger, path=path, **kwargs)
         name, ext = os.path.splitext(path)
         if sub:
             name += "_%05i" % rank

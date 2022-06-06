@@ -26,10 +26,10 @@ nx, ny, nlev = 612, 600, 1
 tiling = pygetm.parallel.Tiling(args.nrow, args.ncol)
 rank = tiling.rank
 
-outman = pygetm.output.OutputManager(rank=rank)
 subdomain = pygetm.domain.create_cartesian(np.linspace(-Lx/2, Lx/2, nx), np.linspace(-Ly/2, Ly/2, ny), nlev, H=1, f=0., tiling=tiling)
 halo = subdomain.halo
-subdomain.initialize(runtype=1, field_manager=outman)
+subdomain.initialize(runtype=pygetm.BAROTROPIC_2D)
+outman = pygetm.output.OutputManager(subdomain.fields, rank=rank)
 
 f_glob = None
 if subdomain.glob:

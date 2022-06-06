@@ -1,4 +1,4 @@
-from typing import MutableMapping, Tuple, Union, Optional, Sequence
+from typing import MutableMapping, Tuple, Union, Optional, Sequence, Mapping
 import collections
 
 from numpy.typing import DTypeLike, ArrayLike
@@ -43,10 +43,14 @@ class Base:
 
 
 class FieldCollection:
-    def __init__(self, field_manager, default_dtype: Optional[DTypeLike] = None):
+    def __init__(
+        self,
+        available_fields: Mapping[str, pygetm.core.Array],
+        default_dtype: Optional[DTypeLike] = None,
+    ):
         self.fields: MutableMapping[str, Base] = collections.OrderedDict()
         self.expression2name = {}
-        self.field_manager = field_manager
+        self.available_fields = available_fields
         self.default_dtype = default_dtype
         self._updatable = []
 
@@ -93,12 +97,12 @@ class FieldCollection:
         arrays = []
         for field in fields:
             if isinstance(field, str):
-                if field not in self.field_manager.fields:
+                if field not in self.available_fields:
                     raise Exception(
                         'Unknown field "%s" requested. Available: %s'
-                        % (field, ", ".join(self.field_manager.fields))
+                        % (field, ", ".join(self.available_fields))
                     )
-                arrays.append(self.field_manager.fields[field])
+                arrays.append(self.available_fields[field])
             elif isinstance(field, pygetm.core.Array):
                 arrays.append(field)
             else:
@@ -189,7 +193,7 @@ class Field(Base):
         self.global_array = None
         global_domain = array.grid.domain.glob
         if global_domain and array.constant:
-            self.global_array = global_domain.field_manager.fields.get(array.name)
+            self.global_array = global_domain.fields.get(array.name)
         super().__init__(
             array.ndim,
             dtype or array.dtype,

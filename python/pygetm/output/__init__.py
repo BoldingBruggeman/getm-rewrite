@@ -1,5 +1,5 @@
 import logging
-from typing import MutableMapping, Optional, List, Union
+from typing import Mapping, Optional, List, Union
 import datetime
 
 from numpy.typing import DTypeLike
@@ -9,28 +9,16 @@ from .. import core
 from . import operators
 
 
-class FieldManager:
-    def __init__(self):
-        self.fields: MutableMapping[str, core.Array] = {}
-
-    def register(self, array: core.Array):
-        assert array.name is not None, "Cannot register field without name."
-        assert array.name not in self.fields, (
-            'A field with name "%s" has already been registered.' % array.name
-        )
-        self.fields[array.name] = array
-
-
 class File(operators.FieldCollection):
     def __init__(
         self,
-        field_manager: FieldManager,
+        available_fields: Mapping[str, core.Array],
         logger: logging.Logger,
         interval: Union[int, datetime.timedelta] = 1,
         path: Optional[str] = None,
         default_dtype: Optional[DTypeLike] = None,
     ):
-        super().__init__(field_manager, default_dtype=default_dtype)
+        super().__init__(available_fields, default_dtype=default_dtype)
         self._logger = logger
         self.next = None
         self.interval_in_dt = isinstance(interval, int)
@@ -77,15 +65,20 @@ class File(operators.FieldCollection):
         pass
 
 
-# Note: netcdf cannot be imported before FieldManager and File are defined,
+# Note: netcdf cannot be imported before File is defined,
 # because both are imported by netcdf itself.
 # If this import statement came earlier, it would cause a circular dependency error.
 from . import netcdf
 
 
-class OutputManager(FieldManager):
-    def __init__(self, rank: int, logger: Optional[logging.Logger] = None):
-        FieldManager.__init__(self)
+class OutputManager:
+    def __init__(
+        self,
+        fields: Mapping[str, core.Array],
+        rank: int,
+        logger: Optional[logging.Logger] = None,
+    ):
+        self.fields = fields
         self.rank = rank
         self.files: List[File] = []
         self._logger = logger or logging.getLogger()
@@ -100,7 +93,7 @@ class OutputManager(FieldManager):
         """
         self._logger.debug("Adding NetCDF file %s" % path)
         file = netcdf.NetCDFFile(
-            self, self._logger.getChild(path), path, rank=self.rank, **kwargs
+            self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
         )
         self.files.append(file)
         return file

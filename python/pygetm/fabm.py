@@ -132,7 +132,7 @@ class FABM:
             variable.save = ar.saved
 
         # Transfer GETM fields with a standard name to FABM
-        for field in self.grid.domain.field_manager.fields.values():
+        for field in self.grid.domain.fields.values():
             for standard_name in field.attrs.get("_fabm_standard_names", []):
                 try:
                     variable = self.model.dependencies.find(standard_name)
