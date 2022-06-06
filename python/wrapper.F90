@@ -113,13 +113,14 @@ contains
       pgrid = c_loc(grid)
    end function
 
-   subroutine domain_do_vertical(pdomain) bind(c)
-      type(c_ptr), intent(in), value :: pdomain
+   subroutine domain_do_vertical(pdomain, timestep) bind(c)
+      type(c_ptr),    intent(in), value :: pdomain
+      real(c_double), intent(in), value :: timestep
 
       type (type_getm_domain), pointer :: domain
 
       call c_f_pointer(pdomain, domain)
-      call domain%do_vertical(1._c_double)
+      call domain%do_vertical(timestep)
    end subroutine
 
    subroutine get_array(source_type, obj, name, grid_type, sub_type, data_type, p) bind(c)

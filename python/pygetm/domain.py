@@ -13,7 +13,6 @@ import netCDF4
 from . import _pygetm
 from . import core
 from . import parallel
-from . import output
 from . import input
 from .constants import FILL_VALUE, CENTERS, GRAVITY, INTERFACES
 
@@ -242,7 +241,8 @@ class Grid(_pygetm.Grid):
                 self.wrap(array, name.encode("ascii"), register=register),
             )
 
-        # Obtain corresponding array on the supergrid. If this does not exist, we are done
+        # Obtain corresponding array on the supergrid.
+        # If this does not exist, we are done
         source = getattr(self.domain, name + "_", None)
         if source is None:
             return
@@ -2141,7 +2141,7 @@ class Domain(_pygetm.Domain):
                 inside = not inside
         return inside
 
-    def update_depth(self, _3d: bool = False):
+    def update_depth(self, _3d: bool = False, timestep: float = 1.):
         """Use old and new surface elevation on T grid to update elevations on U, V, X grids
         and subsequently update total water depth ``D`` on all grids.
 
@@ -2152,6 +2152,7 @@ class Domain(_pygetm.Domain):
                 those of the microtimestep (``self.T.z``). It also updates layer
                 thicknesses ``hn``, layer center depths ``zc`` and interface depths
                 ``zf`` on all grids.
+            timestep: time step (s) for layer thickness change
 
         This routine will ensure values are up to date in the domain interior and in
         the halos, but that this requires that ``self.T.z`` (and old elevations
@@ -2252,7 +2253,7 @@ class Domain(_pygetm.Domain):
 
             # Update layer thicknesses (hn) on all grids, using bathymetry H and new
             # elevations zin (on the 3D timestep)
-            self.do_vertical()
+            self.do_vertical(timestep)
 
             # Update vertical coordinates, used for e.g., output, internal pressure,
             # vertical interpolation of open boundary forcing of tracers

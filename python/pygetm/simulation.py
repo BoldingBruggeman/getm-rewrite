@@ -474,7 +474,7 @@ class Simulation(_pygetm.Simulation):
             )  # to become T.zin when update_depth is called
             self.domain.T.zio.fill(np.nan)
             self.domain.T.ho.fill(np.nan)
-            self.domain.update_depth(_3d=True)
+            self.domain.update_depth(_3d=True, timestep=self.macrotimestep)
 
             # Second 3D depth/thickness update based on zin.
             # Override T.ho with user-provided value if available, since this may
@@ -490,7 +490,7 @@ class Simulation(_pygetm.Simulation):
 
             # this moves our zin backup into zin, and at the same time moves the
             # current zin (originally zio) to zio
-            self.domain.update_depth(_3d=True)
+            self.domain.update_depth(_3d=True, timestep=self.macrotimestep)
             self.momentum.update_diagnostics(self.macrotimestep, self.turbulence.num)
 
         # Update all forcing, which includes the final 2D depth update based on
@@ -574,7 +574,7 @@ class Simulation(_pygetm.Simulation):
             # Old elevations zio and thicknesses ho will store the previous values of
             # zin and hn, and thus are one macrotimestep behind new elevations zin and
             # thicknesses hn.
-            self.domain.update_depth(_3d=True)
+            self.domain.update_depth(_3d=True, timestep=self.macrotimestep)
 
             # Update presssure gradient for start of the 3D time step
             # Note that we use previously-recorded elevations and surface pressure at

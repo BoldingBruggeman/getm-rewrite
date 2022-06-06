@@ -15,7 +15,7 @@ cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int 
 cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
 cdef extern void domain_initialize(void* domain, int runtype, double Dmin, int method_vertical_coordinates, double ddl, double ddu, double Dgamma, int gamma_surf, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
-cdef extern void domain_do_vertical(void* domain) nogil
+cdef extern void domain_do_vertical(void* domain, double timestep) nogil
 cdef extern void domain_tracer_bdy(void* domain, void* grid, int nz, double* field, int bdytype, double* bdy)
 cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
 cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* target, int joffset) nogil
@@ -198,8 +198,8 @@ cdef class Domain:
         if self.p != NULL:
             domain_finalize(self.p)
 
-    def do_vertical(self):
-        domain_do_vertical(self.p)
+    def do_vertical(self, double timestep):
+        domain_do_vertical(self.p, timestep)
 
     def initialize(self, int runtype, double Dmin, int method_vertical_coordinates, double ddl=0., double ddu=0., double Dgamma=0., gamma_surf=True):
         domain_initialize(self.p, runtype, Dmin, method_vertical_coordinates, ddl, ddu, Dgamma, 1 if gamma_surf else 0, &self.maxdt)
