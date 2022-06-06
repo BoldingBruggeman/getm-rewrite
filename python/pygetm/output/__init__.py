@@ -2,7 +2,7 @@ import logging
 from typing import MutableMapping, Optional, List, Union
 import datetime
 
-import numpy.typing
+from numpy.typing import DTypeLike
 import cftime
 
 from .. import core
@@ -28,7 +28,7 @@ class File(operators.FieldCollection):
         logger: logging.Logger,
         interval: Union[int, datetime.timedelta] = 1,
         path: Optional[str] = None,
-        default_dtype: Optional[numpy.typing.DTypeLike] = None,
+        default_dtype: Optional[DTypeLike] = None,
     ):
         super().__init__(field_manager, default_dtype=default_dtype)
         self._logger = logger

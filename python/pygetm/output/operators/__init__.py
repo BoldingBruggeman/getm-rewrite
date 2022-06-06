@@ -1,8 +1,7 @@
 from typing import MutableMapping, Tuple, Union, Optional, Sequence
 import collections
 
-import numpy
-import numpy.typing
+from numpy.typing import DTypeLike, ArrayLike
 
 import pygetm.core
 from pygetm.constants import INTERFACES
@@ -14,7 +13,7 @@ class Base:
     def __init__(
         self,
         ndim: int,
-        dtype: numpy.typing.DTypeLike,
+        dtype: DTypeLike,
         grid,
         fill_value=None,
         constant: bool = False,
@@ -29,10 +28,7 @@ class Base:
         self.coordinates = []
 
     def get(
-        self,
-        out: numpy.typing.ArrayLike,
-        slice_spec: Tuple[int] = (),
-        sub: bool = False,
+        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
     ):
         raise NotImplementedError
 
@@ -47,9 +43,7 @@ class Base:
 
 
 class FieldCollection:
-    def __init__(
-        self, field_manager, default_dtype: Optional[numpy.typing.DTypeLike] = None
-    ):
+    def __init__(self, field_manager, default_dtype: Optional[DTypeLike] = None):
         self.fields: MutableMapping[str, Base] = collections.OrderedDict()
         self.expression2name = {}
         self.field_manager = field_manager
@@ -60,7 +54,7 @@ class FieldCollection:
         self,
         *fields: Union[str, pygetm.core.Array],
         output_name: Optional[str] = None,
-        dtype: Optional[numpy.typing.DTypeLike] = None,
+        dtype: Optional[DTypeLike] = None,
         mask: Optional[bool] = None,
         time_average: bool = False,
         generate_unique_name: bool = False
@@ -181,7 +175,7 @@ class Field(Base):
         self,
         array: pygetm.core.Array,
         collection: FieldCollection,
-        dtype: Optional[numpy.typing.DTypeLike] = None,
+        dtype: Optional[DTypeLike] = None,
         atts=None,
     ):
         if atts is None:
@@ -206,11 +200,8 @@ class Field(Base):
         )
 
     def get(
-        self,
-        out: numpy.typing.ArrayLike,
-        slice_spec: Tuple[int] = (),
-        sub: bool = False,
-    ) -> numpy.typing.ArrayLike:
+        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
+    ) -> ArrayLike:
         if sub:
             # Get data for subdomain only
             if out is not None:
@@ -280,11 +271,8 @@ class UnivariateTransform(Field):
 
 class Mask(UnivariateTransform):
     def get(
-        self,
-        out: numpy.typing.ArrayLike,
-        slice_spec: Tuple[int] = (),
-        sub: bool = False,
-    ) -> numpy.typing.ArrayLike:
+        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
+    ) -> ArrayLike:
         self._source.get(out=self.array.all_values, sub=True)
         self.array.all_values[..., self.grid.mask.all_values == 0] = self.fill_value
         super().get(out, slice_spec, sub)
@@ -311,11 +299,8 @@ class TimeAverage(UnivariateTransform):
         self._n += 1
 
     def get(
-        self,
-        out: numpy.typing.ArrayLike,
-        slice_spec: Tuple[int] = (),
-        sub: bool = False,
-    ) -> numpy.typing.ArrayLike:
+        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
+    ) -> ArrayLike:
         if self._n > 0:
             self.array.all_values /= self._n
         super().get(out, slice_spec, sub)
