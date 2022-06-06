@@ -25,7 +25,7 @@ class NetCDFFile(File):
         """Create a NetCDF file for output
 
         Args:
-            field_manager: collection of model fields that may be added
+            available_fields: collection of model fields that may be added
             logger: target for log messages
             path: file to create. If it exists it will be clobbered.
             rank: rank of this subdomain. This will be used to determine whether
