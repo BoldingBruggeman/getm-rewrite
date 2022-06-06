@@ -21,6 +21,24 @@ class NetCDFFile(File):
         time_reference: Optional[cftime.datetime] = None,
         **kwargs
     ):
+        """Create a NetCDF file for output
+
+        Args:
+            field_manager: collection of model fields that may be added
+            logger: target for log messages
+            path: file to create. If it exists it will be clobbered.
+            rank: rank of this subdomain. This will be used to determine whether
+                we are the root (rank 0) all output is gathered and written to a single
+                file. Otherwise the rank will be used as suffix for the
+                subdomain-specific files.
+            sub: whether to write to separate files per subdomain
+            sync_interval: frequency to call NetCDF sync, which forces all output to
+                be written to disk. If set to None, syncronization will happen only
+                when the file is closed as the end of a simulation.
+            time_reference: time reference (epoch) to use as offset for the time
+                coordinate.
+            **kwargs: additional keyword arguments passed to :class:`pygetm.output.File`
+        """
         super().__init__(field_manager, logger, path=path, **kwargs)
         name, ext = os.path.splitext(path)
         if sub:

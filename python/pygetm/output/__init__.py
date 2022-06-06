@@ -91,6 +91,13 @@ class OutputManager(FieldManager):
         self._logger = logger or logging.getLogger()
 
     def add_netcdf_file(self, path: str, **kwargs) -> netcdf.NetCDFFile:
+        """Add a NetCDF file for output.
+
+        Args:
+            path: NetCDF file to write to.
+            **kwargs: additional keyword arguments passed to
+                :class:`pygetm.output.netcdf.NetCDFFile`
+        """
         self._logger.debug("Adding NetCDF file %s" % path)
         file = netcdf.NetCDFFile(
             self, self._logger.getChild(path), path, rank=self.rank, **kwargs
@@ -99,6 +106,18 @@ class OutputManager(FieldManager):
         return file
 
     def add_restart(self, path: str, **kwargs) -> netcdf.NetCDFFile:
+        """Add a restart file to write to.
+
+        Args:
+            path: NetCDF file to write to.
+            **kwargs: additional keyword arguments passed to
+                :class:`pygetm.output.netcdf.NetCDFFile`
+
+        This is a wrapper around :meth:`add_netcdf_file` that automatically adds all
+        arrays with the ``_part_of_state`` flag. By default, the restart file will be
+        configured to be written at the end of the simulation, but this can be
+        customized by providing argument ``interval``.
+        """
         kwargs.setdefault("interval", -1)
         file = self.add_netcdf_file(path, **kwargs)
         for field in self.fields.values():

@@ -31,9 +31,11 @@ def domain_from_topo(
         **kwargs: keyword arguments that are ultimately passed to
             :class:`pygetm.domain.Domain`
 
-    Bottom roughness ``z0`` can be prescribed with keyword argument ``z0``,
+    Bottom roughness can be prescribed with keyword argument ``z0``,
     which will be passed to :class:`pygetm.domain.Domain`. This argument `must`
     be provided if the topo file does not contain bottom roughness ``z0``.
+    If ``z0`` is present in the argument list as well as the topo file, the
+    argument takes priority.
     """
     with netCDF4.Dataset(path) as nc:
         nc.set_auto_mask(False)
