@@ -366,30 +366,30 @@ for membername in Grid._all_arrays:
 
 
 def read_centers_to_supergrid(
-    ncvar, ioffset: int, joffset: int, nx: int, ny: int, dtype=None
+    source: ArrayLike, ioffset: int, joffset: int, nx: int, ny: int, dtype=None
 ):
     if dtype is None:
-        dtype = ncvar.dtype
-    data = np.ma.masked_all(ncvar.shape[:-2] + (ny * 2 + 1, nx * 2 + 1), dtype=dtype)
+        dtype = source.dtype
+    data = np.ma.masked_all(source.shape[:-2] + (ny * 2 + 1, nx * 2 + 1), dtype=dtype)
 
-    # Create an array to data at centers (T points),
+    # Create an array to hold data at centers (T points),
     # with strips of size 1 on all sides to support interpolation to interfaces
-    data_centers = np.ma.masked_all(ncvar.shape[:-2] + (ny + 2, nx + 2), dtype=dtype)
+    data_centers = np.ma.masked_all(source.shape[:-2] + (ny + 2, nx + 2), dtype=dtype)
 
     masked_values = []
-    if hasattr(ncvar, "missing_value"):
-        masked_values.append(np.array(ncvar.missing_value, ncvar.dtype))
+    if hasattr(source, "missing_value"):
+        masked_values.append(np.array(source.missing_value, source.dtype))
 
     # Extend the read domain (T grid) by 1 each side, where possible
     # That will allow us to interpolate (rater than extrapolate) to values at the
     # interfaces
     ex_imin = 0 if ioffset == 0 else 1
-    ex_imax = 0 if ioffset + nx == ncvar.shape[-1] else 1
+    ex_imax = 0 if ioffset + nx == source.shape[-1] else 1
     ex_jmin = 0 if joffset == 0 else 1
-    ex_jmax = 0 if joffset + ny == ncvar.shape[-2] else 1
+    ex_jmax = 0 if joffset + ny == source.shape[-2] else 1
     data_centers[
         ..., 1 - ex_jmin : 1 + ny + ex_jmax, 1 - ex_imin : 1 + nx + ex_imax
-    ] = ncvar[
+    ] = source[
         ...,
         joffset - ex_jmin : joffset + ny + ex_jmax,
         ioffset - ex_imin : ioffset + nx + ex_imax,
@@ -398,7 +398,7 @@ def read_centers_to_supergrid(
         data_centers = np.ma.masked_equal(data_centers, value, copy=False)
 
     data_if_ip = np.ma.masked_all(
-        (4,) + ncvar.shape[:-2] + (ny + 1, nx + 1), dtype=dtype
+        (4,) + source.shape[:-2] + (ny + 1, nx + 1), dtype=dtype
     )
     data_if_ip[0, ...] = data_centers[..., :-1, :-1]
     data_if_ip[1, ...] = data_centers[..., 1:, :-1]
@@ -428,6 +428,18 @@ R_EARTH = 6378815.0  # radius of the earth (m)
 OMEGA = (
     2.0 * np.pi / 86164.0
 )  # rotation rate of the earth (rad/s), 86164 is number of seconds in a sidereal day
+
+
+def coriolis(lat: ArrayLike) -> ArrayLike:
+    """Calculate Coriolis parameter f for the given latitude.
+
+    Args:
+        lat: latitude in degrees North
+
+    Returns:
+        Coriolis parameter f
+    """
+    return 2.0 * OMEGA * np.sin(DEG2RAD * lat)
 
 
 def center_to_supergrid_1d(data) -> np.ndarray:
@@ -1507,7 +1519,7 @@ class Domain(_pygetm.Domain):
         self.z0b_min, self.z0b_min_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=np.intc, fill_value=0)
 
-        cor = f if f is not None else 2.0 * OMEGA * np.sin(DEG2RAD * lat)
+        cor = f if f is not None else coriolis(lat)
         self.cor, self.cor_ = setup_metric(cor, writeable=False)
 
         # Compute dx, dy from Cartesian or spherical coordinates
@@ -1779,6 +1791,10 @@ class Domain(_pygetm.Domain):
             not self._initialized
         ), "set_bathymetry cannot be called after the domain has been initialized."
         if not isinstance(depth, xarray.DataArray):
+            depth = np.asarray(depth)
+            if depth.shape == (self.ny, self.nx):
+                depth = read_centers_to_supergrid(depth, 0, 0, self.nx, self.ny)
+
             # Depth is provided as raw data and therefore must be already on the
             # supergrid
             self.H[...] = depth
@@ -2141,7 +2157,7 @@ class Domain(_pygetm.Domain):
                 inside = not inside
         return inside
 
-    def update_depth(self, _3d: bool = False, timestep: float = 1.):
+    def update_depth(self, _3d: bool = False, timestep: float = 1.0):
         """Use old and new surface elevation on T grid to update elevations on U, V, X grids
         and subsequently update total water depth ``D`` on all grids.
 
