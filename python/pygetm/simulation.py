@@ -200,8 +200,8 @@ class Simulation(_pygetm.Simulation):
         self._cum_river_height_increase = np.zeros((len(self.domain.rivers),))
 
         #: Provider of air-water fluxes of heat and momentum.
-        # This must inherit from :class:`pygetm.airsea.Fluxes`
-        # and should be provided as argument airsea to :class:`Simulation`.
+        #: This must inherit from :class:`pygetm.airsea.Fluxes`
+        #: and should be provided as argument airsea to :class:`Simulation`.
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
         assert isinstance(self.airsea, pygetm.airsea.Fluxes), (
             "airsea argument should be of type pygetm.airsea.Fluxes, but is %s"
@@ -218,14 +218,14 @@ class Simulation(_pygetm.Simulation):
         self.fwf.fill(0.0)
 
         #: Collection of tracers that are to be transported.
-        # Optionally they can have sources, open boundary conditions
-        # and riverine concentrations set.
+        #: Optionally they can have sources, open boundary conditions
+        #: and riverine concentrations set.
         self.tracers: pygetm.tracer.TracerCollection = pygetm.tracer.TracerCollection(
             self.domain.T, advection_scheme=advection_scheme
         )
 
         #: List of variables for which the domain-integrated total needs to be reported.
-        # These can be depth-integrated (2D) or depth-explicit (3D).
+        #: These can be depth-integrated (2D) or depth-explicit (3D).
         self.tracer_totals: List[core.Array] = []
 
         self.fabm = None
