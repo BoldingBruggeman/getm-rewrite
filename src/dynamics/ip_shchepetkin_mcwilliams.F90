@@ -114,10 +114,16 @@ CONTAINS
    call cpu_time(U_start)
 #endif
    do k=TG%kmax,1,-1
+      UGrid: associate( UG => self%domain%U )
       do j=TG%jmin,TG%jmax
          do i=TG%imin-1,TG%imax+2
-            self%dZx(i,j)=TG%zc(i,j,k)-TG%zc(i-1,j,k)
-            self%dRx(i,j)=buoy(i,j,k)-buoy(i-1,j,k)
+            if (UG%mask(i-1,j) > 0) then
+               self%dZx(i,j)=TG%zc(i,j,k)-TG%zc(i-1,j,k)
+               self%dRx(i,j)=buoy(i,j,k)-buoy(i-1,j,k)
+            else
+               self%dZx(i,j)=0._real64
+               self%dRx(i,j)=0._real64
+            end if
          end do
       end do
 
@@ -138,7 +144,6 @@ CONTAINS
          end do
       end do
 
-      UGrid: associate( UG => self%domain%U )
       do j=UG%jmin,UG%jmax
          do i=UG%imin,UG%imax
             if (UG%mask(i,j) > 0) then
@@ -152,7 +157,7 @@ CONTAINS
                              )
                self%idpdx(i,j,k)=UG%hn(i,j,k)*UG%idx(i,j) &
                                  *(self%P(i+1,j,k)-self%P(i,j,k)+FC &
-                                 -(TG%zio(i+1,j)-TG%zio(i,j))*0.5_real64*(buoy(i+1,j,TG%kmax)+buoy(i,j,TG%kmax)))
+                                 -(TG%zin(i+1,j)-TG%zin(i,j))*0.5_real64*(buoy(i+1,j,TG%kmax)+buoy(i,j,TG%kmax)))
             end if
          end do
       end do
@@ -173,10 +178,16 @@ CONTAINS
    call cpu_time(V_start)
 #endif
    do k=TG%kmax,1,-1
+      VGrid: associate( VG => self%domain%V )
       do j=TG%jmin-1,TG%jmax+2
          do i=TG%imin,TG%imax
-            self%dZx(i,j)=TG%zc(i,j,k)-TG%zc(i,j-1,k)
-            self%dRx(i,j)=buoy(i,j,k)-buoy(i,j-1,k)
+            if (VG%mask(i,j-1) > 0) then
+               self%dZx(i,j)=TG%zc(i,j,k)-TG%zc(i,j-1,k)
+               self%dRx(i,j)=buoy(i,j,k)-buoy(i,j-1,k)
+            else
+               self%dZx(i,j)=0._real64
+               self%dRx(i,j)=0._real64
+            end if
          end do
       end do
 
@@ -197,7 +208,6 @@ CONTAINS
          end do
       end do
 
-      VGrid: associate( VG => self%domain%V )
       do j=VG%jmin,VG%jmax
          do i=VG%imin,VG%imax
             if (VG%mask(i,j) > 0) then
@@ -211,7 +221,7 @@ CONTAINS
                              )
                self%idpdy(i,j,k)=VG%hn(i,j,k)*VG%idy(i,j) &
                                  *(self%P(i,j+1,k)-self%P(i,j,k)+FC &
-                                 -(TG%zio(i,j+1)-TG%zio(i,j))*0.5_real64*(buoy(i,j+1,TG%kmax)+buoy(i,j,TG%kmax)))
+                                 -(TG%zin(i,j+1)-TG%zin(i,j))*0.5_real64*(buoy(i,j+1,TG%kmax)+buoy(i,j,TG%kmax)))
             end if
          end do
       end do
