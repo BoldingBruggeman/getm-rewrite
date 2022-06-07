@@ -1247,7 +1247,11 @@ class Domain(_pygetm.Domain):
         )
 
     def _map_array(self, source: ArrayLike, target: np.ndarray):
-        assert target.shape[-2:] == (self.ny * 2 + 9, self.nx * 2 + 9)
+        supergrid_shape = (
+            (self.ny + 2 * self.haloy) * 2 + 1,
+            (self.nx + 2 * self.halox) * 2 + 1,
+        )
+        assert target.shape[-2:] == supergrid_shape
         nx_glob, ny_glob = self.tiling.nx_glob, self.tiling.ny_glob
         source_shape = np.shape(source)
 
@@ -1717,20 +1721,21 @@ class Domain(_pygetm.Domain):
         if self.glob is not None and self.glob is not self:
             self.glob.initialize(runtype)
 
+        # Update halos of bathymwtry and bottom roughness, which the user could
+        # modify freely until now.
+        self._exchange_metric(self.H_)
+        self._exchange_metric(self.z0b_min_)
+
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained
         # by the domain to be used for e.g. plotting
         tmask = self.mask_[1::2, 1::2]
-        self.mask_[2:-2:2, 1::2][
-            np.logical_and(tmask[1:, :] == 0, tmask[:-1, :] == 0)
-        ] = 0
-        self.mask_[1::2, 2:-2:2][
-            np.logical_and(tmask[:, 1:] == 0, tmask[:, :-1] == 0)
-        ] = 0
+        self.mask_[2:-2:2, 1::2][(tmask[1:, :] == 0) & (tmask[:-1, :] == 0)] = 0
+        self.mask_[1::2, 2:-2:2][(tmask[:, 1:] == 0) & (tmask[:, :-1] == 0)] = 0
         self.mask_[2:-2:2, 2:-2:2][
-            np.logical_and(
-                np.logical_and(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0),
-                np.logical_and(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0),
-            )
+            (tmask[1:, 1:] == 0)
+            & (tmask[:-1, 1:] == 0)
+            & (tmask[1:, :-1] == 0)
+            & (tmask[:-1, :-1] == 0)
         ] = 0
         self._exchange_metric(self.mask_, fill_value=0)
 
@@ -1740,13 +1745,13 @@ class Domain(_pygetm.Domain):
         # sent to Fortran and determine which points are computed
         mask_ = np.array(self.mask_, copy=True)
         tmask = mask_[1::2, 1::2]
-        mask_[2:-2:2, 1::2][np.logical_or(tmask[1:, :] == 0, tmask[:-1, :] == 0)] = 0
-        mask_[1::2, 2:-2:2][np.logical_or(tmask[:, 1:] == 0, tmask[:, :-1] == 0)] = 0
+        mask_[2:-2:2, 1::2][(tmask[1:, :] == 0) | (tmask[:-1, :] == 0)] = 0
+        mask_[1::2, 2:-2:2][(tmask[:, 1:] == 0) | (tmask[:, :-1] == 0)] = 0
         mask_[2:-2:2, 2:-2:2][
-            np.logical_or(
-                np.logical_or(tmask[1:, 1:] == 0, tmask[:-1, 1:] == 0),
-                np.logical_or(tmask[1:, :-1] == 0, tmask[:-1, :-1] == 0),
-            )
+            (tmask[1:, 1:] == 0)
+            | (tmask[:-1, 1:] == 0)
+            | (tmask[1:, :-1] == 0)
+            | (tmask[:-1, :-1] == 0)
         ] = 0
         self._exchange_metric(mask_, fill_value=0)
         self.mask_[...] = mask_
@@ -1758,24 +1763,16 @@ class Domain(_pygetm.Domain):
         self.VU.mask.all_values.fill(0)
         self.VV.mask.all_values.fill(0)
         self.UU.mask.all_values[:, :-1][
-            np.logical_and(
-                self.U.mask.all_values[:, :-1], self.U.mask.all_values[:, 1:]
-            )
+            self.U.mask.all_values[:, :-1] & self.U.mask.all_values[:, 1:]
         ] = 1
         self.UV.mask.all_values[:-1, :][
-            np.logical_and(
-                self.U.mask.all_values[:-1, :], self.U.mask.all_values[1:, :]
-            )
+            self.U.mask.all_values[:-1, :] & self.U.mask.all_values[1:, :]
         ] = 1
         self.VU.mask.all_values[:, :-1][
-            np.logical_and(
-                self.V.mask.all_values[:, :-1], self.V.mask.all_values[:, 1:]
-            )
+            self.V.mask.all_values[:, :-1] & self.V.mask.all_values[:, 1:]
         ] = 1
         self.VV.mask.all_values[:-1, :][
-            np.logical_and(
-                self.V.mask.all_values[:-1, :], self.V.mask.all_values[1:, :]
-            )
+            self.V.mask.all_values[:-1, :] & self.V.mask.all_values[1:, :]
         ] = 1
 
         self.logger.info(
@@ -1884,15 +1881,11 @@ class Domain(_pygetm.Domain):
         if critical_depth is None:
             critical_depth = self.Dcrit
         tdepth = self.H_[1::2, 1::2]
-        Vchange = np.logical_or(
-            tdepth[1:, :] <= critical_depth, tdepth[:-1, :] <= critical_depth
-        )
+        Vchange = (tdepth[1:, :] <= critical_depth) | (tdepth[:-1, :] <= critical_depth)
         self.H_[2:-2:2, 1::2][Vchange] = np.minimum(tdepth[1:, :], tdepth[:-1, :])[
             Vchange
         ]
-        Uchange = np.logical_or(
-            tdepth[:, 1:] <= critical_depth, tdepth[:, :-1] <= critical_depth
-        )
+        Uchange = (tdepth[:, 1:] <= critical_depth) | (tdepth[:, :-1] <= critical_depth)
         self.H_[1::2, 2:-2:2][Uchange] = np.minimum(tdepth[:, 1:], tdepth[:, :-1])[
             Uchange
         ]
@@ -1937,13 +1930,13 @@ class Domain(_pygetm.Domain):
         selected = np.ones(self.mask.shape, dtype=bool)
         x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
         if xmin is not None:
-            selected = np.logical_and(selected, x >= xmin)
+            selected &= x >= xmin
         if xmax is not None:
-            selected = np.logical_and(selected, x <= xmax)
+            selected &= x <= xmax
         if ymin is not None:
-            selected = np.logical_and(selected, y >= ymin)
+            selected &= y >= ymin
         if ymax is not None:
-            selected = np.logical_and(selected, y <= ymax)
+            selected &= y <= ymax
         self.mask[selected] = value
 
     def plot(
