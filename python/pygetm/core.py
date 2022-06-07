@@ -276,7 +276,18 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             kwargs["shading"] = "auto"
         return self.xarray.plot(**kwargs)
 
-    def interp(self, target, z: Literal[None, True, False, CENTERS, INTERFACES] = None):
+    def interp(
+        self,
+        target: Union["Array", domain.Grid],
+        z: Literal[None, True, False, CENTERS, INTERFACES] = None,
+    ) -> "Array":
+        """Interpolate the array to another grid.
+
+        Args:
+            target: either the :class:`Array` that will hold the interpolated data,
+                or the :class:`domain.Grid` to interpolate to. If a `Grid` is provided,
+                a new array will be created to hold the interpolated values
+        """
         if not isinstance(target, Array):
             # Target must be a grid; we need to create the array
             target = Array.create(
@@ -313,10 +324,21 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             )
         return target
 
-    def __array__(self, dtype=None):
+    def __array__(self, dtype: Optional[DTypeLike] = None) -> np.ndarray:
+        """Return interior of the array as a NumPy array.
+        No copy will be made unless the requested data type differs from that
+        of the underlying array.
+
+        Args:
+            dtype: data type
+        """
         return np.asarray(self.values, dtype=dtype)
 
-    def isel(self, z: int, **kwargs):
+    def isel(self, *, z: int, **kwargs) -> "Array":
+        """Select a single depth level. The data in the returned 2D :class:`Array`.
+        will be a view of the relevant data of the original 3D array. Thus, changes
+        in one will affect the other.
+        """
         if self._ndim != 3:
             raise NotImplementedError
         if self.units is not None:
@@ -328,22 +350,33 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         ar.register()
         return ar
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> np.ndarray:
+        """Retrieve values from the interior of the array (excluding halos).
+        For access to the halos, use :attr:`all_values`.
+        """
         return self.values[key]
 
     def __setitem__(self, key, values):
+        """Assign values to the interior of the array (excluding halos).
+        For access to the halos, use :attr:`all_values`.
+        """
         self.values[key] = values
 
     @property
     def shape(self) -> Tuple[int]:
+        """Shape"""
         return self._shape
 
     @property
     def ndim(self) -> int:
+        """Number of dimensions"""
         return self._ndim
 
     @property
     def z(self):
+        """Vertical dimension: False if the array has no vertical dimension,
+        `CENTERS` for layer centers, `INTERFACES` for layer interfaces.
+        """
         if self._ndim != (2 if self.on_boundary else 3):
             return False
         nz = self._shape[1 if self.on_boundary else 0]
@@ -351,26 +384,32 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def size(self) -> int:
+        """Total number of values"""
         return self._size
 
     @property
     def dtype(self) -> DTypeLike:
+        """Data type"""
         return self._dtype
 
     @property
     def name(self) -> Optional[str]:
+        """Name"""
         return self._name
 
     @property
     def units(self) -> Optional[str]:
+        """Units"""
         return self.attrs.get("units")
 
     @property
     def long_name(self) -> Optional[str]:
+        """Long name"""
         return self.attrs.get("long_name")
 
     @property
     def fill_value(self) -> Optional[Union[int, float]]:
+        """Fill value"""
         return self._fill_value
 
     # Below based on https://np.org/devdocs/reference/generated/np.lib.mixins.NDArrayOperatorsMixin.html#np.lib.mixins.NDArrayOperatorsMixin
@@ -438,6 +477,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def xarray(self) -> xarray.DataArray:
+        """Return this array wrapped in an :class:`xarray.DataArray` that includes
+        coordinates and can be used for plotting
+        """
         if self._xarray is None:
             attrs = {}
             for key in ("units", "long_name"):

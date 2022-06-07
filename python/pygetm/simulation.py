@@ -332,7 +332,7 @@ class Simulation(_pygetm.Simulation):
                 z=CENTERS, name="buoy", units="m s-2", long_name="buoyancy"
             )
             self.tracer_totals.append(self.salt)
-            self.sss = self.salt.isel(-1)
+            self.sss = self.salt.isel(z=-1)
 
             self.density = density or pygetm.density.Density()
         else:
@@ -705,7 +705,7 @@ class Simulation(_pygetm.Simulation):
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
             self.density.get_potential_temperature(
-                self.sss, self.temp.isel(-1), out=self.sst
+                self.sss, self.temp.isel(z=-1), out=self.sst
             )
 
             # Calculate squared buoyancy frequency NN
