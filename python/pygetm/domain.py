@@ -1157,8 +1157,7 @@ class Domain(_pygetm.Domain):
             expected_shape,
         )
 
-        halo = 2
-        superhalo = 2 * halo
+        HALO = 4  # supergrid
         valid_before = np.logical_not(np.isnan(data))
 
         # Expand the data array one each side
@@ -1166,23 +1165,15 @@ class Domain(_pygetm.Domain):
             (data.shape[0] + 2, data.shape[1] + 2), fill_value, dtype=data.dtype
         )
         data_ext[1:-1, 1:-1] = data
-        data_ext[:superhalo, :superhalo] = data[:superhalo, :superhalo]
-        data_ext[:superhalo, superhalo + 1 : -superhalo - 1] = data[
-            :superhalo, superhalo:-superhalo
-        ]
-        data_ext[:superhalo, -superhalo:] = data[:superhalo, -superhalo:]
-        data_ext[superhalo + 1 : -superhalo - 1, :superhalo] = data[
-            superhalo:-superhalo, :superhalo
-        ]
-        data_ext[superhalo + 1 : -superhalo - 1, -superhalo:] = data[
-            superhalo:-superhalo, -superhalo:
-        ]
-        data_ext[-superhalo:, :superhalo] = data[-superhalo:, :superhalo]
-        data_ext[-superhalo:, superhalo + 1 : -superhalo - 1] = data[
-            -superhalo:, superhalo:-superhalo
-        ]
-        data_ext[-superhalo:, -superhalo:] = data[-superhalo:, -superhalo:]
-        self.tiling.wrap(data_ext, superhalo + 1).update_halos()
+        data_ext[:HALO, :HALO] = data[:HALO, :HALO]
+        data_ext[:HALO, HALO + 1 : -HALO - 1] = data[:HALO, HALO:-HALO]
+        data_ext[:HALO, -HALO:] = data[:HALO, -HALO:]
+        data_ext[HALO + 1 : -HALO - 1, :HALO] = data[HALO:-HALO, :HALO]
+        data_ext[HALO + 1 : -HALO - 1, -HALO:] = data[HALO:-HALO, -HALO:]
+        data_ext[-HALO:, :HALO] = data[-HALO:, :HALO]
+        data_ext[-HALO:, HALO + 1 : -HALO - 1] = data[-HALO:, HALO:-HALO]
+        data_ext[-HALO:, -HALO:] = data[-HALO:, -HALO:]
+        self.tiling.wrap(data_ext, HALO + 1).update_halos()
 
         # For values in the halo, compute their difference with the outer boundary of
         # the subdomain we exchanged with (now the innermost halo point). Then use that
@@ -1190,22 +1181,18 @@ class Domain(_pygetm.Domain):
         # This ensures coordinate variables are monotonically increasing in interior
         # AND halos, even if periodic boundary conditions are used.
         if relative_in_x:
-            data_ext[:, : superhalo + 1] += (
-                data_ext[:, superhalo + 1 : superhalo + 2]
-                - data_ext[:, superhalo : superhalo + 1]
+            data_ext[:, : HALO + 1] += (
+                data_ext[:, HALO + 1 : HALO + 2] - data_ext[:, HALO : HALO + 1]
             )
-            data_ext[:, -superhalo - 1 :] += (
-                data_ext[:, -superhalo - 2 : -superhalo - 1]
-                - data_ext[:, -superhalo - 1 : -superhalo]
+            data_ext[:, -HALO - 1 :] += (
+                data_ext[:, -HALO - 2 : -HALO - 1] - data_ext[:, -HALO - 1 : -HALO]
             )
         if relative_in_y:
-            data_ext[: superhalo + 1, :] += (
-                data_ext[superhalo + 1 : superhalo + 2, :]
-                - data_ext[superhalo : superhalo + 1, :]
+            data_ext[: HALO + 1, :] += (
+                data_ext[HALO + 1 : HALO + 2, :] - data_ext[HALO : HALO + 1, :]
             )
-            data_ext[-superhalo - 1 :, :] += (
-                data_ext[-superhalo - 2 : -superhalo - 1, :]
-                - data_ext[-superhalo - 1 : -superhalo, :]
+            data_ext[-HALO - 1 :, :] += (
+                data_ext[-HALO - 2 : -HALO - 1, :] - data_ext[-HALO - 1 : -HALO, :]
             )
 
         # Since subdomains share the outer boundary, that boundary will be replicated
@@ -1214,29 +1201,21 @@ class Domain(_pygetm.Domain):
         # inwards to eliminate that overlapping point
         # Where we do not have a subdomain neighbor, we keep the original values.
         if self.tiling.bottomleft != -1:
-            data[:superhalo, :superhalo] = data_ext[:superhalo, :superhalo]
+            data[:HALO, :HALO] = data_ext[:HALO, :HALO]
         if self.tiling.bottom != -1:
-            data[:superhalo, superhalo:-superhalo] = data_ext[
-                :superhalo, superhalo + 1 : -superhalo - 1
-            ]
+            data[:HALO, HALO:-HALO] = data_ext[:HALO, HALO + 1 : -HALO - 1]
         if self.tiling.bottomright != -1:
-            data[:superhalo, -superhalo:] = data_ext[:superhalo, -superhalo:]
+            data[:HALO, -HALO:] = data_ext[:HALO, -HALO:]
         if self.tiling.left != -1:
-            data[superhalo:-superhalo, :superhalo] = data_ext[
-                superhalo + 1 : -superhalo - 1, :superhalo
-            ]
+            data[HALO:-HALO, :HALO] = data_ext[HALO + 1 : -HALO - 1, :HALO]
         if self.tiling.right != -1:
-            data[superhalo:-superhalo, -superhalo:] = data_ext[
-                superhalo + 1 : -superhalo - 1, -superhalo:
-            ]
+            data[HALO:-HALO, -HALO:] = data_ext[HALO + 1 : -HALO - 1, -HALO:]
         if self.tiling.topleft != -1:
-            data[-superhalo:, :superhalo] = data_ext[-superhalo:, :superhalo]
+            data[-HALO:, :HALO] = data_ext[-HALO:, :HALO]
         if self.tiling.top != -1:
-            data[-superhalo:, superhalo:-superhalo] = data_ext[
-                -superhalo:, superhalo + 1 : -superhalo - 1
-            ]
+            data[-HALO:, HALO:-HALO] = data_ext[-HALO:, HALO + 1 : -HALO - 1]
         if self.tiling.topright != -1:
-            data[-superhalo:, -superhalo:] = data_ext[-superhalo:, -superhalo:]
+            data[-HALO:, -HALO:] = data_ext[-HALO:, -HALO:]
 
         valid_after = np.logical_not(np.isnan(data))
         still_ok = np.where(valid_before, valid_after, True)
