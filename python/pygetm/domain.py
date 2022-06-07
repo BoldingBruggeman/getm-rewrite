@@ -1742,16 +1742,16 @@ class Domain(_pygetm.Domain):
         self.VU.mask.all_values.fill(0)
         self.VV.mask.all_values.fill(0)
         self.UU.mask.all_values[:, :-1][
-            self.U.mask.all_values[:, :-1] & self.U.mask.all_values[:, 1:]
+            (self.U.mask.all_values[:, :-1] != 0) & (self.U.mask.all_values[:, 1:] != 0)
         ] = 1
         self.UV.mask.all_values[:-1, :][
-            self.U.mask.all_values[:-1, :] & self.U.mask.all_values[1:, :]
+            (self.U.mask.all_values[:-1, :] != 0) & (self.U.mask.all_values[1:, :] != 0)
         ] = 1
         self.VU.mask.all_values[:, :-1][
-            self.V.mask.all_values[:, :-1] & self.V.mask.all_values[:, 1:]
+            (self.V.mask.all_values[:, :-1] != 0) & (self.V.mask.all_values[:, 1:] != 0)
         ] = 1
         self.VV.mask.all_values[:-1, :][
-            self.V.mask.all_values[:-1, :] & self.V.mask.all_values[1:, :]
+            (self.V.mask.all_values[:-1, :] != 0) & (self.V.mask.all_values[1:, :] != 0)
         ] = 1
 
         self.logger.info(
