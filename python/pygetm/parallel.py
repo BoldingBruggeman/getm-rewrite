@@ -20,7 +20,7 @@ def _iterate_rankmap(rankmap):
             yield irow, icol, rankmap[irow, icol]
 
 
-def getLogger(log_level=logging.INFO, comm=MPI.COMM_WORLD):
+def get_logger(log_level=logging.INFO, comm=MPI.COMM_WORLD):
     handlers: List[logging.Handler] = []
     if comm.rank == 0:
         handlers.append(logging.StreamHandler())

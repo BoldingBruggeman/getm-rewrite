@@ -1304,7 +1304,7 @@ class Domain(_pygetm.Domain):
         **kwargs
     ):
         global_domain = None
-        logger = logger or parallel.getLogger()
+        logger = logger or parallel.get_logger()
         parlogger = logger.getChild("parallel")
 
         # Determine subdomain division
@@ -1467,7 +1467,7 @@ class Domain(_pygetm.Domain):
 
         # Loggers
         if logger is None:
-            logger = parallel.getLogger()
+            logger = parallel.get_logger()
         self.root_logger: logging.Logger = logger
         self.logger: logging.Logger = self.root_logger.getChild("domain")
 
