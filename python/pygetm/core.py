@@ -29,7 +29,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "attrs",
         "_fill_value",
         "_ma",
-        "mapped_field",
         "saved",
         "_shape",
         "_ndim",
@@ -75,8 +74,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             else np.array(fill_value, dtype=dtype)
         )
         self._ma = None
-        self.mapped_field: Optional[xarray.DataArray] = None
-        self.saved = False  # to be set if this variable is requested for output
+        self.saved = False  #: to be set if this variable is requested for output
         self._shape = shape
         self._ndim = None if shape is None else len(shape)
         self._size = None if shape is None else np.prod(shape)
@@ -91,7 +89,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def finish_initialization(self):
         """This is called by the underlying cython implementation after the array
-        receives a value (self.all_values is valid)
+        receives a value (:attr:`all_values` is valid)
         """
         assert self.grid is not None
         self._dtype = self.all_values.dtype
@@ -278,7 +276,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def interp(
         self,
-        target: Union["Array", domain.Grid],
+        target: Union["Array", "domain.Grid"],
         z: Literal[None, True, False, CENTERS, INTERFACES] = None,
     ) -> "Array":
         """Interpolate the array to another grid.
