@@ -56,6 +56,8 @@ class Tiling:
         solution = find_optimal_divison(
             mask, ncpus, max_protrude=max_protrude, logger=logger
         )
+        if not solution:
+            raise Exception("No suitable subdomain decompositon found")
         counts = solution["map"]
         rank_map = np.full(counts.shape, -1, dtype=int)
         rank = 0
@@ -802,6 +804,7 @@ def find_optimal_divison(
     weight_halo: int = 10,
     max_protrude: float = 0.5,
     logger: Optional[logging.Logger] = None,
+    comm: MPI.Comm = MPI.COMM_WORLD,
 ) -> Optional[Mapping[str, Any]]:
     if ncpus is None:
         ncpus = MPI.COMM_WORLD.size
@@ -849,7 +852,7 @@ def find_optimal_divison(
         logger.info("Trying %i possible subdomain sizes" % (nx_ny_combos.shape[0],))
 
     cost, solution = None, None
-    for nx_sub, ny_sub in nx_ny_combos[MPI.COMM_WORLD.rank :: MPI.COMM_WORLD.size]:
+    for nx_sub, ny_sub in nx_ny_combos[comm.rank :: comm.size]:
         current_solution = _pygetm.find_subdiv_solutions(
             mask,
             nx_sub,
@@ -873,9 +876,9 @@ def find_optimal_divison(
                     "map": submap,
                 }
                 cost = current_cost
-    solutions = MPI.COMM_WORLD.allgather(solution)
-    solution = min(filter(None, solutions), key=lambda x: x["cost"])
-    if logger:
+    solutions = comm.allgather(solution)
+    solution = min(filter(None, solutions), key=lambda x: x["cost"], default=None)
+    if logger and solution:
         logger.info("Optimal subdomain decomposition: %s" % solution)
     return solution
 
