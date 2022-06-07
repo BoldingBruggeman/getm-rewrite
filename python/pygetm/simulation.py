@@ -506,6 +506,11 @@ class Simulation(_pygetm.Simulation):
             default_time_reference=self.default_time_reference,
         )
 
+        # Verify all fields have finite values. Do this after self.output_manager.start
+        # so the user can diagnose issues by reviewing the output
+        if not self.check_finite(_3d=self.runtype > BAROTROPIC_2D):
+            raise Exception('Non-finite values found before simulation start')
+
         # Record true start time for performance analysis
         self._start_time = timeit.default_timer()
 
@@ -518,10 +523,14 @@ class Simulation(_pygetm.Simulation):
             self._profile = (profile, pr)
             pr.enable()
 
-    def advance(self):
+    def advance(self, check_finite: bool = False):
         """Advance the model state by one microtimestep.
         If this completes the current macrotimestep, the part of the state associated
         with that timestep will be advanced too.
+
+        Args:
+            check_finite: after the state update, verify that all fields only contain
+                finite values
         """
 
         # Update transports U and V from time=-1/2 to +1/2, using surface stresses and
@@ -648,6 +657,9 @@ class Simulation(_pygetm.Simulation):
 
         self.output_manager.save(self.timestep * self.istep, self.istep, self.time)
 
+        if check_finite:
+            assert self.check_finite(_3d=macro_active)
+
         return macro_active
 
     def update_forcing(
@@ -663,6 +675,8 @@ class Simulation(_pygetm.Simulation):
             skip_2d_coriolis: whether to skip the update of depth-integrated Coriolis
                 terms, typically because they have already been recalculated as part of
                 the transport update
+            update_z0b: update bottom roughness z0b as part of the depth-integrated
+                bottom friction calculation
         """
         # Update all inputs.
         self.domain.input_manager.update(self.time, include_3d=macro_active)
@@ -882,6 +896,34 @@ class Simulation(_pygetm.Simulation):
         """
         super().advance_surface_elevation(timestep, U, V, fwf)
         self.domain.T.z.update_halos()
+
+    def check_finite(self, _3d: bool = True) -> bool:
+        """Verify that all fields available for output contain finite values.
+        Fields with non-finite values are reported in the log as error messages,
+        but the simulation is not automatically stopped. This can be done based
+        on the return value of this function (False if one or more fields are invalid)
+
+        Args:
+            _3d: also check fields updated on the 3d (macro) timestep, not just
+                depth-integrated fields
+
+        Returns:
+            True if all checked fields only contain finite values; False otherwise
+        """
+        valid = True
+        for field in self.domain.fields.values():
+            if field.z and not _3d:
+                continue
+            finite = np.isfinite(field.all_values)
+            unmasked = True if field.on_boundary else field.grid.mask.all_values > 0
+            if not finite.all(where=unmasked):
+                valid = False
+                bad_count = finite.size - finite.sum(where=unmasked)
+                self.logger.error(
+                    "Field %s has %i non-finite values (out of %i)."
+                    % (field.name, bad_count, finite.size)
+                )
+        return valid
 
     @property
     def Ekin(self, rho0: float = RHO0):

@@ -220,7 +220,7 @@ class Grid(_pygetm.Grid):
             units="rad",
             long_name="grid rotation with respect to true North",
         )
-        self._setup_array(name, self.rotation)
+        self._setup_array("rotation", self.rotation)
         self.zc.all_values.fill(0.0)
         self.zf.all_values.fill(0.0)
         self.z0b.all_values[...] = self.z0b_min.all_values

@@ -159,7 +159,7 @@ class FABM:
 
         # Fill GETM placeholder arrays for all FABM diagnostics that will be
         # computed/saved.
-        for variable, ar in zip(
+        for variable, array in zip(
             itertools.chain(
                 self.model.interior_diagnostic_variables,
                 self.model.horizontal_diagnostic_variables,
@@ -168,8 +168,12 @@ class FABM:
                 self._interior_diagnostic_arrays, self._horizontal_diagnostic_arrays
             ),
         ):
-            if ar.saved:
-                ar.wrap_ndarray(variable.data)
+            if array.saved:
+                # Provide the array with data
+                array.wrap_ndarray(variable.data)
+            else:
+                # Remove the array from the list of available fields
+                del self.grid.domain.fields[array.name]
 
         # Apply mask to all state variables (interior, bottom, surface)
         for variable in self.model.state_variables:
