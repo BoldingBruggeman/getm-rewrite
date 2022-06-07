@@ -1246,6 +1246,61 @@ class Domain(_pygetm.Domain):
             still_ok,
         )
 
+    def _map_array(self, source: ArrayLike, target: np.ndarray):
+        assert target.shape[-2:] == (self.ny * 2 + 9, self.nx * 2 + 9)
+        nx_glob, ny_glob = self.tiling.nx_glob, self.tiling.ny_glob
+        source_shape = np.shape(source)
+
+        target_slice, source_slice, _, _ = self.tiling.subdomain2slices(
+            halo_sub=4,
+            halo_glob=0,
+            scale=2,
+            share=1,
+            exclude_halos=False,
+            exclude_global_halos=True,
+        )
+
+        def cast(target_shape: Tuple[int]) -> bool:
+            nonlocal source
+            try:
+                np.broadcast_shapes(source_shape, target_shape)
+            except ValueError:
+                return False
+            source = np.broadcast_to(source, target_shape)
+            return True
+
+        if cast(target.shape):
+            # local domain, supergrid INcluding halos
+            target_slice = (Ellipsis,)
+            source_slice = (Ellipsis,)
+        elif cast((self.ny * 2 + 1, self.nx * 2 + 1)):
+            # local domain, supergrid EXcluding halos
+            target_slice = (Ellipsis, slice(4, -4), slice(4, -4))
+            source_slice = (Ellipsis,)
+        elif cast((self.ny, self.nx)):
+            # local domain, T grid, no halos
+            source = read_centers_to_supergrid(source, 0, 0, self.nx, self.ny)
+            target_slice = (Ellipsis, slice(4, -4), slice(4, -4))
+            source_slice = (Ellipsis,)
+        elif cast((self.ny + 1, self.nx + 1)):
+            # local domain, X grid, no halos
+            source = interfaces_to_supergrid_2d(source)
+            target_slice = (Ellipsis, slice(4, -4), slice(4, -4))
+            source_slice = (Ellipsis,)
+        elif cast((ny_glob, nx_glob)):
+            # global domain, T grid
+            source = read_centers_to_supergrid(source, 0, 0, nx_glob, ny_glob)
+        elif cast((ny_glob + 1, nx_glob + 1)):
+            # global domain, X grid
+            source = interfaces_to_supergrid_2d(source)
+        else:
+            raise Exception(
+                "Cannot map array with shape %s to local supergrid with shape %s."
+                % (source_shape, target.shape)
+            )
+
+        target[target_slice] = source[source_slice]
+
     @staticmethod
     def create(
         nx: int,
@@ -1418,13 +1473,19 @@ class Domain(_pygetm.Domain):
             Dgamma: depth (m) range over which z-like coordinates should be used
             gamma_surf: use z-like coordinates in surface layer (as opposed to bottom
                 layer)
+            **kwargs: additional keyword arguments passed to
+                :class:`pygetm.parallel.Tiling`
         """
-        assert nx > 0, "Number of x points is %i but must be > 0" % nx
-        assert ny > 0, "Number of y points is %i but must be > 0" % ny
-        assert nz > 0, "Number of z points is %i but must be > 0" % nz
-        assert (
-            lat is not None or f is not None
-        ), "Either lat of f must be provided to determine the Coriolis parameter."
+        if nx <= 0:
+            raise Exception("Number of x points is %i but must be > 0" % nx)
+        if ny <= 0:
+            raise Exception("Number of y points is %i but must be > 0" % ny)
+        if nz <= 0:
+            raise Exception("Number of z points is %i but must be > 0" % nz)
+        if lat is None and f is None:
+            raise Exception(
+                "Either lat of f must be provided to determine the Coriolis parameter."
+            )
 
         # Loggers
         if logger is None:
@@ -1477,23 +1538,7 @@ class Domain(_pygetm.Domain):
             data = np.full(shape_, fill_value, dtype)
             data_int = data[superhalo:-superhalo, superhalo:-superhalo]
             if source is not None:
-                if np.shape(source) == data.shape:
-                    data[...] = source
-                else:
-                    try:
-                        # First try if data has been provided on the supergrid
-                        data_int[...] = source
-                    except ValueError:
-                        try:
-                            # Now try if data has been provided on the X (corners) grid
-                            source_on_X = np.broadcast_to(source, (ny + 1, nx + 1))
-                            interfaces_to_supergrid_2d(source_on_X, out=data_int)
-                        except ValueError:
-                            raise Exception(
-                                "Cannot array broadcast to supergrid (%i x %i) or"
-                                " X grid (%i x %i)"
-                                % ((ny * 2 + 1, nx * 2 + 1, ny + 1, nx + 1))
-                            )
+                self._map_array(source, data)
                 self._exchange_metric(
                     data, relative_in_x, relative_in_y, fill_value=fill_value
                 )
@@ -1778,26 +1823,25 @@ class Domain(_pygetm.Domain):
 
         self._initialized = True
 
-    def set_bathymetry(self, depth, scale_factor=None, periodic_lon: bool = False):
+    def set_bathymetry(
+        self, depth, scale_factor=None, periodic_lon: bool = False, sub: bool = False
+    ):
         """Set bathymetric depth on supergrid. The bathymetric depth is the distance
         between some arbitrary depth reference (often mean sea level) and the bottom,
         positive for greater depth.
 
         Args:
+            depth: depth values for the global domain or the local subdomain.
+                They can be provided on the supergrid, or on the T or X grid.
             scale_factor: apply scale factor to provided depths
             periodic_lon: depth source spans entire globe in longitude
         """
         assert (
             not self._initialized
         ), "set_bathymetry cannot be called after the domain has been initialized."
-        if not isinstance(depth, xarray.DataArray):
-            depth = np.asarray(depth)
-            if depth.shape == (self.ny, self.nx):
-                depth = read_centers_to_supergrid(depth, 0, 0, self.nx, self.ny)
 
-            # Depth is provided as raw data and therefore must be already on the
-            # supergrid
-            self.H[...] = depth
+        if not isinstance(depth, xarray.DataArray):
+            self._map_array(depth, self.H_)
         else:
             # Depth is provided as xarray object that includes coordinates (we require
             # CF compliant longitude, latitude). Interpolate to target grid.
