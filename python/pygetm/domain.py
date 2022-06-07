@@ -224,6 +224,7 @@ class Grid(_pygetm.Grid):
         self.zc.all_values.fill(0.0)
         self.zf.all_values.fill(0.0)
         self.z0b.all_values[...] = self.z0b_min.all_values
+        self.z.all_values[self.mask.all_values > 0] = 0.
         self.zo.all_values[...] = self.z.all_values
         self.zio.all_values[...] = self.z.all_values
         self.zin.all_values[...] = self.z.all_values
@@ -1132,9 +1133,6 @@ class Domain(_pygetm.Domain):
         parallel.Scatter(tiling, domain.z0b_min_, halo=HALO, share=SHARE, scale=SCALE)(
             None if global_domain is None else global_domain.z0b_min_
         )
-        parallel.Scatter(tiling, domain.z_, halo=HALO, share=SHARE, scale=SCALE)(
-            None if global_domain is None else global_domain.z_
-        )
 
         return domain
 
@@ -1301,7 +1299,6 @@ class Domain(_pygetm.Domain):
         tiling: Optional[parallel.Tiling] = None,
         periodic_x: bool = False,
         periodic_y: bool = False,
-        z: Optional[np.ndarray] = 0.0,
         logger: Optional[logging.Logger] = None,
         glob: bool = False,
         **kwargs
@@ -1371,7 +1368,6 @@ class Domain(_pygetm.Domain):
                 H=H,
                 z0=z0,
                 f=f,
-                z=z,
                 logger=logger,
                 **kwargs
             )
@@ -1412,7 +1408,6 @@ class Domain(_pygetm.Domain):
         z0: Optional[np.ndarray] = 0.0,
         f: Optional[np.ndarray] = None,
         tiling: Optional[parallel.Tiling] = None,
-        z: Optional[np.ndarray] = 0.0,
         logger: Optional[logging.Logger] = None,
         Dmin: float = 1.0,
         Dcrit: float = 2.0,
@@ -1543,7 +1538,6 @@ class Domain(_pygetm.Domain):
             lat, optional=True, relative_in_y=True, writeable=False
         )
         self.H, self.H_ = setup_metric(H)
-        self.z, self.z_ = setup_metric(z)  # elevation
         self.z0b_min, self.z0b_min_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=np.intc, fill_value=0)
 
@@ -1700,7 +1694,7 @@ class Domain(_pygetm.Domain):
         if self.glob is not None and self.glob is not self:
             self.glob.initialize(runtype)
 
-        # Update halos of bathymwtry and bottom roughness, which the user could
+        # Update halos of bathymetry and bottom roughness, which the user could
         # modify freely until now.
         self._exchange_metric(self.H_)
         self._exchange_metric(self.z0b_min_)
@@ -1742,16 +1736,16 @@ class Domain(_pygetm.Domain):
         self.VU.mask.all_values.fill(0)
         self.VV.mask.all_values.fill(0)
         self.UU.mask.all_values[:, :-1][
-            (self.U.mask.all_values[:, :-1] != 0) & (self.U.mask.all_values[:, 1:] != 0)
+            (self.U.mask.all_values[:, :-1] > 0) & (self.U.mask.all_values[:, 1:] > 0)
         ] = 1
         self.UV.mask.all_values[:-1, :][
-            (self.U.mask.all_values[:-1, :] != 0) & (self.U.mask.all_values[1:, :] != 0)
+            (self.U.mask.all_values[:-1, :] > 0) & (self.U.mask.all_values[1:, :] > 0)
         ] = 1
         self.VU.mask.all_values[:, :-1][
-            (self.V.mask.all_values[:, :-1] != 0) & (self.V.mask.all_values[:, 1:] != 0)
+            (self.V.mask.all_values[:, :-1] > 0) & (self.V.mask.all_values[:, 1:] > 0)
         ] = 1
         self.VV.mask.all_values[:-1, :][
-            (self.V.mask.all_values[:-1, :] != 0) & (self.V.mask.all_values[1:, :] != 0)
+            (self.V.mask.all_values[:-1, :] > 0) & (self.V.mask.all_values[1:, :] > 0)
         ] = 1
 
         self.logger.info(
@@ -1768,7 +1762,6 @@ class Domain(_pygetm.Domain):
         self.H_.flags.writeable = self.H.flags.writeable = False
         self.z0b_min_.flags.writeable = self.z0b_min.flags.writeable = False
         self.mask_.flags.writeable = self.mask.flags.writeable = False
-        self.z_.flags.writeable = self.z.flags.writeable = False
 
         super().initialize(
             runtype,
