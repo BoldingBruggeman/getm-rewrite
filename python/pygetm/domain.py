@@ -224,7 +224,7 @@ class Grid(_pygetm.Grid):
         self.zc.all_values.fill(0.0)
         self.zf.all_values.fill(0.0)
         self.z0b.all_values[...] = self.z0b_min.all_values
-        self.z.all_values[self.mask.all_values > 0] = 0.
+        self.z.all_values[self.mask.all_values > 0] = 0.0
         self.zo.all_values[...] = self.z.all_values
         self.zio.all_values[...] = self.z.all_values
         self.zin.all_values[...] = self.z.all_values
@@ -249,26 +249,23 @@ class Grid(_pygetm.Grid):
             return
 
         nj, ni = self.ny_, self.nx_
+        supergrid_slice = (
+            slice(self.joffset, self.joffset + 2 * nj, 2),
+            slice(self.ioffset, self.ioffset + 2 * ni, 2),
+        )
+        values = source[supergrid_slice]
+        array.all_values.fill(np.nan)
+        slc = (Ellipsis,)
+        if name in ("z0b_min",):
+            slc = self.domain.mask_[supergrid_slice] > 0
+        array.all_values[: values.shape[0], : values.shape[1]][slc] = values[slc]
+
         has_bounds = (
             self.ioffset > 0
             and self.joffset > 0
-            and self.domain.H_.shape[-1] >= self.ioffset + 2 * ni
-            and self.domain.H_.shape[-2] >= self.joffset + 2 * nj
+            and source.shape[-1] >= self.ioffset + 2 * ni
+            and source.shape[-2] >= self.joffset + 2 * nj
         )
-        valid = (
-            self.domain.mask_[
-                self.joffset : self.joffset + 2 * nj : 2,
-                self.ioffset : self.ioffset + 2 * ni : 2,
-            ]
-            > 0
-        )
-        values = source[
-            self.joffset : self.joffset + 2 * nj : 2,
-            self.ioffset : self.ioffset + 2 * ni : 2,
-        ]
-        array.all_values.fill(np.nan)
-        slc = valid if name in ("z", "z0b_min") else (Ellipsis,)
-        array.all_values[: values.shape[0], : values.shape[1]][slc] = values[slc]
         if has_bounds and name in self._coordinate_arrays:
             # Generate interface coordinates. These are not represented in Fortran as
             # they are only needed for plotting. The interface coordinates are slices
@@ -337,17 +334,14 @@ class Grid(_pygetm.Grid):
             exclude_global_halos=True,
         )
         allx, ally = (self.lon, self.lat) if self.domain.spherical else (self.x, self.y)
-        dist = (allx.all_values[local_slice] - x) ** 2 + (
-            ally.all_values[local_slice] - y
-        ) ** 2
+        actx, acty = allx.all_values[local_slice], ally.all_values[local_slice]
+        dist = (actx - x) ** 2 + (acty - y) ** 2
         if mask is not None:
             if isinstance(mask, int):
                 mask = (mask,)
             invalid = np.ones(dist.shape, dtype=bool)
             for mask_value in mask:
-                invalid = np.logical_and(
-                    invalid, self.mask.all_values[local_slice] != mask_value
-                )
+                invalid &= self.mask.all_values[local_slice] != mask_value
             dist[invalid] = np.inf
         idx = np.nanargmin(dist)
         j, i = np.unravel_index(idx, dist.shape)
