@@ -77,7 +77,7 @@ class Tracer(core.Array):
             surface_flux: array with surface flux values that after multiplication with
                 ``source_scale`` must have tracer units per time, multiplied by layer
                 thickness. Defaults to 0.
-            source_scale: scale factor for sources and surface flux
+            source_scale: scale factor for source terms and surface flux
             vertical_velocity: array with vertical velocities (m s-1) describing
                 movement through the water, not water movement itself. Positive for
                 upward movement (e.g. floating), negative for downward movement
@@ -86,6 +86,11 @@ class Tracer(core.Array):
                 to those in the cell into which the river flows. This can be customized
                 further by setting <TRACER>.rivers[<RIVERNAME>].follow_target_cell
                 and/or <TRACER>.rivers[<RIVERNAME>].values
+            precipitation_follows_target_cell: tracer values in precipitation are
+                assumed equal to surface values in the cell into which the
+                precipitation falls. If not set, tracer values in precipitation are
+                assumed to be 0. This can be adjusted afterwards with
+                :attr:`precipitation_follows_target_cell`
             **kwargs: keyword arguments to be passed to :class:`pygetm.core.Array`
         """
         kwargs.setdefault("attrs", {}).update(_part_of_state=True, _3d_only=True)

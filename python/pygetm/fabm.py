@@ -81,15 +81,13 @@ class FABM:
         for variable in self.model.bottom_state_variables:
             variable_to_array(variable, send_data=True, attrs={"_part_of_state": True})
 
-        # Diagnostics
-        self._interior_diagnostic_arrays = [
-            variable_to_array(variable, shape=grid.hn.shape)
-            for variable in self.model.interior_diagnostic_variables
-        ]
-        self._horizontal_diagnostic_arrays = [
-            variable_to_array(variable, shape=grid.H.shape)
-            for variable in self.model.horizontal_diagnostic_variables
-        ]
+        # Add diagnostics, initially without associated data
+        # Data will be sent later, only if the variable is selected for output,
+        # and thus, activated in FABM
+        self._diag_arrays = []
+        for variable in self.model.diagnostic_variables:
+            ndim = 2 if variable.horizontal else 3
+            self._diag_arrays.append(variable_to_array(variable, shape=shape[-ndim:]))
 
         # Required inputs: mask and cell thickness
         self.model.link_mask(grid.mask.all_values)
@@ -120,16 +118,8 @@ class FABM:
         """
         # Tell FABM which diagnostics are saved. FABM will allocate and manage memory
         # only for those that are. This MUST be done before calling self.model.start
-        for variable, ar in zip(
-            itertools.chain(
-                self.model.interior_diagnostic_variables,
-                self.model.horizontal_diagnostic_variables,
-            ),
-            itertools.chain(
-                self._interior_diagnostic_arrays, self._horizontal_diagnostic_arrays
-            ),
-        ):
-            variable.save = ar.saved
+        for variable, array in zip(self.model.diagnostic_variables, self._diag_arrays):
+            variable.save = array.saved
 
         # Transfer GETM fields with a standard name to FABM
         for field in self.grid.domain.fields.values():
@@ -160,15 +150,7 @@ class FABM:
 
         # Fill GETM placeholder arrays for all FABM diagnostics that will be
         # computed/saved.
-        for variable, array in zip(
-            itertools.chain(
-                self.model.interior_diagnostic_variables,
-                self.model.horizontal_diagnostic_variables,
-            ),
-            itertools.chain(
-                self._interior_diagnostic_arrays, self._horizontal_diagnostic_arrays
-            ),
-        ):
+        for variable, array in zip(self.model.diagnostic_variables, self._diag_arrays):
             if array.saved:
                 # Provide the array with data
                 array.wrap_ndarray(variable.data)
