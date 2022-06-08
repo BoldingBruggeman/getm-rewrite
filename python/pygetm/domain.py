@@ -1787,7 +1787,7 @@ class Domain(_pygetm.Domain):
         self._initialized = True
 
     def set_bathymetry(
-        self, depth, scale_factor=None, periodic_lon: bool = False, sub: bool = False
+        self, depth: ArrayLike, scale_factor=None, periodic_lon: bool = False
     ):
         """Set bathymetric depth on supergrid. The bathymetric depth is the distance
         between some arbitrary depth reference (often mean sea level) and the bottom,
@@ -1847,22 +1847,18 @@ class Domain(_pygetm.Domain):
         if critical_depth is None:
             critical_depth = self.Dcrit
         tdepth = self.H_[1::2, 1::2]
-        Vchange = (tdepth[1:, :] <= critical_depth) | (tdepth[:-1, :] <= critical_depth)
-        self.H_[2:-2:2, 1::2][Vchange] = np.minimum(tdepth[1:, :], tdepth[:-1, :])[
-            Vchange
-        ]
-        Uchange = (tdepth[:, 1:] <= critical_depth) | (tdepth[:, :-1] <= critical_depth)
-        self.H_[1::2, 2:-2:2][Uchange] = np.minimum(tdepth[:, 1:], tdepth[:, :-1])[
-            Uchange
-        ]
+        Vsel = (tdepth[1:, :] <= critical_depth) | (tdepth[:-1, :] <= critical_depth)
+        self.H_[2:-2:2, 1::2][Vsel] = np.minimum(tdepth[1:, :], tdepth[:-1, :])[Vsel]
+        Usel = (tdepth[:, 1:] <= critical_depth) | (tdepth[:, :-1] <= critical_depth)
+        self.H_[1::2, 2:-2:2][Usel] = np.minimum(tdepth[:, 1:], tdepth[:, :-1])[Usel]
         self.logger.info(
             "limit_velocity_depth has decreased depth in %i U points (%i currently"
             " unmasked), %i V points (%i currently unmasked)."
             % (
-                Uchange.sum(),
-                Uchange.sum(where=self.mask_[1::2, 2:-2:2] != 0),
-                Vchange.sum(),
-                Vchange.sum(where=self.mask_[2:-2:2, 1::2] != 0),
+                Usel.sum(),
+                Usel.sum(where=self.mask_[1::2, 2:-2:2] > 0),
+                Vsel.sum(),
+                Vsel.sum(where=self.mask_[2:-2:2, 1::2] > 0),
             )
         )
 
@@ -2297,8 +2293,8 @@ class Domain(_pygetm.Domain):
             ] = self.X.hn.all_values[:, 1:, 1:]
 
             if self.depth.saved:
-                # Update pressure (dbar) at layer centers, assuming it is equal to
-                # depth in m
+                # Update depth-below-surface at layer centers.
+                # Elsewhere this can be used as approximate pressure in dbar
                 _pygetm.thickness2center_depth(self.T.mask, self.T.hn, self.depth)
 
             if self.open_boundaries.zc.saved:

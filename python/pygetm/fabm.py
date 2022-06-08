@@ -153,9 +153,10 @@ class FABM:
 
         # Start FABM. This verifies whether all dependencies are fulfilled and freezes
         # the set of diagnostics that will be saved.
-        assert (
-            self.model.start()
-        ), "FABM failed to start. Likely its configuration is incomplete."
+        if not self.model.start():
+            raise Exception(
+                "FABM failed to start. Likely its configuration is incomplete."
+            )
 
         # Fill GETM placeholder arrays for all FABM diagnostics that will be
         # computed/saved.

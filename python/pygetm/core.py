@@ -214,17 +214,33 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         on_boundary: bool = False,
         **kwargs
     ) -> "Array":
+        """Create a new :class:`Array`
+
+        Args:
+            grid: grid associated with the new array
+            fill: value to set the new array to
+            z: vertical dimension of the new array.
+                ``False`` for a 2D array, ``CENTERS`` (or ``True``) for an array
+                defined at the layer centers, ``INTERFACES`` for an array defined at
+                the layer interfaces. ``None`` to detect from ``fill``.
+            dtype: data type
+            copy: whether to create a copy of ``fill``, if provided
+            on_boundary: whether to describe data along the open boundaries (1D),
+                instead of the 2D x-y model domain
+            **kwargs: additional keyword arguments passed to :class:`Array`
+        """
         ar = Array(grid=grid, **kwargs)
         if fill is None and ar.fill_value is not None:
             fill = ar.fill_value
         if fill is not None:
             fill = np.asarray(fill)
             if z is None and not on_boundary:
-                z = (
-                    False
-                    if fill.ndim != 3
-                    else (INTERFACES if fill.shape[0] == grid.nz_ + 1 else CENTERS)
-                )
+                if fill.ndim != 3:
+                    z = False
+                elif fill.shape[0] == grid.nz_ + 1:
+                    z = INTERFACES
+                else:
+                    z = CENTERS
         if dtype is None:
             dtype = float if fill is None else fill.dtype
         shape = (
@@ -254,6 +270,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def ma(self) -> np.ma.MaskedArray:
+        """Masked array representation that combines the data and the mask associated
+        with the array's native grid
+        """
         if self._ma is None:
             if self.size == 0 or self.on_boundary:
                 mask = False
@@ -263,6 +282,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return self._ma
 
     def plot(self, **kwargs):
+        """Plot the array with :meth:`xarray.DataArray.plot`
+
+        Args:
+            **kwargs: additional keyword arguments passed to
+                :meth:`xarray.DataArray.plot`
+        """
         if "x" not in kwargs and "y" not in kwargs:
             kwargs["x"] = (
                 "lon" if self.grid.domain.spherical else "x"
@@ -283,8 +308,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
         Args:
             target: either the :class:`Array` that will hold the interpolated data,
-                or the :class:`domain.Grid` to interpolate to. If a `Grid` is provided,
-                a new array will be created to hold the interpolated values
+                or the :class:`~pygetm.domain.Grid` to interpolate to. If a ``Grid`` is
+                provided, a new array will be created to hold the interpolated values.
         """
         if not isinstance(target, Array):
             # Target must be a grid; we need to create the array
@@ -333,7 +358,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return np.asarray(self.values, dtype=dtype)
 
     def isel(self, *, z: int, **kwargs) -> "Array":
-        """Select a single depth level. The data in the returned 2D :class:`Array`.
+        """Select a single depth level. The data in the returned 2D :class:`Array`
         will be a view of the relevant data of the original 3D array. Thus, changes
         in one will affect the other.
         """
@@ -372,8 +397,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def z(self):
-        """Vertical dimension: False if the array has no vertical dimension,
-        `CENTERS` for layer centers, `INTERFACES` for layer interfaces.
+        """Vertical dimension: ``False`` if the array has no vertical dimension,
+        ``CENTERS`` for layer centers, ``INTERFACES`` for layer interfaces.
         """
         if self._ndim != (2 if self.on_boundary else 3):
             return False
