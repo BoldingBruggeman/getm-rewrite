@@ -387,7 +387,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def shape(self) -> Tuple[int]:
-        """Shape"""
+        """Shape excluding halos"""
         return self._shape
 
     @property
@@ -407,7 +407,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def size(self) -> int:
-        """Total number of values"""
+        """Total number of values, excluding halos"""
         return self._size
 
     @property

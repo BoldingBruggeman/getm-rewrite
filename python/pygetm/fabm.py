@@ -1,4 +1,3 @@
-import itertools
 import logging
 from typing import List
 
@@ -86,14 +85,14 @@ class FABM:
         # and thus, activated in FABM
         self._diag_arrays = []
         for variable in self.model.diagnostic_variables:
-            ndim = 2 if variable.horizontal else 3
-            self._diag_arrays.append(variable_to_array(variable, shape=shape[-ndim:]))
+            current_shape = grid.H.shape if variable.horizontal else grid.hn.shape
+            self._diag_arrays.append(variable_to_array(variable, shape=current_shape))
 
         # Required inputs: mask and cell thickness
         self.model.link_mask(grid.mask.all_values)
         self.model.link_cell_thickness(grid.hn.all_values)
 
-        # Conserved quantities
+        # Conserved quantities (depth-integrated)
         self.conserved_quantity_totals = np.empty(
             (len(self.model.conserved_quantities),) + shape[1:],
             dtype=self.sources_interior.dtype,
