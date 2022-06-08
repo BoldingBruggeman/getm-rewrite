@@ -34,8 +34,8 @@ simstop = datetime.datetime.strptime(args.stop, '%Y-%m-%d %H:%M:%S')
 tiling = args.tiling if args.tiling is not None else None
 #if args.meteo_dir is None: args.no_meteo = True
 
-domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30, z0_const=0.001,
-    vertical_coordinate_method=pygetm.VerticalCoordinates.GVC, Dgamma=40., ddu=0.75, ddl = 0.5, Dcrit=0.2, Dmin=0.05, 
+domain = pygetm.legacy.domain_from_topo(os.path.join(args.setup_dir, 'Topo/NS6nm.v01.nc'), nlev=30,
+    vertical_coordinate_method=pygetm.VerticalCoordinates.GVC, Dgamma=40., ddu=0.75, ddl=0.5, Dcrit=0.2, Dmin=0.05, 
     z0=0.001
 )
 
@@ -89,7 +89,8 @@ if domain.rivers:
 
 if sim.runtype < pygetm.BAROCLINIC:
     sim.sst = sim.airsea.t2m
-    sim.turbulence.num[...]=1e-2
+    if sim.runtype > pygetm.BAROTROPIC_2D:
+        sim.turbulence.num[...] = 1e-2
 if sim.runtype == pygetm.BAROCLINIC:
     sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
     sim.temp.set(11.6)
@@ -125,26 +126,26 @@ if sim.fabm:
 if args.output:
     sim.logger.info('Setting up output')
     output = sim.output_manager.add_netcdf_file('meteo.nc', interval=datetime.timedelta(hours=1), sync_interval=None)
-    output.request(('u10', 'v10', 'sp', 't2m', 'qa', 'tcc', 'e', 'tp', 'pe'))
-    #output.request(('qe', 'qh', 'ql', 'swr', 'albedo', 'zen'))
+    output.request('u10', 'v10', 'sp', 't2m', 'qa', 'tcc', 'e', 'tp', 'pe')
+    #output.request('qe', 'qh', 'ql', 'swr', 'albedo', 'zen')
     output = sim.output_manager.add_netcdf_file('north_sea_2d.nc', interval=datetime.timedelta(hours=1), sync_interval=None)
-    output.request(('zt', 'Dt', 'u1', 'v1', 'tausxu', 'tausyv', ))
+    output.request('zt', 'Dt', 'u1', 'v1', 'tausxu', 'tausyv')
     if args.debug_output:
-        output.request(('maskt', 'masku', 'maskv', ))
-        output.request(('U', 'V'), mask=True)
-        output.request(('Du', 'Dv', 'dpdx', 'dpdy', 'z0bu', 'z0bv', 'z0bt'))   #, 'u_taus'
-        output.request(('ru', 'rru', 'rv', 'rrv'))
+        output.request('maskt', 'masku', 'maskv')
+        output.request('U', 'V')
+        output.request('Du', 'Dv', 'dpdx', 'dpdy', 'z0bu', 'z0bv', 'z0bt')   #, 'u_taus'
+        output.request('ru', 'rru', 'rv', 'rrv')
     if sim.runtype > pygetm.BAROTROPIC_2D:
         output = sim.output_manager.add_netcdf_file('north_sea_3d.nc', interval=datetime.timedelta(hours=6), sync_interval=None)
-        output.request(('uk', 'vk', 'ww', 'SS', 'num',))
+        output.request('uk', 'vk', 'ww', 'SS', 'num')
         if args.debug_output:
-            output.request(('fpk', 'fqk', 'advpk', 'advqk', )) # 'diffpk', 'diffqk'))
+            output.request('fpk', 'fqk', 'advpk', 'advqk') # 'diffpk', 'diffqk')
     if sim.runtype == pygetm.BAROCLINIC:
-        output.request(('temp', 'salt', 'rho', 'NN', 'rad', 'sst', 'hnt', 'nuh',))
+        output.request('temp', 'salt', 'rho', 'NN', 'rad', 'sst', 'hnt', 'nuh')
         if args.debug_output:
-            output.request(('idpdx', 'idpdy' ))
+            output.request('idpdx', 'idpdy')
         if sim.fabm:
-            output.request(('par', 'med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd'))
+            output.request('par', 'med_ergom_o2', 'med_ergom_OFL', 'med_ergom_dd')
 
 if args.save_restart:
     sim.output_manager.add_restart(args.save_restart)
