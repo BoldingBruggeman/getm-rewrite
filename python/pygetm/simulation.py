@@ -166,15 +166,9 @@ class Simulation(_pygetm.Simulation):
 
         # Make open boundary conditions for elevation and transport/velocity
         # available as part of domain.open_boundaries
-        self.domain.open_boundaries.z = self.wrap(
-            self.domain.open_boundaries.z, b"zbdy", source=3
-        )
-        self.domain.open_boundaries.u = self.momentum.wrap(
-            self.domain.open_boundaries.u, b"bdyu"
-        )
-        self.domain.open_boundaries.v = self.momentum.wrap(
-            self.domain.open_boundaries.v, b"bdyv"
-        )
+        self.wrap(self.domain.open_boundaries.z, b"zbdy", source=3)
+        self.momentum.wrap(self.domain.open_boundaries.u, b"bdyu")
+        self.momentum.wrap(self.domain.open_boundaries.v, b"bdyv")
 
         for name in Simulation._pressure_arrays:
             setattr(
@@ -509,7 +503,7 @@ class Simulation(_pygetm.Simulation):
         # Verify all fields have finite values. Do this after self.output_manager.start
         # so the user can diagnose issues by reviewing the output
         if not self.check_finite(_3d=self.runtype > BAROTROPIC_2D):
-            raise Exception('Non-finite values found before simulation start')
+            raise Exception("Non-finite values found before simulation start")
 
         # Record true start time for performance analysis
         self._start_time = timeit.default_timer()

@@ -1023,22 +1023,9 @@ class OpenBoundaries(collections.Mapping):
 
         # The arrays below are placeholders that will be assigned data
         # (from momentum/sealevel Fortran modules) when linked to the Simulation
-        self.z = core.Array(
-            grid=self.domain.T,
-            name="z_bdy",
-            units="m",
-            long_name="surface elevation at open boundaries",
-        )
-        self.u = core.Array(
-            grid=self.domain.T,
-            name="u_bdy",
-            long_name="Eastward velocity or transport at open boundaries",
-        )
-        self.v = core.Array(
-            grid=self.domain.T,
-            name="v_bdy",
-            long_name="Northward velocity or transport open boundaries",
-        )
+        self.z = self.domain.T.array(on_boundary=True)
+        self.u = self.domain.T.array(on_boundary=True)
+        self.v = self.domain.T.array(on_boundary=True)
 
         self._frozen = True
 

@@ -84,10 +84,10 @@ cdef class Array:
         cdef int grid_type
         cdef int sub_type
         cdef int data_type
-        self.on_boundary = False
         get_array(source, obj, name, &grid_type, &sub_type, &data_type, &self.p)
         if self.p == NULL:
             return
+        self.on_boundary = False
         self.grid = domain.grids[grid_type]
         if sub_type == 0:
             # Horizontal-only array on normal grid
