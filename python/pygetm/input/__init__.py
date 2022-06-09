@@ -779,7 +779,7 @@ class InputManager:
             # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
             # or for only the open boundary points that fall within the local subdomain. Determine which of these.
             source_lon, source_lat = value.getm.longitude, value.getm.latitude
-            if value.ndim >= 2 and value.shape[-1] == global_shape[-1] and value.shape[-2] == global_shape[-2]:
+            if value.ndim >= 2 and value.shape[-2:] == global_shape:
                 # on-grid data for the global domain - extract data at open boundary points
                 value = isel(value, **{value.dims[-1]: grid.domain.open_boundaries.i_glob, value.dims[-2]: grid.domain.open_boundaries.j_glob})
                 if array.z:

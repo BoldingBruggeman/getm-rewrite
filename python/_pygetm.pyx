@@ -131,7 +131,7 @@ cdef class Array:
             self.register()
         return self
 
-    def wrap_ndarray(self, numpy.ndarray data not None, on_boundary=False):
+    def wrap_ndarray(self, numpy.ndarray data not None, on_boundary=False, register=True):
         self.on_boundary = on_boundary
         if self.on_boundary:
             assert data.ndim in (1, 2) and data.flags['C_CONTIGUOUS'], 'Invalid array properties for wrapping: %i dimensions, flags %s' % (data.ndim, data.flags)
@@ -144,6 +144,8 @@ cdef class Array:
         self._array = data
         self.p = self._array.data
         self.finish_initialization()
+        if register:
+            self.register()
 
     def update_boundary(self, int bdytype, Array bdy=None):
         assert not self.on_boundary, 'update_boundary cannot be called on boundary arrays.'

@@ -285,6 +285,16 @@ class Grid(_pygetm.Grid):
     def rotate(
         self, u: ArrayLike, v: ArrayLike, to_grid: bool = True
     ) -> Tuple[ArrayLike, ArrayLike]:
+        """Rotate a geocentric velocity field to the model coordinate system,
+        or a model velocity field to the geocentric coordinate system.
+
+        Args:
+            u: velocity in x direction in source coordinate system
+                (Eastward velocity if the source is a geocentric velocity field)
+            v: velocity in y direction in source coordinate system
+                (Northward velocity if the source is a geocentric velocity field)
+            to_grid: rotate from geocentric to model coordinate system, not vice versa
+        """
         if self._sin_rot is None:
             self._sin_rot = np.sin(self.rotation.all_values)
             self._cos_rot = np.cos(self.rotation.all_values)
@@ -1023,9 +1033,9 @@ class OpenBoundaries(collections.Mapping):
 
         # The arrays below are placeholders that will be assigned data
         # (from momentum/sealevel Fortran modules) when linked to the Simulation
-        self.z = self.domain.T.array(on_boundary=True)
-        self.u = self.domain.T.array(on_boundary=True)
-        self.v = self.domain.T.array(on_boundary=True)
+        self.z = self.domain.T.array(name='z_bdy', on_boundary=True, register=False)
+        self.u = self.domain.T.array(name='u_bdy', on_boundary=True, register=False)
+        self.v = self.domain.T.array(name='v_bdy', on_boundary=True, register=False)
 
         self._frozen = True
 
@@ -1413,9 +1423,9 @@ class Domain(_pygetm.Domain):
                 ``lon`` and ``lat`` must be provided. Otherwise at least ``x`` and ``y``
                 must be provided.
             mask: initial mask (0: land, 1: water)
-            H: initial distance between bottom depth and some arbitrary depth reference
-                (m, positive if bottom lies below the depth reference). Typically the
-                depth reference is mean sea level.
+            H: initial bathymetric depth. This is the distance between the bottom and
+                some arbitrary depth reference (m, positive if bottom lies below the
+                depth reference). Typically the depth reference is mean sea level.
             z0: initial bottom roughness (m)
             f: Coriolis parameter. By default this is calculated from latitude ``lat``
                 if provided.
@@ -1582,7 +1592,7 @@ class Domain(_pygetm.Domain):
             self.rotation_[1:-1, 1:-1] = supergrid_rotation(self.lon_, self.lat_)
         else:
             # Rotation with respect to y axis - assumes y axis always point to true
-            # North (can be valid on for infinitesimally small domain)
+            # North (can be valid only for infinitesimally small domain)
             self.rotation_[1:-1, 1:-1] = supergrid_rotation(self.x_, self.y_)
         self._exchange_metric(self.rotation_)
         self.rotation.flags.writeable = False

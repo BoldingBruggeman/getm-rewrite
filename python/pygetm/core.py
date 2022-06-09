@@ -212,6 +212,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         dtype: DTypeLike = None,
         copy: bool = True,
         on_boundary: bool = False,
+        register: bool = True,
         **kwargs
     ) -> "Array":
         """Create a new :class:`Array`
@@ -227,6 +228,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             copy: whether to create a copy of ``fill``, if provided
             on_boundary: whether to describe data along the open boundaries (1D),
                 instead of the 2D x-y model domain
+            register: whether to register the array as field available for output
             **kwargs: additional keyword arguments passed to :class:`Array`
         """
         ar = Array(grid=grid, **kwargs)
@@ -256,8 +258,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 data[...] = fill
         else:
             data = np.broadcast_to(fill, shape)
-        ar.wrap_ndarray(data, on_boundary=on_boundary)
-        ar.register()
+        ar.wrap_ndarray(data, on_boundary=on_boundary, register=register)
         return ar
 
     def fill(self, value):
@@ -370,7 +371,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             kwargs.setdefault("long_name", "%s @ k=%i" % (self.long_name, z))
         ar = Array(grid=self.grid, **kwargs)
         ar.wrap_ndarray(self.all_values[z, ...])
-        ar.register()
         return ar
 
     def __getitem__(self, key) -> np.ndarray:

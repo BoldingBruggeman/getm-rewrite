@@ -906,7 +906,7 @@ class Simulation(_pygetm.Simulation):
         """
         valid = True
         for field in self.domain.fields.values():
-            if field.z and not _3d:
+            if field.ndim == 0 or (field.z and not _3d):
                 continue
             finite = np.isfinite(field.all_values)
             unmasked = True if field.on_boundary else field.grid.mask.all_values > 0

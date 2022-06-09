@@ -43,7 +43,7 @@ class FABM:
                 **kwargs
             )
             if send_data:
-                ar.wrap_ndarray(variable.data)
+                ar.wrap_ndarray(variable.data, register=False)
             ar.register()
             return ar
 
@@ -106,7 +106,7 @@ class FABM:
                 dtype=self.model.fabm.dtype,
                 grid=grid,
             )
-            ar.wrap_ndarray(self.conserved_quantity_totals[i, ...])
+            ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
             tracer_totals.append(ar)
 
     def start(self, time: cftime.datetime):
@@ -151,8 +151,8 @@ class FABM:
         # computed/saved.
         for variable, array in zip(self.model.diagnostic_variables, self._diag_arrays):
             if array.saved:
-                # Provide the array with data
-                array.wrap_ndarray(variable.data)
+                # Provide the array with data (NB it has been registered before)
+                array.wrap_ndarray(variable.data, register=False)
             else:
                 # Remove the array from the list of available fields
                 del self.grid.domain.fields[array.name]

@@ -99,7 +99,6 @@ class Tracer(core.Array):
         if data is None:
             data = np.full_like(grid.hn.all_values, np.nan)
         self.wrap_ndarray(data)
-        self.register()
 
         assert source is None or (source.grid is self.grid and source.z == CENTERS)
         assert surface_flux is None or (
