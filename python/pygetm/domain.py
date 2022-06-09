@@ -91,81 +91,37 @@ class Grid(_pygetm.Grid):
     )
 
     _array_args = {
-        "x": dict(units="m", constant=True, fill_value=FILL_VALUE),
-        "y": dict(units="m", constant=True, fill_value=FILL_VALUE),
-        "lon": dict(
-            units="degrees_east",
-            long_name="longitude",
-            constant=True,
-            fill_value=FILL_VALUE,
-        ),
-        "lat": dict(
-            units="degrees_north",
-            long_name="latitude",
-            constant=True,
-            fill_value=FILL_VALUE,
-        ),
-        "dx": dict(units="m", constant=True, fill_value=FILL_VALUE),
-        "dy": dict(units="m", constant=True, fill_value=FILL_VALUE),
-        "idx": dict(units="m-1", constant=True, fill_value=FILL_VALUE),
-        "idy": dict(units="m-1", constant=True, fill_value=FILL_VALUE),
-        "dlon": dict(units="degrees_east", constant=True, fill_value=FILL_VALUE),
-        "dlat": dict(units="degrees_north", constant=True, fill_value=FILL_VALUE),
-        "H": dict(
-            units="m",
-            long_name="water depth at rest",
-            constant=True,
-            fill_value=FILL_VALUE,
-        ),
-        "D": dict(units="m", long_name="water depth", fill_value=FILL_VALUE),
+        "x": dict(units="m", constant=True),
+        "y": dict(units="m", constant=True),
+        "lon": dict(units="degrees_east", long_name="longitude", constant=True),
+        "lat": dict(units="degrees_north", long_name="latitude", constant=True,),
+        "dx": dict(units="m", constant=True),
+        "dy": dict(units="m", constant=True),
+        "idx": dict(units="m-1", constant=True),
+        "idy": dict(units="m-1", constant=True),
+        "dlon": dict(units="degrees_east", constant=True),
+        "dlat": dict(units="degrees_north", constant=True),
+        "H": dict(units="m", long_name="water depth at rest", constant=True),
+        "D": dict(units="m", long_name="water depth"),
         "mask": dict(constant=True, fill_value=0),
-        "z": dict(units="m", long_name="elevation", fill_value=FILL_VALUE),
-        "zo": dict(
-            units="m",
-            long_name="elevation at previous microtimestep",
-            fill_value=FILL_VALUE,
-        ),
-        "zin": dict(
-            units="m", long_name="elevation at macrotimestep", fill_value=FILL_VALUE
-        ),
-        "zio": dict(
-            units="m",
-            long_name="elevation at previous macrotimestep",
-            fill_value=FILL_VALUE,
-        ),
-        "area": dict(
-            units="m2", long_name="grid cell area", constant=True, fill_value=FILL_VALUE
-        ),
+        "z": dict(units="m", long_name="elevation"),
+        "zo": dict(units="m", long_name="elevation at previous microtimestep"),
+        "zin": dict(units="m", long_name="elevation at macrotimestep"),
+        "zio": dict(units="m", long_name="elevation at previous macrotimestep"),
+        "area": dict(units="m2", long_name="grid cell area", constant=True),
         "iarea": dict(
-            units="m-2",
-            long_name="inverse of grid cell area",
-            constant=True,
-            fill_value=FILL_VALUE,
+            units="m-2", long_name="inverse of grid cell area", constant=True
         ),
-        "cor": dict(
-            units="1",
-            long_name="Coriolis parameter",
-            constant=True,
-            fill_value=FILL_VALUE,
-        ),
-        "ho": dict(
-            units="m",
-            long_name="layer heights at previous time step",
-            fill_value=FILL_VALUE,
-        ),
-        "hn": dict(units="m", long_name="layer heights", fill_value=FILL_VALUE),
-        "zc": dict(units="m", long_name="depth", fill_value=FILL_VALUE),
-        "zf": dict(units="m", long_name="interface depth", fill_value=FILL_VALUE),
-        "z0b": dict(
-            units="m", long_name="hydrodynamic bottom roughness", fill_value=FILL_VALUE
-        ),
+        "cor": dict(units="1", long_name="Coriolis parameter", constant=True),
+        "ho": dict(units="m", long_name="layer heights at previous time step"),
+        "hn": dict(units="m", long_name="layer heights"),
+        "zc": dict(units="m", long_name="depth"),
+        "zf": dict(units="m", long_name="interface depth"),
+        "z0b": dict(units="m", long_name="hydrodynamic bottom roughness"),
         "z0b_min": dict(
-            units="m",
-            long_name="physical bottom roughness",
-            constant=True,
-            fill_value=FILL_VALUE,
+            units="m", long_name="physical bottom roughness", constant=True
         ),
-        "alpha": dict(units="1", long_name="dampening", fill_value=FILL_VALUE),
+        "alpha": dict(units="1", long_name="dampening"),
     }
 
     def __init__(
@@ -200,7 +156,7 @@ class Grid(_pygetm.Grid):
         self._cos_rot: Optional[np.ndarray] = None
 
         for name in self._readonly_arrays:
-            self._setup_array(name, register=False)
+            self._setup_array(name)
         self._iarea.all_values[...] = 1.0 / self._area.all_values
         self._idx.all_values[...] = 1.0 / self._dx.all_values
         self._idy.all_values[...] = 1.0 / self._dy.all_values
@@ -209,9 +165,7 @@ class Grid(_pygetm.Grid):
 
     def initialize(self, nbdyp: int):
         for name in self._fortran_arrays:
-            if name in self._readonly_arrays:
-                getattr(self, name).register()
-            else:
+            if not hasattr(self, "_%s" % name):
                 self._setup_array(name)
         self.rotation = core.Array.create(
             grid=self,
@@ -230,23 +184,19 @@ class Grid(_pygetm.Grid):
         self.zin.all_values[...] = self.z.all_values
         self.nbdyp = nbdyp
 
-    def _setup_array(
-        self, name: str, array: Optional[core.Array] = None, register: bool = True
-    ):
+    def _setup_array(self, name: str, array: Optional[core.Array] = None) -> core.Array:
         if array is None:
             # No array provided, so it must live in Fortran; retrieve it
-            array = core.Array(name=name + self.postfix, **self._array_args[name])
-            setattr(
-                self,
-                "_%s" % name,
-                self.wrap(array, name.encode("ascii"), register=register),
-            )
+            kwargs = dict(fill_value=FILL_VALUE)
+            kwargs.update(self._array_args[name])
+            array = core.Array(name=name + self.postfix, **kwargs)
+            setattr(self, "_%s" % name, self.wrap(array, name.encode("ascii")))
 
         # Obtain corresponding array on the supergrid.
         # If this does not exist, we are done
         source = getattr(self.domain, name + "_", None)
         if source is None:
-            return
+            return array
 
         nj, ni = self.ny_, self.nx_
         supergrid_slice = (
@@ -281,6 +231,8 @@ class Grid(_pygetm.Grid):
                 "_%si" % name,
                 values_i[self.halo : -self.halo, self.halo : -self.halo],
             )
+
+        return array
 
     def rotate(
         self, u: ArrayLike, v: ArrayLike, to_grid: bool = True
@@ -1033,9 +985,9 @@ class OpenBoundaries(collections.Mapping):
 
         # The arrays below are placeholders that will be assigned data
         # (from momentum/sealevel Fortran modules) when linked to the Simulation
-        self.z = self.domain.T.array(name='z_bdy', on_boundary=True, register=False)
-        self.u = self.domain.T.array(name='u_bdy', on_boundary=True, register=False)
-        self.v = self.domain.T.array(name='v_bdy', on_boundary=True, register=False)
+        self.z = self.domain.T.array(name="z_bdy", on_boundary=True, register=False)
+        self.u = self.domain.T.array(name="u_bdy", on_boundary=True, register=False)
+        self.v = self.domain.T.array(name="v_bdy", on_boundary=True, register=False)
 
         self._frozen = True
 
@@ -1693,9 +1645,12 @@ class Domain(_pygetm.Domain):
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained
         # by the domain to be used for e.g. plotting
         tmask = self.mask_[1::2, 1::2]
-        self.mask_[2:-2:2, 1::2][(tmask[1:, :] == 0) & (tmask[:-1, :] == 0)] = 0
-        self.mask_[1::2, 2:-2:2][(tmask[:, 1:] == 0) & (tmask[:, :-1] == 0)] = 0
-        self.mask_[2:-2:2, 2:-2:2][
+        umask = self.mask_[1::2, 2::2]
+        vmask = self.mask_[2::2, 1::2]
+        xmask = self.mask_[::2, ::2]
+        umask[:, :-1][(tmask[:, 1:] == 0) & (tmask[:, :-1] == 0)] = 0
+        vmask[:-1, :][(tmask[1:, :] == 0) & (tmask[:-1, :] == 0)] = 0
+        xmask[1:-1, 1:-1][
             (tmask[1:, 1:] == 0)
             & (tmask[:-1, 1:] == 0)
             & (tmask[1:, :-1] == 0)
@@ -1705,39 +1660,35 @@ class Domain(_pygetm.Domain):
 
         self.open_boundaries.initialize()
 
-        # Mask U,V,X points unless all their T neighbors are valid - this mask will be
-        # sent to Fortran and determine which points are computed
-        mask_ = np.array(self.mask_, copy=True)
-        tmask = mask_[1::2, 1::2]
-        mask_[2:-2:2, 1::2][(tmask[1:, :] == 0) | (tmask[:-1, :] == 0)] = 0
-        mask_[1::2, 2:-2:2][(tmask[:, 1:] == 0) | (tmask[:, :-1] == 0)] = 0
-        mask_[2:-2:2, 2:-2:2][
+        # At this point we could make a copy of self.mask_ that would be useful for
+        # plotting, since it does not hide U, V, X points at the edges of valid T cells.
+        # Now mask U,V,X points unless all their T neighbors are valid - this mask will
+        # be sent to Fortran and determine which points are computed
+        umask[:, :-1][(tmask[:, 1:] == 0) | (tmask[:, :-1] == 0)] = 0
+        vmask[:-1, :][(tmask[1:, :] == 0) | (tmask[:-1, :] == 0)] = 0
+        xmask[1:-1, 1:-1][
             (tmask[1:, 1:] == 0)
             | (tmask[:-1, 1:] == 0)
             | (tmask[1:, :-1] == 0)
             | (tmask[:-1, :-1] == 0)
         ] = 0
-        self._exchange_metric(mask_, fill_value=0)
-        self.mask_[...] = mask_
+        self._exchange_metric(self.mask_, fill_value=0)
+
+        uumask = self.UU._setup_array("mask").all_values
+        uvmask = self.UV._setup_array("mask").all_values
+        vumask = self.VU._setup_array("mask").all_values
+        vvmask = self.VV._setup_array("mask").all_values
+        uumask.fill(0)
+        uvmask.fill(0)
+        vumask.fill(0)
+        vvmask.fill(0)
+        uumask[:, :-1][(umask[:, :-1] > 0) & (umask[:, 1:] > 0)] = 1
+        uvmask[:-1, :][(umask[:-1, :] > 0) & (umask[1:, :] > 0)] = 1
+        vumask[:, :-1][(vmask[:, :-1] > 0) & (vmask[:, 1:] > 0)] = 1
+        vvmask[:-1, :][(vmask[:-1, :] > 0) & (vmask[1:, :] > 0)] = 1
 
         for grid in self.grids.values():
             grid.initialize(self.open_boundaries.np)
-        self.UU.mask.all_values.fill(0)
-        self.UV.mask.all_values.fill(0)
-        self.VU.mask.all_values.fill(0)
-        self.VV.mask.all_values.fill(0)
-        self.UU.mask.all_values[:, :-1][
-            (self.U.mask.all_values[:, :-1] > 0) & (self.U.mask.all_values[:, 1:] > 0)
-        ] = 1
-        self.UV.mask.all_values[:-1, :][
-            (self.U.mask.all_values[:-1, :] > 0) & (self.U.mask.all_values[1:, :] > 0)
-        ] = 1
-        self.VU.mask.all_values[:, :-1][
-            (self.V.mask.all_values[:, :-1] > 0) & (self.V.mask.all_values[:, 1:] > 0)
-        ] = 1
-        self.VV.mask.all_values[:-1, :][
-            (self.V.mask.all_values[:-1, :] > 0) & (self.V.mask.all_values[1:, :] > 0)
-        ] = 1
 
         self.logger.info(
             "Number of unmasked points excluding halos: %i on T grid, %i on U grid,"
