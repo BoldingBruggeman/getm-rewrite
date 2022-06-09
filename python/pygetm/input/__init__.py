@@ -810,7 +810,7 @@ class InputManager:
             # The target is a normal 2D (horizontal-only) or 3D (depth-explicit) array
             # The source data can either be on the native model grid, or at an arbitrary lon, lat grid.
             # In the latter case, we interpolate in space.
-            assert array.all_values.shape == local_shape
+            assert array.all_values.shape[-2:] == local_shape
             target_slice = local_slice
             if on_grid == OnGrid.NONE:
                 # interpolate horizontally to local array INCLUDING halos
@@ -821,7 +821,7 @@ class InputManager:
                 value = horizontal_interpolation(value, lon, lat)
             else:
                 # the input is already on-grid, but we need to map from global domain to subdomain
-                assert value.shape == global_shape
+                assert value.shape[-2:] == global_shape, "%s: shape of values %s should match that of global domain %s" % (array.name, value.shape[-2:], global_shape)
                 value = value[global_slice]
 
         if value.getm.time is not None:
