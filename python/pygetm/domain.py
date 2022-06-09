@@ -1852,7 +1852,8 @@ class Domain(_pygetm.Domain):
     def plot(
         self,
         fig=None,
-        show_H: bool = True,
+        show_bathymetry: bool = True,
+        show_mask: bool = False,
         show_mesh: bool = True,
         show_rivers: bool = True,
         editable: bool = False,
@@ -1863,7 +1864,8 @@ class Domain(_pygetm.Domain):
         Args:
             fig: :class:`matplotlib.figure.Figure` instance to plot to. If not provided,
                 a new figure is created.
-            show_H: show bathymetry as color map
+            show_bathymetry: show bathymetry as color map
+            show_mask: show mask as color map (this disables ``show_bathymetry``)
             show_mesh: show model grid
             show_rivers: show rivers with position and name
             editable: allow interactive selection of rectangular regions in the domain
@@ -1883,7 +1885,9 @@ class Domain(_pygetm.Domain):
             # If we are the root, divert the plot command to the global domain.
             # Otherwise just ignore this and return.
             if self.glob:
-                return self.glob.plot(fig, show_H, show_mesh, show_rivers, editable)
+                return self.glob.plot(
+                    fig, show_bathymetry, show_mask, show_mesh, show_rivers, editable
+                )
             return
 
         if fig is None:
@@ -1898,7 +1902,15 @@ class Domain(_pygetm.Domain):
         local_slice, _, _, _ = self.tiling.subdomain2slices(
             halo_sub=0, halo_glob=4, scale=2, share=1, exclude_global_halos=True
         )
-        if show_H:
+        if show_mask:
+            c = ax.pcolormesh(
+                x[local_slice],
+                y[local_slice],
+                self.mask[local_slice],
+                alpha=0.5 if show_mesh else 1,
+                shading="auto",
+            )
+        elif show_bathymetry:
             import cmocean
 
             cm = cmocean.cm.deep
