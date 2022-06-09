@@ -207,7 +207,7 @@ class Grid(_pygetm.Grid):
         array.all_values.fill(np.nan)
         slc = (Ellipsis,)
         if name in ("z0b_min",):
-            slc = self.domain.mask_[supergrid_slice] > 0
+            slc = self.mask.all_values[: values.shape[0], : values.shape[1]] > 0
         array.all_values[: values.shape[0], : values.shape[1]][slc] = values[slc]
 
         has_bounds = (
