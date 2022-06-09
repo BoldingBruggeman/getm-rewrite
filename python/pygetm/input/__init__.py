@@ -770,12 +770,16 @@ class InputManager:
 
         grid = array.grid
 
+        # Obtain active area of local subdomain (including halos if include_halos is True)
+        # and the corresponding slice in the global domain (always excluding halos)
+        local_slice, global_slice, local_shape, global_shape = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2)
+
         target_slice = (Ellipsis,)
         if array.on_boundary:
             # Open boundary information. This can either be specified for the global domain (e.g., when read from netCDF),
             # or for only the open boundary points that fall within the local subdomain. Determine which of these.
             source_lon, source_lat = value.getm.longitude, value.getm.latitude
-            if value.ndim >= 2 and value.shape[-1] == grid.domain.nx and value.shape[-2] == grid.domain.ny:
+            if value.ndim >= 2 and value.shape[-1] == global_shape[-1] and value.shape[-2] == global_shape[-2]:
                 # on-grid data for the global domain - extract data at open boundary points
                 value = isel(value, **{value.dims[-1]: grid.domain.open_boundaries.i_glob, value.dims[-2]: grid.domain.open_boundaries.j_glob})
                 if array.z:
@@ -794,29 +798,30 @@ class InputManager:
                     value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
                     value = pygetm.input.horizontal_interpolation(value, lon, lat)
             idim = value.ndim - (2 if array.z else 1)
-            if value.shape[idim] != grid.domain.open_boundaries.np:
+            if value.shape[idim] == grid.domain.open_boundaries.np_glob:
                 # The source array covers all open boundaries (global domain).
-                # Slice out only the points that fall within the current subdomain
-                if value.shape[idim] != grid.domain.open_boundaries.np_glob:
-                    self._logger.error('Dimension %i of %s does not have expected extent %i (number of open boundary points in the global domain). Its actual extent is %i' % (idim, value.name, grid.domain.open_boundaries.np_glob, value.shape[idim]))
+                # If the subdomain only has a subset of those, slice out only the points
+                # that fall within the current subdomain
                 if grid.domain.open_boundaries.local_to_global:
                     value = concatenate_slices(value, idim, [slice(start, stop) for (start, stop) in grid.domain.open_boundaries.local_to_global])
+            elif value.shape[idim] != grid.domain.open_boundaries.np:
+                raise Exception('Extent of dimension %i of %s is not compatible with open boundaries. It should have length %i (number of open boundary points in the global domain) or %i (number of open boundary points in the subdomain). Its actual extent is %i.' % (idim, value.name, grid.domain.open_boundaries.np_glob, grid.domain.open_boundaries.np, value.shape[idim]))
         elif array.ndim != 0:
             # The target is a normal 2D (horizontal-only) or 3D (depth-explicit) array
             # The source data can either be on the native model grid, or at an arbitrary lon, lat grid.
             # In the latter case, we interpolate in space.
+            assert array.all_values.shape == local_shape
+            target_slice = local_slice
             if on_grid == OnGrid.NONE:
                 # interpolate horizontally to local array INCLUDING halos
-                target_slice, _, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2, halo_glob=2, exclude_global_halos=True)
                 lon, lat = grid.lon.all_values[target_slice], grid.lat.all_values[target_slice]
                 assert not numpy.isnan(lon).any()
                 assert not numpy.isnan(lat).any()
                 value = limit_region(value, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=periodic_lon)
                 value = horizontal_interpolation(value, lon, lat)
             else:
-                # the input is already on-grid, but we may need to map from global domain to subdomain
-                # source is global array EXCLUDING halos, but subdomain that we assign to does include halos (i.e., no halo exchange needed after assignment)
-                target_slice, global_slice, _, _ = grid.domain.tiling.subdomain2slices(exclude_halos=not include_halos, halo_sub=2)
+                # the input is already on-grid, but we need to map from global domain to subdomain
+                assert value.shape == global_shape
                 value = value[global_slice]
 
         if value.getm.time is not None:
