@@ -38,7 +38,6 @@ def domain_from_topo(
     argument takes priority.
     """
     with netCDF4.Dataset(path) as nc:
-        nc.set_auto_mask(False)
         grid_type = int(np.reshape(nc["grid_type"], ()))
         if grid_type == 1:
             # Cartesian
