@@ -924,10 +924,11 @@ class Simulation(_pygetm.Simulation):
             unmasked = True if field.on_boundary else field.grid.mask.all_values > 0
             if not finite.all(where=unmasked):
                 nbad += 1
-                bad_count = finite.size - finite.sum(where=unmasked)
+                unmasked_count = unmasked.sum()
+                bad_count = unmasked_count - finite.sum(where=unmasked)
                 self.logger.error(
-                    "Field %s has %i non-finite values (out of %i)."
-                    % (field.name, bad_count, finite.size)
+                    "Field %s has %i non-finite values (out of %i unmasked values)."
+                    % (field.name, bad_count, unmasked_count)
                 )
         if nbad:
             raise Exception("Non-finite values found in %i fields" % nbad)
