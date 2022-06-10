@@ -47,6 +47,18 @@ class InternalPressure(enum.IntEnum):
     #    STELLING_VANKESTER=7
 
 
+def log_exceptions(method):
+    def wrapper(self, *args, **kwargs):
+        try:
+            method(self, *args, **kwargs)
+        except Exception as e:
+            if self.domain.tiling.n == 1:
+                raise
+            self.logger.exception(str(e), stack_info=True, stacklevel=3)
+            self.domain.tiling.comm.Abort(1)
+    return wrapper
+
+
 class Simulation(_pygetm.Simulation):
     _pressure_arrays = "dpdx", "dpdy", "idpdx", "idpdy"
     _sealevel_arrays = ()
@@ -106,6 +118,7 @@ class Simulation(_pygetm.Simulation):
 
     _array_args = {}
 
+    @log_exceptions
     def __init__(
         self,
         dom: domain.Domain,
@@ -343,6 +356,7 @@ class Simulation(_pygetm.Simulation):
     def __getitem__(self, key: str) -> core.Array:
         return self.output_manager.fields[key]
 
+    @log_exceptions
     def load_restart(
         self, path: str, time: Optional[cftime.datetime] = None, **kwargs
     ) -> cftime.datetime:
@@ -385,6 +399,7 @@ class Simulation(_pygetm.Simulation):
             self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
         return time_coord[0]
 
+    @log_exceptions
     def start(
         self,
         time: Union[cftime.datetime, datetime.datetime],
@@ -517,6 +532,7 @@ class Simulation(_pygetm.Simulation):
             self._profile = (profile, pr)
             pr.enable()
 
+    @log_exceptions
     def advance(self, check_finite: bool = False):
         """Advance the model state by one microtimestep.
         If this completes the current macrotimestep, the part of the state associated
@@ -772,6 +788,7 @@ class Simulation(_pygetm.Simulation):
             self.airsea.taux_Uo.all_values[...] = self.airsea.taux_U.all_values
             self.airsea.tauy_Vo.all_values[...] = self.airsea.tauy_V.all_values
 
+    @log_exceptions
     def finish(self):
         """Clean-up after simulation: save profiling result (if any), write output
         where appropriate (restarts), and close output files
