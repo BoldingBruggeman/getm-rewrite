@@ -54,16 +54,17 @@ module mod_longwave_radiation
    elemental subroutine clark(dlat, tw, ta, cloud, ea, ql)
       real(rk), intent(in)  :: dlat, tw, ta, cloud, ea
       real(rk), intent(out) :: ql
-      real(rk)              :: x1, x2, x3, ccf
+      real(rk)              :: x1, x2, x3, ccf, tw3
 
       ccf = cloud_correction_factor(dlat)
 
       ! unit of vapor pressure ea is Pascal, must hPa (= mbar)
       ! Black body defect term, clouds, water vapor correction
-      x1 = (1.0_rk - ccf * cloud * cloud) * tw**4
+      tw3 = tw**3
+      x1 = (1.0_rk - ccf * cloud * cloud) * tw3 * tw
       x2 = 0.39_rk - 0.05_rk * sqrt(ea * 0.01_rk)
       ! temperature jump term
-      x3 = 4.0_rk * tw**3 * (tw - ta)
+      x3 = 4.0_rk * tw3 * (tw - ta)
       ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
@@ -71,14 +72,15 @@ module mod_longwave_radiation
    elemental subroutine hastenrath(dlat, tw, ta, cloud, qa, ql)
       real(rk), intent(in)  :: dlat, tw, ta, cloud, qa
       real(rk), intent(out) :: ql
-      real(rk)              :: x1, x2, x3, ccf
+      real(rk)              :: x1, x2, x3, ccf, tw3
 
       ccf = cloud_correction_factor(dlat)
 
       ! unit of specific humidity qa is kg/kg, must be g(water)/kg(wet air)
-      x1 = (1.0_rk - ccf * cloud * cloud) * tw**4
+      tw3 = tw**3
+      x1 = (1.0_rk - ccf * cloud * cloud) * tw3 * tw
       x2 = 0.39_rk - 0.056_rk * sqrt(1000.0_rk * qa)
-      x3 = 4.0_rk * tw**3 * (tw - ta)
+      x3 = 4.0_rk * tw3 * (tw - ta)
       ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
@@ -100,11 +102,12 @@ module mod_longwave_radiation
    elemental subroutine berliand(tw, ta, cloud, ea, ql)
       real(rk), intent(in)  :: tw, ta, cloud, ea
       real(rk), intent(out) :: ql
-      real(rk)              :: x1, x2, x3
+      real(rk)              :: x1, x2, x3, ta3
 
-      x1 = (1.0_rk - 0.6823_rk * cloud * cloud) * ta**4
+      ta3 = ta**3
+      x1 = (1.0_rk - 0.6823_rk * cloud * cloud) * ta3 * ta
       x2 = 0.39_rk - 0.05_rk * sqrt(0.01_rk * ea)
-      x3 = 4.0_rk * ta**3 * (tw - ta)
+      x3 = 4.0_rk * ta3 * (tw - ta)
       ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
