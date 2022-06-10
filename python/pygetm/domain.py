@@ -1084,7 +1084,7 @@ class Domain(_pygetm.Domain):
         data,
         relative_in_x: bool = False,
         relative_in_y: bool = False,
-        fill_value=np.nan,
+        fill_value=None,
     ):
         if not self.tiling:
             return
@@ -1102,18 +1102,25 @@ class Domain(_pygetm.Domain):
         valid_before = np.logical_not(np.isnan(data))
 
         # Expand the data array one each side
-        data_ext = np.full(
-            (data.shape[0] + 2, data.shape[1] + 2), fill_value, dtype=data.dtype
-        )
-        data_ext[1:-1, 1:-1] = data
-        data_ext[:HALO, :HALO] = data[:HALO, :HALO]
-        data_ext[:HALO, HALO + 1 : -HALO - 1] = data[:HALO, HALO:-HALO]
-        data_ext[:HALO, -HALO:] = data[:HALO, -HALO:]
-        data_ext[HALO + 1 : -HALO - 1, :HALO] = data[HALO:-HALO, :HALO]
-        data_ext[HALO + 1 : -HALO - 1, -HALO:] = data[HALO:-HALO, -HALO:]
-        data_ext[-HALO:, :HALO] = data[-HALO:, :HALO]
-        data_ext[-HALO:, HALO + 1 : -HALO - 1] = data[-HALO:, HALO:-HALO]
-        data_ext[-HALO:, -HALO:] = data[-HALO:, -HALO:]
+        shape_ext = (data.shape[0] + 2, data.shape[1] + 2)
+        fill_ext = fill_value
+        if fill_ext is None:
+            fill_ext = 0 if np.issubdtype(data.dtype, np.integer) else np.nan
+        data_ext = np.full(shape_ext, fill_ext, dtype=data.dtype)
+        data_ext[1 + HALO : -1 - HALO, 1 + HALO : -1 - HALO] = data[
+            HALO:-HALO, HALO:-HALO
+        ]
+        if relative_in_x or relative_in_y:
+            # Pre-fill the halo zones with existing values
+            # This is needed in cases where some neighbors are missing
+            data_ext[:HALO, :HALO] = data[:HALO, :HALO]
+            data_ext[:HALO, HALO + 1 : -HALO - 1] = data[:HALO, HALO:-HALO]
+            data_ext[:HALO, -HALO:] = data[:HALO, -HALO:]
+            data_ext[HALO + 1 : -HALO - 1, :HALO] = data[HALO:-HALO, :HALO]
+            data_ext[HALO + 1 : -HALO - 1, -HALO:] = data[HALO:-HALO, -HALO:]
+            data_ext[-HALO:, :HALO] = data[-HALO:, :HALO]
+            data_ext[-HALO:, HALO + 1 : -HALO - 1] = data[-HALO:, HALO:-HALO]
+            data_ext[-HALO:, -HALO:] = data[-HALO:, -HALO:]
         self.tiling.wrap(data_ext, HALO + 1).update_halos()
 
         # For values in the halo, compute their difference with the outer boundary of
@@ -1141,30 +1148,32 @@ class Domain(_pygetm.Domain):
         # We move the outer part of the halos (all but their innermost point) one point
         # inwards to eliminate that overlapping point
         # Where we do not have a subdomain neighbor, we keep the original values.
-        if self.tiling.bottomleft != -1:
+        if self.tiling.bottomleft != -1 or fill_value is not None:
             data[:HALO, :HALO] = data_ext[:HALO, :HALO]
-        if self.tiling.bottom != -1:
+        if self.tiling.bottom != -1 or fill_value is not None:
             data[:HALO, HALO:-HALO] = data_ext[:HALO, HALO + 1 : -HALO - 1]
-        if self.tiling.bottomright != -1:
+        if self.tiling.bottomright != -1 or fill_value is not None:
             data[:HALO, -HALO:] = data_ext[:HALO, -HALO:]
-        if self.tiling.left != -1:
+        if self.tiling.left != -1 or fill_value is not None:
             data[HALO:-HALO, :HALO] = data_ext[HALO + 1 : -HALO - 1, :HALO]
-        if self.tiling.right != -1:
+        if self.tiling.right != -1 or fill_value is not None:
             data[HALO:-HALO, -HALO:] = data_ext[HALO + 1 : -HALO - 1, -HALO:]
-        if self.tiling.topleft != -1:
+        if self.tiling.topleft != -1 or fill_value is not None:
             data[-HALO:, :HALO] = data_ext[-HALO:, :HALO]
-        if self.tiling.top != -1:
+        if self.tiling.top != -1 or fill_value is not None:
             data[-HALO:, HALO:-HALO] = data_ext[-HALO:, HALO + 1 : -HALO - 1]
-        if self.tiling.topright != -1:
+        if self.tiling.topright != -1 or fill_value is not None:
             data[-HALO:, -HALO:] = data_ext[-HALO:, -HALO:]
 
-        valid_after = np.logical_not(np.isnan(data))
-        still_ok = np.where(valid_before, valid_after, True)
-        assert still_ok.all(), "Rank %i: _exchange_metric corrupted %i values: %s." % (
-            self.tiling.rank,
-            still_ok.size - still_ok.sum(),
-            still_ok,
-        )
+        if fill_value is None:
+            # Values in halos where there is no matching neighbor should have been preserved
+            # Therefore we cannot have gained invalid values anywhere - verify this.
+            valid_after = np.logical_not(np.isnan(data))
+            still_ok = np.where(valid_before, valid_after, True)
+            assert still_ok.all(), (
+                "Rank %i: _exchange_metric corrupted %i values: %s."
+                % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok,)
+            )
 
     def _map_array(self, source: ArrayLike, target: np.ndarray):
         supergrid_shape = (
@@ -1460,9 +1469,7 @@ class Domain(_pygetm.Domain):
             data_int = data[superhalo:-superhalo, superhalo:-superhalo]
             if source is not None:
                 self._map_array(source, data)
-                self._exchange_metric(
-                    data, relative_in_x, relative_in_y, fill_value=fill_value
-                )
+                self._exchange_metric(data, relative_in_x, relative_in_y)
             data.flags.writeable = data_int.flags.writeable = writeable
             return data_int, data
 
@@ -1639,8 +1646,8 @@ class Domain(_pygetm.Domain):
 
         # Update halos of bathymetry and bottom roughness, which the user could
         # modify freely until now.
-        self._exchange_metric(self.H_)
-        self._exchange_metric(self.z0b_min_)
+        self._exchange_metric(self.H_, fill_value=np.nan)
+        self._exchange_metric(self.z0b_min_, fill_value=np.nan)
 
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained
         # by the domain to be used for e.g. plotting
