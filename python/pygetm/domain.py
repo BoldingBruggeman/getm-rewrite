@@ -1202,13 +1202,15 @@ class Domain(_pygetm.Domain):
             source = np.broadcast_to(source, target_shape)
             return True
 
-        if cast(target.shape):
-            # local domain, supergrid INcluding halos
-            target_slice = (Ellipsis,)
-            source_slice = (Ellipsis,)
-        elif cast((self.ny * 2 + 1, self.nx * 2 + 1)):
+        # Note: the first of these clauses will catch assignment to a scalar
+        # - a very common case!
+        if cast((self.ny * 2 + 1, self.nx * 2 + 1)):
             # local domain, supergrid EXcluding halos
             target_slice = (Ellipsis, slice(4, -4), slice(4, -4))
+            source_slice = (Ellipsis,)
+        elif cast(target.shape):
+            # local domain, supergrid INcluding halos
+            target_slice = (Ellipsis,)
             source_slice = (Ellipsis,)
         elif cast((self.ny, self.nx)):
             # local domain, T grid, no halos
