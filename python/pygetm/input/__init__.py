@@ -672,9 +672,6 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         if numtime is None:
             numtime = time.toordinal(fractional=True)
 
-        if numtime == self._numnow:
-            return False
-
         if self._numnow is None:
             # First call to update - make sure the time series does not start after the requested time.
             if time.calendar != self.times[0].calendar:
@@ -689,27 +686,17 @@ class TemporalInterpolationResult(UnaryOperatorResult):
                 if time < self.times[0]:
                     raise Exception('Cannot interpolate %s to value at %s, because time series starts only at %s.' % (self._source_name, time.strftime(), self.times[0].strftime()))
                 self._inext = self.times.searchsorted(time, side='right') - 2
-        elif numtime < self._numnow:
-            # Subsequent call to update - make sure the requested time equals or exceeds the previously requested value
+            while self._inext < 1:
+                self._move_to_next()
+        elif numtime <= self._numnow:
+            # Subsequent call to update, but time has not increased
+            # If equal to previous time, we are done. If smaller, raise an exception
+            if numtime == self._numnow:
+                return False
             raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._timevalues.flat[0].strftime(), time.strftime()))
 
-        while self._inext < 1 or self._numnext < numtime:
-            # Move to next record
-            self._inext += 1
-            if self._inext == self.times.size:
-                if self.climatology:
-                    self._inext = 0
-                    self._year += 1
-                else:
-                    raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, time.strftime(), self.times[-1].strftime()))
-            old, numold = self._next, self._numnext
-            self._slices[self._itimedim] = self._inext
-            self._next = numpy.asarray(self._source[tuple(self._slices)], dtype=self.dtype)
-            next_time = self.times[self._inext]
-            if self.climatology:
-                next_time = next_time.replace(year=self._year)
-            self._numnext = next_time.toordinal(fractional=True)
-            self._slope = (self._next - old) / (self._numnext - numold)
+        while self._numnext < numtime:
+            self._move_to_next()
 
         # Do linear interpolation
         numpy.multiply(self._slope, numtime - self._numnext, out=self._current)
@@ -720,6 +707,23 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._timevalues[...] = time
         return True
 
+    def _move_to_next(self):
+        # Move to next record
+        self._inext += 1
+        if self._inext == self.times.size:
+            if self.climatology:
+                self._inext = 0
+                self._year += 1
+            else:
+                raise Exception('Cannot interpolate %s to value at %s because end of time series was reached (%s).' % (self._source_name, time.strftime(), self.times[-1].strftime()))
+        old, numold = self._next, self._numnext
+        self._slices[self._itimedim] = self._inext
+        self._next = numpy.asarray(self._source[tuple(self._slices)], dtype=self.dtype)
+        next_time = self.times[self._inext]
+        if self.climatology:
+            next_time = next_time.replace(year=self._year)
+        self._numnext = next_time.toordinal(fractional=True)
+        self._slope = (self._next - old) / (self._numnext - numold)
 
 def debug_nc_reads(logger: Optional[logging.Logger]=None):
     """Hook into :mod:`xarray` so that every read from a NetCDF file is written to the log."""
