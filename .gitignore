@@ -27,3 +27,7 @@ ford/
 *.pyc
 /build
 /python/docs/build
+
+/python/examples/*.prof
+/python/examples/*.log
+/python/examples/*.nc
