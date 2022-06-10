@@ -1,4 +1,4 @@
-from typing import Callable, Iterable, List, Mapping, Union, Optional, Mapping, Sequence, Tuple, TYPE_CHECKING
+from typing import Callable, Iterable, List, Mapping, Union, Optional, Sequence, Tuple, TYPE_CHECKING
 import glob
 import numbers
 import logging
@@ -15,6 +15,7 @@ from pygetm.constants import CENTERS
 
 if TYPE_CHECKING:
     import pygetm.core
+
 
 @xarray.register_dataarray_accessor('getm')
 class GETMAccessor:
@@ -55,6 +56,7 @@ class GETMAccessor:
                     self._coordinates['z'] = coord
         return self._coordinates
 
+
 open_nc_files = []
 def _open(path, preprocess=None, **kwargs):
     key = (path, preprocess, kwargs.copy())
@@ -66,6 +68,7 @@ def _open(path, preprocess=None, **kwargs):
         ds = preprocess(ds)
     open_nc_files.append((key, ds))
     return ds
+
 
 def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess: Optional[Callable[[xarray.Dataset], xarray.Dataset]]=None, **kwargs) -> xarray.DataArray:
     """Obtain a variable from one or more NetCDF files that can be used as value provided to
@@ -101,6 +104,7 @@ def from_nc(paths: Union[str, Sequence[str]], name: str, preprocess: Optional[Ca
     else:
         assert all(array.getm.time is not None for array in arrays)
         return xarray.concat(sorted(arrays, key=lambda a: a.getm.time.values.flat[0]), dim=arrays[0].getm.time.dims[0])
+
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, shape: Iterable[int], dtype: numpy.typing.DTypeLike, name: str):
@@ -157,6 +161,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
                 break
         assert len(slices) == self.ndim
         return slices
+
 
 class OperatorResult(LazyArray):
     def __init__(self, *inputs, passthrough=(), dtype=None, shape=None, name: Optional[str]=None, **kwargs):
@@ -242,11 +247,13 @@ class OperatorResult(LazyArray):
     def __array__(self, dtype=None) -> numpy.ndarray:
         return self.apply(*[numpy.asarray(inp) for inp in self.inputs], dtype=dtype)
 
+
 class UnaryOperatorResult(OperatorResult):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._source = self.inputs[0]
         self._source_name = self.input_names[0]
+
 
 class UFuncResult(OperatorResult):
     def __init__(self, ufunc, *inputs, **kwargs):
@@ -255,6 +262,7 @@ class UFuncResult(OperatorResult):
 
     def apply(self, *inputs, dtype=None) -> numpy.ndarray:
         return self.ufunc(*inputs, **self.kwargs)
+
 
 class WrappedArray(UnaryOperatorResult):
     def __init__(self, source: xarray.Variable, **kwargs):
@@ -266,6 +274,7 @@ class WrappedArray(UnaryOperatorResult):
 
     def update(self, *args) -> bool:
         return False
+
 
 class SliceArray(UnaryOperatorResult):
     def __init__(self, *args, **kwargs):
@@ -298,6 +307,7 @@ class SliceArray(UnaryOperatorResult):
             data[tgt_slice] = self._source[tuple(src_slice)]
         return data
 
+
 class ConcatenatedArray(UnaryOperatorResult):
     def __init__(self, arrays, axis: int=0, *args, **kwargs):
         shape = list(arrays[0].shape)
@@ -321,6 +331,7 @@ class ConcatenatedArray(UnaryOperatorResult):
                 return numpy.asarray(input[tuple(slices)])
             slices[self.axis] -= input.shape[self.axis]
         assert False, 'Index out of bounds?'
+
 
 def limit_region(source: xarray.DataArray, minlon: float, maxlon: float, minlat: float, maxlat: float, periodic_lon: bool=False, verbose: bool=False, require_2d: bool=True) -> xarray.DataArray:
     assert numpy.isfinite(minlon) and numpy.isfinite(maxlon), 'Longitude range %s - %s is not valid' % (minlon, maxlon)
@@ -442,12 +453,14 @@ class Transpose(UnaryOperatorResult):
     def __getitem__(self, slices) -> numpy.ndarray:
         return self._source[slices[::-1]].transpose()
 
+
 def transpose(source: xarray.DataArray) -> xarray.DataArray:
     lazyvar = Transpose(source.variable, shape=source.shape[::-1], passthrough=list(range(source.ndim)), dtype=source.dtype, name='transpose(%s)' % (source.name,))
     coords = {}
     for name, c in source.coords.items():
         coords[name] = c.transpose()
     return xarray.DataArray(lazyvar, dims=source.dims[::-1], coords=coords, attrs=source.attrs, name=lazyvar.name)
+
 
 def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
     """Index named dimensions with integers, slice objects or integer arrays"""
@@ -492,6 +505,7 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
             coords[name] = c
     return xarray.DataArray(lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
+
 def horizontal_interpolation(source: xarray.DataArray, lon: xarray.DataArray, lat: xarray.DataArray, dtype: numpy.typing.DTypeLike=float, mask=None) -> xarray.DataArray:
     assert source.getm.longitude is not None, 'Variable %s does not have a valid longitude coordinate.' % source.name
     assert source.getm.latitude is not None, 'Variable %s does not have a valid latitude coordinate.' % source.name
@@ -528,6 +542,7 @@ def horizontal_interpolation(source: xarray.DataArray, lon: xarray.DataArray, la
     lazyvar = SpatialInterpolation(ip, source.variable, shape, min(ilondim, ilatdim), source.ndim - max(ilondim, ilatdim) - 1, name='horizontal_interpolation(%s)' % source.name)
     return xarray.DataArray(lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
+
 class SpatialInterpolation(UnaryOperatorResult):
     def __init__(self, ip: pygetm.util.interpolate.Linear2DGridInterpolator, source: xarray.Variable, shape: Iterable[int], npre: int, npost: int, **kwargs):
         UnaryOperatorResult.__init__(self, source, shape=shape, **kwargs)
@@ -558,6 +573,7 @@ class SpatialInterpolation(UnaryOperatorResult):
         result = self._ip(source)
         return result[tuple(tgt_slice)]
 
+
 def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, itargetdim: int=0) -> xarray.DataArray:
     source_z = source.getm.z
     assert source_z is not None, 'Variable %s does not have a valid depth coordinate.' % source.name
@@ -586,6 +602,7 @@ def vertical_interpolation(source: xarray.DataArray, target_z: numpy.ndarray, it
     lazyvar = VerticalInterpolation(source.variable, target_z, izdim, source_z.values, itargetdim, name='horizontal_interpolation(%s)' % source.name)
     return xarray.DataArray(lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
 
+
 class VerticalInterpolation(UnaryOperatorResult):
     def __init__(self, source: xarray.Variable, z: numpy.ndarray, izdim: int, source_z: numpy.ndarray, axis: int=0, **kwargs):
         self.izdim = izdim
@@ -602,6 +619,7 @@ class VerticalInterpolation(UnaryOperatorResult):
     def apply(self, source, dtype=None) -> numpy.ndarray:
         return pygetm.util.interpolate.interp_1d(self.z, self.source_z, source, axis=self.axis)
 
+
 def temporal_interpolation(source: xarray.DataArray, climatology: bool=False) -> xarray.DataArray:
     time_coord = source.getm.time
     assert time_coord is not None, 'No time coordinate found'
@@ -611,6 +629,7 @@ def temporal_interpolation(source: xarray.DataArray, climatology: bool=False) ->
     coords = dict(source.coords.items())
     coords[time_coord.dims[0]] = lazyvar._timecoord
     return xarray.DataArray(lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name)
+
 
 class TemporalInterpolationResult(UnaryOperatorResult):
     __slots__ = '_current', '_itimedim', '_numnow', '_numnext', '_slope', '_inext', '_next', '_slices', 'climatology', '_year'
@@ -692,12 +711,14 @@ class TemporalInterpolationResult(UnaryOperatorResult):
             self._slope = (self._next - old) / (self._numnext - numold)
 
         # Do linear interpolation
-        self._current[...] = self._next + (numtime - self._numnext) * self._slope
+        numpy.multiply(self._slope, numtime - self._numnext, out=self._current)
+        self._current += self._next
 
         # Save current time
         self._numnow = numtime
         self._timecoord.values[...] = time
         return True
+
 
 def debug_nc_reads(logger: Optional[logging.Logger]=None):
     """Hook into :mod:`xarray` so that every read from a NetCDF file is written to the log."""
@@ -712,10 +733,12 @@ def debug_nc_reads(logger: Optional[logging.Logger]=None):
             return super()._getitem(key)
     xarray.backends.netCDF4_.NetCDF4ArrayWrapper = NetCDF4ArrayWrapper2
 
+
 class OnGrid(enum.Enum):
     NONE = enum.auto()        #: grids do not match. Spatially explicit data will require horizontal and - if vertically resolved - vertical interpolation.
     HORIZONTAL = enum.auto()  #: horizontal grid matches, but vertical does not. Vertically resolved data will require vertical interpolation.
     ALL = enum.auto()         #: horizontal and vertical grids match
+
 
 class InputManager:
     def __init__(self):
