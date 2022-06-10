@@ -50,7 +50,7 @@ class InternalPressure(enum.IntEnum):
 def log_exceptions(method):
     def wrapper(self, *args, **kwargs):
         try:
-            method(self, *args, **kwargs)
+            return method(self, *args, **kwargs)
         except Exception as e:
             if self.domain.tiling.n == 1:
                 raise
