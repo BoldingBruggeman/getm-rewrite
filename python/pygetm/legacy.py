@@ -72,7 +72,7 @@ def domain_from_topo(
                 if "z0" not in nc.variables:
                     raise Exception(
                         "Bottom roughness z0 is not present in %s; you need to provide"
-                        "it as keyword argument to domain_from_topo instead."
+                        " it as keyword argument to domain_from_topo instead."
                     )
                 kwargs["z0"] = np.ma.filled(
                     pygetm.domain.read_centers_to_supergrid(
