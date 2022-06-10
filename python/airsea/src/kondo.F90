@@ -85,20 +85,20 @@ contains
    s = s0 * abs(s0) / (abs(s0) + 0.01_rk)
 
 ! Transfer coefficient for heat and momentum
-!   if (w .lt. 0.3) then
-   if (w .lt. 2.2_rk) then
+!   if (w < 0.3) then
+   if (w < 2.2_rk) then
       cdd = (be_d(1) * w**pe_d(1)) * 1.0e-3_rk
       chd = (be_h(1) * w**pe_h(1)) * 1.0e-3_rk
       ced = (be_e(1) * w**pe_e(1)) * 1.0e-3_rk
-   else if (w .lt. 5.0_rk) then
+   else if (w < 5.0_rk) then
       cdd = (ae_d(2) + be_d(2) * w) * 1.0e-3_rk
       chd = (ae_h(2) + be_h(2) * w) * 1.0e-3_rk
       ced = (ae_e(2) + be_e(2) * w) * 1.0e-3_rk
-   else if (w .lt. 8.0_rk) then
+   else if (w < 8.0_rk) then
       cdd = (ae_d(3) + be_d(3) * w) * 1.0e-3_rk
       chd = (ae_h(3) + be_h(3) * w) * 1.0e-3_rk
       ced = (ae_e(3) + be_e(3) * w) * 1.0e-3_rk
-   else if (w .lt. 25.0_rk) then
+   else if (w < 25.0_rk) then
       cdd = (ae_d(4) + be_d(4) * w) * 1.0e-3_rk
       chd = (ae_h(4) + be_h(4) * w + ce_h(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
       ced = (ae_e(4) + be_e(4) * w + ce_e(4) * (w - 8.0_rk)**2) * 1.0e-3_rk
@@ -108,8 +108,8 @@ contains
       ced = (ae_e(5) + be_e(5) * w) * 1.0e-3_rk
    end if
 
-   if(s .lt. 0._rk) then
-      if (s .gt. -3.3_rk) then
+   if(s < 0._rk) then
+      if (s > -3.3_rk) then
          x = 0.1_rk + 0.03_rk * s + 0.9_rk * exp(4.8_rk * s)
       else
          x = 0.0_rk

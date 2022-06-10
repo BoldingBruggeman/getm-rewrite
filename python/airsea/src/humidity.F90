@@ -1,6 +1,6 @@
 module mod_humidity
 
-   use mod_airsea_variables, only: kelvin,const06,rgas,rk
+   use mod_airsea_variables, only: kelvin, const06, rgas, rk
 
    implicit none
 
@@ -22,7 +22,7 @@ module mod_humidity
       real(rk), parameter       :: a6=2.034080948e-8_rk
       real(rk), parameter       :: a7=6.136820929e-11_rk
 
-      qa = a1 +t*(a2+t*(a3+t*(a4+t*(a5+t*(a6+t*a7)))))
+      qa = a1 + t * (a2 + t * (a3 + t * (a4 + t * (a5 + t * (a6 + t * a7)))))
       qa = qa * 100.0_rk ! Conversion millibar --> Pascal
    end function
 
