@@ -16,7 +16,7 @@ def compare(path1: str, path2: str) -> bool:
             # Then skip the full values check (expensive!)
             values1 = np.ma.masked_invalid(ncvar1[-1, ...])
             values2 = np.ma.masked_invalid(ncvar2[-1, ...])
-            if np.ma.filled(values1 == values2, True,).all():
+            if np.ma.filled(values1 == values2, True).all():
                 continue
 
             # Values at last time did not match. Now check all time points
