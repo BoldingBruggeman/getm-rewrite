@@ -632,7 +632,7 @@ def temporal_interpolation(source: xarray.DataArray, climatology: bool=False) ->
 
 
 class TemporalInterpolationResult(UnaryOperatorResult):
-    __slots__ = '_current', '_itimedim', '_numnow', '_numnext', '_slope', '_inext', '_next', '_slices', 'climatology', '_year'
+    __slots__ = '_current', '_itimedim', '_numnow', '_numnext', '_slope', '_inext', '_next', '_slices', 'climatology', '_year', '_timevalues'
 
     def __init__(self, source: xarray.Variable, itimedim: int, times: numpy.ndarray, climatology: bool, dtype=float, **kwargs):
         shape = list(source.shape)
@@ -646,6 +646,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         self.times = times
         self._timecoord = xarray.DataArray(self.times[0])
+        self._timevalues = self._timecoord.values
 
         self._numnow = None
         self._numnext = 0.
@@ -690,7 +691,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
                 self._inext = self.times.searchsorted(time, side='right') - 2
         elif numtime < self._numnow:
             # Subsequent call to update - make sure the requested time equals or exceeds the previously requested value
-            raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._timecoord.values.flat[0].strftime(), time.strftime()))
+            raise Exception('Time can only increase, but previous time was %s, new time %s' % (self._timevalues.flat[0].strftime(), time.strftime()))
 
         while self._inext < 1 or self._numnext < numtime:
             # Move to next record
@@ -716,7 +717,7 @@ class TemporalInterpolationResult(UnaryOperatorResult):
 
         # Save current time
         self._numnow = numtime
-        self._timecoord.values[...] = time
+        self._timevalues[...] = time
         return True
 
 
