@@ -322,8 +322,14 @@ for membername in Grid._all_arrays:
     setattr(Grid, membername[1:], property(operator.attrgetter(membername), doc=doc))
 
 
-def read_centers_to_supergrid(
-    source: ArrayLike, ioffset: int, joffset: int, nx: int, ny: int, dtype=None
+def centers_to_supergrid_2d(
+    source: ArrayLike,
+    ioffset: int,
+    joffset: int,
+    nx: int,
+    ny: int,
+    dtype=None,
+    missing_values=(),
 ):
     if dtype is None:
         dtype = source.dtype
@@ -332,10 +338,6 @@ def read_centers_to_supergrid(
     # Create an array to hold data at centers (T points),
     # with strips of size 1 on all sides to support interpolation to interfaces
     data_centers = np.ma.masked_all(source.shape[:-2] + (ny + 2, nx + 2), dtype=dtype)
-
-    masked_values = []
-    if hasattr(source, "missing_value"):
-        masked_values.append(np.array(source.missing_value, source.dtype))
 
     # Extend the read domain (T grid) by 1 each side, where possible
     # That will allow us to interpolate (rater than extrapolate) to values at the
@@ -351,8 +353,8 @@ def read_centers_to_supergrid(
         joffset - ex_jmin : joffset + ny + ex_jmax,
         ioffset - ex_imin : ioffset + nx + ex_imax,
     ]
-    for value in masked_values:
-        data_centers = np.ma.masked_equal(data_centers, value, copy=False)
+    for missing_value in missing_values:
+        data_centers = np.ma.masked_equal(data_centers, missing_value, copy=False)
 
     data_if_ip = np.ma.masked_all(
         (4,) + source.shape[:-2] + (ny + 1, nx + 1), dtype=dtype
@@ -373,9 +375,6 @@ def read_centers_to_supergrid(
         ..., 1:-1, 1:,
     ]
     data[..., 1::2, ::2] = data_if_ip[:2, ..., :-1, :].mean(axis=0)
-
-    if len(masked_values) > 0:
-        data.set_fill_value(masked_values[0])
 
     return data
 
@@ -399,7 +398,7 @@ def coriolis(lat: ArrayLike) -> ArrayLike:
     return 2.0 * OMEGA * np.sin(DEG2RAD * lat)
 
 
-def center_to_supergrid_1d(data) -> np.ndarray:
+def centers_to_supergrid_1d(data) -> np.ndarray:
     assert data.ndim == 1, "data must be one-dimensional"
     assert data.size > 1, "data must have at least 2 elements"
     data_sup = np.empty((data.size * 2 + 1,))
@@ -444,7 +443,7 @@ def create_cartesian(x, y, nz: int, interfaces=False, **kwargs) -> "Domain":
         x, y = interfaces_to_supergrid_1d(x), interfaces_to_supergrid_1d(y)
     else:
         nx, ny = x.size, y.size
-        x, y = center_to_supergrid_1d(x), center_to_supergrid_1d(y)
+        x, y = centers_to_supergrid_1d(x), centers_to_supergrid_1d(y)
     return Domain.create(nx, ny, nz, x=x, y=y[:, np.newaxis], **kwargs)
 
 
@@ -458,7 +457,7 @@ def create_spherical(lon, lat, nz: int, interfaces=False, **kwargs) -> "Domain":
         lon, lat = interfaces_to_supergrid_1d(lon), interfaces_to_supergrid_1d(lat)
     else:
         nx, ny = lon.size, lat.size
-        lon, lat = center_to_supergrid_1d(lon), center_to_supergrid_1d(lat)
+        lon, lat = centers_to_supergrid_1d(lon), centers_to_supergrid_1d(lat)
     return Domain.create(
         nx, ny, nz, lon=lon, lat=lat[:, np.newaxis], spherical=True, **kwargs
     )
@@ -1214,7 +1213,7 @@ class Domain(_pygetm.Domain):
             source_slice = (Ellipsis,)
         elif cast((self.ny, self.nx)):
             # local domain, T grid, no halos
-            source = read_centers_to_supergrid(source, 0, 0, self.nx, self.ny)
+            source = centers_to_supergrid_2d(source, 0, 0, self.nx, self.ny)
             target_slice = (Ellipsis, slice(4, -4), slice(4, -4))
             source_slice = (Ellipsis,)
         elif cast((self.ny + 1, self.nx + 1)):
@@ -1224,7 +1223,7 @@ class Domain(_pygetm.Domain):
             source_slice = (Ellipsis,)
         elif cast((ny_glob, nx_glob)):
             # global domain, T grid
-            source = read_centers_to_supergrid(source, 0, 0, nx_glob, ny_glob)
+            source = centers_to_supergrid_2d(source, 0, 0, nx_glob, ny_glob)
         elif cast((ny_glob + 1, nx_glob + 1)):
             # global domain, X grid
             source = interfaces_to_supergrid_2d(source)

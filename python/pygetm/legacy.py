@@ -64,9 +64,15 @@ def domain_from_topo(
             )
             lat = lat[:, np.newaxis]
 
-            H = pygetm.domain.read_centers_to_supergrid(
-                nc["bathymetry"], ioffset, joffset, nx, ny
+            # Bathymetry (missing values/fill values will be masked)
+            missing = []
+            ncbath = nc["bathymetry"]
+            if hasattr(ncbath, "missing_value"):
+                missing.append(np.array(ncbath.missing_value, ncbath.dtype))
+            H = pygetm.domain.centers_to_supergrid_2d(
+                ncbath, ioffset, joffset, nx, ny, missing_values=missing
             )
+
             if "z0" not in kwargs:
                 if "z0" not in nc.variables:
                     raise Exception(
@@ -74,7 +80,7 @@ def domain_from_topo(
                         " it as keyword argument to domain_from_topo instead."
                     )
                 kwargs["z0"] = np.ma.filled(
-                    pygetm.domain.read_centers_to_supergrid(
+                    pygetm.domain.centers_to_supergrid_2d(
                         nc["z0"], ioffset, joffset, nx, ny
                     )
                 )
