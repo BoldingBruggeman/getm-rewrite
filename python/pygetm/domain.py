@@ -1079,11 +1079,7 @@ class Domain(_pygetm.Domain):
         return domain
 
     def _exchange_metric(
-        self,
-        data,
-        relative_in_x: bool = False,
-        relative_in_y: bool = False,
-        fill_value=None,
+        self, data, relative_in_x: bool = False, relative_in_y: bool = False
     ):
         if not self.tiling:
             return
@@ -1102,24 +1098,22 @@ class Domain(_pygetm.Domain):
 
         # Expand the data array one each side
         shape_ext = (data.shape[0] + 2, data.shape[1] + 2)
-        fill_ext = fill_value
-        if fill_ext is None:
-            fill_ext = 0 if np.issubdtype(data.dtype, np.integer) else np.nan
-        data_ext = np.full(shape_ext, fill_ext, dtype=data.dtype)
+        fill_value = 0 if np.issubdtype(data.dtype, np.integer) else np.nan
+        data_ext = np.full(shape_ext, fill_value, dtype=data.dtype)
         data_ext[1 + HALO : -1 - HALO, 1 + HALO : -1 - HALO] = data[
             HALO:-HALO, HALO:-HALO
         ]
         if relative_in_x or relative_in_y:
             # Pre-fill the halo zones with existing values
             # This is needed in cases where some neighbors are missing
-            data_ext[:HALO, :HALO] = data[:HALO, :HALO]
-            data_ext[:HALO, HALO + 1 : -HALO - 1] = data[:HALO, HALO:-HALO]
-            data_ext[:HALO, -HALO:] = data[:HALO, -HALO:]
-            data_ext[HALO + 1 : -HALO - 1, :HALO] = data[HALO:-HALO, :HALO]
-            data_ext[HALO + 1 : -HALO - 1, -HALO:] = data[HALO:-HALO, -HALO:]
-            data_ext[-HALO:, :HALO] = data[-HALO:, :HALO]
-            data_ext[-HALO:, HALO + 1 : -HALO - 1] = data[-HALO:, HALO:-HALO]
-            data_ext[-HALO:, -HALO:] = data[-HALO:, -HALO:]
+            data_ext[: HALO + 1, : HALO + 1] = data[: HALO + 1, : HALO + 1]
+            data_ext[: HALO + 1, HALO + 1 : -HALO - 1] = data[: HALO + 1, HALO:-HALO]
+            data_ext[: HALO + 1, -HALO - 1 :] = data[: HALO + 1, -HALO - 1 :]
+            data_ext[HALO + 1 : -HALO - 1, : HALO + 1] = data[HALO:-HALO, : HALO + 1]
+            data_ext[HALO + 1 : -HALO - 1, -HALO - 1 :] = data[HALO:-HALO, -HALO - 1 :]
+            data_ext[-HALO - 1 :, : HALO + 1] = data[-HALO - 1 :, : HALO + 1]
+            data_ext[-HALO - 1 :, HALO + 1 : -HALO - 1] = data[-HALO - 1 :, HALO:-HALO]
+            data_ext[-HALO - 1 :, -HALO - 1 :] = data[-HALO - 1 :, -HALO - 1 :]
         self.tiling.wrap(data_ext, HALO + 1).update_halos()
 
         # For values in the halo, compute their difference with the outer boundary of
@@ -1147,32 +1141,32 @@ class Domain(_pygetm.Domain):
         # We move the outer part of the halos (all but their innermost point) one point
         # inwards to eliminate that overlapping point
         # Where we do not have a subdomain neighbor, we keep the original values.
-        if self.tiling.bottomleft != -1 or fill_value is not None:
+        if self.tiling.bottomleft != -1:
             data[:HALO, :HALO] = data_ext[:HALO, :HALO]
-        if self.tiling.bottom != -1 or fill_value is not None:
+        if self.tiling.bottom != -1:
             data[:HALO, HALO:-HALO] = data_ext[:HALO, HALO + 1 : -HALO - 1]
-        if self.tiling.bottomright != -1 or fill_value is not None:
+        if self.tiling.bottomright != -1:
             data[:HALO, -HALO:] = data_ext[:HALO, -HALO:]
-        if self.tiling.left != -1 or fill_value is not None:
+        if self.tiling.left != -1:
             data[HALO:-HALO, :HALO] = data_ext[HALO + 1 : -HALO - 1, :HALO]
-        if self.tiling.right != -1 or fill_value is not None:
+        if self.tiling.right != -1:
             data[HALO:-HALO, -HALO:] = data_ext[HALO + 1 : -HALO - 1, -HALO:]
-        if self.tiling.topleft != -1 or fill_value is not None:
+        if self.tiling.topleft != -1:
             data[-HALO:, :HALO] = data_ext[-HALO:, :HALO]
-        if self.tiling.top != -1 or fill_value is not None:
+        if self.tiling.top != -1:
             data[-HALO:, HALO:-HALO] = data_ext[-HALO:, HALO + 1 : -HALO - 1]
-        if self.tiling.topright != -1 or fill_value is not None:
+        if self.tiling.topright != -1:
             data[-HALO:, -HALO:] = data_ext[-HALO:, -HALO:]
 
-        if fill_value is None:
-            # Values in halos where there is no matching neighbor should have been preserved
-            # Therefore we cannot have gained invalid values anywhere - verify this.
-            valid_after = np.logical_not(np.isnan(data))
-            still_ok = np.where(valid_before, valid_after, True)
-            assert still_ok.all(), (
-                "Rank %i: _exchange_metric corrupted %i values: %s."
-                % (self.tiling.rank, still_ok.size - still_ok.sum(), still_ok,)
-            )
+        # Values in halos where there is no matching neighbor should have been preserved
+        # Therefore we cannot have gained invalid values anywhere - verify this.
+        valid_after = np.logical_not(np.isnan(data))
+        still_ok = np.where(valid_before, valid_after, True)
+        assert still_ok.all(), "Rank %i: _exchange_metric corrupted %i values: %s." % (
+            self.tiling.rank,
+            still_ok.size - still_ok.sum(),
+            still_ok,
+        )
 
     def _map_array(self, source: ArrayLike, target: np.ndarray):
         supergrid_shape = (
@@ -1645,10 +1639,26 @@ class Domain(_pygetm.Domain):
         if self.glob is not None and self.glob is not self:
             self.glob.initialize(runtype)
 
-        # Update halos of bathymetry and bottom roughness, which the user could
-        # modify freely until now.
-        self._exchange_metric(self.H_, fill_value=np.nan)
-        self._exchange_metric(self.z0b_min_, fill_value=np.nan)
+        # The user could modify mask, bathymetry, bottom roughness freely until now.
+        # Ensure they are marked invalid inside halos and outside the global domain.
+        local_slice, _, _, _ = self.tiling.subdomain2slices(
+            halo_sub=4,
+            scale=2,
+            share=1,
+            exclude_halos=True,
+            exclude_global_halos=True,
+        )
+        outside = np.full(self.H_.shape, True)
+        outside[local_slice] = False
+        self.mask_[outside] = 0
+        self.H_[outside] = np.nan
+        self.z0b_min_[outside] = np.nan
+
+        # Now update halos.
+        # This ensures the mask in halos is valid only if there is an actual neighbor.
+        self._exchange_metric(self.mask_)
+        self._exchange_metric(self.H_)
+        self._exchange_metric(self.z0b_min_)
 
         # Mask U,V,X points without any valid T neighbor - this mask will be maintained
         # by the domain to be used for e.g. plotting
@@ -1664,7 +1674,7 @@ class Domain(_pygetm.Domain):
             & (tmask[1:, :-1] == 0)
             & (tmask[:-1, :-1] == 0)
         ] = 0
-        self._exchange_metric(self.mask_, fill_value=0)
+        self._exchange_metric(self.mask_)
 
         self.open_boundaries.initialize()
 
@@ -1680,7 +1690,7 @@ class Domain(_pygetm.Domain):
             | (tmask[1:, :-1] == 0)
             | (tmask[:-1, :-1] == 0)
         ] = 0
-        self._exchange_metric(self.mask_, fill_value=0)
+        self._exchange_metric(self.mask_)
 
         uumask = self.UU._setup_array("mask").all_values
         uvmask = self.UV._setup_array("mask").all_values
