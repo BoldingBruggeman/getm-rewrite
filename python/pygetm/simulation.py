@@ -16,7 +16,6 @@ from .constants import (
     INTERFACES,
     FILL_VALUE,
     RHO0,
-    CP,
     CENTERS,
     GRAVITY,
 )
@@ -305,6 +304,7 @@ class Simulation(_pygetm.Simulation):
         )
 
         if runtype == BAROCLINIC:
+            self.density = density or pygetm.density.Density()
             self.radiation = pygetm.radiation.TwoBand(dom.T)
             self.temp = self.tracers.add(
                 name="temp",
@@ -314,7 +314,7 @@ class Simulation(_pygetm.Simulation):
                 fill_value=FILL_VALUE,
                 source=self.radiation.swr_abs,
                 surface_flux=self.airsea.shf,
-                source_scale=1.0 / (RHO0 * CP),
+                source_scale=1.0 / (RHO0 * self.density.CP),
                 rivers_follow_target_cell=True,
                 precipitation_follows_target_cell=True,
             )
@@ -340,8 +340,6 @@ class Simulation(_pygetm.Simulation):
             )
             self.tracer_totals.append(self.salt)
             self.sss = self.salt.isel(z=-1)
-
-            self.density = density or pygetm.density.Density()
         else:
             self.sss = None
 

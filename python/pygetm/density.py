@@ -13,6 +13,8 @@ import pygsw
 
 
 class Density:
+    CP = pygsw.CP
+
     @staticmethod
     def get_buoyancy_frequency(
         SA: core.Array,
