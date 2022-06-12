@@ -198,33 +198,28 @@ class Grid(_pygetm.Grid):
         if source is None:
             return array
 
-        nj, ni = self.ny_, self.nx_
-        supergrid_slice = (
-            slice(self.joffset, self.joffset + 2 * nj, 2),
-            slice(self.ioffset, self.ioffset + 2 * ni, 2),
-        )
-        values = source[supergrid_slice]
-        array.all_values.fill(np.nan)
+        imax, jmax = self.ioffset + 2 * self.nx_, self.joffset + 2 * self.ny_
+        values = source[(slice(self.joffset, jmax, 2), slice(self.ioffset, imax, 2))]
         slc = (Ellipsis,)
         if name in ("z0b_min",):
             slc = self.mask.all_values[: values.shape[0], : values.shape[1]] > 0
         array.all_values[: values.shape[0], : values.shape[1]][slc] = values[slc]
+        if values.shape != array.all_values.shape:
+            # supergrid does not span entire grid; fill remainder by exchanging halos
+            array.update_halos()
 
         has_bounds = (
             self.ioffset > 0
             and self.joffset > 0
-            and source.shape[-1] >= self.ioffset + 2 * ni
-            and source.shape[-2] >= self.joffset + 2 * nj
+            and source.shape[-1] >= imax
+            and source.shape[-2] >= jmax
         )
         if has_bounds and name in self._coordinate_arrays:
             # Generate interface coordinates. These are not represented in Fortran as
             # they are only needed for plotting. The interface coordinates are slices
             # that point to the supergrid data; they thus do not consume additional
             # memory.
-            values_i = source[
-                self.joffset - 1 : self.joffset + 2 * nj + 1 : 2,
-                self.ioffset - 1 : self.ioffset + 2 * ni + 1 : 2,
-            ]
+            values_i = source[self.joffset - 1 : jmax : 2, self.ioffset - 1 : imax : 2]
             setattr(self, "_%si_" % name, values_i)
             setattr(
                 self,
@@ -1642,11 +1637,7 @@ class Domain(_pygetm.Domain):
         # The user could modify mask, bathymetry, bottom roughness freely until now.
         # Ensure they are marked invalid inside halos and outside the global domain.
         local_slice, _, _, _ = self.tiling.subdomain2slices(
-            halo_sub=4,
-            scale=2,
-            share=1,
-            exclude_halos=True,
-            exclude_global_halos=True,
+            halo_sub=4, scale=2, share=1, exclude_halos=True, exclude_global_halos=True,
         )
         outside = np.full(self.H_.shape, True)
         outside[local_slice] = False
