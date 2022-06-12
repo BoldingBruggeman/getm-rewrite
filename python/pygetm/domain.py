@@ -184,7 +184,9 @@ class Grid(_pygetm.Grid):
         self.zin.all_values[...] = self.z.all_values
         self.nbdyp = nbdyp
 
-    def _setup_array(self, name: str, array: Optional[core.Array] = None) -> core.Array:
+    def _setup_array(
+        self, name: str, array: Optional[core.Array] = None, from_supergrid: bool = True
+    ) -> core.Array:
         if array is None:
             # No array provided, so it must live in Fortran; retrieve it
             kwargs = dict(fill_value=FILL_VALUE)
@@ -195,7 +197,7 @@ class Grid(_pygetm.Grid):
         # Obtain corresponding array on the supergrid.
         # If this does not exist, we are done
         source = getattr(self.domain, name + "_", None)
-        if source is None:
+        if source is None or not from_supergrid:
             return array
 
         imax, jmax = self.ioffset + 2 * self.nx_, self.joffset + 2 * self.ny_
@@ -1683,14 +1685,10 @@ class Domain(_pygetm.Domain):
         ] = 0
         self._exchange_metric(self.mask_)
 
-        uumask = self.UU._setup_array("mask").all_values
-        uvmask = self.UV._setup_array("mask").all_values
-        vumask = self.VU._setup_array("mask").all_values
-        vvmask = self.VV._setup_array("mask").all_values
-        uumask.fill(0)
-        uvmask.fill(0)
-        vumask.fill(0)
-        vvmask.fill(0)
+        uumask = self.UU._setup_array("mask", from_supergrid=False).all_values
+        uvmask = self.UV._setup_array("mask", from_supergrid=False).all_values
+        vumask = self.VU._setup_array("mask", from_supergrid=False).all_values
+        vvmask = self.VV._setup_array("mask", from_supergrid=False).all_values
         uumask[:, :-1][(umask[:, :-1] > 0) & (umask[:, 1:] > 0)] = 1
         uvmask[:-1, :][(umask[:-1, :] > 0) & (umask[1:, :] > 0)] = 1
         vumask[:, :-1][(vmask[:, :-1] > 0) & (vmask[:, 1:] > 0)] = 1
