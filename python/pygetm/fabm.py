@@ -181,7 +181,7 @@ class FABM:
         variable.link(arr.all_values)
         return arr
 
-    def update_sources(self, time: cftime.datetime):
+    def update_sources(self, time: Optional[cftime.datetime] = None):
         """Update sources, vertical velocities, and diagnostics.
         This does not update the state variables themselves; that is done by
         :meth:`advance`
