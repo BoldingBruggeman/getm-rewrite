@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import cftime
@@ -109,7 +109,7 @@ class FABM:
             ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
             tracer_totals.append(ar)
 
-    def start(self, time: cftime.datetime):
+    def start(self, time: Optional[cftime.datetime] = None):
         """Prepare FABM. This includes flagging which diagnostics need saving based on
         the output manager configuration, offering fields registered with the field
         manager to FABM if they have a standard name assigned, and subsequently
