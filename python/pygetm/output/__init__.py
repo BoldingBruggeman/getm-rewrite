@@ -31,8 +31,7 @@ class File(operators.FieldCollection):
         itimestep: int,
         time: Optional[cftime.datetime],
         save: bool,
-        default_time_reference: Optional[cftime.datetime],
-        macro: bool,
+        default_time_reference: Optional[cftime.datetime]
     ):
         self.start_now(itimestep, time, default_time_reference)
         if save and not self.save_on_close_only:
@@ -137,10 +136,9 @@ class OutputManager:
         time: Optional[cftime.datetime] = None,
         save: bool = True,
         default_time_reference: Optional[cftime.datetime] = None,
-        macro: bool = True,
     ):
         for file in self.files:
-            file.start(itimestep, time, save, default_time_reference or time, macro)
+            file.start(itimestep, time, save, default_time_reference or time)
 
     def save(
         self,

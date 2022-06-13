@@ -513,7 +513,6 @@ class Simulation(_pygetm.Simulation):
             self.time,
             save=save,
             default_time_reference=self.default_time_reference,
-            macro=True,
         )
 
         # Verify all fields have finite values. Do this after self.output_manager.start
