@@ -54,7 +54,8 @@ class NetCDFFile(File):
         self.time_offset = 0.0
         self.time_reference = time_reference
         self.sync_interval = sync_interval
-        self._ncfields = []
+        self._field2nc = {}
+        self._varying_fields = []
 
     def __repr__(self) -> str:
         return "%s(%r)" % (self.__class__.__name__, self.path)
@@ -115,10 +116,13 @@ class NetCDFFile(File):
                     setattr(ncvar, att, value)
                 if field.coordinates:
                     setattr(ncvar, "coordinates", " ".join(field.coordinates))
-                if field.time_varying == TimeVarying.NO:
-                    field.get(ncvar, sub=self.sub)
-                else:
-                    self._ncfields.append((field, ncvar))
+                self._field2nc[field] = ncvar
+
+        for field in self.fields.values():
+            if field.time_varying == TimeVarying.NO:
+                field.get(self._field2nc.get(field), sub=self.sub)
+            else:
+                self._varying_fields.append(field)
 
     def start_now(
         self,
@@ -134,8 +138,8 @@ class NetCDFFile(File):
             self._create(seconds_passed, time)
         if self.nc is not None:
             self.nctime[self.itime] = self.time_offset + seconds_passed
-        for field, ncvar in self._ncfields:
-            field.get(ncvar, slice_spec=(self.itime,), sub=self.sub)
+        for field in self._varying_fields:
+            field.get(self._field2nc.get(field), slice_spec=(self.itime,), sub=self.sub)
         self.itime += 1
         if (
             self.nc is not None
