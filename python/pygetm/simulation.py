@@ -335,6 +335,7 @@ class Simulation(_pygetm.Simulation):
                 units="kg m-3",
                 long_name="density",
                 fabm_standard_name="density",
+                fill_value=FILL_VALUE
             )
             self.buoy = dom.T.array(
                 z=CENTERS, name="buoy", units="m s-2", long_name="buoyancy"

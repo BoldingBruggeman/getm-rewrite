@@ -31,7 +31,7 @@ class OpenBoundaries:
                 name="%s_bdy" % self._tracer.name,
                 z=CENTERS,
                 on_boundary=True,
-                attrs={"_3d_only": True},
+                attrs={"_macro": True},
             )
 
     def update(self):
@@ -93,7 +93,7 @@ class Tracer(core.Array):
                 :attr:`precipitation_follows_target_cell`
             **kwargs: keyword arguments to be passed to :class:`pygetm.core.Array`
         """
-        kwargs.setdefault("attrs", {}).update(_part_of_state=True, _3d_only=True)
+        kwargs.setdefault("attrs", {}).update(_part_of_state=True, _macro=True)
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
 
         if data is None:
@@ -127,7 +127,7 @@ class Tracer(core.Array):
                 self.river_values[..., iriver],
                 self.river_follow[..., iriver],
                 units=self.units,
-                attrs={"_3d_only": True},
+                attrs={"_macro": True},
             )
             river._tracers[self.name] = river_tracer
             self.rivers[river.name] = river_tracer

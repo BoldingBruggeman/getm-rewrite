@@ -52,14 +52,14 @@ class Fluxes:
             units="W m-2",
             fill_value=FILL_VALUE,
             fabm_standard_name="surface_downwelling_shortwave_flux",
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
         self.pe = domain.T.array(
             name="pe",
             long_name="net freshwater flux due to precipitation, condensation, evaporation",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
         self.pe.fill(0.0)
 
@@ -180,14 +180,14 @@ class FluxesFromMeteo(Fluxes):
             long_name="zenith angle",
             units="degrees",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
         self.albedo = domain.T.array(
             name="albedo",
             long_name="albedo",
             units="1",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
 
         self.t2m = domain.T.array(
@@ -214,7 +214,7 @@ class FluxesFromMeteo(Fluxes):
             long_name="total cloud cover",
             units="1",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
 
         self.w = domain.T.array(
@@ -233,21 +233,21 @@ class FluxesFromMeteo(Fluxes):
             long_name="latent heat flux",
             units="W m-2",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
         self.qh = domain.T.array(
             name="qh",
             long_name="sensible heat flux",
             units="W m-2",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
         self.ql = domain.T.array(
             name="ql",
             long_name="net downwelling longwave radiation",
             units="W m-2",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
 
         self.tp = domain.T.array(
@@ -255,14 +255,14 @@ class FluxesFromMeteo(Fluxes):
             long_name="total precipitation",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
         self.e = domain.T.array(
             name="e",
             long_name="evaporation minus condensation",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs={"_3d_only": True},
+            attrs={"_macro": True},
         )
 
         self.cd_mom = domain.T.array()

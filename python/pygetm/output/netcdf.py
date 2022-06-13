@@ -7,6 +7,7 @@ import netCDF4
 
 from . import File
 from ..constants import INTERFACES
+from .operators import TimeVarying
 import pygetm.core
 
 
@@ -53,6 +54,7 @@ class NetCDFFile(File):
         self.time_offset = 0.0
         self.time_reference = time_reference
         self.sync_interval = sync_interval
+        self._ncfields = []
 
     def __repr__(self) -> str:
         return "%s(%r)" % (self.__class__.__name__, self.path)
@@ -103,7 +105,7 @@ class NetCDFFile(File):
                 dims = ("y%s" % field.grid.postfix, "x%s" % field.grid.postfix)
                 if field.z:
                     dims = ("zi" if field.z == INTERFACES else "z",) + dims
-                if not field.constant:
+                if field.time_varying != TimeVarying.NO:
                     dims = ("time",) + dims
                 ncvar = self.nc.createVariable(
                     output_name, field.dtype, dims, fill_value=field.fill_value
@@ -113,12 +115,10 @@ class NetCDFFile(File):
                     setattr(ncvar, att, value)
                 if field.coordinates:
                     setattr(ncvar, "coordinates", " ".join(field.coordinates))
-                field._ncvar = ncvar
-
-        # Save time-invariant fields
-        for field in self.fields.values():
-            if field.constant:
-                field.get(getattr(field, "_ncvar", None), sub=self.sub)
+                if field.time_varying == TimeVarying.NO:
+                    field.get(ncvar, sub=self.sub)
+                else:
+                    self._ncfields.append((field, ncvar))
 
     def start_now(
         self,
@@ -134,13 +134,8 @@ class NetCDFFile(File):
             self._create(seconds_passed, time)
         if self.nc is not None:
             self.nctime[self.itime] = self.time_offset + seconds_passed
-        for field in self.fields.values():
-            if not field.constant:
-                field.get(
-                    getattr(field, "_ncvar", None),
-                    slice_spec=(self.itime,),
-                    sub=self.sub,
-                )
+        for field, ncvar in self._ncfields:
+            field.get(ncvar, slice_spec=(self.itime,), sub=self.sub)
         self.itime += 1
         if (
             self.nc is not None

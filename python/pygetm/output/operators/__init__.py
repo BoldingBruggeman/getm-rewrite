@@ -8,8 +8,14 @@ import pygetm.core
 from pygetm.constants import INTERFACES
 
 
+class TimeVarying(enum.Enum):
+    NO = 0
+    MACRO = 1
+    MICRO = 2
+
+
 class Base:
-    __slots__ = "dtype", "ndim", "grid", "fill_value", "atts", "constant", "coordinates"
+    __slots__ = "dtype", "ndim", "grid", "fill_value", "atts", "time_varying", "coordinates"
 
     def __init__(
         self,
@@ -17,7 +23,7 @@ class Base:
         dtype: DTypeLike,
         grid,
         fill_value=None,
-        constant: bool = False,
+        time_varying: TimeVarying = TimeVarying.MICRO,
         atts={},
     ):
         self.dtype = dtype
@@ -25,7 +31,7 @@ class Base:
         self.grid = grid
         self.fill_value = fill_value
         self.atts = atts
-        self.constant = constant
+        self.time_varying = time_varying
         self.coordinates = []
 
     def get(
@@ -153,7 +159,7 @@ class FieldCollection:
             if dtype is None and array.dtype == float:
                 dtype = self.default_dtype
             field = Field(array, self, dtype=dtype)
-            if time_average:
+            if time_average and field.time_varying != TimeVarying.NO:
                 field = TimeAverage(field)
             if time_average or mask:
                 field = Mask(field)
@@ -188,7 +194,7 @@ class FieldCollection:
 
 
 class Field(Base):
-    __slots__ = "collection", "array", "global_array", "_ncvar"
+    __slots__ = "collection", "array", "global_array"
 
     def __init__(
         self,
@@ -207,14 +213,19 @@ class Field(Base):
         self.array = array
         self.global_array = None
         global_domain = array.grid.domain.glob
-        if global_domain and array.constant:
+        time_varying = TimeVarying.MICRO
+        if array.constant:
+            time_varying = TimeVarying.NO
+        elif array.attrs.get('_macro', False) or array.z:
+            time_varying = TimeVarying.MACRO
+        if global_domain and time_varying == TimeVarying.NO:
             self.global_array = global_domain.fields.get(array.name)
         super().__init__(
             array.ndim,
             dtype or array.dtype,
             array.grid,
             array.fill_value,
-            array.constant,
+            time_varying,
             atts,
         )
 
@@ -270,8 +281,8 @@ class UnivariateTransform(Field):
     def __init__(self, source: Field):
         self._source = source
         assert source.fill_value is not None, (
-            "%s cannot be used on variables without fill value."
-            % self.__class__.__name__
+            "%s cannot be used on %s as it does not have a fill value."
+            % (self.__class__.__name__, source.get_expression())
         )
         array = pygetm.core.Array.create(
             source.grid,
@@ -311,7 +322,9 @@ class TimeAverage(UnivariateTransform):
 
     @property
     def updatable(self) -> bool:
-        return Updatable.MACRO_ONLY if self._source.z else Updatable.ALWAYS
+        if self._source.time_varying == TimeVarying.MACRO:
+            return Updatable.MACRO_ONLY
+        return Updatable.ALWAYS
 
     def update(self):
         if self._n == 0:
