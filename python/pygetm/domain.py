@@ -161,7 +161,7 @@ class Grid(_pygetm.Grid):
         self._idx.all_values[...] = 1.0 / self._dx.all_values
         self._idy.all_values[...] = 1.0 / self._dy.all_values
         for name in self._readonly_arrays:
-            getattr(self, name).all_values.flags.writeable = True
+            getattr(self, name).all_values.flags.writeable = False
 
     def initialize(self, nbdyp: int):
         for name in self._fortran_arrays:
@@ -721,7 +721,7 @@ class OpenBoundary:
         self.type_3d = type_3d
 
 
-class OpenBoundaries(collections.Mapping):
+class OpenBoundaries(Mapping):
     __slots__ = (
         "domain",
         "np",
