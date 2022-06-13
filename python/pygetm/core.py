@@ -282,7 +282,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self._ma = np.ma.array(self.values, mask=np.broadcast_to(mask, self._shape))
         return self._ma
 
-    def plot(self, **kwargs):
+    def plot(self, mask: bool = True, **kwargs):
         """Plot the array with :meth:`xarray.DataArray.plot`
 
         Args:
@@ -298,7 +298,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             ) + self.grid.postfix
         if "shading" not in kwargs:
             kwargs["shading"] = "auto"
-        return self.xarray.plot(**kwargs)
+        return self.as_xarray(mask=mask).plot(**kwargs)
 
     def interp(
         self,
@@ -369,7 +369,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             kwargs.setdefault("units", self.units)
         if self.long_name is not None:
             kwargs.setdefault("long_name", "%s @ k=%i" % (self.long_name, z))
-        ar = Array(grid=self.grid, **kwargs)
+        ar = Array(grid=self.grid, fill_value=self.fill_value, **kwargs)
         ar.wrap_ndarray(self.all_values[z, ...])
         return ar
 
@@ -498,39 +498,44 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 valid = False
         return valid
 
-    @property
-    def xarray(self) -> xarray.DataArray:
+    def as_xarray(self, mask: bool = False) -> xarray.DataArray:
         """Return this array wrapped in an :class:`xarray.DataArray` that includes
         coordinates and can be used for plotting
         """
-        if self._xarray is None:
-            attrs = {}
-            for key in ("units", "long_name"):
-                value = getattr(self, key)
-                if value is not None:
-                    attrs[key] = value
-            dom = self.grid.domain
-            coords = {}
-            if self.name not in (
-                "x" + self.grid.postfix,
-                "y" + self.grid.postfix,
-                "lon" + self.grid.postfix,
-                "lat" + self.grid.postfix,
-            ):
-                if dom.x_is_1d:
-                    coords["x%s" % self.grid.postfix] = self.grid.x.xarray[0, :]
-                if dom.y_is_1d:
-                    coords["y%s" % self.grid.postfix] = self.grid.y.xarray[:, 0]
-                coords["x%s2" % self.grid.postfix] = self.grid.x.xarray
-                coords["y%s2" % self.grid.postfix] = self.grid.y.xarray
-                if dom.lon is not None:
-                    coords["lon%s" % self.grid.postfix] = self.grid.lon.xarray
-                if dom.lat is not None:
-                    coords["lat%s" % self.grid.postfix] = self.grid.lat.xarray
-            dims = ("y" + self.grid.postfix, "x" + self.grid.postfix)
-            if self.ndim == 3:
-                dims = ("zi" if self.z == INTERFACES else "z",) + dims
-            self._xarray = xarray.DataArray(
-                self.values, coords=coords, dims=dims, attrs=attrs, name=self.name
-            )
-        return self._xarray
+        if self._xarray is not None and not mask:
+            return self._xarray
+        attrs = {}
+        for key in ("units", "long_name"):
+            value = getattr(self, key)
+            if value is not None:
+                attrs[key] = value
+        dom = self.grid.domain
+        coords = {}
+        if self.name not in (
+            "x" + self.grid.postfix,
+            "y" + self.grid.postfix,
+            "lon" + self.grid.postfix,
+            "lat" + self.grid.postfix,
+        ):
+            if dom.x_is_1d:
+                coords["x%s" % self.grid.postfix] = self.grid.x.xarray[0, :]
+            if dom.y_is_1d:
+                coords["y%s" % self.grid.postfix] = self.grid.y.xarray[:, 0]
+            coords["x%s2" % self.grid.postfix] = self.grid.x.xarray
+            coords["y%s2" % self.grid.postfix] = self.grid.y.xarray
+            if dom.lon is not None:
+                coords["lon%s" % self.grid.postfix] = self.grid.lon.xarray
+            if dom.lat is not None:
+                coords["lat%s" % self.grid.postfix] = self.grid.lat.xarray
+        dims = ("y" + self.grid.postfix, "x" + self.grid.postfix)
+        if self.ndim == 3:
+            dims = ("zi" if self.z == INTERFACES else "z",) + dims
+        values = self.values if not mask else self.ma
+        _xarray = xarray.DataArray(
+            values, coords=coords, dims=dims, attrs=attrs, name=self.name
+        )
+        if not mask:
+            self._xarray = _xarray
+        return _xarray
+
+    xarray = property(as_xarray)
