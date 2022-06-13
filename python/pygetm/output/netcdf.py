@@ -120,16 +120,14 @@ class NetCDFFile(File):
             if field.constant:
                 field.get(getattr(field, "_ncvar", None), sub=self.sub)
 
-    def start(
+    def start_now(
         self,
         itimestep: int,
         time: Optional[cftime.datetime],
-        save: bool,
         default_time_reference: Optional[cftime.datetime],
     ):
         if self.time_reference is None:
             self.time_reference = default_time_reference
-        super().start(itimestep, time, save, default_time_reference)
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if not self.created:

@@ -55,6 +55,7 @@ def log_exceptions(method):
                 raise
             self.logger.exception(str(e), stack_info=True, stacklevel=3)
             self.domain.tiling.comm.Abort(1)
+
     return wrapper
 
 
@@ -511,6 +512,7 @@ class Simulation(_pygetm.Simulation):
             self.time,
             save=save,
             default_time_reference=self.default_time_reference,
+            macro=True,
         )
 
         # Verify all fields have finite values. Do this after self.output_manager.start
@@ -662,7 +664,9 @@ class Simulation(_pygetm.Simulation):
             update_z0b=self.runtype == BAROTROPIC_2D,
         )
 
-        self.output_manager.save(self.timestep * self.istep, self.istep, self.time)
+        self.output_manager.save(
+            self.timestep * self.istep, self.istep, self.time, macro=macro_active
+        )
 
         if check_finite:
             self.check_finite(_3d=macro_active)

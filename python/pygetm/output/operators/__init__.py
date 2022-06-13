@@ -1,5 +1,6 @@
 from typing import MutableMapping, Tuple, Union, Optional, Sequence, Mapping
 import collections
+import enum
 
 from numpy.typing import DTypeLike, ArrayLike
 
@@ -38,8 +39,14 @@ class Base:
     def get_expression(self) -> str:
         raise NotImplementedError
 
-    def is_updatable(self) -> bool:
+    @property
+    def updatable(self) -> bool:
         return False
+
+
+class Updatable(enum.Enum):
+    ALWAYS = 1
+    MACRO_ONLY = 2
 
 
 class FieldCollection:
@@ -52,7 +59,7 @@ class FieldCollection:
         self.expression2name = {}
         self.available_fields = available_fields
         self.default_dtype = default_dtype
-        self._updatable = []
+        self._updatable = {}
 
     def request(
         self,
@@ -150,8 +157,12 @@ class FieldCollection:
                 field = TimeAverage(field)
             if time_average or mask:
                 field = Mask(field)
-            if field.is_updatable():
-                self._updatable.append(field)
+            if field.updatable:
+                when_macro = [True]
+                if field.updatable == Updatable.ALWAYS:
+                    when_macro.append(False)
+                for key in when_macro:
+                    self._updatable.setdefault(key, []).append(field)
             self.fields[name] = field
             self.expression2name[field.get_expression()] = name
             field.coordinates = field.get_coordinates()
@@ -170,6 +181,10 @@ class FieldCollection:
             return self.expression2name[expression]
         (output_name,) = self.request(expression, generate_unique_name=True)
         return output_name
+
+    def update(self, macro: bool = False):
+        for field in self._updatable.get(macro, ()):
+            field.update()
 
 
 class Field(Base):
@@ -254,9 +269,10 @@ class UnivariateTransform(Field):
 
     def __init__(self, source: Field):
         self._source = source
-        assert (
-            source.fill_value is not None
-        ), "UnivariateTransform cannot be used on variables without fill value."
+        assert source.fill_value is not None, (
+            "%s cannot be used on variables without fill value."
+            % self.__class__.__name__
+        )
         array = pygetm.core.Array.create(
             source.grid,
             z=source.z,
@@ -266,8 +282,9 @@ class UnivariateTransform(Field):
         )
         super().__init__(array, source.collection, atts=source.atts)
 
-    def is_updatable(self) -> bool:
-        return self._source.is_updatable()
+    @property
+    def updatable(self) -> bool:
+        return self._source.updatable
 
     def update(self):
         return self._source.update()
@@ -292,8 +309,9 @@ class TimeAverage(UnivariateTransform):
         super().__init__(source)
         self._n = 0
 
-    def is_updatable(self) -> bool:
-        return True
+    @property
+    def updatable(self) -> bool:
+        return Updatable.MACRO_ONLY if self._source.z else Updatable.ALWAYS
 
     def update(self):
         if self._n == 0:
@@ -306,7 +324,7 @@ class TimeAverage(UnivariateTransform):
         self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
     ) -> ArrayLike:
         if self._n > 0:
-            self.array.all_values /= self._n
+            self.array.all_values *= 1.0 / self._n
         super().get(out, slice_spec, sub)
         self._n = 0
 

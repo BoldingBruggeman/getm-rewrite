@@ -32,7 +32,9 @@ class File(operators.FieldCollection):
         time: Optional[cftime.datetime],
         save: bool,
         default_time_reference: Optional[cftime.datetime],
+        macro: bool,
     ):
+        self.start_now(itimestep, time, default_time_reference)
         if save and not self.save_on_close_only:
             self._logger.debug("Saving initial state")
             self.save_now(0.0, time)
@@ -40,10 +42,13 @@ class File(operators.FieldCollection):
         self.next = now + self.interval
 
     def save(
-        self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime]
+        self,
+        seconds_passed: float,
+        itimestep: int,
+        time: Optional[cftime.datetime],
+        macro: bool,
     ):
-        for field in self._updatable:
-            field.update()
+        self.update(macro=macro)
         if self.save_on_close_only:
             return
         now = itimestep if self.interval_in_dt else seconds_passed
@@ -57,6 +62,14 @@ class File(operators.FieldCollection):
             self.save_now(seconds_passed, time)
         self._logger.debug("Closing")
         self.close_now(seconds_passed, time)
+
+    def start_now(
+        self,
+        itimestep: int,
+        time: Optional[cftime.datetime],
+        default_time_reference: Optional[cftime.datetime],
+    ):
+        pass
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         raise NotImplementedError
@@ -124,18 +137,20 @@ class OutputManager:
         time: Optional[cftime.datetime] = None,
         save: bool = True,
         default_time_reference: Optional[cftime.datetime] = None,
+        macro: bool = True,
     ):
         for file in self.files:
-            file.start(itimestep, time, save, default_time_reference or time)
+            file.start(itimestep, time, save, default_time_reference or time, macro)
 
     def save(
         self,
         seconds_passed: float,
         itimestep: int,
         time: Optional[cftime.datetime] = None,
+        macro: bool = True,
     ):
         for file in self.files:
-            file.save(seconds_passed, itimestep, time)
+            file.save(seconds_passed, itimestep, time, macro)
 
     def close(self, seconds_passed: float, time: Optional[cftime.datetime] = None):
         for file in self.files:
