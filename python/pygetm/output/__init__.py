@@ -13,8 +13,14 @@ from . import operators
 class TimeUnit(enum.Enum):
     TIMESTEPS = enum.auto()
     SECONDS = enum.auto()
+    MINUTES = enum.auto()
+    HOURS = enum.auto()
+    DAYS = enum.auto()
     MONTHS = enum.auto()
     YEARS = enum.auto()
+
+
+time_unit2seconds = {TimeUnit.MINUTES: 60, TimeUnit.HOURS: 3600, TimeUnit.DAYS: 86400}
 
 
 class File(operators.FieldCollection):
@@ -30,12 +36,19 @@ class File(operators.FieldCollection):
         super().__init__(available_fields, default_dtype=default_dtype)
         self._logger = logger
         self.next = None
+
         if isinstance(interval, datetime.timedelta):
             interval = interval.total_seconds()
             interval_units = TimeUnit.SECONDS
+        elif interval_units in time_unit2seconds:
+            interval *= time_unit2seconds[interval_units]
+            interval_units = TimeUnit.SECONDS
         self.interval = interval
         self.interval_units = interval_units
-        self.save_on_close_only = self.interval_units == TimeUnit.TIMESTEPS and self.interval == -1
+        self.save_on_close_only = (
+            self.interval_units == TimeUnit.TIMESTEPS and self.interval == -1
+        )
+
         self.path = path
 
     def _next_time(
