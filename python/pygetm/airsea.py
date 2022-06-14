@@ -5,7 +5,7 @@ import pyairsea
 import pygetm.domain
 from . import core
 from . import parallel
-from .constants import FILL_VALUE, RHO0
+from .constants import FILL_VALUE, RHO0, TimeVarying
 from pyairsea import HumidityMeasure, LongwaveMethod, AlbedoMethod
 
 CPA = 1008.0  #: specific heat capacity of air (J kg-1 K-1)
@@ -52,14 +52,14 @@ class Fluxes:
             units="W m-2",
             fill_value=FILL_VALUE,
             fabm_standard_name="surface_downwelling_shortwave_flux",
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
         self.pe = domain.T.array(
             name="pe",
             long_name="net freshwater flux due to precipitation, condensation, evaporation",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
         self.pe.fill(0.0)
 
@@ -180,14 +180,14 @@ class FluxesFromMeteo(Fluxes):
             long_name="zenith angle",
             units="degrees",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
         self.albedo = domain.T.array(
             name="albedo",
             long_name="albedo",
             units="1",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
 
         self.t2m = domain.T.array(
@@ -214,7 +214,7 @@ class FluxesFromMeteo(Fluxes):
             long_name="total cloud cover",
             units="1",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
 
         self.w = domain.T.array(
@@ -233,21 +233,21 @@ class FluxesFromMeteo(Fluxes):
             long_name="latent heat flux",
             units="W m-2",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
         self.qh = domain.T.array(
             name="qh",
             long_name="sensible heat flux",
             units="W m-2",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
         self.ql = domain.T.array(
             name="ql",
             long_name="net downwelling longwave radiation",
             units="W m-2",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
 
         self.tp = domain.T.array(
@@ -255,14 +255,14 @@ class FluxesFromMeteo(Fluxes):
             long_name="total precipitation",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
         self.e = domain.T.array(
             name="e",
             long_name="evaporation minus condensation",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs={"_macro": True},
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
 
         self.cd_mom = domain.T.array()

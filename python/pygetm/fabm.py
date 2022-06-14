@@ -8,6 +8,7 @@ from . import domain
 from . import pyfabm
 from . import core
 from . import tracer
+from .constants import TimeVarying
 
 
 class FABM:
@@ -33,6 +34,7 @@ class FABM:
             grid.lat.fabm_standard_name = "latitude"
 
         def variable_to_array(variable, send_data: bool = False, **kwargs):
+            kwargs.setdefault("attrs", {})["_time_varying"] = TimeVarying.MACRO
             ar = core.Array(
                 name=variable.output_name,
                 units=variable.units,
@@ -49,7 +51,7 @@ class FABM:
 
         shape = grid.hn.all_values.shape  # shape including halos
         halo = grid.domain.halo
-        self.model = pyfabm.Model(
+        model = self.model = pyfabm.Model(
             self.path,
             shape=shape,
             libname="fabm_c",
@@ -58,11 +60,11 @@ class FABM:
         )
 
         # State variables
-        self.sources_interior = np.zeros_like(self.model.interior_state)
-        self.sources_surface = np.zeros_like(self.model.surface_state)
-        self.sources_bottom = np.zeros_like(self.model.bottom_state)
-        self.vertical_velocity = np.zeros_like(self.model.interior_state)
-        for i, variable in enumerate(self.model.interior_state_variables):
+        self.sources_interior = np.zeros_like(model.interior_state)
+        self.sources_surface = np.zeros_like(model.surface_state)
+        self.sources_bottom = np.zeros_like(model.bottom_state)
+        self.vertical_velocity = np.zeros_like(model.interior_state)
+        for i, variable in enumerate(model.interior_state_variables):
             ar_w = core.Array(grid=grid)
             ar_w.wrap_ndarray(self.vertical_velocity[i, ...])
             tracer_collection.add(
@@ -75,36 +77,35 @@ class FABM:
                 rivers_follow_target_cell=variable.no_river_dilution,
                 precipitation_follows_target_cell=variable.no_precipitation_dilution,
             )
-        for variable in self.model.surface_state_variables:
-            variable_to_array(variable, send_data=True, attrs={"_part_of_state": True})
-        for variable in self.model.bottom_state_variables:
-            variable_to_array(variable, send_data=True, attrs={"_part_of_state": True})
+        for variable in model.surface_state_variables + model.bottom_state_variables:
+            variable_to_array(variable, send_data=True, attrs=dict(_part_of_state=True))
 
         # Add diagnostics, initially without associated data
         # Data will be sent later, only if the variable is selected for output,
         # and thus, activated in FABM
         self._diag_arrays = []
-        for variable in self.model.diagnostic_variables:
+        for variable in model.diagnostic_variables:
             current_shape = grid.H.shape if variable.horizontal else grid.hn.shape
             self._diag_arrays.append(variable_to_array(variable, shape=current_shape))
 
         # Required inputs: mask and cell thickness
-        self.model.link_mask(grid.mask.all_values)
-        self.model.link_cell_thickness(grid.hn.all_values)
+        model.link_mask(grid.mask.all_values)
+        model.link_cell_thickness(grid.hn.all_values)
 
         # Conserved quantities (depth-integrated)
         self.conserved_quantity_totals = np.empty(
-            (len(self.model.conserved_quantities),) + shape[1:],
+            (len(model.conserved_quantities),) + shape[1:],
             dtype=self.sources_interior.dtype,
         )
-        for i, variable in enumerate(self.model.conserved_quantities):
+        for i, variable in enumerate(model.conserved_quantities):
             ar = core.Array(
                 name=variable.output_name,
                 units=variable.units,
                 long_name=variable.long_name,
                 fill_value=variable.missing_value,
-                dtype=self.model.fabm.dtype,
+                dtype=model.fabm.dtype,
                 grid=grid,
+                attrs=dict(_time_varying=TimeVarying.MACRO)
             )
             ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
             tracer_totals.append(ar)

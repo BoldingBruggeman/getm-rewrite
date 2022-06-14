@@ -90,33 +90,33 @@ class Grid(_pygetm.Grid):
     )
 
     _array_args = {
-        "x": dict(units="m", constant=True),
-        "y": dict(units="m", constant=True),
+        "x": dict(units="m", attrs=dict(_time_varying=False)),
+        "y": dict(units="m", attrs=dict(_time_varying=False)),
         "lon": dict(
             units="degree_east",
             long_name="longitude",
-            constant=True,
-            attrs=dict(standard_name="longitude", axis="X"),
+            attrs=dict(standard_name="longitude", axis="X", _time_varying=False),
         ),
         "lat": dict(
             units="degree_north",
             long_name="latitude",
-            constant=True,
-            attrs=dict(standard_name="latitude", axis="Y"),
+            attrs=dict(standard_name="latitude", axis="Y", _time_varying=False),
         ),
-        "dx": dict(units="m", constant=True),
-        "dy": dict(units="m", constant=True),
-        "idx": dict(units="m-1", constant=True),
-        "idy": dict(units="m-1", constant=True),
-        "dlon": dict(units="degree_east", constant=True),
-        "dlat": dict(units="degree_north", constant=True),
-        "H": dict(units="m", long_name="water depth at rest", constant=True),
+        "dx": dict(units="m", attrs=dict(_time_varying=False)),
+        "dy": dict(units="m", attrs=dict(_time_varying=False)),
+        "idx": dict(units="m-1", attrs=dict(_time_varying=False)),
+        "idy": dict(units="m-1", attrs=dict(_time_varying=False)),
+        "dlon": dict(units="degree_east", attrs=dict(_time_varying=False)),
+        "dlat": dict(units="degree_north", attrs=dict(_time_varying=False)),
+        "H": dict(
+            units="m", long_name="water depth at rest", attrs=dict(_time_varying=False)
+        ),
         "D": dict(
             units="m",
             long_name="water depth",
             attrs=dict(standard_name="sea_floor_depth_below_sea_surface"),
         ),
-        "mask": dict(constant=True, fill_value=0),
+        "mask": dict(attrs=dict(_time_varying=False), fill_value=0),
         "z": dict(units="m", long_name="elevation"),
         "zo": dict(units="m", long_name="elevation at previous microtimestep"),
         "zin": dict(units="m", long_name="elevation at macrotimestep"),
@@ -124,13 +124,16 @@ class Grid(_pygetm.Grid):
         "area": dict(
             units="m2",
             long_name="cell area",
-            constant=True,
-            attrs=dict(standard_name="cell_area"),
+            attrs=dict(standard_name="cell_area", _time_varying=False),
         ),
         "iarea": dict(
-            units="m-2", long_name="inverse of cell area", constant=True
+            units="m-2",
+            long_name="inverse of cell area",
+            attrs=dict(_time_varying=False),
         ),
-        "cor": dict(units="1", long_name="Coriolis parameter", constant=True),
+        "cor": dict(
+            units="1", long_name="Coriolis parameter", attrs=dict(_time_varying=False)
+        ),
         "ho": dict(units="m", long_name="cell thickness at previous time step"),
         "hn": dict(
             units="m",
@@ -141,7 +144,9 @@ class Grid(_pygetm.Grid):
         "zf": dict(units="m", long_name="interface depth", attrs=dict(axis="Z")),
         "z0b": dict(units="m", long_name="hydrodynamic bottom roughness"),
         "z0b_min": dict(
-            units="m", long_name="physical bottom roughness", constant=True
+            units="m",
+            long_name="physical bottom roughness",
+            attrs=dict(_time_varying=False),
         ),
         "alpha": dict(units="1", long_name="dampening"),
     }

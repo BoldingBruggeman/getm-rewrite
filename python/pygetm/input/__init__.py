@@ -11,7 +11,7 @@ import xarray
 import cftime
 
 import pygetm.util.interpolate
-from pygetm.constants import CENTERS
+from pygetm.constants import CENTERS, TimeVarying
 
 if TYPE_CHECKING:
     import pygetm.core
@@ -874,7 +874,7 @@ class InputManager:
         target = array.all_values[target_slice]
         assert value.shape == target.shape, 'Source shape %s does not match target shape %s' % (value.shape, target.shape)
         if isinstance(value.variable._data, LazyArray) and value.variable._data.is_time_varying():
-            macro = array.attrs.get('_macro', False)
+            macro = array.attrs.get('_time_varying', TimeVarying.MICRO) == TimeVarying.MACRO
             self._logger.info('%s will be updated dynamically from %s%s' % (array.name, value.name, ' on macrotimestep' if macro else ''))
             self.fields.append((array.name, value.variable._data, target, not macro))
         else:

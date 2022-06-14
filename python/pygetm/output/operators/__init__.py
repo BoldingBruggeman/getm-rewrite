@@ -1,17 +1,11 @@
-from typing import MutableMapping, Tuple, Union, Optional, Sequence, Mapping
+from typing import MutableMapping, Tuple, Union, Optional, Sequence, Mapping, Literal
 import collections
 import enum
 
 from numpy.typing import DTypeLike, ArrayLike
 
 import pygetm.core
-from pygetm.constants import INTERFACES
-
-
-class TimeVarying(enum.Enum):
-    NO = 0
-    MACRO = 1
-    MICRO = 2
+from pygetm.constants import INTERFACES, TimeVarying
 
 
 class Base:
@@ -31,7 +25,7 @@ class Base:
         dtype: DTypeLike,
         grid,
         fill_value=None,
-        time_varying: TimeVarying = TimeVarying.MICRO,
+        time_varying: Union[TimeVarying, Literal[False]] = TimeVarying.MICRO,
         atts={},
     ):
         self.dtype = dtype
@@ -167,7 +161,7 @@ class FieldCollection:
             if dtype is None and array.dtype == float:
                 dtype = self.default_dtype
             field = Field(array, self, dtype=dtype)
-            if time_average and field.time_varying != TimeVarying.NO:
+            if time_average and field.time_varying:
                 field = TimeAverage(field)
             if time_average or mask:
                 field = Mask(field)
@@ -220,12 +214,9 @@ class Field(Base):
         self.array = array
         self.global_array = None
         global_domain = array.grid.domain.glob
-        time_varying = TimeVarying.MICRO
-        if array.constant:
-            time_varying = TimeVarying.NO
-        elif array.attrs.get("_macro", False) or array.z:
-            time_varying = TimeVarying.MACRO
-        if global_domain and time_varying == TimeVarying.NO:
+        default_time_varying = TimeVarying.MACRO if array.z else TimeVarying.MICRO
+        time_varying = array.attrs.get("_time_varying", default_time_varying)
+        if global_domain and not time_varying:
             self.global_array = global_domain.fields.get(array.name)
         super().__init__(
             array.ndim,

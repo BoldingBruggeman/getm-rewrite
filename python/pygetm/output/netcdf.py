@@ -106,7 +106,7 @@ class NetCDFFile(File):
                 dims = ("y%s" % field.grid.postfix, "x%s" % field.grid.postfix)
                 if field.z:
                     dims = ("zi" if field.z == INTERFACES else "z",) + dims
-                if field.time_varying != TimeVarying.NO:
+                if field.time_varying:
                     dims = ("time",) + dims
                 ncvar = self.nc.createVariable(
                     output_name, field.dtype, dims, fill_value=field.fill_value
@@ -119,10 +119,10 @@ class NetCDFFile(File):
                 self._field2nc[field] = ncvar
 
         for field in self.fields.values():
-            if field.time_varying == TimeVarying.NO:
-                field.get(self._field2nc.get(field), sub=self.sub)
-            else:
+            if field.time_varying:
                 self._varying_fields.append(field)
+            else:
+                field.get(self._field2nc.get(field), sub=self.sub)
 
     def start_now(
         self,

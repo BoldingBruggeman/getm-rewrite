@@ -2,7 +2,7 @@ from typing import Mapping, Optional, List, Sequence
 
 import numpy as np
 
-from .constants import ZERO_GRADIENT, CENTERS, INTERFACES
+from .constants import ZERO_GRADIENT, CENTERS, INTERFACES, TimeVarying
 from . import core
 from . import domain
 from . import operators
@@ -31,7 +31,7 @@ class OpenBoundaries:
                 name="%s_bdy" % self._tracer.name,
                 z=CENTERS,
                 on_boundary=True,
-                attrs={"_macro": True},
+                attrs={"_time_varying": TimeVarying.MACRO},
             )
 
     def update(self):
@@ -93,7 +93,9 @@ class Tracer(core.Array):
                 :attr:`precipitation_follows_target_cell`
             **kwargs: keyword arguments to be passed to :class:`pygetm.core.Array`
         """
-        kwargs.setdefault("attrs", {}).update(_part_of_state=True, _macro=True)
+        kwargs.setdefault("attrs", {}).update(
+            _part_of_state=True, _time_varying=TimeVarying.MACRO
+        )
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
 
         if data is None:
@@ -127,7 +129,7 @@ class Tracer(core.Array):
                 self.river_values[..., iriver],
                 self.river_follow[..., iriver],
                 units=self.units,
-                attrs={"_macro": True},
+                attrs={"_time_varying": TimeVarying.MACRO},
             )
             river._tracers[self.name] = river_tracer
             self.rivers[river.name] = river_tracer

@@ -50,7 +50,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         dtype: Optional[DTypeLike] = None,
         grid: "domain.Grid" = None,
         fabm_standard_name: Optional[str] = None,
-        constant: bool = False,
         attrs: Mapping[str, Any] = {},
     ):
         _pygetm.Array.__init__(self, grid)
@@ -79,7 +78,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._ndim = None if shape is None else len(shape)
         self._size = None if shape is None else np.prod(shape)
         self._dtype = dtype
-        self.constant = constant
         self.values = None
 
     def set_fabm_standard_name(self, fabm_standard_name):
