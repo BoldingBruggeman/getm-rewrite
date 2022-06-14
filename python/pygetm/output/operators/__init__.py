@@ -215,6 +215,7 @@ class Field(Base):
         for key, value in array.attrs.items():
             if not key.startswith("_"):
                 default_atts[key] = value
+        default_atts.update(atts)
         self.collection = collection
         self.array = array
         self.global_array = None
@@ -232,7 +233,7 @@ class Field(Base):
             array.grid,
             array.fill_value,
             time_varying,
-            default_atts | atts,
+            default_atts,
         )
 
     def get(
