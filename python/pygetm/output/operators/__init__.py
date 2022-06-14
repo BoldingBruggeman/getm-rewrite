@@ -209,14 +209,12 @@ class Field(Base):
         array: pygetm.core.Array,
         collection: FieldCollection,
         dtype: Optional[DTypeLike] = None,
-        atts=None,
+        atts={},
     ):
-        if atts is None:
-            atts = {}
-        if array.units is not None:
-            atts["units"] = array.units
-        if array.long_name is not None:
-            atts["long_name"] = array.long_name
+        default_atts = {}
+        for key, value in array.attrs.items():
+            if not key.startswith("_"):
+                default_atts[key] = value
         self.collection = collection
         self.array = array
         self.global_array = None
@@ -234,7 +232,7 @@ class Field(Base):
             array.grid,
             array.fill_value,
             time_varying,
-            atts,
+            default_atts | atts,
         )
 
     def get(
