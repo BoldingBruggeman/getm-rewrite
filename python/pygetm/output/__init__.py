@@ -32,6 +32,7 @@ class File(operators.FieldCollection):
         interval_units: TimeUnit = TimeUnit.TIMESTEPS,
         path: Optional[str] = None,
         default_dtype: Optional[DTypeLike] = None,
+        save_initial: bool = True,
     ):
         super().__init__(available_fields, default_dtype=default_dtype)
         self._logger = logger
@@ -48,6 +49,7 @@ class File(operators.FieldCollection):
         self.save_on_close_only = (
             self.interval_units == TimeUnit.TIMESTEPS and self.interval == -1
         )
+        self.save_initial = save_initial and not self.save_on_close_only
 
         self.path = path
 
@@ -72,11 +74,10 @@ class File(operators.FieldCollection):
         self,
         itimestep: int,
         time: Optional[cftime.datetime],
-        save: bool,
         default_time_reference: Optional[cftime.datetime],
     ):
         self.start_now(itimestep, time, default_time_reference)
-        if save and not self.save_on_close_only:
+        if self.save_initial:
             self._logger.debug("Saving initial state")
             self.save_now(0.0, time)
         self.next = self._next_time(0.0, itimestep, time)
@@ -175,11 +176,10 @@ class OutputManager:
         self,
         itimestep: int = 0,
         time: Optional[cftime.datetime] = None,
-        save: bool = True,
         default_time_reference: Optional[cftime.datetime] = None,
     ):
         for file in self.files:
-            file.start(itimestep, time, save, default_time_reference or time)
+            file.start(itimestep, time, default_time_reference or time)
 
     def save(
         self,

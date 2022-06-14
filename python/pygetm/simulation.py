@@ -407,7 +407,6 @@ class Simulation(_pygetm.Simulation):
         split_factor: int = 1,
         report: Union[int, datetime.timedelta] = 10,
         report_totals: Union[int, datetime.timedelta] = datetime.timedelta(days=1),
-        save: bool = True,
         profile: Optional[str] = None,
     ):
         """Start a simulation by configuring the time, zeroing velocities, updating
@@ -425,8 +424,6 @@ class Simulation(_pygetm.Simulation):
                 current time, used as indicator of simulation progress
             report_totals: time interval or number of microtimesteps between reporting
                 of integrals over the global domain
-            save: whether to save the model state and diagnostics at the very start of
-                the simulation
             profile: base name for the file to write profiling results to. The proces
                 rank and extension ``.prof`` will be appended, so that the final name
                 becomes ``<profile>-<rank>.prof``. If the argument is not provided,
@@ -511,7 +508,6 @@ class Simulation(_pygetm.Simulation):
         self.output_manager.start(
             self.istep,
             self.time,
-            save=save,
             default_time_reference=self.default_time_reference,
         )
 
