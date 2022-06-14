@@ -15,7 +15,15 @@ class TimeVarying(enum.Enum):
 
 
 class Base:
-    __slots__ = "dtype", "ndim", "grid", "fill_value", "atts", "time_varying", "coordinates"
+    __slots__ = (
+        "dtype",
+        "ndim",
+        "grid",
+        "fill_value",
+        "atts",
+        "time_varying",
+        "coordinates",
+    )
 
     def __init__(
         self,
@@ -216,7 +224,7 @@ class Field(Base):
         time_varying = TimeVarying.MICRO
         if array.constant:
             time_varying = TimeVarying.NO
-        elif array.attrs.get('_macro', False) or array.z:
+        elif array.attrs.get("_macro", False) or array.z:
             time_varying = TimeVarying.MACRO
         if global_domain and time_varying == TimeVarying.NO:
             self.global_array = global_domain.fields.get(array.name)
@@ -319,6 +327,10 @@ class TimeAverage(UnivariateTransform):
     def __init__(self, source: Field):
         super().__init__(source)
         self._n = 0
+        if "cell_methods" in self.atts:
+            self.atts["cell_methods"] += " time: mean"
+        else:
+            self.atts["cell_methods"] = "time: mean"
 
     @property
     def updatable(self) -> bool:
