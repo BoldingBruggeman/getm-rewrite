@@ -302,6 +302,7 @@ class Simulation(_pygetm.Simulation):
             units="degrees_Celsius",
             long_name="sea surface temperature",
             fill_value=FILL_VALUE,
+            attrs=dict(standard_name="sea_surface_temperature"),
         )
 
         if runtype == BAROCLINIC:
@@ -318,6 +319,7 @@ class Simulation(_pygetm.Simulation):
                 source_scale=1.0 / (RHO0 * self.density.CP),
                 rivers_follow_target_cell=True,
                 precipitation_follows_target_cell=True,
+                attrs=dict(standard_name="sea_water_conservative_temperature"),
             )
             self.salt = self.tracers.add(
                 name="salt",
@@ -325,6 +327,7 @@ class Simulation(_pygetm.Simulation):
                 long_name="absolute salinity",
                 fabm_standard_name="practical_salinity",
                 fill_value=FILL_VALUE,
+                attrs=dict(standard_name="sea_water_absolute_salinity"),
             )
             self.pres.saved = True
             self.temp.fill(5.0)
@@ -335,7 +338,8 @@ class Simulation(_pygetm.Simulation):
                 units="kg m-3",
                 long_name="density",
                 fabm_standard_name="density",
-                fill_value=FILL_VALUE
+                fill_value=FILL_VALUE,
+                attrs=dict(standard_name="sea_water_density"),
             )
             self.buoy = dom.T.array(
                 z=CENTERS, name="buoy", units="m s-2", long_name="buoyancy"
@@ -506,9 +510,7 @@ class Simulation(_pygetm.Simulation):
 
         # Start output manager
         self.output_manager.start(
-            self.istep,
-            self.time,
-            default_time_reference=self.default_time_reference,
+            self.istep, self.time, default_time_reference=self.default_time_reference,
         )
 
         # Verify all fields have finite values. Do this after self.output_manager.start

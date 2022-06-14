@@ -3,7 +3,6 @@ import operator
 import logging
 import os.path
 import enum
-import collections
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -93,30 +92,53 @@ class Grid(_pygetm.Grid):
     _array_args = {
         "x": dict(units="m", constant=True),
         "y": dict(units="m", constant=True),
-        "lon": dict(units="degrees_east", long_name="longitude", constant=True),
-        "lat": dict(units="degrees_north", long_name="latitude", constant=True,),
+        "lon": dict(
+            units="degree_east",
+            long_name="longitude",
+            constant=True,
+            attrs=dict(standard_name="longitude", axis="X"),
+        ),
+        "lat": dict(
+            units="degree_north",
+            long_name="latitude",
+            constant=True,
+            attrs=dict(standard_name="latitude", axis="Y"),
+        ),
         "dx": dict(units="m", constant=True),
         "dy": dict(units="m", constant=True),
         "idx": dict(units="m-1", constant=True),
         "idy": dict(units="m-1", constant=True),
-        "dlon": dict(units="degrees_east", constant=True),
-        "dlat": dict(units="degrees_north", constant=True),
+        "dlon": dict(units="degree_east", constant=True),
+        "dlat": dict(units="degree_north", constant=True),
         "H": dict(units="m", long_name="water depth at rest", constant=True),
-        "D": dict(units="m", long_name="water depth"),
+        "D": dict(
+            units="m",
+            long_name="water depth",
+            attrs=dict(standard_name="sea_floor_depth_below_sea_surface"),
+        ),
         "mask": dict(constant=True, fill_value=0),
         "z": dict(units="m", long_name="elevation"),
         "zo": dict(units="m", long_name="elevation at previous microtimestep"),
         "zin": dict(units="m", long_name="elevation at macrotimestep"),
         "zio": dict(units="m", long_name="elevation at previous macrotimestep"),
-        "area": dict(units="m2", long_name="grid cell area", constant=True),
+        "area": dict(
+            units="m2",
+            long_name="cell area",
+            constant=True,
+            attrs=dict(standard_name="cell_area"),
+        ),
         "iarea": dict(
-            units="m-2", long_name="inverse of grid cell area", constant=True
+            units="m-2", long_name="inverse of cell area", constant=True
         ),
         "cor": dict(units="1", long_name="Coriolis parameter", constant=True),
-        "ho": dict(units="m", long_name="layer heights at previous time step"),
-        "hn": dict(units="m", long_name="layer heights"),
-        "zc": dict(units="m", long_name="depth"),
-        "zf": dict(units="m", long_name="interface depth"),
+        "ho": dict(units="m", long_name="cell thickness at previous time step"),
+        "hn": dict(
+            units="m",
+            long_name="cell thickness",
+            attrs=dict(standard_name="cell_thickness"),
+        ),
+        "zc": dict(units="m", long_name="depth", attrs=dict(axis="Z")),
+        "zf": dict(units="m", long_name="interface depth", attrs=dict(axis="Z")),
         "z0b": dict(units="m", long_name="hydrodynamic bottom roughness"),
         "z0b_min": dict(
             units="m", long_name="physical bottom roughness", constant=True
