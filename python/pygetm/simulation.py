@@ -250,6 +250,9 @@ class Simulation(_pygetm.Simulation):
                 units="s-2",
                 long_name="buoyancy frequency squared",
                 fill_value=FILL_VALUE,
+                attrs=dict(
+                    standard_name="square_of_brunt_vaisala_frequency_in_sea_water"
+                ),
             )
             self.ustar_s = dom.T.array(
                 fill=0.0,
