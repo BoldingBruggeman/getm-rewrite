@@ -326,7 +326,7 @@ class Simulation(_pygetm.Simulation):
             )
             self.salt = self.tracers.add(
                 name="salt",
-                units="-",
+                units="g kg-1",
                 long_name="absolute salinity",
                 fabm_standard_name="practical_salinity",
                 fill_value=FILL_VALUE,
