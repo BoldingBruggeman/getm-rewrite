@@ -1022,10 +1022,12 @@ class TemporalInterpolationResult(UnaryOperatorResult):
         self._slices: List[Union[int, slice]] = [slice(None)] * source.ndim
 
         self.climatology = climatology
-        assert not climatology or all(
-            time.year == self.times[0].year for time in self.times
-        )
         self._year = self.times[0].year
+        if climatology and not all(time.year == self._year for time in self.times):
+            raise Exception(
+                "%s cannot be used as climatology because it spans more than"
+                " one calendar year" % self._source_name
+            )
 
     def __array__(self, dtype=None) -> np.ndarray:
         return self._current
