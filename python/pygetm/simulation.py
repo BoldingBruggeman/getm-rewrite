@@ -26,6 +26,7 @@ from . import parallel
 from . import output
 from . import operators
 import pygetm.airsea
+import pygetm.ice
 import pygetm.density
 import pygetm.fabm
 import pygetm.input
@@ -88,6 +89,7 @@ class Simulation(_pygetm.Simulation):
             "logger",
             "momentum",
             "airsea",
+            "ice",
             "turbulence",
             "density",
             "buoy",
@@ -99,7 +101,8 @@ class Simulation(_pygetm.Simulation):
             "par0",
             "rho",
             "sst",
-            "sss",
+            "temp_sf",
+            "salt_sf",
             "NN",
             "ustar_s",
             "ustar_b",
@@ -215,6 +218,9 @@ class Simulation(_pygetm.Simulation):
             % type(self.airsea)
         )
         self.airsea.initialize(self.domain)
+
+        self.ice = pygetm.ice.Ice()
+        self.ice.initialize(self.domain.T)
 
         self.fwf = dom.T.array(
             name="fwf",
@@ -348,9 +354,11 @@ class Simulation(_pygetm.Simulation):
                 z=CENTERS, name="buoy", units="m s-2", long_name="buoyancy"
             )
             self.tracer_totals.append(self.salt)
-            self.sss = self.salt.isel(z=-1)
+            self.temp_sf = self.temp.isel(z=-1)
+            self.salt_sf = self.salt.isel(z=-1)
         else:
-            self.sss = None
+            self.temp_sf = None
+            self.salt_sf = None
 
         # Derive old and new elevations, water depths and thicknesses from current
         # surface elevation on T grid. This must be done after self.pres.saved is set
@@ -693,7 +701,8 @@ class Simulation(_pygetm.Simulation):
         # Update all inputs.
         self.domain.input_manager.update(self.time, include_3d=macro_active)
 
-        if self.runtype == BAROCLINIC and macro_active:
+        baroclinic_active = self.runtype == BAROCLINIC and macro_active
+        if baroclinic_active:
             # Update tracer values at open boundaries. This must be done after
             # input_manager.update, but before diagnostics/forcing variables derived
             # from the tracers are calculated
@@ -717,7 +726,7 @@ class Simulation(_pygetm.Simulation):
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
             self.density.get_potential_temperature(
-                self.sss, self.temp.isel(z=-1), out=self.sst
+                self.salt_sf, self.temp_sf, out=self.sst
             )
 
             # Calculate squared buoyancy frequency NN
@@ -746,14 +755,13 @@ class Simulation(_pygetm.Simulation):
 
         # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for
         # x and y stresses respectively)
-        # Note SST is the true in-situ/potential temperature. SSS currently is absolute
-        # salinity - not practical salinity.
-        self.airsea(
-            self.time,
-            self.sst,
-            self.sss,
-            calculate_heat_flux=macro_active and self.runtype == BAROCLINIC,
+        # Note: sst is the in-situ surface temperature, whereas temp_sf is the
+        # conservative surface temperature (salt_sf is absolute salinity)
+        self.airsea(self.time, self.sst, calculate_heat_flux=baroclinic_active)
+        self.ice(
+            baroclinic_active, self.temp_sf, self.salt_sf, self.airsea,
         )
+        self.airsea.update_uv_stresses()
 
         # Update depth-integrated freshwater fluxes: precipitation, evaporation,
         # condensation, rivers
@@ -774,7 +782,7 @@ class Simulation(_pygetm.Simulation):
         self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
 
-        if self.runtype == BAROCLINIC and macro_active:
+        if baroclinic_active:
             # Update radiation. This must come after the airsea update, which is
             # responsible for calculating swr
             self.radiation(self.airsea.swr)
@@ -785,7 +793,8 @@ class Simulation(_pygetm.Simulation):
             if self.fabm:
                 self.fabm.update_sources(self.time)
 
-            # Save forcing variables for the next baroclinic update
+        if macro_active:
+            # Save forcing variables for the next macro update
             self.airsea.spo.all_values[...] = self.airsea.sp.all_values
             self.airsea.taux_Uo.all_values[...] = self.airsea.taux_U.all_values
             self.airsea.tauy_Vo.all_values[...] = self.airsea.tauy_V.all_values

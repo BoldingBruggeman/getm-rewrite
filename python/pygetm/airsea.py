@@ -87,7 +87,6 @@ class Fluxes:
         self,
         time: cftime.datetime,
         sst: core.Array,
-        sss: core.Array,
         calculate_heat_flux: bool,
     ) -> None:
         """Update surface flux of momentum (``taux_U`` at U grid, ``tauy_V`` at V grid,
@@ -103,6 +102,8 @@ class Fluxes:
                 * (not calculate_heat_flux or self.swr.require_set(self.logger))
             )
             self._ready = True
+
+    def update_uv_stresses(self):
         self.taux.update_halos(parallel.Neighbor.RIGHT)
         self.taux.interp(self.taux_U)
         self.tauy.update_halos(parallel.Neighbor.TOP)
@@ -386,7 +387,6 @@ class FluxesFromMeteo(Fluxes):
         self,
         time: cftime.datetime,
         sst: core.Array,
-        sss: core.Array,
         calculate_heat_flux: bool,
     ) -> None:
 
@@ -447,13 +447,6 @@ class FluxesFromMeteo(Fluxes):
                 self.qh.all_values + self.qe.all_values + self.ql.all_values
             )
 
-            # Limit heat flux to positive values (into water) where SST is at freezing
-            self.shf.all_values[
-                np.logical_and(
-                    sst.all_values < -0.0575 * sss.all_values, self.shf.all_values < 0
-                )
-            ] = 0.0
-
             # Shortwave radiation just below water surface
             if self.calculate_swr:
                 self.update_shortwave_radiation(time)
@@ -468,4 +461,4 @@ class FluxesFromMeteo(Fluxes):
                     self.tp.all_values, self.e.all_values, out=self.pe.all_values
                 )
 
-        super().__call__(time, sst, sss, calculate_heat_flux)
+        super().__call__(time, sst, calculate_heat_flux)
