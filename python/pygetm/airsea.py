@@ -286,7 +286,7 @@ class FluxesFromMeteo(Fluxes):
             units="m s-1",
             fill_value=FILL_VALUE,
             attrs=dict(
-                _time_varying=TimeVarying.MACRO, standard_name="precipitation_flux"
+                _time_varying=TimeVarying.MACRO, standard_name="lwe_precipitation_rate"
             ),
         )
         self.e = domain.T.array(

@@ -91,6 +91,7 @@ class NetCDFFile(File):
                     self.nc.createDimension(ziname, nz + 1)
             self.nc.createDimension("time",)
             self.nctime = self.nc.createVariable("time", float, ("time",))
+            self.nctime.axis = "T"
             if time is not None:
                 self.nctime.units = "seconds since %s" % self.time_reference.strftime(
                     "%Y-%m-%d %H:%M:%S"
@@ -101,6 +102,7 @@ class NetCDFFile(File):
                 ).total_seconds() - seconds_passed
             else:
                 self.nctime.units = "s"
+                self.nctime.standard_name = "time"
             self.ncvars = []
             for output_name, field in self.fields.items():
                 dims = ("y%s" % field.grid.postfix, "x%s" % field.grid.postfix)

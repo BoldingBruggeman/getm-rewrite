@@ -93,12 +93,12 @@ class Grid(_pygetm.Grid):
         "x": dict(units="m", attrs=dict(_time_varying=False)),
         "y": dict(units="m", attrs=dict(_time_varying=False)),
         "lon": dict(
-            units="degree_east",
+            units="degrees_east",
             long_name="longitude",
             attrs=dict(standard_name="longitude", axis="X", _time_varying=False),
         ),
         "lat": dict(
-            units="degree_north",
+            units="degrees_north",
             long_name="latitude",
             attrs=dict(standard_name="latitude", axis="Y", _time_varying=False),
         ),
@@ -106,8 +106,8 @@ class Grid(_pygetm.Grid):
         "dy": dict(units="m", attrs=dict(_time_varying=False)),
         "idx": dict(units="m-1", attrs=dict(_time_varying=False)),
         "idy": dict(units="m-1", attrs=dict(_time_varying=False)),
-        "dlon": dict(units="degree_east", attrs=dict(_time_varying=False)),
-        "dlat": dict(units="degree_north", attrs=dict(_time_varying=False)),
+        "dlon": dict(units="degrees_east", attrs=dict(_time_varying=False)),
+        "dlat": dict(units="degrees_north", attrs=dict(_time_varying=False)),
         "H": dict(
             units="m", long_name="water depth at rest", attrs=dict(_time_varying=False)
         ),
@@ -140,8 +140,20 @@ class Grid(_pygetm.Grid):
             long_name="cell thickness",
             attrs=dict(standard_name="cell_thickness"),
         ),
-        "zc": dict(units="m", long_name="depth", attrs=dict(axis="Z")),
-        "zf": dict(units="m", long_name="interface depth", attrs=dict(axis="Z")),
+        "zc": dict(
+            units="m",
+            long_name="height",
+            attrs=dict(
+                axis="Z", positive="up", standard_name="height_above_mean_sea_level"
+            ),
+        ),
+        "zf": dict(
+            units="m",
+            long_name="interface height",
+            attrs=dict(
+                axis="Z", positive="up", standard_name="height_above_mean_sea_level"
+            ),
+        ),
         "z0b": dict(units="m", long_name="hydrodynamic bottom roughness"),
         "z0b_min": dict(
             units="m",
