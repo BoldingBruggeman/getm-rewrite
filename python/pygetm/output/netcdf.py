@@ -7,7 +7,6 @@ import netCDF4
 
 from . import File
 from ..constants import INTERFACES
-from .operators import TimeVarying
 import pygetm.core
 
 

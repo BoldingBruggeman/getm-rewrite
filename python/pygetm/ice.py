@@ -18,7 +18,7 @@ class Ice:
             attrs=dict(standard_name="sea_ice_area_fraction"),
             fabm_standard_name="ice_area_fraction",
         )
-        #self.ice.fill(0.0)
+        self.ice.fill(0.0)
         self.has_ice = False
         self.covered = np.full(grid.mask.all_values.shape, False)
 
@@ -30,7 +30,8 @@ class Ice:
         airsea: pygetm.airsea.Fluxes,
     ):
         if macro:
-            # 1st order freezing point approximation based on gsw_mod_freezing_poly_coefficients
+            # 1st order freezing point approximation based on
+            # gsw_mod_freezing_poly_coefficients
             ct_freezing = 0.017947064327968736 - 0.06076099099929818 * sa_sf.all_values
             unmasked = self.grid.mask.all_values > 0
             np.logical_and(ct_sf.all_values <= ct_freezing, unmasked, out=self.covered)
