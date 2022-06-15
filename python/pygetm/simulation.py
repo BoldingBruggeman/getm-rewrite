@@ -699,7 +699,7 @@ class Simulation(_pygetm.Simulation):
                 bottom friction calculation
         """
         # Update all inputs.
-        self.domain.input_manager.update(self.time, include_3d=macro_active)
+        self.domain.input_manager.update(self.time, macro=macro_active)
 
         baroclinic_active = self.runtype == BAROCLINIC and macro_active
         if baroclinic_active:
