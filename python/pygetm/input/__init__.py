@@ -247,8 +247,8 @@ class OperatorResult(LazyArray):
             if isinstance(inp, xarray.Variable) and isinstance(inp._data, LazyArray):
                 inp = inp._data
 
-            if isinstance(inp, xarray.Variable) and isinstance(inp._data, LazyArray):
-                self.input_names.append(inp._data.name)
+            if isinstance(inp, LazyArray):
+                self.input_names.append(inp.name)
             elif isinstance(inp, (np.ndarray, numbers.Number)):
                 self.input_names.append(str(inp))
             else:
@@ -1179,7 +1179,7 @@ class InputManager:
     ):
         """Link an array to the provided input. If this input is constant in time,
         the value of the array will be set immediately.
-        
+
         Args:
             array: array to assign a value to
             value: input to assign. If this is time-dependent, the combination of the
@@ -1448,7 +1448,7 @@ class InputManager:
 
     def update(self, time: cftime.datetime, macro: bool = True):
         """Update all arrays linked to time-dependent inputs to the current time.
-        
+
         Args:
             time: current time
             macro: whether to also update arrays that were marked as only relevant for
