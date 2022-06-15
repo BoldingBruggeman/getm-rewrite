@@ -1155,8 +1155,8 @@ class OnGrid(enum.Enum):
 
 class InputManager:
     def __init__(self):
-        self._all_fields = []
-        self._micro_fields = []
+        self._all_fields: List[Tuple[str, LazyArray, np.ndarray]] = []
+        self._micro_fields: List[Tuple[str, LazyArray, np.ndarray]] = []
         self._logger = logging.getLogger()
 
     def debug_nc_reads(self):
@@ -1372,14 +1372,9 @@ class InputManager:
                     % (array.name, value.name, time.strftime(), array.name,)
                 )
                 itimedim = value.dims.index(value.getm.time.dims[0])
-                value = value[
-                    tuple(
-                        [
-                            0 if idim == itimedim else slice(None)
-                            for idim in range(value.ndim)
-                        ]
-                    )
-                ]
+                slc = [slice(None)] * value.ndim
+                slc[itimedim] = 0
+                value = value[tuple(slc)]
 
         if array.z and on_grid != OnGrid.ALL:
             # The target is a depth-explicit array.
@@ -1399,17 +1394,15 @@ class InputManager:
             "Source shape %s does not match target  shape %s"
             % (value.shape, target.shape)
         )
-        if (
-            isinstance(value.variable._data, LazyArray)
-            and value.variable._data.is_time_varying()
-        ):
+        data = value.variable._data
+        if isinstance(data, LazyArray) and data.is_time_varying():
             time_varying = array.attrs.get("_time_varying", TimeVarying.MICRO)
             suffix = " on macrotimestep" if time_varying == TimeVarying.MACRO else ""
             self._logger.info(
                 "%s will be updated dynamically from %s%s"
                 % (array.name, value.name, suffix,)
             )
-            info = (array.name, value.variable._data, target)
+            info = (array.name, data, target)
             self._all_fields.append(info)
             if time_varying == TimeVarying.MICRO:
                 self._micro_fields.append(info)
@@ -1422,28 +1415,21 @@ class InputManager:
                 target_mask = grid.mask.all_values[target_slice]
                 unmasked = np.broadcast_to(target_mask != 0, target.shape)
                 if array.fill_value is not None:
-                    keep_mask = unmasked if mask else np.logical_or(unmasked, finite)
+                    keep_mask = unmasked if mask else unmasked | finite
                     target[~keep_mask] = array.fill_value
             if not finite.all(where=unmasked):
                 n_unmasked = unmasked.sum()
+                n_bad = n_unmasked - finite.sum(where=unmasked)
                 self._logger.warning(
                     "%s is set to %s, which is not finite (e.g., NaN)"
                     " in %i of %i unmasked points."
-                    % (
-                        array.name,
-                        value.name,
-                        n_unmasked - finite.sum(where=unmasked),
-                        n_unmasked,
-                    )
+                    % (array.name, value.name, n_bad, n_unmasked)
                 )
+            minval = target.min(where=unmasked, initial=np.inf)
+            maxval = target.max(where=unmasked, initial=-np.inf)
             self._logger.info(
                 "%s is set to time-invariant %s (minimum: %s, maximum: %s)"
-                % (
-                    array.name,
-                    value.name,
-                    target.min(where=unmasked, initial=np.inf),
-                    target.max(where=unmasked, initial=-np.inf),
-                )
+                % (array.name, value.name, minval, maxval)
             )
 
     def update(self, time: cftime.datetime, macro: bool = True):
