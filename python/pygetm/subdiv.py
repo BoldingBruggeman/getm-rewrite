@@ -54,7 +54,7 @@ def main():
 def load_topo(path: bool, legacy: bool, logger: logging.Logger):
     logger.info('Reading topo from %s...' % path)
     if legacy:
-        domain = pygetm.legacy.domain_from_topo(path, nlev=1, logger=logger, glob=True)
+        domain = pygetm.legacy.domain_from_topo(path, nlev=1, logger=logger, glob=True, z0=0.)
     else:
         domain = pygetm.domain.load(path, 1, logger=logger, glob=True)
     domain.initialize(1)
