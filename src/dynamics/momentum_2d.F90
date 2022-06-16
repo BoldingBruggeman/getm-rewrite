@@ -204,13 +204,13 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
                Slr = max( self%SxF(i,j) , 0._real64 )
             end if
             ! [GETM Scientific Report: eqs. 2.14, 2.16]
-            self%U(i,j)=(self%U(i,j)-dt*(g*UG%D(i,j)*dpdx(i,j) & ! note SxF is multiplied by alpha
-                        +UG%alpha(i,j)*(-tausx(i,j)*rho0i-self%fV(i,j) &
+            self%U(i,j) = (self%U(i,j) + dt * (-g * UG%D(i,j) * dpdx(i,j) & ! note SxF is multiplied by alpha
+                           + UG%alpha(i,j) * (tausx(i,j) * rho0i + self%fV(i,j) &
 #ifndef _APPLY_ADV_DIFF_
-                        -self%advU(i,j)-self%diffu1(i,j)-self%dampU(i,j) &
+                           + self%advU(i,j) + self%diffu1(i,j) + self%dampU(i,j) &
 #endif
-                        -self%SxA(i,j)-self%SxB(i,j)-self%SxD(i,j)-Slr))) &
-                        /(1._real64+dt*self%ru(i,j)/UG%D(i,j))
+                           + self%SxA(i,j) + self%SxB(i,j) + self%SxD(i,j) + Slr))) &
+                          / (1._real64 + dt * self%ru(i,j) / UG%D(i,j))
             !self%Ui(i,j)=self%Ui(i,j)+self%U(i,j)   ! JB now done in Python, needs to include halos for slow advection
          end if
       end do
@@ -257,13 +257,13 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
                Slr = max( self%SyF(i,j) , 0._real64 )
             end if
             ! [GETM Scientific Report: eqs. 2.15, 2.17]
-            self%V(i,j)=(self%V(i,j)-dt*(g*VG%D(i,j)*dpdy(i,j) & ! note SyF is multiplied by alpha
-                        +VG%alpha(i,j)*(-tausy(i,j)*rho0i+self%fU(i,j) &
+            self%V(i,j) = (self%V(i,j) + dt * (-g * VG%D(i,j) * dpdy(i,j) & ! note SyF is multiplied by alpha
+                           + VG%alpha(i,j) * (tausy(i,j) * rho0i - self%fU(i,j) &
 #ifndef _APPLY_ADV_DIFF_
-                        -self%advV(i,j)-self%diffv1(i,j)-self%dampV(i,j) &
+                           + self%advV(i,j) + self%diffv1(i,j) + self%dampV(i,j) &
 #endif
-                        -self%SyA(i,j)-self%SyB(i,j)-self%SyD(i,j)-Slr))) &
-                        /(1._real64+dt*self%rv(i,j)/VG%D(i,j))
+                           + self%SyA(i,j) + self%SyB(i,j) + self%SyD(i,j) + Slr))) &
+                          / (1._real64 + dt * self%rv(i,j) / VG%D(i,j))
             !self%Vi(i,j)=self%Vi(i,j)+self%V(i,j)   ! JB now done in Python, needs to include halos for slow advection
          end if
       end do
