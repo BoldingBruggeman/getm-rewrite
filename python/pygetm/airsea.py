@@ -68,26 +68,10 @@ class Fluxes:
         )
         self.pe.fill(0.0)
 
-        self.taux_U = domain.U.array(
-            name="tausxu", fill_value=FILL_VALUE, attrs={"_mask_output": True}
-        )
-        self.tauy_V = domain.V.array(
-            name="tausyv", fill_value=FILL_VALUE, attrs={"_mask_output": True}
-        )
-
-        # Forcing variables for processes operating over the 3D/macro timestep;
-        # these lag behind the 2D forcing variables defined above.
-        self.spo = domain.T.array()
-        self.taux_Uo = domain.U.array()
-        self.tauy_Vo = domain.V.array()
-
         self._ready = False
 
     def __call__(
-        self,
-        time: cftime.datetime,
-        sst: core.Array,
-        calculate_heat_flux: bool,
+        self, time: cftime.datetime, sst: core.Array, calculate_heat_flux: bool,
     ) -> None:
         """Update surface flux of momentum (``taux_U`` at U grid, ``tauy_V`` at V grid,
         ``taux`` and ``tauy`` at T grid) and optionally the surface heat flux (``shf``)
@@ -102,12 +86,6 @@ class Fluxes:
                 * (not calculate_heat_flux or self.swr.require_set(self.logger))
             )
             self._ready = True
-
-    def update_uv_stresses(self):
-        self.taux.update_halos(parallel.Neighbor.RIGHT)
-        self.taux.interp(self.taux_U)
-        self.tauy.update_halos(parallel.Neighbor.TOP)
-        self.tauy.interp(self.tauy_V)
 
 
 class FluxesFromMeteo(Fluxes):
@@ -384,10 +362,7 @@ class FluxesFromMeteo(Fluxes):
         )
 
     def __call__(
-        self,
-        time: cftime.datetime,
-        sst: core.Array,
-        calculate_heat_flux: bool,
+        self, time: cftime.datetime, sst: core.Array, calculate_heat_flux: bool,
     ) -> None:
 
         if not self._ready:

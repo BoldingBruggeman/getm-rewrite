@@ -110,6 +110,12 @@ class Simulation(_pygetm.Simulation):
             "z0s",
             "z0b",
             "fwf",
+            "tausx",
+            "tausy",
+            "tausxo",
+            "tausyo",
+            "dpdxo",
+            "dpdyo",
             "_cum_river_height_increase",
             "_start_time",
             "_profile",
@@ -289,6 +295,21 @@ class Simulation(_pygetm.Simulation):
                 fill_value=FILL_VALUE,
                 fabm_standard_name="bottom_stress",
             )
+
+            # Surface stresses interpolated to U and V grids
+            self.tausx = dom.U.array(
+                name="tausxu", fill_value=FILL_VALUE, attrs={"_mask_output": True}
+            )
+            self.tausy = dom.V.array(
+                name="tausyv", fill_value=FILL_VALUE, attrs={"_mask_output": True}
+            )
+
+            # Forcing variables for macro/3D momentum update
+            # These lag behind the forcing for the micro/2D momentum update
+            self.tausxo = dom.U.array()
+            self.tausyo = dom.V.array()
+            self.dpdxo = dom.U.array()
+            self.dpdyo = dom.V.array()
 
             if fabm:
                 if not isinstance(fabm, pygetm.fabm.FABM):
@@ -557,7 +578,7 @@ class Simulation(_pygetm.Simulation):
         # already been updated by the call to update_forcing at the end of the previous
         # time step.
         self.momentum.advance_depth_integrated(
-            self.timestep, self.airsea.taux_U, self.airsea.tauy_V, self.dpdx, self.dpdy
+            self.timestep, self.tausx, self.tausy, self.dpdx, self.dpdy
         )
 
         # Update surface elevation on T grid from time=0 to time=1 using transports
@@ -603,25 +624,19 @@ class Simulation(_pygetm.Simulation):
             # thicknesses hn.
             self.domain.update_depth(_3d=True, timestep=self.macrotimestep)
 
-            # Update presssure gradient for start of the 3D time step
-            # Note that we use previously-recorded elevations and surface pressure at
-            # the start of the current macrotimestep
-            self.update_surface_pressure_gradient(self.domain.T.zio, self.airsea.spo)
-
             # Update momentum from time=-1/2 to 1/2 of the macrotimestep, using forcing
-            # defined at time=0. For this purpose, surface stresses at the end of the
-            # previous macrotimestep were saved (taux_Uo, tauy_Vo)
-            # Pressure gradients dpdx and dpdy have just been updated to match the
-            # start of the current macrotimestep
+            # defined at time=0. For this purpose, surface stresses (tausxo, tausyo)
+            # and surface pressure gradients (dpdxo, dpdyo) at the end of the previous
+            # macrotimestep were saved
             # Internal pressure idpdx and idpdy were calculated at the end of the
             # previous macrotimestep and are therefore ready as-is.
             self.momentum.advance(
                 self.macrotimestep,
                 self.split_factor,
-                self.airsea.taux_Uo,
-                self.airsea.tauy_Vo,
-                self.dpdx,
-                self.dpdy,
+                self.tausxo,
+                self.tausyo,
+                self.dpdxo,
+                self.dpdyo,
                 self.idpdx,
                 self.idpdy,
                 self.turbulence.num,
@@ -761,7 +776,6 @@ class Simulation(_pygetm.Simulation):
         self.ice(
             baroclinic_active, self.temp_sf, self.salt_sf, self.airsea,
         )
-        self.airsea.update_uv_stresses()
 
         # Update depth-integrated freshwater fluxes: precipitation, evaporation,
         # condensation, rivers
@@ -782,6 +796,19 @@ class Simulation(_pygetm.Simulation):
         self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
         self.update_surface_pressure_gradient(self.domain.T.z, self.airsea.sp)
 
+        # Interpolate surface stresses from T to U and V grids
+        self.airsea.taux.update_halos(parallel.Neighbor.RIGHT)
+        self.airsea.taux.interp(self.tausx)
+        self.airsea.tauy.update_halos(parallel.Neighbor.TOP)
+        self.airsea.tauy.interp(self.tausy)
+
+        if macro_active:
+            # Save surface forcing variables for the next macro momentum update
+            self.tausxo.all_values[...] = self.tausx.all_values
+            self.tausyo.all_values[...] = self.tausy.all_values
+            self.dpdxo.all_values[...] = self.dpdx.all_values
+            self.dpdyo.all_values[...] = self.dpdy.all_values
+
         if baroclinic_active:
             # Update radiation. This must come after the airsea update, which is
             # responsible for calculating swr
@@ -792,12 +819,6 @@ class Simulation(_pygetm.Simulation):
             # variables computed before
             if self.fabm:
                 self.fabm.update_sources(self.time)
-
-        if macro_active:
-            # Save forcing variables for the next macro update
-            self.airsea.spo.all_values[...] = self.airsea.sp.all_values
-            self.airsea.taux_Uo.all_values[...] = self.airsea.taux_U.all_values
-            self.airsea.tauy_Vo.all_values[...] = self.airsea.tauy_V.all_values
 
     @log_exceptions
     def finish(self):
