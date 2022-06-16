@@ -74,7 +74,10 @@ class GOTM(Turbulence):
             name="tke",
             units="m2 s-2",
             long_name="turbulent kinetic energy",
-            attrs={"_part_of_state": True},
+            attrs=dict(
+                _part_of_state=True,
+                standard_name="specific_turbulent_kinetic_energy_of_sea_water",
+            ),
         )
         self.tkeo = grid.array(
             fill=self.mix.tkeo[:, np.newaxis, np.newaxis],
@@ -82,7 +85,7 @@ class GOTM(Turbulence):
             name="tkeo",
             units="m2 s-2",
             long_name="turbulent kinetic energy at previous timestep",
-            attrs={"_part_of_state": True},
+            attrs=dict(_part_of_state=True),
         )
         self.eps = grid.array(
             fill=self.mix.eps[:, np.newaxis, np.newaxis],
@@ -90,7 +93,10 @@ class GOTM(Turbulence):
             name="eps",
             units="m2 s-3",
             long_name="energy dissipation rate",
-            attrs={"_part_of_state": True},
+            attrs=dict(
+                _part_of_state=True,
+                standard_name="specific_turbulent_kinetic_energy_dissipation_in_sea_water",
+            ),
         )
         self.L = grid.array(
             fill=self.mix.L[:, np.newaxis, np.newaxis],
@@ -98,7 +104,10 @@ class GOTM(Turbulence):
             name="L",
             units="m",
             long_name="turbulence length scale",
-            attrs={"_part_of_state": True},
+            attrs=dict(
+                _part_of_state=True,
+                standard_name="turbulent_mixing_length_of_sea_water",
+            ),
         )
         self._log()
 

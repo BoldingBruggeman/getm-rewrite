@@ -82,6 +82,7 @@ class TwoBand(Radiation):
             fabm_standard_name="downwelling_shortwave_flux",
             z=INTERFACES,
             fill_value=FILL_VALUE,
+            attrs=dict(standard_name="downwelling_shortwave_flux_in_sea_water")
         )
         self.par = grid.array(
             name="par",
@@ -90,6 +91,7 @@ class TwoBand(Radiation):
             fabm_standard_name="downwelling_photosynthetic_radiative_flux",
             z=CENTERS,
             fill_value=FILL_VALUE,
+            attrs=dict(standard_name="downwelling_photosynthetic_radiative_flux_in_sea_water")
         )
         self.par0 = grid.array(
             name="par0",

@@ -124,17 +124,22 @@ class Momentum(pygetm._pygetm.Momentum):
         ),
         "uk": dict(
             units="m s-1",
-            long_name="velocity in Eastward direction",
+            long_name="velocity in x direction",
             fill_value=FILL_VALUE,
-            attrs={"_mask_output": True},
+            attrs=dict(_mask_output=True, standard_name="sea_water_x_velocity"),
         ),
         "vk": dict(
             units="m s-1",
-            long_name="velocity in Northward direction",
+            long_name="velocity in y direction",
             fill_value=FILL_VALUE,
-            attrs={"_mask_output": True},
+            attrs=dict(_mask_output=True, standard_name="sea_water_y_velocity"),
         ),
-        "ww": dict(units="m s-1", long_name="vertical velocity", fill_value=FILL_VALUE),
+        "ww": dict(
+            units="m s-1",
+            long_name="vertical velocity",
+            fill_value=FILL_VALUE,
+            attrs=dict(standard_name="upward_sea_water_velocity"),
+        ),
         "SS": dict(
             units="s-2", long_name="shear frequency squared", fill_value=FILL_VALUE
         ),
@@ -526,11 +531,11 @@ class Momentum(pygetm._pygetm.Momentum):
             # vk, rru, rrv). Slow bottom friction (stress/density) is derived by taking
             # the difference between 3D bottom friction and the inferred ru and rv.
             self.SxF.all_values[...] = (
-                - self.rru.all_values * self.uk.all_values[0, ...]
+                -self.rru.all_values * self.uk.all_values[0, ...]
                 + self.ru.all_values * self.u1.all_values
             )
             self.SyF.all_values[...] = (
-                - self.rrv.all_values * self.vk.all_values[0, ...]
+                -self.rrv.all_values * self.vk.all_values[0, ...]
                 + self.rv.all_values * self.v1.all_values
             )
 
