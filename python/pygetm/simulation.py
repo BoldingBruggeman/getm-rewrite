@@ -256,7 +256,6 @@ class Simulation(_pygetm.Simulation):
             self.turbulence = turbulence or pygetm.mixing.GOTM(nml_path=gotm)
             self.turbulence.initialize(self.domain.T)
             self.NN = dom.T.array(
-                fill=0.0,
                 z=INTERFACES,
                 name="NN",
                 units="s-2",
@@ -266,6 +265,7 @@ class Simulation(_pygetm.Simulation):
                     standard_name="square_of_brunt_vaisala_frequency_in_sea_water"
                 ),
             )
+            self.NN.fill(0.)
             self.ustar_s = dom.T.array(
                 fill=0.0,
                 name="ustar_s",
@@ -777,8 +777,8 @@ class Simulation(_pygetm.Simulation):
             baroclinic_active, self.temp_sf, self.salt_sf, self.airsea,
         )
 
-        # Update depth-integrated freshwater fluxes: precipitation, evaporation,
-        # condensation, rivers
+        # Update depth-integrated freshwater fluxes:
+        # precipitation, evaporation, condensation, rivers
         self.fwf.all_values[...] = self.airsea.pe.all_values
         self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] += (
             self.domain.rivers.flow * self.domain.rivers.iarea
