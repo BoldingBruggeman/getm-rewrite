@@ -590,8 +590,8 @@ class River:
         name: str,
         i: int,
         j: int,
-        zl: Optional[float] = None,
-        zu: Optional[float] = None,
+        zl: Optional[float] = np.inf,
+        zu: Optional[float] = 0.0,
         x: Optional[float] = None,
         y: Optional[float] = None,
     ):
@@ -657,6 +657,12 @@ class Rivers(Mapping[str, River]):
 
     def add_by_index(self, name: str, i: int, j: int, **kwargs):
         """Add a river at a location specified by the indices of a tracer point
+
+        Args:
+            name: river name
+            i: index in x direction (0-based)
+            j: index in y direction (0-based)
+            **kwargs: additional keyword arguments passed to :class:`River`
         """
         assert not self._frozen, (
             "The river collection has already been initialized"
@@ -703,25 +709,19 @@ class Rivers(Mapping[str, River]):
         self._frozen = True
         self._rivers = [river for river in self._rivers if river.locate(self.grid)]
         self.flow = np.zeros((len(self._rivers),))
-        self.i = np.empty((len(self._rivers),), dtype=int)
-        self.j = np.empty((len(self._rivers),), dtype=int)
-        self.iarea = np.empty((len(self._rivers),))
         for iriver, river in enumerate(self._rivers):
-            if self.grid.mask.all_values[river.j, river.i] != 1:
+            mask = self.grid.mask.all_values[river.j, river.i]
+            if mask != 1:
                 raise Exception(
                     "River %s is located at i=%i, j=%i, which is not water"
-                    " (it has mask value %i)."
-                    % (
-                        river.name,
-                        river.i,
-                        river.j,
-                        self.grid.mask.all_values[river.j, river.i],
-                    )
+                    " (it has mask value %i)." % (river.name, river.i, river.j, mask)
                 )
             river.initialize(self.grid, self.flow[..., iriver])
-            self.i[iriver] = river.i
-            self.j[iriver] = river.j
-            self.iarea[iriver] = self.grid.iarea.all_values[river.j, river.i]
+        self.i = np.array([river.i for river in self._rivers], dtype=int)
+        self.j = np.array([river.j for river in self._rivers], dtype=int)
+        self.iarea = self.grid.iarea.all_values[self.j, self.i]
+        self.zl = np.array([river.zl for river in self._rivers])
+        self.zu = np.array([river.zu for river in self._rivers])
 
     def __getitem__(self, key) -> River:
         for river in self._rivers:

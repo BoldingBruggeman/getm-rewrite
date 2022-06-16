@@ -192,10 +192,16 @@ def load_riverinfo(dom: pygetm.domain.Domain, path: str):
             # Indices of the river cell (1-based!)
             i, j, name = int(items[0]), int(items[1]), items[2]
 
-            # Depth extent
-            zl, zu = None, None
+            # Depth extent: zl and zu are depths i.e. measured from the surface.
+            # Negative values have the following meaning - if zl < 0 use bottom
+            # and if zu < 0 use surface. zl and zu are optional but either none
+            # or both must be specified
+            zl, zu = np.inf, 0.0
             if len(items) == 5:
                 zl, zu = float(items[3]), float(items[4])
+                zu = max(0.0, zu)
+                if zl < 0:
+                    zl = np.inf
 
             # Note: we convert from 1-based indices to 0-based indices!
             dom.rivers.add_by_index(name, i - 1, j - 1, zl=zl, zu=zu)

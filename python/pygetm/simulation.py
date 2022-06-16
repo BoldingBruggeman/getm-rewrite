@@ -265,7 +265,7 @@ class Simulation(_pygetm.Simulation):
                     standard_name="square_of_brunt_vaisala_frequency_in_sea_water"
                 ),
             )
-            self.NN.fill(0.)
+            self.NN.fill(0.0)
             self.ustar_s = dom.T.array(
                 fill=0.0,
                 name="ustar_s",
@@ -860,10 +860,12 @@ class Simulation(_pygetm.Simulation):
         self.domain.T.zin.all_values += h_increase_pe
 
         # Rivers, potentially entering anywhere in the water column
-        h = self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i]
-        river_active = np.full(h.shape, True)
-        # JB TODO: customize river_active by flagging layers where the river does not
-        # go with False
+        rivers = self.domain.rivers
+        h = self.domain.T.hn.all_values[:, rivers.j, rivers.i]
+        z_if = np.zeros((h.shape[0] + 1, h.shape[1]))
+        z_if[1:, :] = -h.cumsum(axis=0)
+        z_if -= z_if[-1, :]
+        river_active = (z_if[:-1, :] >= rivers.zu) & (z_if[1:, :] <= rivers.zl)
 
         # Copy with order=F to ensure pairwise summation also for more than 1 river.
         # Essential for bitwise reproducibility across different subdomain partitions!
@@ -876,25 +878,21 @@ class Simulation(_pygetm.Simulation):
         for tracer in self.tracers:
             river_follow = np.logical_or(tracer.river_follow, withdrawal)
             if not river_follow.all():
-                tracer_old = tracer.all_values[
-                    :, self.domain.rivers.j, self.domain.rivers.i
-                ]
+                tracer_old = tracer.all_values[:, rivers.j, rivers.i]
                 river_values = np.where(river_follow, tracer_old, tracer.river_values)
                 tracer_new = (
                     tracer_old * river_depth
                     + river_values * self._cum_river_height_increase
                 ) / (river_depth + self._cum_river_height_increase)
-                tracer.all_values[
-                    :, self.domain.rivers.j, self.domain.rivers.i
-                ] = np.where(river_active, tracer_new, tracer_old)
+                tracer.all_values[:, rivers.j, rivers.i] = np.where(
+                    river_active, tracer_new, tracer_old
+                )
             tracer.update_halos_start(
                 parallel.Neighbor.LEFT_AND_RIGHT
             )  # to prepare for advection
-        self.domain.T.hn.all_values[:, self.domain.rivers.j, self.domain.rivers.i] = (
-            h + h_increase
-        )
+        self.domain.T.hn.all_values[:, rivers.j, rivers.i] = h + h_increase
         self.domain.T.zin.all_values[
-            self.domain.rivers.j, self.domain.rivers.i
+            rivers.j, rivers.i
         ] += self._cum_river_height_increase
         self._cum_river_height_increase.fill(0.0)
 
