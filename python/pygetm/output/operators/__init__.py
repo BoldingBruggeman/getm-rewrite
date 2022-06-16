@@ -1,10 +1,20 @@
-from typing import MutableMapping, Tuple, Union, Optional, Sequence, Mapping, Literal
+from typing import (
+    MutableMapping,
+    Tuple,
+    Union,
+    Optional,
+    Sequence,
+    Mapping,
+    Literal,
+    Callable,
+)
 import collections
 import enum
 
 from numpy.typing import DTypeLike, ArrayLike
 
 import pygetm.core
+import pygetm.domain
 from pygetm.constants import INTERFACES, TimeVarying
 
 
@@ -51,6 +61,10 @@ class Base:
     def updatable(self) -> bool:
         return False
 
+    @property
+    def updater(self) -> Optional[Callable]:
+        raise NotImplementedError
+
 
 class Updatable(enum.Enum):
     ALWAYS = 1
@@ -67,7 +81,7 @@ class FieldCollection:
         self.expression2name = {}
         self.available_fields = available_fields
         self.default_dtype = default_dtype
-        self._updatable = {}
+        self._updaters = {}
 
     def request(
         self,
@@ -76,6 +90,7 @@ class FieldCollection:
         dtype: Optional[DTypeLike] = None,
         mask: Optional[bool] = None,
         time_average: bool = False,
+        regrid: Optional[pygetm.domain.Grid] = None,
         generate_unique_name: bool = False
     ) -> Tuple[str]:
         """Add one or more arrays to this field collection.
@@ -163,14 +178,16 @@ class FieldCollection:
             field = Field(array, self, dtype=dtype)
             if time_average and field.time_varying:
                 field = TimeAverage(field)
-            if time_average or mask:
+            if regrid and array.grid is not regrid:
+                field = Regrid(field, regrid)
+            if time_average or mask or regrid:
                 field = Mask(field)
             if field.updatable:
                 when_macro = [True]
                 if field.updatable == Updatable.ALWAYS:
                     when_macro.append(False)
                 for key in when_macro:
-                    self._updatable.setdefault(key, []).append(field)
+                    self._updaters.setdefault(key, []).append(field.updater)
             self.fields[name] = field
             self.expression2name[field.get_expression()] = name
             field.coordinates = field.get_coordinates()
@@ -191,8 +208,8 @@ class FieldCollection:
         return output_name
 
     def update(self, macro: bool = False):
-        for field in self._updatable.get(macro, ()):
-            field.update()
+        for updater in self._updaters.get(macro, ()):
+            updater()
 
 
 class Field(Base):
@@ -228,7 +245,10 @@ class Field(Base):
         )
 
     def get(
-        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
+        self,
+        out: Optional[ArrayLike] = None,
+        slice_spec: Tuple[int] = (),
+        sub: bool = False,
     ) -> ArrayLike:
         if sub:
             # Get data for subdomain only
@@ -276,14 +296,14 @@ class Field(Base):
 class UnivariateTransform(Field):
     __slots__ = ("_source",)
 
-    def __init__(self, source: Field):
+    def __init__(self, source: Field, grid: Optional[pygetm.domain.Grid] = None):
         self._source = source
         assert source.fill_value is not None, (
             "%s cannot be used on %s as it does not have a fill value."
             % (self.__class__.__name__, source.get_expression())
         )
         array = pygetm.core.Array.create(
-            source.grid,
+            grid or source.grid,
             z=source.z,
             dtype=source.dtype,
             on_boundary=source.on_boundary,
@@ -295,24 +315,31 @@ class UnivariateTransform(Field):
     def updatable(self) -> bool:
         return self._source.updatable
 
-    def update(self):
-        return self._source.update()
+    @property
+    def updater(self) -> Optional[Callable]:
+        return self._source.updater
+
+    def get_expression(self) -> str:
+        return "%s(%s)" % (self.operation, self._source.get_expression())
 
 
 class Mask(UnivariateTransform):
+    operation = "mask"
+
     def get(
-        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
+        self,
+        out: Optional[ArrayLike] = None,
+        slice_spec: Tuple[int] = (),
+        sub: bool = False,
     ) -> ArrayLike:
         self._source.get(out=self.array.all_values, sub=True)
         self.array.all_values[..., self.grid.mask.all_values == 0] = self.fill_value
-        super().get(out, slice_spec, sub)
-
-    def get_expression(self) -> str:
-        return "mask(%s)" % self._source.get_expression()
+        return super().get(out, slice_spec, sub)
 
 
 class TimeAverage(UnivariateTransform):
     __slots__ = ("_n",)
+    operation = "time_average"
 
     def __init__(self, source: Field):
         super().__init__(source)
@@ -328,6 +355,10 @@ class TimeAverage(UnivariateTransform):
             return Updatable.MACRO_ONLY
         return Updatable.ALWAYS
 
+    @property
+    def updater(self) -> Optional[Callable]:
+        return self.update
+
     def update(self):
         if self._n == 0:
             self._source.get(out=self.array.all_values, sub=True)
@@ -336,12 +367,30 @@ class TimeAverage(UnivariateTransform):
         self._n += 1
 
     def get(
-        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
+        self,
+        out: Optional[ArrayLike] = None,
+        slice_spec: Tuple[int] = (),
+        sub: bool = False,
     ) -> ArrayLike:
         if self._n > 0:
             self.array.all_values *= 1.0 / self._n
-        super().get(out, slice_spec, sub)
         self._n = 0
+        return super().get(out, slice_spec, sub)
+
+
+class Regrid(UnivariateTransform):
+    def __init__(self, source: Field, grid: Optional[pygetm.domain.Grid]):
+        super().__init__(source, grid)
+
+    def get(
+        self,
+        out: Optional[ArrayLike] = None,
+        slice_spec: Tuple[int] = (),
+        sub: bool = False,
+    ) -> ArrayLike:
+        self._source.get(sub=True)
+        self._source.array.interp(self.array)
+        return super().get(out, slice_spec, sub)
 
     def get_expression(self) -> str:
-        return "time_average(%s)" % self._source.get_expression()
+        return "regrid(%s, %s)" % (self._source.get_expression(), self.grid.postfix,)
