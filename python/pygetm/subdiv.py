@@ -49,8 +49,9 @@ def main():
     if args.plot and rank == 0:
         from matplotlib import pyplot
         ny, nx = tiling.map.shape
-        fig, ax = pyplot.subplots(figsize=(0.75 * nx, 0.75 * ny))
+        fig, ax = pyplot.subplots(figsize=(0.5 * nx, 0.5 * ny))
         tiling.plot(ax=ax, background=background)
+        fig.tight_layout()
         if args.savefig:
             fig.savefig(args.savefig, dpi=300)
         else:

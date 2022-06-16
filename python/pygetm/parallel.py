@@ -382,7 +382,7 @@ class Tiling:
             )
         )
 
-    def plot(self, ax=None, background: Optional[np.ndarray] = None):
+    def plot(self, ax=None, background: Optional[np.ndarray] = None, cmap="viridis"):
         """Plot the current subdomain division
 
         Args:
@@ -393,13 +393,17 @@ class Tiling:
                 a single filled rectabgle covering the global domain will be used as
                 background.
         """
+        import matplotlib.patches
+        import matplotlib.cm
+
         x = self.xoffset_global + np.arange(self.ncol + 1) * self.nx_sub
         y = self.yoffset_global + np.arange(self.nrow + 1) * self.ny_sub
         if ax is None:
             import matplotlib.pyplot
 
             fig, ax = matplotlib.pyplot.subplots()
-        import matplotlib.patches
+
+        ax.set_facecolor((0.8, 0.8, 0.8))
 
         # Background showing global domain
         if background is not None:
@@ -408,25 +412,33 @@ class Tiling:
                 "Argument background has incorrrect shape %s. Expected %s"
                 % (background.shape, (self.ny_glob, self.nx_glob))
             )
+            if isinstance(cmap, str):
+                cmap = matplotlib.cm.get_cmap(cmap)
+            cmap.set_bad("w")
             ax.pcolormesh(
                 np.arange(background.shape[1] + 1),
                 np.arange(background.shape[0] + 1),
                 background,
                 alpha=0.5,
+                cmap=cmap,
             )
+            facecolor = "None"
         else:
             # Background field not provided:
             # just show a filled rectangle covering the global domain
-            ax.add_patch(
-                matplotlib.patches.Rectangle(
-                    (0, 0),
-                    self.nx_glob,
-                    self.ny_glob,
-                    edgecolor="None",
-                    facecolor="C0",
-                    zorder=-1,
-                )
+            facecolor = "C0"
+
+        ax.add_patch(
+            matplotlib.patches.Rectangle(
+                (0, 0),
+                self.nx_glob,
+                self.ny_glob,
+                edgecolor="k",
+                linewidth=".4",
+                facecolor=facecolor,
+                zorder=-1,
             )
+        )
 
         # Boundaries between subdomains
         ax.pcolormesh(
