@@ -223,7 +223,7 @@ class Simulation(_pygetm.Simulation):
             "airsea argument should be of type pygetm.airsea.Fluxes, but is %s"
             % type(self.airsea)
         )
-        self.airsea.initialize(self.domain)
+        self.airsea.initialize(self.domain.T)
 
         self.ice = pygetm.ice.Ice()
         self.ice.initialize(self.domain.T)

@@ -18,37 +18,37 @@ class Fluxes:
     net downwelling shortwave radiation ``swr``) are prescribed, not calculated.
     """
 
-    def initialize(self, domain: pygetm.domain.Domain):
-        self.logger = domain.root_logger.getChild("airsea")
+    def initialize(self, grid: pygetm.domain.Grid):
+        self.logger = grid.domain.root_logger.getChild("airsea")
 
-        self.taux = domain.T.array(
+        self.taux = grid.array(
             name="tausx",
             long_name="wind stress in x direction",
             units="Pa",
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="downward_x_stress_at_sea_water_surface"),
         )
-        self.tauy = domain.T.array(
+        self.tauy = grid.array(
             name="tausy",
             long_name="wind stress in y direction",
             units="Pa",
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="downward_y_stress_at_sea_water_surface"),
         )
-        self.shf = domain.T.array(
+        self.shf = grid.array(
             name="shf",
             units="W m-2",
             long_name="surface heat flux",
             fill_value=FILL_VALUE,
         )
-        self.sp = domain.T.array(
+        self.sp = grid.array(
             name="sp",
             long_name="surface air pressure",
             units="Pa",
             fill_value=FILL_VALUE,
             attrs=dict(_require_halos=True, standard_name="surface_air_pressure"),
         )
-        self.swr = domain.T.array(
+        self.swr = grid.array(
             name="swr",
             long_name="surface net downwelling shortwave radiation",
             units="W m-2",
@@ -59,7 +59,7 @@ class Fluxes:
                 standard_name="net_downward_shortwave_flux_at_sea_water_surface",
             ),
         )
-        self.pe = domain.T.array(
+        self.pe = grid.array(
             name="pe",
             long_name="net freshwater flux due to precipitation, condensation, evaporation",
             units="m s-1",
@@ -108,25 +108,25 @@ class FluxesFromMeteo(Fluxes):
         self.calculate_swr = calculate_swr
         self.calculate_evaporation = calculate_evaporation
 
-    def initialize(self, domain: pygetm.domain.Domain):
-        super().initialize(domain)
+    def initialize(self, grid: pygetm.domain.Grid):
+        super().initialize(grid)
 
-        self.es = domain.T.array(
+        self.es = grid.array(
             name="es",
             long_name="vapor pressure at saturation",
             units="Pa",
             fill_value=FILL_VALUE,
         )
-        self.ea = domain.T.array(
+        self.ea = grid.array(
             name="ea", long_name="vapor pressure", units="Pa", fill_value=FILL_VALUE
         )
-        self.qs = domain.T.array(
+        self.qs = grid.array(
             name="qs",
             long_name="specific humidity at saturation",
             units="kg kg-1",
             fill_value=FILL_VALUE,
         )
-        self.qa = domain.T.array(
+        self.qa = grid.array(
             name="qa",
             long_name="specific humidity",
             units="kg kg-1",
@@ -134,7 +134,7 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(standard_name="specific_humidity"),
         )
         if self.humidity_measure == HumidityMeasure.DEW_POINT_TEMPERATURE:
-            self.hum = self.d2m = domain.T.array(
+            self.hum = self.d2m = grid.array(
                 name="d2m",
                 long_name="dew point temperature @ 2 m",
                 units="degrees_Celsius",
@@ -142,7 +142,7 @@ class FluxesFromMeteo(Fluxes):
                 attrs=dict(standard_name="dew_point_temperature"),
             )
         elif self.humidity_measure == HumidityMeasure.RELATIVE_HUMIDITY:
-            self.hum = self.rh = domain.T.array(
+            self.hum = self.rh = grid.array(
                 name="rh",
                 long_name="relative humidity @ 2 m",
                 units="%",
@@ -150,7 +150,7 @@ class FluxesFromMeteo(Fluxes):
                 attrs=dict(standard_name="relative_humidity"),
             )
         elif self.humidity_measure == HumidityMeasure.WET_BULB_TEMPERATURE:
-            self.hum = self.wbt = domain.T.array(
+            self.hum = self.wbt = grid.array(
                 name="wbt",
                 long_name="wet bulb temperature @ 2 m",
                 units="degrees_Celsius",
@@ -159,7 +159,7 @@ class FluxesFromMeteo(Fluxes):
             )
         else:
             self.hum = self.qa
-        self.rhoa = domain.T.array(
+        self.rhoa = grid.array(
             name="rhoa",
             long_name="air density",
             units="kg m-3",
@@ -167,7 +167,7 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(standard_name="air_density"),
         )
 
-        self.zen = domain.T.array(
+        self.zen = grid.array(
             name="zen",
             long_name="solar zenith angle",
             units="degree",
@@ -176,7 +176,7 @@ class FluxesFromMeteo(Fluxes):
                 _time_varying=TimeVarying.MACRO, standard_name="solar_zenith_angle"
             ),
         )
-        self.albedo = domain.T.array(
+        self.albedo = grid.array(
             name="albedo",
             long_name="albedo",
             units="1",
@@ -184,7 +184,7 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(_time_varying=TimeVarying.MACRO, standard_name="surface_albedo"),
         )
 
-        self.t2m = domain.T.array(
+        self.t2m = grid.array(
             name="t2m",
             long_name="air temperature @ 2 m",
             units="degrees_Celsius",
@@ -192,21 +192,21 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(standard_name="air_temperature"),
         )
 
-        self.u10 = domain.T.array(
+        self.u10 = grid.array(
             name="u10",
             long_name="wind speed in Eastward direction @ 10 m",
             units="m s-1",
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="eastward_wind"),
         )
-        self.v10 = domain.T.array(
+        self.v10 = grid.array(
             name="v10",
             long_name="wind speed in Northward direction @ 10 m",
             units="m s-1",
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="northward_wind"),
         )
-        self.tcc = domain.T.array(
+        self.tcc = grid.array(
             name="tcc",
             long_name="total cloud cover",
             units="1",
@@ -216,7 +216,7 @@ class FluxesFromMeteo(Fluxes):
             ),
         )
 
-        self.w = domain.T.array(
+        self.w = grid.array(
             name="w",
             long_name="wind speed",
             units="m s-1",
@@ -225,10 +225,10 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(standard_name="wind_speed"),
         )
 
-        self.lon = domain.T.lon
-        self.lat = domain.T.lat
+        self.lon = grid.lon
+        self.lat = grid.lat
 
-        self.qe = domain.T.array(
+        self.qe = grid.array(
             name="qe",
             long_name="latent heat flux",
             units="W m-2",
@@ -238,7 +238,7 @@ class FluxesFromMeteo(Fluxes):
                 standard_name="surface_downward_latent_heat_flux",
             ),
         )
-        self.qh = domain.T.array(
+        self.qh = grid.array(
             name="qh",
             long_name="sensible heat flux",
             units="W m-2",
@@ -248,7 +248,7 @@ class FluxesFromMeteo(Fluxes):
                 standard_name="surface_downward_sensible_heat_flux",
             ),
         )
-        self.ql = domain.T.array(
+        self.ql = grid.array(
             name="ql",
             long_name="net downwelling longwave radiation",
             units="W m-2",
@@ -259,7 +259,7 @@ class FluxesFromMeteo(Fluxes):
             ),
         )
 
-        self.tp = domain.T.array(
+        self.tp = grid.array(
             name="tp",
             long_name="total precipitation",
             units="m s-1",
@@ -268,7 +268,7 @@ class FluxesFromMeteo(Fluxes):
                 _time_varying=TimeVarying.MACRO, standard_name="lwe_precipitation_rate"
             ),
         )
-        self.e = domain.T.array(
+        self.e = grid.array(
             name="e",
             long_name="evaporation minus condensation",
             units="m s-1",
@@ -276,9 +276,9 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(_time_varying=TimeVarying.MACRO),
         )
 
-        self.cd_mom = domain.T.array()
-        self.cd_latent = domain.T.array()
-        self.cd_sensible = domain.T.array()
+        self.cd_mom = grid.array()
+        self.cd_latent = grid.array()
+        self.cd_sensible = grid.array()
 
     def update_humidity(self, sst: core.Array):
         """Update humidity metrics: saturation vapor pressure ``es``, actual vapor
