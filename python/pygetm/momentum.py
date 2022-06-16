@@ -526,12 +526,12 @@ class Momentum(pygetm._pygetm.Momentum):
             # vk, rru, rrv). Slow bottom friction (stress/density) is derived by taking
             # the difference between 3D bottom friction and the inferred ru and rv.
             self.SxF.all_values[...] = (
-                self.rru.all_values * self.uk.all_values[0, ...]
-                - self.ru.all_values * self.u1.all_values
+                - self.rru.all_values * self.uk.all_values[0, ...]
+                + self.ru.all_values * self.u1.all_values
             )
             self.SyF.all_values[...] = (
-                self.rrv.all_values * self.vk.all_values[0, ...]
-                - self.rv.all_values * self.v1.all_values
+                - self.rrv.all_values * self.vk.all_values[0, ...]
+                + self.rv.all_values * self.v1.all_values
             )
 
     def transport_2d_momentum(
