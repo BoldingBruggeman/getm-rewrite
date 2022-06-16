@@ -31,6 +31,7 @@ def main():
 
     for p in (optimize_parser, show_parser):
         p.add_argument('--plot', action='store_true', help='plot subdomain decomposition')
+        p.add_argument('--savefig', help='path to save figure to')
         p.add_argument('--profile', action='store_true')
         p.add_argument('--legacy', action='store_true')
 
@@ -47,9 +48,13 @@ def main():
 
     if args.plot and rank == 0:
         from matplotlib import pyplot
-        fig, ax = pyplot.subplots()
+        ny, nx = tiling.map.shape
+        fig, ax = pyplot.subplots(figsize=(0.75 * nx, 0.75 * ny))
         tiling.plot(ax=ax, background=background)
-        pyplot.show()
+        if args.savefig:
+            fig.savefig(args.savefig, dpi=300)
+        else:
+            pyplot.show()
 
 def load_topo(path: bool, legacy: bool, logger: logging.Logger):
     logger.info('Reading topo from %s...' % path)
