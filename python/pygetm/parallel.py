@@ -406,15 +406,14 @@ class Tiling:
         ax.set_facecolor((0.8, 0.8, 0.8))
 
         # Background showing global domain
+        rect = (0, 0), self.nx_glob, self.ny_glob
         if background is not None:
             # Background field (e.g., bathymetry) provided
             assert background.shape == (self.ny_glob, self.nx_glob), (
                 "Argument background has incorrrect shape %s. Expected %s"
                 % (background.shape, (self.ny_glob, self.nx_glob))
             )
-            if isinstance(cmap, str):
-                cmap = matplotlib.cm.get_cmap(cmap)
-            cmap.set_bad("w")
+            ax.add_artist(matplotlib.patches.Rectangle(*rect, ec="None", fc="w"))
             ax.pcolormesh(
                 np.arange(background.shape[1] + 1),
                 np.arange(background.shape[0] + 1),
@@ -422,28 +421,16 @@ class Tiling:
                 alpha=0.5,
                 cmap=cmap,
             )
-            facecolor = "None"
+            fc = "None"
         else:
             # Background field not provided:
             # just show a filled rectangle covering the global domain
-            facecolor = "C0"
+            fc = "C0"
 
-        ax.add_patch(
-            matplotlib.patches.Rectangle(
-                (0, 0),
-                self.nx_glob,
-                self.ny_glob,
-                edgecolor="k",
-                linewidth=".4",
-                facecolor=facecolor,
-                zorder=-1,
-            )
-        )
+        ax.add_artist(matplotlib.patches.Rectangle(*rect, ec="k", fc=fc, lw=0.4))
 
         # Boundaries between subdomains
-        ax.pcolormesh(
-            x, y, np.empty((self.nrow, self.ncol)), edgecolors="k", facecolor="none"
-        )
+        ax.pcolormesh(x, y, np.empty((self.nrow, self.ncol)), ec="k", fc="none")
 
         # Rank of each subdomain (cross for subdomains that are not used, e.g. land)
         for i in range(self.nrow):
