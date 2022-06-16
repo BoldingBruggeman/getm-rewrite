@@ -105,7 +105,7 @@ if args.meteo_dir:
     sim.airsea.d2m.set(pygetm.input.from_nc(ERA_path, 'd2m') - 273.15)
     sim.airsea.sp.set(pygetm.input.from_nc(ERA_path, 'sp'))
     sim.airsea.tcc.set(pygetm.input.from_nc(ERA_path, 'tcc'))
-    sim.airsea.tp.set(pygetm.input.from_nc(ERA_path, 'tp'))
+    sim.airsea.tp.set(pygetm.input.from_nc(ERA_path, 'tp') / 3600.)
 else:
     sim.logger.info('Setting up NS original meteorological forcing')
     met_path = os.path.join(args.setup_dir, 'Forcing/Meteo/CFSR.daymean.2006.nc')
