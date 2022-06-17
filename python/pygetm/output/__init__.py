@@ -3,6 +3,7 @@ from typing import Mapping, Optional, List, Union
 import datetime
 import enum
 
+import numpy as np
 from numpy.typing import DTypeLike
 import cftime
 
@@ -30,6 +31,8 @@ class File(operators.FieldCollection):
         logger: logging.Logger,
         interval: Union[datetime.timedelta, int] = 1,
         interval_units: TimeUnit = TimeUnit.TIMESTEPS,
+        start: Optional[cftime.datetime] = None,
+        stop: Optional[cftime.datetime] = None,
         path: Optional[str] = None,
         default_dtype: Optional[DTypeLike] = None,
         save_initial: bool = True,
@@ -52,6 +55,8 @@ class File(operators.FieldCollection):
         self.save_initial = save_initial and not self.save_on_close_only
 
         self.path = path
+        self._start = start
+        self._stop = stop
 
     def _next_time(
         self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime],
@@ -72,6 +77,7 @@ class File(operators.FieldCollection):
 
     def start(
         self,
+        seconds_passed: float,
         itimestep: int,
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
@@ -79,8 +85,8 @@ class File(operators.FieldCollection):
         self.start_now(itimestep, time, default_time_reference)
         if self.save_initial:
             self._logger.debug("Saving initial state")
-            self.save_now(0.0, time)
-        self.next = self._next_time(0.0, itimestep, time)
+            self.save_now(seconds_passed, time)
+        self.next = self._next_time(seconds_passed, itimestep, time)
 
     def save(
         self,
@@ -134,7 +140,9 @@ class OutputManager:
     ):
         self.fields = fields
         self.rank = rank
-        self.files: List[File] = []
+        self._active_files: List[File] = []
+        self._not_started_files: List[File] = []
+        self._time_reference = None
         self._logger = logger or logging.getLogger()
 
     def add_netcdf_file(self, path: str, **kwargs) -> netcdf.NetCDFFile:
@@ -149,7 +157,7 @@ class OutputManager:
         file = netcdf.NetCDFFile(
             self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
         )
-        self.files.append(file)
+        self._not_started_files.append(file)
         return file
 
     def add_restart(self, path: str, **kwargs) -> netcdf.NetCDFFile:
@@ -178,8 +186,33 @@ class OutputManager:
         time: Optional[cftime.datetime] = None,
         default_time_reference: Optional[cftime.datetime] = None,
     ):
-        for file in self.files:
-            file.start(itimestep, time, default_time_reference or time)
+        self._time_reference = default_time_reference or time
+        for file in list(self._not_started_files):
+            if file._start is not None:
+                file._start = (file._start - time).total_seconds()
+            else:
+                file._start = 0.
+            if file._stop is not None:
+                file._stop = (file._stop - time).total_seconds()
+            else:
+                file._stop = np.inf
+        self._start_stop_files(0.0, itimestep, time)
+
+    def _start_stop_files(
+        self,
+        seconds_passed: float,
+        itimestep: int,
+        time: Optional[cftime.datetime] = None,
+    ):
+        for file in self._not_started_files:
+            if file._start <= seconds_passed:
+                file.start(seconds_passed, itimestep, time, self._time_reference)
+                self._active_files.append(file)
+                self._not_started_files.remove(file)
+        for file in self._active_files:
+            if file._stop < seconds_passed:
+                self._active_files.remove(file)
+                file.close(seconds_passed, time)
 
     def save(
         self,
@@ -188,10 +221,10 @@ class OutputManager:
         time: Optional[cftime.datetime] = None,
         macro: bool = True,
     ):
-        for file in self.files:
+        self._start_stop_files(seconds_passed, itimestep, time)
+        for file in self._active_files:
             file.save(seconds_passed, itimestep, time, macro)
 
     def close(self, seconds_passed: float, time: Optional[cftime.datetime] = None):
-        for file in self.files:
-            self._logger.debug("Closing %s" % file.path)
+        for file in self._active_files:
             file.close(seconds_passed, time)
