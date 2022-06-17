@@ -15,7 +15,7 @@ from numpy.typing import DTypeLike, ArrayLike
 
 import pygetm.core
 import pygetm.domain
-from pygetm.constants import INTERFACES, TimeVarying
+from pygetm.constants import CENTERS, INTERFACES, TimeVarying
 
 
 class Base:
@@ -90,7 +90,8 @@ class FieldCollection:
         dtype: Optional[DTypeLike] = None,
         mask: Optional[bool] = None,
         time_average: bool = False,
-        regrid: Optional[pygetm.domain.Grid] = None,
+        grid: Optional[pygetm.domain.Grid] = None,
+        z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
         generate_unique_name: bool = False
     ) -> Tuple[str]:
         """Add one or more arrays to this field collection.
@@ -178,9 +179,11 @@ class FieldCollection:
             field = Field(array, self, dtype=dtype)
             if time_average and field.time_varying:
                 field = TimeAverage(field)
-            if regrid and array.grid is not regrid:
-                field = Regrid(field, regrid)
-            if time_average or mask or regrid:
+            if grid and array.grid is not grid:
+                field = Regrid(field, grid=grid)
+            if z and array.z and array.z != z:
+                field = Regrid(field, z=z)
+            if time_average or mask or grid:
                 field = Mask(field)
             if field.updatable:
                 when_macro = [True]
@@ -296,7 +299,12 @@ class Field(Base):
 class UnivariateTransform(Field):
     __slots__ = ("_source",)
 
-    def __init__(self, source: Field, grid: Optional[pygetm.domain.Grid] = None):
+    def __init__(
+        self,
+        source: Field,
+        grid: Optional[pygetm.domain.Grid] = None,
+        z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
+    ):
         self._source = source
         assert source.fill_value is not None, (
             "%s cannot be used on %s as it does not have a fill value."
@@ -304,7 +312,7 @@ class UnivariateTransform(Field):
         )
         array = pygetm.core.Array.create(
             grid or source.grid,
-            z=source.z,
+            z=source.z if z is None else z,
             dtype=source.dtype,
             on_boundary=source.on_boundary,
             fill_value=source.fill_value,
@@ -379,8 +387,14 @@ class TimeAverage(UnivariateTransform):
 
 
 class Regrid(UnivariateTransform):
-    def __init__(self, source: Field, grid: Optional[pygetm.domain.Grid]):
-        super().__init__(source, grid)
+    def __init__(
+        self,
+        source: Field,
+        grid: Optional[pygetm.domain.Grid] = None,
+        z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
+    ):
+        super().__init__(source, grid, z)
+        self.operation = "regrid[%s, %s]" % (self.grid.postfix, self.array.z)
 
     def get(
         self,
@@ -392,5 +406,3 @@ class Regrid(UnivariateTransform):
         self._source.array.interp(self.array)
         return super().get(out, slice_spec, sub)
 
-    def get_expression(self) -> str:
-        return "regrid(%s, %s)" % (self._source.get_expression(), self.grid.postfix,)
