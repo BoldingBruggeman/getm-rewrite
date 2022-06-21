@@ -89,7 +89,7 @@ MODULE SUBROUTINE shear_frequency(self,num)
    IMPLICIT NONE
 
    class(type_getm_momentum), intent(inout) :: self
-#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3)-1:
+#define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: num(_T3_)
 #undef _T3_
 
