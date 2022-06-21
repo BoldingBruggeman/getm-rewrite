@@ -596,17 +596,20 @@ class River:
         y: Optional[float] = None,
     ):
         self.name = name
-        self.i = i
-        self.j = j
+        self.i_glob = i
+        self.j_glob = j
         self.x = x
         self.y = y
         self.zl = zl
         self.zu = zu
-        self.active = True
+        self.i = None
+        self.j = None
         self._tracers: Mapping[str, RiverTracer] = {}
 
-    def locate(self, grid: Grid):
+    def locate(self, grid: Grid) -> bool:
         if self.x is not None:
+            # Location is specified by x, y coordinate.
+            # Look up nearest unmasked grid cell.
             ind = grid.nearest_point(self.x, self.y, mask=1, include_halos=True)
             if ind is None:
                 grid.domain.logger.info(
@@ -619,17 +622,23 @@ class River:
                         "which does not fall within the global model domain"
                         % (self.name, self.x, self.y)
                     )
-                self.active = False
-            else:
-                self.j, self.i = ind
-                grid.domain.logger.info(
-                    "River %s at x=%s, y=%s is located at i=%i, j=%i in this subdomain"
-                    % (self.name, self.x, self.y, self.i, self.j)
-                )
-        return self.active
+                return False
+            self.j, self.i = ind
+            grid.domain.logger.info(
+                "River %s at x=%s, y=%s is located at i=%i, j=%i in this subdomain"
+                % (self.name, self.x, self.y, self.i, self.j)
+            )
+        else:
+            # Location is specified by global i, j. Map to subdomain.
+            i_loc = self.i_glob - grid.domain.tiling.xoffset + grid.domain.halox
+            j_loc = self.j_glob - grid.domain.tiling.yoffset + grid.domain.haloy
+            if i_loc < 0 or j_loc < 0 or i_loc >= grid.nx_ or j_loc >= grid.ny_:
+                return False
+            self.i, self.j = i_loc, j_loc
+        return True
 
     def initialize(self, grid: Grid, flow: np.ndarray):
-        assert self.active
+        assert self.i is not None and self.j is not None
         self.flow = core.Array(
             grid=grid,
             name="river_" + self.name + "_flow",
@@ -669,24 +678,13 @@ class Rivers(Mapping[str, River]):
             " and can no longer be modified."
         )
 
-        i_loc = i - self.grid.domain.tiling.xoffset + self.grid.domain.halox
-        j_loc = j - self.grid.domain.tiling.yoffset + self.grid.domain.haloy
+        domain = self.grid.domain
+        if domain.glob is not None and domain.glob is not domain:
+            domain.glob.rivers.add_by_index(name, i, j, **kwargs)
 
-        if (
-            self.grid.domain.glob is not None
-            and self.grid.domain.glob is not self.grid.domain
-        ):
-            self.grid.domain.glob.rivers.add_by_index(name, i, j, **kwargs)
-
-        if (
-            i_loc >= 0
-            and j_loc >= 0
-            and i_loc < self.grid.nx_
-            and j_loc < self.grid.ny_
-        ):
-            river = River(name, i_loc, j_loc, **kwargs)
-            self._rivers.append(river)
-            return river
+        river = River(name, i, j, **kwargs)
+        self._rivers.append(river)
+        return river
 
     def add_by_location(self, name: str, x: float, y: float, **kwargs):
         """Add a river at a location specified by the nearest coordinates
@@ -714,7 +712,8 @@ class Rivers(Mapping[str, River]):
             if mask != 1:
                 raise Exception(
                     "River %s is located at i=%i, j=%i, which is not water"
-                    " (it has mask value %i)." % (river.name, river.i, river.j, mask)
+                    " (it has mask value %i)."
+                    % (river.name, river.i_glob, river.j_glob, mask)
                 )
             river.initialize(self.grid, self.flow[..., iriver])
         self.i = np.array([river.i for river in self._rivers], dtype=int)
