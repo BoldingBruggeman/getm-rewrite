@@ -24,6 +24,7 @@ parser.add_argument('--no_rivers', action='store_false', dest='rivers', help='No
 parser.add_argument('--no_output', action='store_false', dest='output', help='Do not save any results to NetCDF')
 parser.add_argument('--debug_output', action='store_true', help='Do not save any results to NetCDF')
 parser.add_argument('--profile', help='File to save profiling report to')
+parser.add_argument('--runtype', type=int, choices=(pygetm.BAROTROPIC_2D, pygetm.BAROTROPIC_3D, pygetm.BAROCLINIC), help='Run type', default=pygetm.BAROCLINIC)
 parser.add_argument('--save_restart', help='File to save restart to')
 parser.add_argument('--load_restart', help='File to load restart from')
 args = parser.parse_args()
@@ -52,7 +53,7 @@ else:
     airsea=pygetm.airsea.FluxesFromMeteo(humidity_measure=pygetm.airsea.HumidityMeasure.SPECIFIC_HUMIDITY, calculate_evaporation=True)
 
 sim = pygetm.Simulation(domain,
-        runtype=pygetm.BAROCLINIC,
+        runtype=args.runtype,
         advection_scheme=pygetm.AdvectionScheme.HSIMT,
         gotm=os.path.join(args.setup_dir, 'gotmturb.nml'),
         airsea=airsea,

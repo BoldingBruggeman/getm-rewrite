@@ -53,7 +53,13 @@ jobs:
           conda activate pygetm
           cd python/examples
           python box_spherical.py ../../getm-setups/box_spherical --start "2004-01-01 00:00:00" --stop "2004-01-03 00:00:00"
-      - name: Test North Sea
+      - name: Test North Sea in 2D barotropic mode
+        run: |
+          source ${CONDA}/etc/profile.d/conda.sh
+          conda activate pygetm
+          cd python/examples
+          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --runtype 1
+      - name: Test North Sea in 3D baroclinic mode
         run: |
           source ${CONDA}/etc/profile.d/conda.sh
           conda activate pygetm
