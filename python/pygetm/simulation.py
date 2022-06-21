@@ -228,6 +228,14 @@ class Simulation(_pygetm.Simulation):
         self.ice = pygetm.ice.Ice()
         self.ice.initialize(self.domain.T)
 
+        # Surface stresses interpolated to U and V grids
+        self.tausx = dom.U.array(
+            name="tausxu", fill_value=FILL_VALUE, attrs={"_mask_output": True}
+        )
+        self.tausy = dom.V.array(
+            name="tausyv", fill_value=FILL_VALUE, attrs={"_mask_output": True}
+        )
+
         self.fwf = dom.T.array(
             name="fwf",
             units="m s-1",
@@ -294,14 +302,6 @@ class Simulation(_pygetm.Simulation):
                 long_name="bottom shear stress",
                 fill_value=FILL_VALUE,
                 fabm_standard_name="bottom_stress",
-            )
-
-            # Surface stresses interpolated to U and V grids
-            self.tausx = dom.U.array(
-                name="tausxu", fill_value=FILL_VALUE, attrs={"_mask_output": True}
-            )
-            self.tausy = dom.V.array(
-                name="tausyv", fill_value=FILL_VALUE, attrs={"_mask_output": True}
             )
 
             # Forcing variables for macro/3D momentum update
@@ -802,7 +802,7 @@ class Simulation(_pygetm.Simulation):
         self.airsea.tauy.update_halos(parallel.Neighbor.TOP)
         self.airsea.tauy.interp(self.tausy)
 
-        if macro_active:
+        if self.runtype > BAROTROPIC_2D and macro_active:
             # Save surface forcing variables for the next macro momentum update
             self.tausxo.all_values[...] = self.tausx.all_values
             self.tausyo.all_values[...] = self.tausy.all_values
