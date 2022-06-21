@@ -859,41 +859,56 @@ class Simulation(_pygetm.Simulation):
         h[:, :] = h_new
         self.domain.T.zin.all_values += h_increase_pe
 
-        # Rivers, potentially entering anywhere in the water column
+        # Local names for river-related variables
         rivers = self.domain.rivers
-        h = self.domain.T.hn.all_values[:, rivers.j, rivers.i]
-        z_if = np.zeros((h.shape[0] + 1, h.shape[1]))
-        z_if[1:, :] = -h.cumsum(axis=0)
-        z_if -= z_if[-1, :]
-        river_active = (z_if[:-1, :] >= rivers.zu) & (z_if[1:, :] <= rivers.zl)
+        z_increases = self._cum_river_height_increase
 
-        # Copy with order=F to ensure pairwise summation also for more than 1 river.
-        # Essential for bitwise reproducibility across different subdomain partitions!
-        river_depth = (h * river_active).copy(order="F").sum(axis=0)
+        # Depth of layer interfaces for each river cell
+        h = self.domain.T.hn.all_values[:, rivers.j, rivers.i].T
+        z_if = np.zeros((h.shape[0], h.shape[1] + 1))
+        z_if[:, 1:] = -h.cumsum(axis=1)
+        z_if -= z_if[:, -1:]
 
-        withdrawal = self._cum_river_height_increase < 0.0
-        h_increase = np.where(
-            river_active, h * self._cum_river_height_increase / river_depth, 0.0
-        )
+        # Determine the part of every layer over which inflow occurs
+        zl = np.minimum(z_if[:, 0], rivers.zl)
+        zu = np.minimum(zl - 1e-6, rivers.zu)
+        zbot = np.minimum(zl[:, np.newaxis], z_if[:, :-1])
+        ztop = np.maximum(zu[:, np.newaxis], z_if[:, 1:])
+        h_active = np.maximum(zbot - ztop, 0.0)
+
+        # Change in thickness per layer
+        h_increases = h_active * (z_increases / h_active.sum(axis=1))[:, np.newaxis]
+
+        # Calculate the depth-integrated change in tracer, per layer.
+        tracer_adds = np.empty((len(self.tracers),) + h.shape)
+        for tracer, river_values in zip(self.tracers, tracer_adds):
+            follow = tracer.river_follow | (z_increases < 0.0)
+            ext = tracer.river_values[:, np.newaxis]
+            if follow.any():
+                int = tracer.all_values[:, rivers.j, rivers.i].T
+                river_values[...] = np.where(follow[:, np.newaxis], int, ext)
+            else:
+                river_values[...] = ext
+        tracer_adds *= h_increases
+
+        # Update thicknesses and tracer values. This must be done iteratively
+        # because different rivers can target the same cell (i, j)
+        all_tracer_values = [tracer.all_values for tracer in self.tracers]
+        for iriver, (i, j) in enumerate(zip(rivers.i, rivers.j)):
+            h_old = self.domain.T.hn.all_values[:, j, i]
+            h_new = h_old + h_increases[iriver, :]
+            h_new_inv = 1.0 / h_new
+            for itracer, all_values in enumerate(all_tracer_values):
+                tracer_values = all_values[:, j, i]
+                add = tracer_adds[itracer, iriver, :]
+                tracer_values[:] = (tracer_values * h_old + add) * h_new_inv
+            h_old[:] = h_new
+            self.domain.T.zin.all_values[j, i] += z_increases[iriver]
+
+        # Start tracer halo exchange (to prepare for advection)
         for tracer in self.tracers:
-            river_follow = np.logical_or(tracer.river_follow, withdrawal)
-            if not river_follow.all():
-                tracer_old = tracer.all_values[:, rivers.j, rivers.i]
-                river_values = np.where(river_follow, tracer_old, tracer.river_values)
-                tracer_new = (
-                    tracer_old * river_depth
-                    + river_values * self._cum_river_height_increase
-                ) / (river_depth + self._cum_river_height_increase)
-                tracer.all_values[:, rivers.j, rivers.i] = np.where(
-                    river_active, tracer_new, tracer_old
-                )
-            tracer.update_halos_start(
-                parallel.Neighbor.LEFT_AND_RIGHT
-            )  # to prepare for advection
-        self.domain.T.hn.all_values[:, rivers.j, rivers.i] = h + h_increase
-        self.domain.T.zin.all_values[
-            rivers.j, rivers.i
-        ] += self._cum_river_height_increase
+            tracer.update_halos_start(parallel.Neighbor.LEFT_AND_RIGHT)
+
         self._cum_river_height_increase.fill(0.0)
 
     def report_domain_integrals(self):
