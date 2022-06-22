@@ -139,7 +139,7 @@ def from_nc(
         array = ds[name]
         # Note: we wrap the netCDF array ourselves, in order to support lazy operators
         # (e.g., add, multiply)
-        lazyvar = WrappedArray(array.variable, name="from_nc(%s, %s)" % (path, name))
+        lazyvar = Wrap(array.variable, name="from_nc(%s, %s)" % (path, name))
         array = xarray.DataArray(
             lazyvar,
             dims=array.dims,
@@ -178,7 +178,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
             args = tuple(x.dtype if isinstance(x, LazyArray) else x for x in args)
             return np.result_type(*args)
         if func == np.concatenate:
-            return ConcatenatedArray(*args, **kwargs)
+            return Concatenate(*args, **kwargs)
         args = tuple(np.asarray(x) if isinstance(x, LazyArray) else x for x in args)
         kwargs = dict(
             (k, np.asarray(v)) if isinstance(v, LazyArray) else (k, v)
@@ -193,13 +193,12 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         if "out" in kwargs:
             return NotImplemented
 
+        COMPATIBLE_TYPES = (np.ndarray, numbers.Number, LazyArray, xarray.Variable)
         for x in inputs:
-            if not isinstance(
-                x, (np.ndarray, numbers.Number, LazyArray, xarray.Variable)
-            ):
+            if not isinstance(x, COMPATIBLE_TYPES):
                 return NotImplemented
 
-        return UFuncResult(getattr(ufunc, method), *inputs, **kwargs)
+        return UFunc(ufunc, method, *inputs, **kwargs)
 
     def __array__(self, dtype=None) -> np.ndarray:
         raise NotImplementedError
@@ -224,7 +223,9 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         return slices
 
 
-class OperatorResult(LazyArray):
+class Operator(LazyArray):
+    _operator_name = None
+
     def __init__(
         self,
         *inputs,
@@ -257,9 +258,9 @@ class OperatorResult(LazyArray):
                 # (e.g. read from file) of the entire array
                 self.input_names.append(str(type(inp)))
 
-            # If this is a WrappedArray, unwrap
+            # If this is a Wrap, unwrap
             # (the wrapping was only for ufunc support)
-            if isinstance(inp, WrappedArray):
+            if isinstance(inp, Wrap):
                 inp = inp.inputs[0]
 
             if isinstance(inp, LazyArray):
@@ -296,7 +297,7 @@ class OperatorResult(LazyArray):
         # Generate a name for the variable if not provided
         if name is None:
             name = "%s(%s%s)" % (
-                self.__class__.__name__,
+                self._operator_name or self.__class__.__name__,
                 ", ".join(self.input_names),
                 "".join(", %s=%s" % item for item in self.kwargs.items()),
             )
@@ -339,23 +340,24 @@ class OperatorResult(LazyArray):
         return self.apply(*[np.asarray(inp) for inp in self.inputs], dtype=dtype)
 
 
-class UnaryOperatorResult(OperatorResult):
+class UnaryOperator(Operator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._source = self.inputs[0]
         self._source_name = self.input_names[0]
 
 
-class UFuncResult(OperatorResult):
-    def __init__(self, ufunc, *inputs, **kwargs):
+class UFunc(Operator):
+    def __init__(self, ufunc, method: str, *inputs, **kwargs):
+        self._operator_name = ufunc.__name__
         super().__init__(*inputs, passthrough=True, **kwargs)
-        self.ufunc = ufunc
+        self.ufunc = getattr(ufunc, method)
 
     def apply(self, *inputs, dtype=None) -> np.ndarray:
         return self.ufunc(*inputs, **self.kwargs)
 
 
-class WrappedArray(UnaryOperatorResult):
+class Wrap(UnaryOperator):
     def __init__(self, source: xarray.Variable, **kwargs):
         assert isinstance(source, xarray.Variable)
         super().__init__(source, passthrough=True, dtype=source.dtype, **kwargs)
@@ -367,7 +369,7 @@ class WrappedArray(UnaryOperatorResult):
         return False
 
 
-class SliceArray(UnaryOperatorResult):
+class Slice(UnaryOperator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._slices = []
@@ -412,7 +414,7 @@ class SliceArray(UnaryOperatorResult):
         return data
 
 
-class ConcatenatedArray(UnaryOperatorResult):
+class Concatenate(UnaryOperator):
     def __init__(self, arrays, axis: int = 0, *args, **kwargs):
         shape = list(arrays[0].shape)
         for array in arrays[1:]:
@@ -589,12 +591,10 @@ def limit_region(
     if verbose:
         print("final shape: %s" % (shape,))
 
-    lazyvar = SliceArray(
+    lazyvar = Slice(
         source.variable,
         shape=shape,
         passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)],
-        name="limit_region(%s, minlon=%s, maxlon=%s, minlat=%s, maxlat=%s)"
-        % (source.name, minlon, maxlon, minlat, maxlat),
     )
     lazyvar._slices.append((center_source, center_target))
     if left_target:
@@ -635,12 +635,11 @@ def concatenate_slices(
         istart += n
     assert istart == shape[idim]
 
-    lazyvar = SliceArray(
+    lazyvar = Slice(
         source.variable,
         shape=shape,
         passthrough=[i for i in range(len(shape)) if i != idim],
         dtype=source.dtype,
-        name="concatenate_slices(%s, slices=(%s))" % (source.name, strslices),
     )
     lazyvar._slices.extend(final_slices)
 
@@ -653,7 +652,7 @@ def concatenate_slices(
     )
 
 
-class Transpose(UnaryOperatorResult):
+class Transpose(UnaryOperator):
     def __array__(self, dtype=None) -> np.ndarray:
         return np.asarray(self._source).transpose()
 
@@ -667,7 +666,6 @@ def transpose(source: xarray.DataArray) -> xarray.DataArray:
         shape=source.shape[::-1],
         passthrough=list(range(source.ndim)),
         dtype=source.dtype,
-        name="transpose(%s)" % (source.name,),
     )
     coords = {}
     for name, c in source.coords.items():
@@ -725,16 +723,11 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
                 shape.append(length)
             advanced_added = True
 
-    lazyvar = SliceArray(
+    lazyvar = Slice(
         source.variable,
         shape=shape,
         passthrough=passthrough,
         dtype=source.dtype,
-        name="isel(%s, %s)"
-        % (
-            source.name,
-            "".join([", %s=%s" % (name, value) for name, value in indices.items()]),
-        ),
     )
     lazyvar._slices.append((slices, (slice(None),) * len(shape)))
 
@@ -820,14 +813,13 @@ def horizontal_interpolation(
         shape,
         min(ilondim, ilatdim),
         source.ndim - max(ilondim, ilatdim) - 1,
-        name="horizontal_interpolation(%s)" % source.name,
     )
     return xarray.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
 
-class SpatialInterpolation(UnaryOperatorResult):
+class SpatialInterpolation(UnaryOperator):
     def __init__(
         self,
         ip: pygetm.util.interpolate.Linear2DGridInterpolator,
@@ -837,7 +829,7 @@ class SpatialInterpolation(UnaryOperatorResult):
         npost: int,
         **kwargs
     ):
-        UnaryOperatorResult.__init__(self, source, shape=shape, **kwargs)
+        UnaryOperator.__init__(self, source, shape=shape, **kwargs)
         self._ip = ip
         self.npre = npre
         self.npost = npost
@@ -872,9 +864,10 @@ class SpatialInterpolation(UnaryOperatorResult):
 
 
 def vertical_interpolation(
-    source: xarray.DataArray, target_z: np.ndarray, itargetdim: int = 0
+    source: xarray.DataArray, target_z: numpy.typing.ArrayLike, itargetdim: int = 0
 ) -> xarray.DataArray:
     source_z = source.getm.z
+    target_z = np.asarray(target_z)
     assert source_z is not None, (
         "Variable %s does not have a valid depth coordinate." % source.name
     )
@@ -919,14 +912,13 @@ def vertical_interpolation(
         izdim,
         source_z.values,
         itargetdim,
-        name="vertical_interpolation(%s)" % source.name,
     )
     return xarray.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
 
-class VerticalInterpolation(UnaryOperatorResult):
+class VerticalInterpolation(UnaryOperator):
     def __init__(
         self,
         source: xarray.Variable,
@@ -959,12 +951,11 @@ def temporal_interpolation(
     time_coord = source.getm.time
     assert time_coord is not None, "No time coordinate found"
     itimedim = source.dims.index(time_coord.dims[0])
-    lazyvar = TemporalInterpolationResult(
+    lazyvar = TemporalInterpolation(
         source.variable,
         itimedim,
         time_coord.values,
         climatology,
-        name="temporal_interpolation(%s)" % source.name,
     )
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
     coords = dict(source.coords.items())
@@ -974,7 +965,7 @@ def temporal_interpolation(
     )
 
 
-class TemporalInterpolationResult(UnaryOperatorResult):
+class TemporalInterpolation(UnaryOperator):
     __slots__ = (
         "_current",
         "_itimedim",
@@ -1400,7 +1391,7 @@ class InputManager:
             suffix = " on macrotimestep" if time_varying == TimeVarying.MACRO else ""
             self._logger.info(
                 "%s will be updated dynamically from %s%s"
-                % (array.name, value.name, suffix,)
+                % (array.name, data.name, suffix,)
             )
             info = (array.name, data, target)
             self._all_fields.append(info)
