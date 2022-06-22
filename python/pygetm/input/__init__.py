@@ -919,7 +919,7 @@ def vertical_interpolation(
         izdim,
         source_z.values,
         itargetdim,
-        name="horizontal_interpolation(%s)" % source.name,
+        name="vertical_interpolation(%s)" % source.name,
     )
     return xarray.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
