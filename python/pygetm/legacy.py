@@ -183,14 +183,22 @@ def load_riverinfo(dom: pygetm.domain.Domain, path: str):
     Args:
         path: data file with river information
     """
+    name2split = {}
     with DatFile(path) as f:
         n = int(f.get_line())
         for _ in range(n):
             items = f.get_line().split()
             assert len(items) in (3, 5)
+            name = items[2]
+            name2split[name] = name2split.get(name, 0) + 1
 
-            # Indices of the river cell (1-based!)
-            i, j, name = int(items[0]), int(items[1]), items[2]
+    name2count = {}
+    with DatFile(path) as f:
+        n = int(f.get_line())
+        for _ in range(n):
+            items = f.get_line().split()
+            i, j = int(items[0]), int(items[1])  # Indices of the river cell (1-based!)
+            mouth_name = name = items[2]
 
             # Depth extent: zl and zu are depths i.e. measured from the surface.
             # Negative values have the following meaning - if zl < 0 use bottom
@@ -203,5 +211,13 @@ def load_riverinfo(dom: pygetm.domain.Domain, path: str):
                 if zl < 0:
                     zl = np.inf
 
+            if name2split[name] > 1:
+                imouth = name2count.get(name, 0)
+                mouth_name = '%s[%i]' % (name, imouth)
+                name2count[name] = imouth + 1
+
             # Note: we convert from 1-based indices to 0-based indices!
-            dom.rivers.add_by_index(name, i - 1, j - 1, zl=zl, zu=zu)
+            river = dom.rivers.add_by_index(mouth_name, i - 1, j - 1, zl=zl, zu=zu)
+
+            river.split = name2split[name]
+            river.original_name = name
