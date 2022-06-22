@@ -204,14 +204,16 @@ class OutputManager:
         itimestep: int,
         time: Optional[cftime.datetime] = None,
     ):
-        for file in self._not_started_files:
+        for i in range(len(self._not_started_files) - 1, -1, -1):
+            file = self._not_started_files[i]
             if file._start <= seconds_passed:
                 file.start(seconds_passed, itimestep, time, self._time_reference)
                 self._active_files.append(file)
-                self._not_started_files.remove(file)
-        for file in self._active_files:
+                del self._not_started_files[i]
+        for i in range(len(self._active_files) - 1, -1, -1):
+            file = self._active_files[i]
             if file._stop < seconds_passed:
-                self._active_files.remove(file)
+                del self._active_files[i]
                 file.close(seconds_passed, time)
 
     def save(
