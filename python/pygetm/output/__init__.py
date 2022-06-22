@@ -141,7 +141,8 @@ class OutputManager:
         self.fields = fields
         self.rank = rank
         self._active_files: List[File] = []
-        self._not_started_files: List[File] = []
+        self._startable_files: List[File] = []
+        self._stoppable_files: List[File] = []
         self._time_reference = None
         self._logger = logger or logging.getLogger()
 
@@ -157,7 +158,7 @@ class OutputManager:
         file = netcdf.NetCDFFile(
             self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
         )
-        self._not_started_files.append(file)
+        self._startable_files.append(file)
         return file
 
     def add_restart(self, path: str, **kwargs) -> netcdf.NetCDFFile:
@@ -187,15 +188,13 @@ class OutputManager:
         default_time_reference: Optional[cftime.datetime] = None,
     ):
         self._time_reference = default_time_reference or time
-        for file in list(self._not_started_files):
+        for file in list(self._startable_files):
             if file._start is not None:
                 file._start = (file._start - time).total_seconds()
             else:
                 file._start = 0.0
             if file._stop is not None:
                 file._stop = (file._stop - time).total_seconds()
-            else:
-                file._stop = np.inf
         self._start_stop_files(0.0, itimestep, time)
 
     def _start_stop_files(
@@ -204,16 +203,19 @@ class OutputManager:
         itimestep: int,
         time: Optional[cftime.datetime] = None,
     ):
-        for i in range(len(self._not_started_files) - 1, -1, -1):
-            file = self._not_started_files[i]
+        for i in range(len(self._startable_files) - 1, -1, -1):
+            file = self._startable_files[i]
             if file._start <= seconds_passed:
                 file.start(seconds_passed, itimestep, time, self._time_reference)
                 self._active_files.append(file)
-                del self._not_started_files[i]
-        for i in range(len(self._active_files) - 1, -1, -1):
-            file = self._active_files[i]
+                if file._stop is not None:
+                    self._stoppable_files.append(file)
+                del self._startable_files[i]
+        for i in range(len(self._stoppable_files) - 1, -1, -1):
+            file = self._stoppable_files[i]
             if file._stop < seconds_passed:
-                del self._active_files[i]
+                self._active_files.remove(file)
+                del self._stoppable_files[i]
                 file.close(seconds_passed, time)
 
     def save(
