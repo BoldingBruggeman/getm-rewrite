@@ -44,6 +44,13 @@ LONGITUDE_UNITS = (
     "degreesE",
 )
 
+Z_STANDARD_NAMES = (
+    "height",
+    "height_above_mean_sea_level",
+    "depth",
+    "depth_below_geoid",
+)
+
 
 @xarray.register_dataarray_accessor("getm")
 class GETMAccessor:
@@ -76,6 +83,8 @@ class GETMAccessor:
                 standard_name = coord.attrs.get("standard_name")
                 if standard_name in ("latitude", "longitude"):
                     self._coordinates[standard_name] = coord
+                elif coord.attrs.get("positive") or standard_name in Z_STANDARD_NAMES:
+                    self._coordinates["z"] = coord
                 elif units in LATITUDE_UNITS:
                     self._coordinates["latitude"] = coord
                 elif units in LONGITUDE_UNITS:
