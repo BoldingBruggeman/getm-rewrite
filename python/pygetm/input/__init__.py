@@ -724,10 +724,7 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
             advanced_added = True
 
     lazyvar = Slice(
-        source.variable,
-        shape=shape,
-        passthrough=passthrough,
-        dtype=source.dtype,
+        source.variable, shape=shape, passthrough=passthrough, dtype=source.dtype,
     )
     lazyvar._slices.append((slices, (slice(None),) * len(shape)))
 
@@ -907,11 +904,7 @@ def vertical_interpolation(
         else:
             coords[n] = c
     lazyvar = VerticalInterpolation(
-        source.variable,
-        target_z,
-        izdim,
-        source_z.values,
-        itargetdim,
+        source.variable, target_z, izdim, source_z.values, itargetdim,
     )
     return xarray.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
@@ -952,10 +945,7 @@ def temporal_interpolation(
     assert time_coord is not None, "No time coordinate found"
     itimedim = source.dims.index(time_coord.dims[0])
     lazyvar = TemporalInterpolation(
-        source.variable,
-        itimedim,
-        time_coord.values,
-        climatology,
+        source.variable, itimedim, time_coord.values, climatology,
     )
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
     coords = dict(source.coords.items())
@@ -1281,7 +1271,7 @@ class InputManager:
                 ilatdim = value.dims.index(source_lat.dims[0])
                 if ilondim != ilatdim:
                     lon_bnd = grid.domain.open_boundaries.lon.all_values
-                    lat_bnd = (grid.domain.open_boundaries.lat.all_values,)
+                    lat_bnd = grid.domain.open_boundaries.lat.all_values
                     value = limit_region(
                         value,
                         lon_bnd.min(),
