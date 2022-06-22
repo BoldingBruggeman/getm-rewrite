@@ -191,7 +191,7 @@ class OutputManager:
             if file._start is not None:
                 file._start = (file._start - time).total_seconds()
             else:
-                file._start = 0.
+                file._start = 0.0
             if file._stop is not None:
                 file._stop = (file._stop - time).total_seconds()
             else:

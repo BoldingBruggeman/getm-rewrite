@@ -44,4 +44,3 @@ class Ice:
         if self.has_ice:
             airsea.taux.all_values[self.covered] = 0.0
             airsea.tauy.all_values[self.covered] = 0.0
-
