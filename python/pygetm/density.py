@@ -143,6 +143,6 @@ class Density:
             sp.all_values.ravel(),
             out.ravel(),
         )
-        sp.all_values[...] = out
+        sp.fill(out)
         pygsw.ct_from_pt(sp.all_values.ravel(), pt.all_values.ravel(), out.ravel())
-        pt.all_values[...] = out
+        pt.fill(out)
