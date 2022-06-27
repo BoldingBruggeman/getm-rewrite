@@ -20,6 +20,7 @@ class NetCDFFile(File):
         sub: bool = False,
         sync_interval: Optional[int] = 1,
         time_reference: Optional[cftime.datetime] = None,
+        format="NETCDF4",
         **kwargs
     ):
         """Create a NetCDF file for output
@@ -38,6 +39,7 @@ class NetCDFFile(File):
                 when the file is closed as the end of a simulation.
             time_reference: time reference (epoch) to use as offset for the time
                 coordinate.
+            format: underlying file format (see :class:`netCDF4.Dataset` documentation)
             **kwargs: additional keyword arguments passed to :class:`pygetm.output.File`
         """
         super().__init__(available_fields, logger, path=path, **kwargs)
@@ -53,6 +55,7 @@ class NetCDFFile(File):
         self.time_offset = 0.0
         self.time_reference = time_reference
         self.sync_interval = sync_interval
+        self.format = format
         self._field2nc = {}
         self._varying_fields = []
 
@@ -64,7 +67,7 @@ class NetCDFFile(File):
 
         if self.is_root or self.sub:
             # Create the NetCDF file
-            self.nc = netCDF4.Dataset(self.path, "w")
+            self.nc = netCDF4.Dataset(self.path, "w", format=self.format)
             for grid in frozenset(field.grid for field in self.fields.values()):
                 if self.sub:
                     # Output data (including halos) for the current subdomain
