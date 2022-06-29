@@ -457,9 +457,9 @@ def interfaces_to_supergrid_1d(data, out: Optional[np.ndarray] = None) -> np.nda
 
 def interfaces_to_supergrid_2d(data, out: Optional[np.ndarray] = None) -> np.ndarray:
     assert data.ndim == 2, "data must be two-dimensional"
-    assert data.shape[0] > 1 and data.shape[1] > 1, "data must have at least 2 elements"
+    assert data.shape[0] > 1 and data.shape[1] > 1, "dimensions must have length >= 2"
     if out is None:
-        out = np.empty((data.shape[1] * 2 - 1, data.shape[0] * 2 - 1))
+        out = np.empty((data.shape[0] * 2 - 1, data.shape[1] * 2 - 1))
     out[0::2, 0::2] = data
     out[1::2, 0::2] = 0.5 * (data[:-1, :] + data[1:, :])
     out[0::2, 1::2] = 0.5 * (data[:, :-1] + data[:, 1:])
