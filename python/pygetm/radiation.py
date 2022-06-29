@@ -21,7 +21,7 @@ class Radiation:
     not calculated. In this case, the heating per layer defaults to zero; assign to
     swr_abs or call swr_abs.set to change this."""
 
-    def __init__(self, grid: domain.Grid):
+    def initialize(self, grid: domain.Grid):
         self.grid = grid
         self.logger = grid.domain.root_logger.getChild("radiation")
         self.swr_abs = grid.array(
@@ -47,8 +47,15 @@ class TwoBand(Radiation):
     and attenuation coefficients can vary only horizontally, not vertically.
     """
 
-    def __init__(self, grid: domain.Grid, jerlov_type: Optional[int] = None):
-        super().__init__(grid)
+    def __init__(
+        self, jerlov_type: Optional[int] = None, reflect_at_bottom: bool = False
+    ):
+        self.reflect_at_bottom = reflect_at_bottom
+        self.initial_jerlov_type = jerlov_type
+        self._first = True
+
+    def initialize(self, grid: domain.Grid):
+        super().initialize(grid)
 
         # Inputs
         self.A = grid.array(
@@ -70,9 +77,8 @@ class TwoBand(Radiation):
             fill_value=FILL_VALUE,
         )
 
-        self._first = True
-        if jerlov_type:
-            self.set_jerlov_type(jerlov_type)
+        if self.initial_jerlov_type:
+            self.jerlov_type = self.initial_jerlov_type
 
         # Outputs
         self.rad = grid.array(
@@ -82,7 +88,7 @@ class TwoBand(Radiation):
             fabm_standard_name="downwelling_shortwave_flux",
             z=INTERFACES,
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="downwelling_shortwave_flux_in_sea_water")
+            attrs=dict(standard_name="downwelling_shortwave_flux_in_sea_water"),
         )
         self.par = grid.array(
             name="par",
@@ -91,7 +97,9 @@ class TwoBand(Radiation):
             fabm_standard_name="downwelling_photosynthetic_radiative_flux",
             z=CENTERS,
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="downwelling_photosynthetic_radiative_flux_in_sea_water")
+            attrs=dict(
+                standard_name="downwelling_photosynthetic_radiative_flux_in_sea_water"
+            ),
         )
         self.par0 = grid.array(
             name="par0",
@@ -100,6 +108,27 @@ class TwoBand(Radiation):
             fabm_standard_name="surface_downwelling_photosynthetic_radiative_flux",
             fill_value=FILL_VALUE,
         )
+        if self.reflect_at_bottom:
+            self.bottom_albedo = grid.array(
+                name="bottom_albedo",
+                units="1",
+                long_name="bottom albedo",
+                fill_value=FILL_VALUE,
+            )
+            self.bottom_albedo.fill(0.0)
+            self.rad_bot_up = grid.array(
+                name="rad_bot_up",
+                units="W m-2",
+                long_name="shortwave radiation reflected at bottom",
+                fill_value=FILL_VALUE,
+            )
+            self.rad_up = grid.array(
+                name="rad_up",
+                units="W m-2",
+                long_name="upwelling shortwave radiation",
+                z=INTERFACES,
+                fill_value=FILL_VALUE,
+            )
 
     def set_jerlov_type(self, jerlov_type: int):
         """Derive non-visible fraction of shortwave radiation (A), attenuation
@@ -121,6 +150,8 @@ class TwoBand(Radiation):
         self.kc1.fill(1.0 / g1)
         self.kc2.fill(1.0 / g2)
 
+    jerlov_type = property(fset=set_jerlov_type)
+
     def __call__(self, swr: core.Array):
         """Compute heating due to shortwave radiation throughout the water column"""
         if self._first:
@@ -138,7 +169,7 @@ class TwoBand(Radiation):
             self.A,
             self.kc1,
             self.kc2,
-            top=swr,
+            initial=swr,
             out=self.rad,
         )
 
@@ -154,7 +185,28 @@ class TwoBand(Radiation):
             )
 
         self.swr_abs.all_values[...] = np.diff(self.rad.all_values, axis=0)
+        rad_bot = self.rad.all_values[0, ...]
+
+        if self.reflect_at_bottom:
+            np.multiply(
+                self.bottom_albedo.all_values,
+                rad_bot,
+                out=self.rad_bot_up.all_values,
+                where=self.grid.mask.all_values != 0,
+            )
+            rad_bot -= self.rad_bot_up.all_values
+            _pygetm.exponential_profile_2band_interfaces(
+                self.grid.mask,
+                self.grid.hn,
+                self.A,
+                self.kc1,
+                self.kc2,
+                initial=self.rad_bot_up,
+                up=True,
+                out=self.rad_up,
+            )
+            self.swr_abs.all_values[...] -= np.diff(self.rad_up.all_values, axis=0)
 
         # all remaining radiation is absorbed at the bottom and
         # injected in the water layer above it
-        self.swr_abs.all_values[0, ...] += self.rad.all_values[0, ...]
+        self.swr_abs.all_values[0, ...] += rad_bot

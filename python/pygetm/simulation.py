@@ -52,7 +52,7 @@ def log_exceptions(method):
         try:
             return method(self, *args, **kwargs)
         except Exception as e:
-            if self.domain.tiling.n == 1:
+            if not hasattr(self, "logger") or self.domain.tiling.n == 1:
                 raise
             self.logger.exception(str(e), stack_info=True, stacklevel=3)
             self.domain.tiling.comm.Abort(1)
@@ -139,6 +139,7 @@ class Simulation(_pygetm.Simulation):
         turbulence: Optional[pygetm.mixing.Turbulence] = None,
         airsea: Optional[pygetm.airsea.Fluxes] = None,
         density: Optional[pygetm.density.Density] = None,
+        radiation: Optional[pygetm.radiation.Radiation] = None,
         logger: Optional[logging.Logger] = None,
         log_level: int = logging.INFO,
         internal_pressure_method: InternalPressure = InternalPressure.OFF,
@@ -337,7 +338,10 @@ class Simulation(_pygetm.Simulation):
 
         if runtype == BAROCLINIC:
             self.density = density or pygetm.density.Density()
-            self.radiation = pygetm.radiation.TwoBand(dom.T)
+
+            self.radiation = radiation or pygetm.radiation.TwoBand()
+            self.radiation.initialize(self.domain.T)
+
             self.temp = self.tracers.add(
                 name="temp",
                 units="degrees_Celsius",

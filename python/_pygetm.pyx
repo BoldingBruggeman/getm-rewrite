@@ -46,7 +46,7 @@ cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, do
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
-cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* top, double* out) nogil
+cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* initial, int up, double* out) nogil
 cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
 cdef extern void c_thickness2vertical_coordinates(int nx, int ny, int nz, int* mask, double* bottom_depth, double* h, double* zc, double* zf) nogil
 cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha)
@@ -422,14 +422,14 @@ def exponential_profile_1band_centers(Array mask not None, Array h not None, Arr
     assert mask.grid is out.grid and out.z == CENTERS
     c_exponential_profile_1band_centers(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>k.p, <double *>top.p, <double *>out.p)
 
-def exponential_profile_2band_interfaces(Array mask not None, Array h not None, Array f not None, Array k1 not None, Array k2 not None, Array top not None, Array out=None):
+def exponential_profile_2band_interfaces(Array mask not None, Array h not None, Array f not None, Array k1 not None, Array k2 not None, Array initial not None, bint up=False, Array out=None):
     assert mask.grid is h.grid and h.z == CENTERS
     assert mask.grid is f.grid and not f.z
     assert mask.grid is k1.grid and not k1.z
     assert mask.grid is k2.grid and not k2.z
-    assert mask.grid is top.grid and not top.z
+    assert mask.grid is initial.grid and not initial.z
     assert mask.grid is out.grid and out.z == INTERFACES
-    c_exponential_profile_2band_interfaces(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>f.p, <double *>k1.p, <double *>k2.p, <double *>top.p, <double *>out.p)
+    c_exponential_profile_2band_interfaces(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>f.p, <double *>k1.p, <double *>k2.p, <double *>initial.p, up, <double *>out.p)
 
 def thickness2center_depth(Array mask not None, Array h not None, Array out=None):
     assert mask.grid is h.grid and h.z == CENTERS
