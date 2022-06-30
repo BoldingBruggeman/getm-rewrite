@@ -1241,11 +1241,11 @@ class InputManager:
         )
 
         target_slice = (Ellipsis,)
+        source_lon, source_lat = value.getm.longitude, value.getm.latitude
         if array.on_boundary:
             # Open boundary information. This can either be specified for the global
             # domain (e.g., when read from NetCDF), or for only the open boundary
             # points that fall within the local subdomain. Determine which of these.
-            source_lon, source_lat = value.getm.longitude, value.getm.latitude
             if value.ndim >= 2 and value.shape[-2:] == global_shape:
                 # on-grid data for the global domain:
                 # extract data at open boundary points
@@ -1324,7 +1324,10 @@ class InputManager:
             # arbitrary lon, lat grid. In the latter case, we interpolate in space.
             assert array.all_values.shape[-2:] == local_shape
             target_slice = local_slice
-            if on_grid == OnGrid.NONE:
+            if source_lon is None and source_lat is None:
+                # time series for single location
+                value = value.expand_dims(("y", "x"), (value.ndim, value.ndim + 1))
+            elif on_grid == OnGrid.NONE:
                 # interpolate horizontally to local array INCLUDING halos
                 lon = grid.lon.all_values[target_slice]
                 lat = grid.lat.all_values[target_slice]
@@ -1380,10 +1383,13 @@ class InputManager:
             )
 
         target = array.all_values[target_slice]
-        assert value.shape == target.shape, (
-            "Source shape %s does not match target  shape %s"
-            % (value.shape, target.shape)
-        )
+        try:
+            np.broadcast_shapes(value.shape, target.shape)
+        except ValueError:
+            assert False, "Source shape %s does not match target shape %s" % (
+                value.shape,
+                target.shape,
+            )
         data = value.variable._data
         if isinstance(data, LazyArray) and data.is_time_varying():
             time_varying = array.attrs.get("_time_varying", TimeVarying.MICRO)
