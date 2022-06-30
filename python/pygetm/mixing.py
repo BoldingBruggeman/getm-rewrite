@@ -1,5 +1,6 @@
 from typing import Optional
 import itertools
+import os.path
 
 import numpy as np
 
@@ -58,6 +59,8 @@ class GOTM(Turbulence):
 
     def __init__(self, nml_path: Optional[str] = None):
         super().__init__()
+        if nml_path and not os.path.isfile(nml_path):
+            raise Exception("Namelist file %s does not exist" % nml_path)
         self.nml_path = nml_path
 
     def initialize(self, grid: domain.Grid):

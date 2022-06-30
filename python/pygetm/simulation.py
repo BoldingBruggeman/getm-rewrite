@@ -52,10 +52,12 @@ def log_exceptions(method):
         try:
             return method(self, *args, **kwargs)
         except Exception as e:
-            if not hasattr(self, "logger") or self.domain.tiling.n == 1:
+            logger = getattr(self, "logger", None)
+            domain = getattr(self, "domain", None)
+            if logger is None or domain is None or domain.tiling.n == 1:
                 raise
-            self.logger.exception(str(e), stack_info=True, stacklevel=3)
-            self.domain.tiling.comm.Abort(1)
+            logger.exception(str(e), stack_info=True, stacklevel=3)
+            domain.tiling.comm.Abort(1)
 
     return wrapper
 
