@@ -970,8 +970,8 @@ class Simulation(_pygetm.Simulation):
         for field in self.domain.fields.values():
             if field.ndim == 0 or (field.z and not _3d):
                 continue
-            finite = np.isfinite(field.all_values)
-            unmasked = True if field.on_boundary else field.grid.mask.all_values > 0
+            finite = np.isfinite(field.values)
+            unmasked = True if field.on_boundary else field.grid.mask.values > 0
             if not finite.all(where=unmasked):
                 nbad += 1
                 unmasked_count = unmasked.sum()
