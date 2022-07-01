@@ -677,17 +677,22 @@ class Sum:
 
 
 class Gather:
-    def __init__(self, tiling: Tiling, field: np.ndarray, fill_value, root: int = 0):
+    def __init__(
+        self,
+        tiling: Tiling,
+        shape: Tuple[int],
+        dtype: DTypeLike,
+        fill_value=None,
+        root: int = 0,
+    ):
         self.comm = tiling.comm
         self.root = root
-        self.field = field
         self.recvbuf = None
         self.fill_value = np.nan if fill_value is None else fill_value
+        self.dtype = dtype
         if tiling.rank == self.root:
             self.buffers = []
-            self.recvbuf = tiling._get_work_array(
-                (tiling.n,) + self.field.shape, self.field.dtype
-            )
+            self.recvbuf = tiling._get_work_array((tiling.n,) + shape, dtype)
             for irow, icol, rank in _iterate_rankmap(tiling.map):
                 if rank >= 0:
                     (
@@ -696,9 +701,9 @@ class Gather:
                         local_shape,
                         global_shape,
                     ) = tiling.subdomain2slices(irow, icol, exclude_halos=True)
-                    assert field.shape[-2:] == local_shape, (
+                    assert shape[-2:] == local_shape, (
                         "Field shape %s differs from expected %s"
-                        % (field.shape[-2:], local_shape)
+                        % (shape[-2:], local_shape)
                     )
                     self.buffers.append(
                         (self.recvbuf[(rank,) + local_slice], global_slice)
@@ -706,15 +711,14 @@ class Gather:
             self.global_shape = global_shape
 
     def __call__(
-        self, out: Optional[np.ndarray] = None, slice_spec=()
+        self, field: np.ndarray, out: Optional[np.ndarray] = None, slice_spec=()
     ) -> Optional[np.ndarray]:
-        sendbuf = np.ascontiguousarray(self.field)
+        sendbuf = np.ascontiguousarray(field, self.dtype)
         self.comm.Gather(sendbuf, self.recvbuf, root=self.root)
         if self.recvbuf is not None:
             if out is None:
                 out = np.empty(
-                    self.recvbuf.shape[1:-2] + self.global_shape,
-                    dtype=self.recvbuf.dtype,
+                    self.recvbuf.shape[1:-2] + self.global_shape, dtype=self.dtype,
                 )
                 if self.fill_value is not None:
                     out.fill(self.fill_value)

@@ -17,11 +17,10 @@ class NetCDFFile(File):
         logger: logging.Logger,
         path: str,
         rank: int,
-        sub: bool = False,
         sync_interval: Optional[int] = 1,
         time_reference: Optional[cftime.datetime] = None,
         format="NETCDF4",
-        **kwargs
+        **kwargs,
     ):
         """Create a NetCDF file for output
 
@@ -33,7 +32,6 @@ class NetCDFFile(File):
                 we are the root (rank 0) all output is gathered and written to a single
                 file. Otherwise the rank will be used as suffix for the
                 subdomain-specific files.
-            sub: whether to write to separate files per subdomain
             sync_interval: frequency to call NetCDF sync, which forces all output to
                 be written to disk. If set to None, syncronization will happen only
                 when the file is closed as the end of a simulation.
@@ -44,13 +42,12 @@ class NetCDFFile(File):
         """
         super().__init__(available_fields, logger, path=path, **kwargs)
         name, ext = os.path.splitext(path)
-        if sub:
+        if self.sub:
             name += "_%05i" % rank
         self.path = name + ext
         self.nc = None
         self.itime = 0
         self.is_root = rank == 0
-        self.sub = sub
         self.created = False
         self.time_offset = 0.0
         self.time_reference = time_reference
@@ -68,29 +65,15 @@ class NetCDFFile(File):
         if self.is_root or self.sub:
             # Create the NetCDF file
             self.nc = netCDF4.Dataset(self.path, "w", format=self.format)
-            for grid in frozenset(field.grid for field in self.fields.values()):
-                if self.sub:
-                    # Output data (including halos) for the current subdomain
-                    nx, ny, nz = grid.nx_, grid.ny_, grid.nz_
-                else:
-                    # Output data for entire (global) domain
-                    nx = grid.domain.tiling.nx_glob + grid.nx - grid.domain.T.nx
-                    ny = grid.domain.tiling.ny_glob + grid.ny - grid.domain.T.ny
-                    nz = grid.nz
-                xname, yname, zname, ziname = (
-                    "x%s" % grid.postfix,
-                    "y%s" % grid.postfix,
-                    "z",
-                    "zi",
-                )
-                if xname not in self.nc.dimensions:
-                    self.nc.createDimension(xname, nx)
-                if yname not in self.nc.dimensions:
-                    self.nc.createDimension(yname, ny)
-                if zname not in self.nc.dimensions:
-                    self.nc.createDimension(zname, nz)
-                if ziname not in self.nc.dimensions:
-                    self.nc.createDimension(ziname, nz + 1)
+            for field in self.fields.values():
+                for dim, length in zip(field.dims, field.shape):
+                    if dim not in self.nc.dimensions:
+                        self.nc.createDimension(dim, length)
+                    elif length != self.nc.dimensions[dim].size:
+                        raise Exception(
+                            "Existing dimension %s has incompatible length %i (need %i)"
+                            % (dim, self.nc.dimensions[dim].size, length)
+                        )
             self.nc.createDimension("time",)
             self.nctime = self.nc.createVariable("time", float, ("time",))
             self.nctime.axis = "T"
@@ -107,15 +90,14 @@ class NetCDFFile(File):
                 self.nctime.standard_name = "time"
             self.ncvars = []
             for output_name, field in self.fields.items():
-                dims = ("y%s" % field.grid.postfix, "x%s" % field.grid.postfix)
-                if field.z:
-                    dims = ("zi" if field.z == INTERFACES else "z",) + dims
+                dims = field.dims
                 if field.time_varying:
                     dims = ("time",) + dims
                 ncvar = self.nc.createVariable(
                     output_name, field.dtype, dims, fill_value=field.fill_value
                 )
                 ncvar.set_auto_maskandscale(False)
+                ncvar.expression = field.expression
                 for att, value in field.atts.items():
                     setattr(ncvar, att, value)
                 if field.coordinates:
@@ -126,7 +108,7 @@ class NetCDFFile(File):
             if field.time_varying:
                 self._varying_fields.append(field)
             else:
-                field.get(self._field2nc.get(field), sub=self.sub)
+                field.get(self._field2nc.get(field))
 
     def start_now(
         self,
@@ -143,7 +125,7 @@ class NetCDFFile(File):
         if self.nc is not None:
             self.nctime[self.itime] = self.time_offset + seconds_passed
         for field in self._varying_fields:
-            field.get(self._field2nc.get(field), slice_spec=(self.itime,), sub=self.sub)
+            field.get(self._field2nc.get(field), slice_spec=(self.itime,))
         self.itime += 1
         if (
             self.nc is not None

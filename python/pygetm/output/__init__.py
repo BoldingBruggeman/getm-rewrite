@@ -36,8 +36,20 @@ class File(operators.FieldCollection):
         path: Optional[str] = None,
         default_dtype: Optional[DTypeLike] = None,
         save_initial: bool = True,
+        sub: bool = False,
     ):
-        super().__init__(available_fields, default_dtype=default_dtype)
+        """
+        Args:
+            interval: time interval to save at
+            interval_units: units for time interval
+                (unless ``interval`` is given as :class:`datetime.timedelta`)
+            start: simulation time at which to start saving
+            start: simulation time at which to stop saving
+            default_dtype: default data type for real-valued variables
+            sub: whether to write to separate files per subdomain
+            save_initial: whether to save at the very start
+        """
+        super().__init__(available_fields, default_dtype=default_dtype, sub=sub)
         self._logger = logger
         self.next = None
 

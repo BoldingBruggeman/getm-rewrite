@@ -164,10 +164,15 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return self
         if self._gather is None:
             self._gather = parallel.Gather(
-                self.grid.domain.tiling, self.values, fill_value=self._fill_value
+                self.grid.domain.tiling,
+                self.values.shape,
+                self.dtype,
+                fill_value=self._fill_value,
             )
         result = self._gather(
-            out.values if isinstance(out, Array) else out, slice_spec=slice_spec
+            self.values,
+            out.values if isinstance(out, Array) else out,
+            slice_spec=slice_spec,
         )
         if result is not None and out is None:
             out = self.grid.domain.glob.grids[self.grid.type].array(dtype=self.dtype)
