@@ -4,7 +4,6 @@ import cftime
 import pyairsea
 import pygetm.domain
 from . import core
-from . import parallel
 from .constants import FILL_VALUE, RHO0, TimeVarying
 from pyairsea import HumidityMeasure, LongwaveMethod, AlbedoMethod
 
@@ -14,8 +13,9 @@ CPA = 1008.0  #: specific heat capacity of air (J kg-1 K-1)
 class Fluxes:
     """Base class that provides air-water fluxes of heat and momentum, as well as
     surface air pressure. When using this class directly, these fluxes (stresses
-    ``taux`` and ``tauy``, surface heat flux ``shf``, air pressure ``sp``, and
-    net downwelling shortwave radiation ``swr``) are prescribed, not calculated.
+    :attr:`taux` and :attr:`tauy`, surface heat flux :attr:`shf`, air pressure
+    :attr:`sp`, net downwelling shortwave radiation :attr:`swr` and the net
+    freshwater flux :attr:`pe`) are prescribed, not calculated.
     """
 
     def initialize(self, grid: pygetm.domain.Grid):
@@ -61,7 +61,10 @@ class Fluxes:
         )
         self.pe = grid.array(
             name="pe",
-            long_name="net freshwater flux due to precipitation, condensation, evaporation",
+            long_name=(
+                "net freshwater flux due to precipitation, condensation,"
+                " evaporation",
+            ),
             units="m s-1",
             fill_value=FILL_VALUE,
             attrs=dict(_time_varying=TimeVarying.MACRO),
@@ -73,9 +76,10 @@ class Fluxes:
     def __call__(
         self, time: cftime.datetime, sst: core.Array, calculate_heat_flux: bool,
     ) -> None:
-        """Update surface flux of momentum (``taux_U`` at U grid, ``tauy_V`` at V grid,
-        ``taux`` and ``tauy`` at T grid) and optionally the surface heat flux (``shf``)
-        and net downwelling shortwave flux (``swr``)
+        """Update surface fluxes. Stresses and air pressure are always updated.
+        The surface heat flux (:attr:`shf`), net downwelling shortwave flux
+        (:attr:`swr`) and net freshwater flux (:attr:`pe`) are updated only if
+        ``calculate_heat_flux`` is ``True``.
         """
         if not self._ready:
             assert (
@@ -89,9 +93,9 @@ class Fluxes:
 
 
 class FluxesFromMeteo(Fluxes):
-    """Calculate air-water fluxes of heat and momentum, as well as surface air pressure,
-    using the pyairsea library. The heat flux is the sum of the sensible heat flux, the
-    latent heat flux, and net downwelling longwave radiation
+    """Calculate air-water fluxes of heat and momentum, as well as surface air
+    pressure, using the :mod:`pyairsea` library. The heat flux is the sum of the
+    sensible heat flux, the latent heat flux, and net downwelling longwave radiation.
     """
 
     def __init__(
@@ -281,9 +285,9 @@ class FluxesFromMeteo(Fluxes):
         self.cd_sensible = grid.array()
 
     def update_humidity(self, sst: core.Array):
-        """Update humidity metrics: saturation vapor pressure ``es``, actual vapor
-        pressure ``ea``, saturation specific humidity ``qs``, actual specific humidity
-        ``qa`` and air density ``rhoa``
+        """Update humidity metrics: saturation vapor pressure :attr:`es`,
+        actual vapor pressure :attr:`ea`, saturation specific humidity :attr:`qs`,
+        actual specific humidity :attr:`qa` and air density :attr:`rhoa`
         """
         pyairsea.humidity(
             self.humidity_measure,
@@ -299,7 +303,7 @@ class FluxesFromMeteo(Fluxes):
         )
 
     def update_longwave_radiation(self, sst: core.Array):
-        """Update net downwelling longwave radiation ``ql``
+        """Update net downwelling longwave radiation :attr:`ql`
         """
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
@@ -315,7 +319,7 @@ class FluxesFromMeteo(Fluxes):
         )
 
     def update_shortwave_radiation(self, time: cftime.datetime):
-        """Update net downwelling shortwave radiation ``swr``.
+        """Update net downwelling shortwave radiation :attr:`swr`.
         This represents the value just below the water surface
         (i.e., what is left after reflection).
         """
@@ -338,8 +342,8 @@ class FluxesFromMeteo(Fluxes):
         self.swr.all_values *= 1.0 - self.albedo.all_values
 
     def update_transfer_coefficients(self, sst: core.Array):
-        """Update transfer coefficients for momentum (``cd_mom``), latent heat
-        (``cd_latent``) and sensible heat (``cd_sensible``)
+        """Update transfer coefficients for momentum (:attr:`cd_mom`), latent heat
+        (:attr:`cd_latent`) and sensible heat (:attr:`cd_sensible`)
         """
 
         # Air and water temperature in Kelvin
