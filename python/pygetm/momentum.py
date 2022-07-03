@@ -602,8 +602,8 @@ class Momentum(pygetm._pygetm.Momentum):
         ) * itimestep
 
         # Advection of v velocity (v1)
-        self.U.interp(self.vua)
-        self.V.interp(self.vva)
+        U.interp(self.vua)
+        V.interp(self.vva)
         self.vua.all_values /= self.domain.VU.D.all_values
         self.vva.all_values /= self.domain.VV.D.all_values
         self.vadv(
