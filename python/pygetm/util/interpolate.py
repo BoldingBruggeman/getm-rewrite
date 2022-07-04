@@ -123,6 +123,46 @@ class Linear2DGridInterpolator:
         return result
 
 
+class LinearVectorized1D:
+    def __init__(self, x, xp, axis=0, fill_value=np.nan):
+        x = np.asarray(x)
+        xp = np.asarray(xp)
+        assert x.ndim == 1
+        assert axis >= -xp.ndim and axis < xp.ndim
+        xp_slice = [slice(None)] * xp.ndim
+        final_shape = list(xp.shape)
+        final_shape[axis] = x.size
+        ix_right = np.empty(final_shape, dtype=int)
+        for ix, cur_x in enumerate(x):
+            xp_slice[axis] = ix
+            ix_right[tuple(xp_slice)] = (xp <= cur_x).sum(axis=axis)
+        ix_left = np.maximum(ix_right - 1, 0)
+        ix_right = np.minimum(ix_right, xp.shape[axis] - 1)
+        valid = ix_left != ix_right
+        xp_right = np.take_along_axis(xp, ix_right, axis=axis)
+        xp_left = np.take_along_axis(xp, ix_left, axis=axis)
+        dxp = xp_right - xp_left
+        x_shape = [1] * xp.ndim
+        x_shape[axis] = x.size
+        x_bc = x.reshape(x_shape)
+        w_left = np.true_divide(xp_right - x_bc, dxp, where=valid)
+        np.putmask(w_left, ~valid, 1.0)
+        self.ix_left = ix_left
+        self.ix_right = ix_right
+        self.w_left = w_left
+        self.axis = axis
+        self.valid = valid
+        self.fill_value = fill_value
+
+    def __call__(self, yp):
+        yp = np.asarray(yp)
+        yp_left = np.take_along_axis(yp, self.ix_left, axis=self.axis)
+        yp_right = np.take_along_axis(yp, self.ix_right, axis=self.axis)
+        y = self.w_left * yp_left + (1.0 - self.w_left) * yp_right
+        y = np.where(self.valid, y, self.fill_value)
+        return y
+
+
 def interp_1d(x, xp, fp, axis: int = 0):
     x = np.asarray(x)
     xp = np.asarray(xp)
@@ -176,9 +216,8 @@ def interp_1d(x, xp, fp, axis: int = 0):
     ix_left = np.clip(ix_right - 1, first, last)
     np.clip(ix_right, first, last, out=ix_right)
     valid_interval = ix_left != ix_right
-    wx_left = np.true_divide(
-        xp[ix_right] - x, xp[ix_right] - xp[ix_left], where=valid_interval
-    )
+    xp_right = xp[ix_right]
+    wx_left = np.true_divide(xp_right - x, xp_right - xp[ix_left], where=valid_interval)
     np.putmask(wx_left, ~valid_interval, 1.0)
 
     # If we reversed source coordinates, compute the correct indices

@@ -1,4 +1,5 @@
 from typing import (
+    Iterable,
     MutableMapping,
     Tuple,
     Union,
@@ -19,6 +20,7 @@ import pygetm.core
 import pygetm.parallel
 import pygetm.domain
 import pygetm._pygetm
+import pygetm.util.interpolate
 from pygetm.constants import CENTERS, INTERFACES, TimeVarying
 
 
@@ -56,8 +58,8 @@ class Base:
         self.coordinates = []
 
     def get(
-        self, out: ArrayLike, slice_spec: Tuple[int] = (), sub: bool = False,
-    ):
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = ()
+    ) -> ArrayLike:
         raise NotImplementedError
 
     @property
@@ -89,6 +91,35 @@ class Base:
     @property
     def mask(self) -> np.ndarray:
         return self.grid.mask.all_values
+
+
+class WrappedArray(Base):
+    __slots__ = ("_name", "values")
+
+    def __init__(self, values: np.ndarray, name: str, dims: Tuple[str]):
+        super().__init__(name, values.shape, dims, values.dtype, time_varying=False)
+        self._name = name
+        self.values = values
+
+    def gather(self, tiling: pygetm.parallel.Tiling) -> Base:
+        return self
+
+    @property
+    def default_name(self) -> str:
+        return self._name
+
+    @property
+    def coords(self) -> Sequence["Base"]:
+        return ()
+
+    def get(
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = ()
+    ) -> ArrayLike:
+        if out is None:
+            return self.values
+        else:
+            out[slice_spec] = self.values
+            return out
 
 
 class Updatable(enum.Enum):
@@ -199,8 +230,11 @@ class FieldCollection:
                 field = TimeAverage(field)
             if grid and array.grid is not grid:
                 field = Regrid(field, grid=grid)
-            if z and array.z and array.z != z:
-                field = Regrid(field, z=z)
+            if z is not None and array.z:
+                if isinstance(z, (Iterable, float)):
+                    field = InterpZ(field, z, "z1")
+                elif array.z and array.z != z:
+                    field = Regrid(field, z=z)
             if time_average or mask_current or grid:
                 field = Mask(field)
             if not self.sub:
@@ -278,7 +312,7 @@ class Field(Base):
         )
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = ()
     ) -> ArrayLike:
         if out is None:
             return self.values
@@ -436,7 +470,9 @@ class Slice(UnivariateTransform):
     @property
     def coords(self) -> Sequence[Base]:
         for c in self._source.coords:
-            yield Slice(c)
+            if c.shape[-2:] == self._source.shape[-2:]:
+                c = Slice(c)
+            yield c
 
     @property
     def grid(self) -> None:
@@ -550,3 +586,38 @@ class Regrid(UnivariateTransformWithData):
     @property
     def grid(self) -> None:
         return self._grid
+
+
+class InterpZ(UnivariateTransformWithData):
+    __slots__ = ("z_src", "z_tgt", "z_dim")
+
+    def __init__(self, source: Base, z: ArrayLike, dim: str):
+        assert source.ndim == 3
+        self.z_tgt = np.asarray(z, dtype=float)
+        shape = (self.z_tgt.size,) + source.shape[-2:]
+        dims = (dim,) + source.dims[1:]
+        self.z_dim = dim
+        expression = "%s(%s, z=%s)" % (
+            self.__class__.__name__,
+            source.expression,
+            self.z_tgt,
+        )
+        at_centers = source.shape[0] == source.grid.nz
+        self.z_src = (source.grid.zc if at_centers else source.grid.zf).all_values
+        super().__init__(source, shape=shape, dims=dims, expression=expression)
+
+    def get(
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+    ) -> ArrayLike:
+        ip = pygetm.util.interpolate.LinearVectorized1D(
+            self.z_tgt, self.z_src, 0, self.fill_value
+        )
+        self.values[...] = ip(self._source.get())
+        return super().get(out, slice_spec)
+
+    @property
+    def coords(self):
+        for c in super().coords:
+            if c.atts.get("axis") == "Z":
+                c = WrappedArray(self.z_tgt, self.z_dim, (self.z_dim,))
+            yield c
