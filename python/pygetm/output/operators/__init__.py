@@ -375,7 +375,7 @@ class Gather(UnivariateTransform):
         nx = tiling.nx_glob + source.shape[-1] - 4 - tiling.nx_sub
         ny = tiling.ny_glob + source.shape[-2] - 4 - tiling.ny_sub
         shape = source.shape[:-2] + (ny, nx)
-        super().__init__(source, shape=shape)
+        super().__init__(source, shape=shape, expression=source.expression)
         self.global_array = None
         if isinstance(source, Field):
             global_domain = source.grid.domain.glob
@@ -415,7 +415,7 @@ class Slice(UnivariateTransform):
         shape = list(source.shape)
         shape[-1] -= 4
         shape[-2] -= 4
-        super().__init__(source, shape=shape)
+        super().__init__(source, shape=shape, expression=source.expression)
         self._slice = (Ellipsis, slice(2, -2), slice(2, -2))
 
     def get(
