@@ -10,6 +10,7 @@ from typing import (
 )
 import collections
 import enum
+import functools
 
 import numpy as np
 from numpy.typing import DTypeLike, ArrayLike
@@ -17,6 +18,7 @@ from numpy.typing import DTypeLike, ArrayLike
 import pygetm.core
 import pygetm.parallel
 import pygetm.domain
+import pygetm._pygetm
 from pygetm.constants import CENTERS, INTERFACES, TimeVarying
 
 
@@ -190,7 +192,6 @@ class FieldCollection:
 
             array.saved = True
             source_grid = array.grid
-            target_grid = grid or source_grid
             if dtype is None and array.dtype == float:
                 dtype = self.default_dtype
             field = Field(array, dtype=dtype)
@@ -246,14 +247,17 @@ class FieldCollection:
             updater()
 
 
+def grid2dims(grid: pygetm.domain.Grid, z) -> Tuple[str]:
+    dims = ("y%s" % grid.postfix, "x%s" % grid.postfix)
+    if z:
+        dims = ("zi" if z == INTERFACES else "z",) + dims
+    return dims
+
+
 class Field(Base):
     __slots__ = "collection", "array", "values"
 
     def __init__(self, array: pygetm.core.Array, dtype: Optional[DTypeLike] = None):
-        dims = ("y%s" % array.grid.postfix, "x%s" % array.grid.postfix)
-        if array.z:
-            dims = ("zi" if array.z == INTERFACES else "z",) + dims
-
         atts = {}
         for key, value in array.attrs.items():
             if not key.startswith("_"):
@@ -266,7 +270,7 @@ class Field(Base):
         super().__init__(
             array.name,
             self.values.shape,
-            dims,
+            grid2dims(array.grid, array.z),
             dtype or array.dtype,
             array.fill_value,
             time_varying,
@@ -313,6 +317,7 @@ class UnivariateTransform(Base):
         self,
         source: Base,
         shape: Optional[Tuple[int]] = None,
+        dims: Optional[Tuple[str]] = None,
         dtype: Optional[DTypeLike] = None,
         expression: Optional[str] = None,
     ):
@@ -321,7 +326,7 @@ class UnivariateTransform(Base):
         super().__init__(
             expression or "%s(%s)" % (self.__class__.__name__, source.expression),
             shape,
-            source.dims,
+            dims or source.dims,
             dtype or source.dtype,
             source.fill_value,
             source.time_varying,
@@ -353,8 +358,8 @@ class UnivariateTransform(Base):
 class UnivariateTransformWithData(UnivariateTransform):
     __slots__ = "values"
 
-    def __init__(self, source: Base, **kwargs):
-        super().__init__(source, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.values = np.empty(self.shape, self.dtype)
 
     def get(
@@ -502,7 +507,7 @@ class TimeAverage(UnivariateTransformWithData):
 
 
 class Regrid(UnivariateTransformWithData):
-    __slots__ = ("source_grid", "target_grid")
+    __slots__ = ("interpolate",)
 
     def __init__(
         self,
@@ -510,23 +515,32 @@ class Regrid(UnivariateTransformWithData):
         grid: Optional[pygetm.domain.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
     ):
-        self.source_grid = source.grid
-        target_grid = grid or self.source_grid
-        expression = "%s(%s,%s,%s)" % (
-            self.__class__.__name__,
-            source.expression,
-            target_grid.postfix,
-            z,
-        )
-        super().__init__(source, expression=expression)
-        self.source_array = pygetm.core.Array(self.source_grid)
-        self.source_array.wrap_ndarray()
-        self.target_array = pygetm.core.Array(target_grid)
+        grid = grid or source.grid
+        if grid is not source.grid:
+            assert z is None
+            self.interpolate = source.grid.interpolator(grid)
+            shape = source.shape[:-2] + (grid.ny_, grid.nx_)
+            args = ", grid=%s" % (grid.postfix,)
+            if source.ndim > 2:
+                z = CENTERS if source.shape[0] == grid.nz else INTERFACES
+        else:
+            assert z is not None
+            if z == CENTERS:
+                assert source.shape[0] == source.grid.nz + 1
+                self.interpolate = functools.partial(pygetm._pygetm.interp_z, offset=0)
+                shape = (source.shape[0] - 1,) + source.shape[1:]
+                args = ", z=centers"
+            else:
+                assert source.shape[0] == source.grid.nz
+                self.interpolate = functools.partial(pygetm._pygetm.interp_z, offset=1)
+                shape = (source.shape[0] + 1,) + source.shape[1:]
+                args = ", z=interfaces"
+        dims = grid2dims(grid, z)
+        expression = "%s(%s%s)" % (self.__class__.__name__, source.expression, args)
+        super().__init__(source, shape=shape, dims=dims, expression=expression)
 
     def get(
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
     ) -> ArrayLike:
-        self.source_grid.interp(
-            self._source.get(), self.target_grid, self.z, out=self.values
-        )
+        self.interpolate(self._source.get(), self.values)
         return super().get(out, slice_spec)
