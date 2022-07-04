@@ -171,17 +171,17 @@ cdef class Grid:
     def wrap(self, Array ar, bytes name, register=True):
         return ar.wrap_c_array(self.domain, 0, self.p, name, register)
 
-    def interp_x(self, Array source not None, Array target not None, int offset):
-        grid_interp_x(source._array.shape[source._array.ndim - 1], source._array.shape[source._array.ndim - 2], 1 if source._array.ndim == 2 else source._array.shape[0], <double *>source.p, <double *>target.p, offset)
+def interp_x(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
+    grid_interp_x(source.shape[2], source.shape[1], source.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
-    def interp_y(self, Array source not None, Array target not None, int offset):
-        grid_interp_y(source._array.shape[source._array.ndim - 1], source._array.shape[source._array.ndim - 2], 1 if source._array.ndim == 2 else source._array.shape[0], <double *>source.p, <double *>target.p, offset)
+def interp_y(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
+    grid_interp_y(source.shape[2], source.shape[1], source.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
-    def interp_z(self, Array source not None, Array target not None, int offset):
-        grid_interp_z(source._array.shape[2], source._array.shape[1], source._array.shape[0], target._array.shape[0], <double *>source.p, <double *>target.p, offset)
+def interp_z(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
+    grid_interp_z(source.shape[2], source.shape[1], source.shape[0], target.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
-    def interp_xy(self, Array source not None, Array target not None, int ioffset, int joffset):
-        grid_interp_xy(source._array.shape[source._array.ndim - 1], source._array.shape[source._array.ndim - 2], target._array.shape[target._array.ndim - 1], target._array.shape[target._array.ndim - 2], 1 if source._array.ndim == 2 else source._array.shape[0], <double *>source.p, <double *>target.p, ioffset, joffset)
+def interp_xy(double[:,:,::1] source not None, double[:,:,::1] target not None, int ioffset, int joffset):
+    grid_interp_xy(source.shape[2], source.shape[1], target.shape[2], target.shape[1], source.shape[0], &source[0,0,0], &target[0,0,0], ioffset, joffset)
 
 cdef class Domain:
     cdef void* p
