@@ -99,11 +99,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # boundary array or scalar
             self.values = self.all_values[...]
         else:
-            self.values = self.all_values[
-                ...,
-                self.grid.domain.haloy : -self.grid.domain.haloy,
-                self.grid.domain.halox : -self.grid.domain.halox,
-            ]
+            halox, haloy = self.grid.domain.halox, self.grid.domain.haloy
+            self.values = self.all_values[..., haloy:-haloy, halox:-halox]
+
         self._shape = self.values.shape
         self._size = self.values.size
 
@@ -317,38 +315,23 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """
         if not isinstance(target, Array):
             # Target must be a grid; we need to create the array
-            target = Array.create(
-                target, dtype=self.dtype, z=z if z is not None else self.z
-            )
-        key = (self.grid.type, target.grid.type)
-        if key == (_pygetm.UGRID, _pygetm.TGRID):
-            self.grid.interp_x(self, target, offset=1)
-        elif key == (_pygetm.TGRID, _pygetm.UGRID):
-            self.grid.interp_x(self, target, offset=0)
-        elif key == (_pygetm.VGRID, _pygetm.TGRID):
-            self.grid.interp_y(self, target, offset=1)
-        elif key == (_pygetm.TGRID, _pygetm.VGRID):
-            self.grid.interp_y(self, target, offset=0)
-        elif key == (_pygetm.XGRID, _pygetm.TGRID):
-            self.grid.interp_xy(self, target, ioffset=0, joffset=0)
-        elif key == (_pygetm.TGRID, _pygetm.XGRID):
-            self.grid.interp_xy(self, target, ioffset=1, joffset=1)
-        elif key in ((_pygetm.UGRID, _pygetm.UUGRID), (_pygetm.VGRID, _pygetm.UVGRID)):
-            self.grid.interp_x(self, target, offset=0)
-        elif key in ((_pygetm.UGRID, _pygetm.VUGRID), (_pygetm.VGRID, _pygetm.VVGRID)):
-            self.grid.interp_y(self, target, offset=0)
-        elif key[0] == key[1] and self.z == INTERFACES and target.z == CENTERS:
-            # vertical interpolation from layer interfaces to layer centers
-            self.grid.interp_z(self, target, offset=0)
-        elif key[0] == key[1] and self.z == CENTERS and target.z == INTERFACES:
-            # vertical interpolation from layer centers to layer interfaces
-            # (top and bottom interfaces will be left untouched)
-            self.grid.interp_z(self, target, offset=1)
+            target_z = z if z is not None else self.z
+            target = Array.create(target, dtype=self._dtype, z=target_z)
+        source_array, target_array = self.all_values, target.all_values
+        if self.grid is target.grid:
+            if self.z == INTERFACES and target.z == CENTERS:
+                # vertical interpolation from layer interfaces to layer centers
+                _pygetm.interp_z(source_array, target_array, offset=0)
+            elif self.z == CENTERS and target.z == INTERFACES:
+                # vertical interpolation from layer centers to layer interfaces
+                # (top and bottom interfaces will be left untouched)
+                _pygetm.interp_z(source_array, target_array, offset=1)
         else:
-            raise NotImplementedError(
-                "interp does not know how to interpolate from grid type %i"
-                " to grid type %i" % (self.grid.type, target.grid.type)
-            )
+            if self._ndim == 2:
+                source_array = source_array[None, ...]
+                target_array = target_array[None, ...]
+            interpolate = self.grid.interpolator(target.grid)
+            interpolate(source_array, target_array)
         return target
 
     def __array__(self, dtype: Optional[DTypeLike] = None) -> np.ndarray:

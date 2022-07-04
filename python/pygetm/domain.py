@@ -1,8 +1,9 @@
-from typing import MutableMapping, Optional, Tuple, List, Mapping
+from typing import Callable, MutableMapping, Optional, Tuple, List, Mapping
 import operator
 import logging
 import os.path
 import enum
+import functools
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -87,6 +88,7 @@ class Grid(_pygetm.Grid):
         "rotation",
         "nbdyp",
         "overlap",
+        "_interpolators",
     )
 
     _array_args = {
@@ -193,6 +195,7 @@ class Grid(_pygetm.Grid):
         self.vgrid: Optional[Grid] = vgrid
         self._sin_rot: Optional[np.ndarray] = None
         self._cos_rot: Optional[np.ndarray] = None
+        self._interpolators = {}
 
         for name in self._readonly_arrays:
             self._setup_array(name)
@@ -269,6 +272,31 @@ class Grid(_pygetm.Grid):
             )
 
         return array
+
+    def interpolator(self, target: "Grid") -> Callable[[np.ndarray, np.ndarray], None]:
+        ip = self._interpolators.get(target)
+        if ip:
+            return ip
+        assert self.domain is target.domain
+        if self.ioffset == target.ioffset + 1 and self.joffset == target.joffset:
+            ip = functools.partial(_pygetm.interp_x, offset=1)
+        elif self.ioffset == target.ioffset - 1 and self.joffset == target.joffset:
+            ip = functools.partial(_pygetm.interp_x, offset=0)
+        elif self.joffset == target.joffset + 1 and self.ioffset == target.ioffset:
+            ip = functools.partial(_pygetm.interp_y, offset=1)
+        elif self.joffset == target.joffset - 1 and self.ioffset == target.ioffset:
+            ip = functools.partial(_pygetm.interp_y, offset=0)
+        elif self.ioffset == target.ioffset - 1 and self.joffset == target.joffset - 1:
+            ip = functools.partial(_pygetm.interp_xy, ioffset=0, joffset=0)
+        elif self.ioffset == target.ioffset + 1 and self.joffset == target.joffset + 1:
+            ip = functools.partial(_pygetm.interp_xy, ioffset=1, joffset=1)
+        else:
+            raise NotImplementedError(
+                "Cannot interpolate from grid type %s to grid type %s"
+                % (self.postfix, target.postfix)
+            )
+        self._interpolators[target] = ip
+        return ip
 
     def rotate(
         self, u: ArrayLike, v: ArrayLike, to_grid: bool = True
