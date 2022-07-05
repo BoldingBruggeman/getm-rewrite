@@ -67,7 +67,7 @@ class GOTM(Turbulence):
         super().initialize(grid)
 
         has_yaml = self.path and self.path.endswith(".yaml")
-        nml_path = b"" if self.path or has_yaml else self.path.encode("ascii")
+        nml_path = b"" if not self.path or has_yaml else self.path.encode("ascii")
         yaml_path = b"" if not has_yaml else self.path.encode("ascii")
         self.mix = _pygotm.Mixing(grid.nz, nml_path, yaml_path)
         self.nuh.fill(self.mix.nuh[:, np.newaxis, np.newaxis])
