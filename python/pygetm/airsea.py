@@ -324,7 +324,7 @@ class FluxesFromMeteo(Fluxes):
         (i.e., what is left after reflection).
         """
         hh = time.hour + time.minute / 60.0 + time.second / 3600.0
-        yday = time.timetuple()[-2]
+        yday = time.timetuple().tm_yday
         pyairsea.solar_zenith_angle(
             yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values
         )
