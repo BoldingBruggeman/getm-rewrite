@@ -57,18 +57,19 @@ class GOTM(Turbulence):
     the `General Ocean Turbulence Model (GOTM) <https://gotm.net>`_.
    """
 
-    def __init__(self, nml_path: Optional[str] = None):
+    def __init__(self, path: Optional[str] = None):
         super().__init__()
-        if nml_path and not os.path.isfile(nml_path):
-            raise Exception("Namelist file %s does not exist" % nml_path)
-        self.nml_path = nml_path
+        if path and not os.path.isfile(path):
+            raise Exception("Configuration file %s does not exist" % path)
+        self.path = path
 
     def initialize(self, grid: domain.Grid):
         super().initialize(grid)
 
-        self.mix = _pygotm.Mixing(
-            grid.nz, b"" if self.nml_path is None else self.nml_path.encode("ascii")
-        )
+        has_yaml = self.path and self.path.endswith(".yaml")
+        nml_path = b"" if self.path or has_yaml else self.path.encode("ascii")
+        yaml_path = b"" if not has_yaml else self.path.encode("ascii")
+        self.mix = _pygotm.Mixing(grid.nz, nml_path, yaml_path)
         self.nuh.fill(self.mix.nuh[:, np.newaxis, np.newaxis])
         self.num.fill(self.mix.num[:, np.newaxis, np.newaxis])
         self.tke = grid.array(

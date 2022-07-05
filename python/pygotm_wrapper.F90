@@ -25,25 +25,34 @@ contains
       close(unit=6)
    end subroutine
 
-   subroutine initialize(nlev, nml_file, ptke, ptkeo, peps, pL, pnum, pnuh) bind(c)
+   subroutine initialize(nlev, pnml_file, pyaml_file, ptke, ptkeo, peps, pL, pnum, pnuh) bind(c)
       integer(c_int), value,          intent(in)  :: nlev
-      character(kind=c_char), target, intent(in)  :: nml_file(*)
+      character(kind=c_char), target, intent(in)  :: pnml_file(*), pyaml_file(*)
       type(c_ptr),                    intent(out) :: ptke, ptkeo, peps, pL, pnum, pnuh
 
-      type (type_settings) :: branch
+      type (type_settings), target :: store
+      class (type_settings), pointer :: branch
       integer, parameter :: iunit = 60
-      integer :: namelen
-      character(len=256), pointer :: pnml_file
+      integer :: pathlen
+      character(len=256), pointer :: nml_file, yaml_file
 
-      call c_f_pointer(c_loc(nml_file), pnml_file)
+      call c_f_pointer(c_loc(pnml_file), nml_file)
+      call c_f_pointer(c_loc(pyaml_file), yaml_file)
 
       if (initialized) then
          call clean_turbulence()
          call clean_tridiagonal()
       end if
+      pathlen = index(yaml_file, C_NULL_CHAR) - 1
+      if (pathlen > 0) then
+         call store%load(yaml_file(:pathlen), iunit)
+         branch => store%get_child('turbulence')
+      else
+         branch => store
+      end if
       call init_turbulence(branch)
-      namelen = index(pnml_file, C_NULL_CHAR) - 1
-      if (namelen > 0) call init_turbulence(iunit, pnml_file(:namelen))
+      pathlen = index(nml_file, C_NULL_CHAR) - 1
+      if (pathlen > 0) call init_turbulence(iunit, nml_file(:pathlen))
       call init_tridiagonal(nlev)
       call post_init_turbulence(nlev)
 

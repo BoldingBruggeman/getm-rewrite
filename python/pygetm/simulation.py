@@ -264,7 +264,7 @@ class Simulation(_pygetm.Simulation):
             #: Provider of turbulent viscosity and diffusivity. This must inherit from
             #: :class:`pygetm.mixing.Turbulence` and should be provided as argument
             #: turbulence to :class:`Simulation`.
-            self.turbulence = turbulence or pygetm.mixing.GOTM(nml_path=gotm)
+            self.turbulence = turbulence or pygetm.mixing.GOTM(gotm)
             self.turbulence.initialize(self.domain.T)
             self.NN = dom.T.array(
                 z=INTERFACES,
