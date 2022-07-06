@@ -48,7 +48,6 @@ class NetCDFFile(File):
         self.nc = None
         self.itime = 0
         self.is_root = rank == 0
-        self.created = False
         self.time_offset = 0.0
         self.time_reference = time_reference
         self.sync_interval = sync_interval
@@ -59,9 +58,12 @@ class NetCDFFile(File):
     def __repr__(self) -> str:
         return "%s(%r)" % (self.__class__.__name__, self.path)
 
-    def _create(self, seconds_passed: float, time: Optional[cftime.datetime]):
-        self.created = True
-
+    def start_now(
+        self,
+        seconds_passed: float,
+        time: Optional[cftime.datetime],
+        default_time_reference: Optional[cftime.datetime],
+    ):
         if self.is_root or self.sub:
             # Create the NetCDF file
             self.nc = netCDF4.Dataset(self.path, "w", format=self.format)
@@ -78,12 +80,13 @@ class NetCDFFile(File):
             self.nctime = self.nc.createVariable("time", float, ("time",))
             self.nctime.axis = "T"
             if time is not None:
-                self.nctime.units = "seconds since %s" % self.time_reference.strftime(
+                time_reference = self.time_reference or default_time_reference
+                self.nctime.units = "seconds since %s" % time_reference.strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
                 self.nctime.calendar = time.calendar
                 self.time_offset = (
-                    time - self.time_reference
+                    time - time_reference
                 ).total_seconds() - seconds_passed
             else:
                 self.nctime.units = "s"
@@ -110,18 +113,7 @@ class NetCDFFile(File):
             else:
                 field.get(self._field2nc.get(field))
 
-    def start_now(
-        self,
-        itimestep: int,
-        time: Optional[cftime.datetime],
-        default_time_reference: Optional[cftime.datetime],
-    ):
-        if self.time_reference is None:
-            self.time_reference = default_time_reference
-
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
-        if not self.created:
-            self._create(seconds_passed, time)
         if self.nc is not None:
             self.nctime[self.itime] = self.time_offset + seconds_passed
         for field in self._varying_fields:

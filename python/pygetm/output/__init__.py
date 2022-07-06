@@ -94,7 +94,7 @@ class File(operators.FieldCollection):
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
     ):
-        self.start_now(itimestep, time, default_time_reference)
+        self.start_now(seconds_passed, time, default_time_reference)
         if self.save_initial:
             self._logger.debug("Saving initial state")
             self.save_now(seconds_passed, time)
@@ -124,7 +124,7 @@ class File(operators.FieldCollection):
 
     def start_now(
         self,
-        itimestep: int,
+        seconds_passed: float,
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
     ):
