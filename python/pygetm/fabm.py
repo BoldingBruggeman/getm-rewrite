@@ -105,7 +105,7 @@ class FABM:
                 fill_value=variable.missing_value,
                 dtype=model.fabm.dtype,
                 grid=grid,
-                attrs=dict(_time_varying=TimeVarying.MACRO)
+                attrs=dict(_time_varying=TimeVarying.MACRO),
             )
             ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
             tracer_totals.append(ar)
@@ -128,8 +128,9 @@ class FABM:
                     variable = self.model.dependencies.find(standard_name)
                 except KeyError:
                     continue
-                field.saved = True
-                variable.link(field.all_values)
+                if not variable.is_set:
+                    field.saved = True
+                    variable.link(field.all_values)
 
         try:
             self._yearday = self.model.dependencies.find(
