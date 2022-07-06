@@ -137,10 +137,11 @@ class File(operators.FieldCollection):
         pass
 
 
-# Note: netcdf cannot be imported before File is defined,
-# because that is imported by netcdf itself.
+# Note: specific file types cannot be imported before File is defined,
+# because that is imported by those types itself.
 # If this import statement came earlier, it would cause a circular dependency error.
 from . import netcdf
+from . import memory
 
 
 class OutputManager:
@@ -169,6 +170,20 @@ class OutputManager:
         self._logger.debug("Adding NetCDF file %s" % path)
         file = netcdf.NetCDFFile(
             self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
+        )
+        self._startable_files.append(file)
+        return file
+
+    def add_recorder(self, **kwargs) -> memory.MemoryFile:
+        """Add an in-memory file to record output.
+
+        Args:
+            **kwargs: additional keyword arguments passed to
+                :class:`pygetm.output.File`
+        """
+        self._logger.debug("Adding in-memory file")
+        file = memory.MemoryFile(
+            self.fields, self._logger.getChild("memfile"), **kwargs
         )
         self._startable_files.append(file)
         return file
