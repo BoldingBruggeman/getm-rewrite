@@ -111,19 +111,19 @@ module mod_longwave_radiation
       ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
-   ! Josey et.al. 2003 - (J1,9)
+   ! Josey et.al. 2003 - (J1,9), https://doi.org/10.1029/2002jc001418
    elemental subroutine josey1(tw, ta, cloud, ql)
       real(rk), intent(in)  :: tw, ta, cloud
       real(rk), intent(out) :: ql
       real(rk)              :: x1, x2, x3
 
       x1 = emiss * tw**4
-      x2 = (10.77_rk * cloud + 2.34_rk) * cloud - 18.44_rk
+      x2 = (10.77_rk * cloud + 2.34_rk) * cloud - 18.44_rk  ! Josey et al Eq 8
       x3 = 0.955_rk * (ta + x2)**4
       ql = -bolz * (x1 - x3)
    end subroutine
 
-   ! Josey et.al. 2003 - (J2,14)
+   ! Josey et.al. 2003 - (J2,14), https://doi.org/10.1029/2002jc001418
    elemental subroutine josey2(tw, ta, cloud, ea, ql)
       real(rk), intent(in)  :: tw, ta, cloud, ea
       real(rk), intent(out) :: ql
@@ -131,8 +131,8 @@ module mod_longwave_radiation
 
       x1 = emiss * tw**4
       ! AS avoid zero trap, limit to about 1% rel. humidity ~ 10Pa
-      x2 = 34.07_rk + 4157.0_rk / (log(2.1718e10_rk / max(ea, 10._rk)))
-      x2 = (10.77_rk * cloud + 2.34_rk) * cloud - 18.44_rk + 0.84_rk * (x2 - ta + 4.01_rk)
+      x2 = 34.07_rk + 4157.0_rk / (log(2.1718e10_rk / max(ea, 10._rk))) ! Dew point temperature (Josey et al Eq 10)
+      x2 = (10.77_rk * cloud + 2.34_rk) * cloud - 18.44_rk + 0.84_rk * (x2 - ta + 4.01_rk)  ! Josey et al Eq 13
       x3 = 0.955_rk * (ta + x2)**4
       ql = -bolz * (x1 - x3)
    end subroutine
