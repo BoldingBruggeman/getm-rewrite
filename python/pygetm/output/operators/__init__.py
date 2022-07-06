@@ -289,7 +289,7 @@ def grid2dims(grid: pygetm.domain.Grid, z) -> Tuple[str]:
 
 
 class Field(Base):
-    __slots__ = "collection", "array", "values"
+    __slots__ = "collection", "array"
 
     def __init__(self, array: pygetm.core.Array, dtype: Optional[DTypeLike] = None):
         atts = {}
@@ -300,10 +300,12 @@ class Field(Base):
         self.array = array
         default_time_varying = TimeVarying.MACRO if array.z else TimeVarying.MICRO
         time_varying = array.attrs.get("_time_varying", default_time_varying)
-        self.values = self.array.all_values
+        shape = list(self.array.shape)
+        shape[-1] += 2 * array.grid.domain.halox
+        shape[-2] += 2 * array.grid.domain.haloy
         super().__init__(
             array.name,
-            self.values.shape,
+            tuple(shape),
             grid2dims(array.grid, array.z),
             dtype or array.dtype,
             array.fill_value,
@@ -315,9 +317,9 @@ class Field(Base):
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = ()
     ) -> ArrayLike:
         if out is None:
-            return self.values
+            return self.array.all_values
         else:
-            out[slice_spec] = self.values
+            out[slice_spec] = self.array.all_values
             return out
 
     @property
