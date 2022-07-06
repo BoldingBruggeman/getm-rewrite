@@ -38,36 +38,43 @@ class MemoryFile(File):
         if self._times is not None:
             timecoords["time"] = xarray.Variable(("time",), np.array(self._times))
 
-        # Create variables
-        name2var = timecoords.copy()
         renames = {}
         for name, field in self.fields.items():
+            if name in field.dims and field.ndim > 1:
+                renames[name] = name + "_"
+
+        # Create variables
+        name2var = timecoords.copy()
+        for name, field in self.fields.items():
+            coord_names = [renames.get(c, c) for c in field.coordinates]
             if field.time_varying:
                 dims = ("time",) + field.dims
                 values = self._recorded_fields[name][1]
+                coord_names.append("time" if "time" in timecoords else "seconds")
             else:
                 dims = field.dims
                 values = field.get()
+            attrs = field.atts.copy()
+            if coord_names:
+                attrs["coordinates"] = " ".join(coord_names)
+            name = renames.get(name, name)
             values = np.ma.masked_equal(values, field.fill_value)
-            name2var[name] = xarray.Variable(dims, values, field.atts)
-            if name in dims and len(dims) > 1:
-                renames[name] = name + "_"
+            name2var[name] = xarray.Variable(dims, values, attrs)
 
         # Create dataarrays (variables + coordinates)
         arrays = {}
         for name, var in name2var.items():
             coords = {}
-            if "time" in var.dims:
-                coords.update(timecoords)
-            if name in self.fields:
-                for c in self.fields[name].coordinates:
-                    coords[renames.get(c, c)] = name2var[c]
-            name = renames.get(name, name)
+            for c in var.attrs.get("coordinates", "").split():
+                coords[c] = name2var[c]
             arrays[name] = xarray.DataArray(var, coords=coords, name=name)
 
         # Return dataset with all arrays
         return xarray.Dataset(arrays)
 
-    def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
+    def close_now(self, *args, **kwargs):
         self._x = self.x
         self._times = self._seconds = self._recorded_fields = None
+
+    def __getattr__(self, name: str):
+        return getattr(self.x, name)
