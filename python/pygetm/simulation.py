@@ -196,13 +196,13 @@ class Simulation(_pygetm.Simulation):
         self.momentum.wrap(self.domain.open_boundaries.v, b"bdyv")
 
         for name in Simulation._pressure_arrays:
+            kwargs = dict(fill_value=FILL_VALUE)
+            kwargs.update(Simulation._array_args.get(name, {}))
             setattr(
                 self,
                 "_%s" % name,
                 self.wrap(
-                    core.Array(name=name, **Simulation._array_args.get(name, {})),
-                    name.encode("ascii"),
-                    source=2,
+                    core.Array(name=name, **kwargs), name.encode("ascii"), source=2,
                 ),
             )
         for name in Simulation._sealevel_arrays:
@@ -383,6 +383,9 @@ class Simulation(_pygetm.Simulation):
             self.tracer_totals.append(self.salt)
             self.temp_sf = self.temp.isel(z=-1)
             self.salt_sf = self.salt.isel(z=-1)
+            if internal_pressure_method == InternalPressure.OFF:
+                self.idpdx.fill(0.0)
+                self.idpdy.fill(0.0)
         else:
             self.temp_sf = None
             self.salt_sf = None
