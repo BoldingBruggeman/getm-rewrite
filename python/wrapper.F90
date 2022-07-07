@@ -618,7 +618,8 @@ contains
       real(real64), contiguous, pointer, dimension(:,:,:) :: viscosity
 
       call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(pviscosity, viscosity, momentum%domain%T%u - momentum%domain%T%l + 2)
+      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%T%u(1) - momentum%domain%T%l(1) + 1, &
+         momentum%domain%T%u(2) - momentum%domain%T%l(2) + 1, momentum%domain%T%u(3) - momentum%domain%T%l(3) + 2/))
       call momentum%shear_frequency(viscosity(:, :, 2:size(viscosity,3) - 1))
    end subroutine
 
