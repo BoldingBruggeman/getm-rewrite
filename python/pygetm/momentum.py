@@ -152,9 +152,10 @@ class Momentum(pygetm._pygetm.Momentum):
         runtype: int,
         apply_bottom_friction: bool = True,
         Am: float = 0.0,
+        cnpar: float = 1.0,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.HSIMT,
     ):
-        super().__init__(domain, runtype, Am)
+        super().__init__(domain, runtype, Am, cnpar)
 
         for name in self._arrays:
             setattr(

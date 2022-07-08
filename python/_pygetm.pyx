@@ -27,7 +27,7 @@ cdef extern void advection_uv_calculate(int direction, int nk, void* advection, 
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
-cdef extern void* momentum_create(int runtype, void* pdomain, double Am0) nogil
+cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double cnpar) nogil
 cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
 cdef extern void momentum_u_3d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx, double* pidpdx, double* pviscosity) nogil
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
@@ -337,9 +337,9 @@ cdef class Momentum:
     cdef void* p
     cdef readonly Domain domain
 
-    def __init__(self, Domain domain, int runtype, double Am0=0.):
+    def __init__(self, Domain domain, int runtype, double Am0, double cnpar):
         self.domain = domain
-        self.p = momentum_create(runtype, domain.p, Am0)
+        self.p = momentum_create(runtype, domain.p, Am0, cnpar)
 
     def u_2d(self, double timestep, Array tausx not None, Array dpdx not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)

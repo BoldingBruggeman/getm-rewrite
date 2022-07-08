@@ -465,10 +465,10 @@ contains
                     w, w_var, tgrid%mask, timestep, h, var)
    end subroutine
 
-   function momentum_create(runtype, pdomain, Am0) result(pmomentum) bind(c)
+   function momentum_create(runtype, pdomain, Am0, cnpar) result(pmomentum) bind(c)
       integer(c_int), intent(in), value :: runtype
       type(c_ptr),    intent(in), value :: pdomain
-      real(c_double), intent(in), value :: Am0
+      real(c_double), intent(in), value :: Am0, cnpar
       type(c_ptr) :: pmomentum
 
       type (type_getm_domain),   pointer :: domain
@@ -479,6 +479,7 @@ contains
       call momentum%configure()
       momentum%advection_scheme = 0
       momentum%Am0 = Am0
+      momentum%cnpar = cnpar
       call momentum%initialize(runtype, domain)
       allocate(momentum%vertical_diffusion)
       call momentum%vertical_diffusion%initialize(domain%T)
