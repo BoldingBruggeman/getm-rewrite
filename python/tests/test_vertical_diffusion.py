@@ -1,126 +1,230 @@
-import sys
+from typing import Optional
+import unittest
+import logging
+from functools import wraps
 
 import numpy as np
-import numpy.random
 
 import pygetm
 
-extent = 50000
-domain = pygetm.domain.create_cartesian(np.linspace(0, extent, 50), np.linspace(0, extent, 52), 25, f=0, H=50)
-domain.mask[...] = numpy.random.random_sample(domain.mask.shape) > 0.5   # randomly mask half of the domain
-sim = pygetm.Simulation(domain, runtype=2)
 
-assert (domain.T.ho.all_values == domain.T.hn.all_values).all(), 'ho and hn are not identical'
+handler = logging.StreamHandler()
+handler.setLevel(level=logging.ERROR)
+logging.basicConfig(handlers=(handler,))
 
-dt = 600
-nstep = 100
-cnpar = 1.
-
-nuh = domain.T.array(fill=1e-2, z=pygetm.INTERFACES)
-
-# Set diffusivity at all masked points to NaN
-nuh.all_values[:, domain.T.mask.all_values != 1] = np.nan
-
-# Set diffusivity at the very surface and bottom to NaN,
-# so we can later check that this value has not been propagated (used)
-nuh.all_values[0, ...] = np.nan
-nuh.all_values[-1, ...] = np.nan
-
-tracer = domain.T.array(z=pygetm.CENTERS)
-tracer.values[...] = 0
-tracer.values[0, ...] = 1
-
-mask = np.broadcast_to(domain.T.mask.values != 1, tracer.shape)
-valid_tracer = np.ma.array(tracer.values, mask=mask)
-
-ini_min = tracer.values[...].min()
-ini_max = tracer.values[...].max()
-vdif = pygetm.operators.VerticalDiffusion(tracer.grid, cnpar=cnpar)
-
-tolerance = 1e-14
-
-for _ in range(nstep):
-    vdif(nuh, dt, tracer)
-
-if not np.isfinite(tracer)[...].all():
-    print('ERROR: tracer contains non-finite values after diffusion')
-    sys.exit(1)
-
-col_min = valid_tracer.min(axis=1).min(axis=1)
-col_max = valid_tracer.max(axis=1).max(axis=1)
-
-col_range = col_max - col_min
-rel_col_range = 2 * col_range / (col_min + col_max)
-print('Absolute range in profiles: %s' % (col_range,))
-print('Relative range in profiles: %s' % (rel_col_range,))
-max_rel_col_range = rel_col_range.max()
-global_min, global_max = col_min.min(), col_max.max()
-
-if max_rel_col_range > tolerance:
-    print('ERROR: maximum range across domain %s exceeds tolerance %s' % (max_rel_col_range, tolerance))
-    sys.exit(1)
-if global_max > ini_max:
-    print('ERROR: final maximum value exceeds %s initial maximum %s' % (global_max, ini_max))
-    sys.exit(1)
-if global_min < ini_min:
-    print('ERROR: final global minimum value %s below initial minimum %s' % (global_min, ini_min))
-    sys.exit(1)
-
-delta = np.abs(valid_tracer.sum(axis=0) - 1)
-max_delta = delta.max()
-if max_delta > tolerance:
-    print('ERROR: difference between initial and final depth integral %s exceeds tolerance %s' % (max_delta, tolerance))
-    sys.exit(1)
-
-# Now try without spatial gradient and source term only
-tracer.values[...] = 0
-sources = domain.T.array(fill=1. / dt, z=pygetm.CENTERS) * dt * domain.T.hn  # note that sources should be time- and layer-integrated!
-for _ in range(nstep):
-    vdif(nuh, dt, tracer, ea4=sources)
-delta = valid_tracer / nstep - 1
-error = np.abs(delta).max()
-if error > tolerance:
-    print('ERROR: error %s in tracer after using vertical diffusion solver to integrate sources exceeds tolerance %s' % (error, tolerance))
-    sys.exit(1)
-
-# Now try without spatial gradient and relative [linear] source term only
-tolerance = 1e-13
-tracer.values[...] = 1
-r = 0.1   # relative rate of increase
-rel_sources = domain.T.array(fill=r / dt, z=pygetm.CENTERS) * dt * domain.T.hn   # note that sources should be time- and layer-integrated!
-for _ in range(nstep):
-    vdif(nuh, dt, tracer, ea2=rel_sources)
-expected = 1. / (1. - r)**nstep
-delta = valid_tracer - expected
-rel_delta = delta / expected
-rel_delta_min = rel_delta.min(axis=(1, 2))
-rel_delta_max = rel_delta.max(axis=(1, 2))
-if (rel_delta_min - rel_delta_max).any():
-    print('ERROR: relative error in tracer varies horizontally after using vertical diffusion solver to integrate relative sources: %s vs %s' % (rel_delta_min, rel_delta_max))
-rel_error = np.abs(rel_delta).max()
-if rel_error > tolerance:
-    print('ERROR: maximum relative error %s in tracer after using vertical diffusion solver to integrate relative sources exceeds tolerance %s' % (rel_error, tolerance))
-    sys.exit(1)
-
-# Now try without spatial gradient in tracer, but with variable diffusivity
-tolerance = 1e-11
 rng = np.random.default_rng()
-nuh.all_values[:, :, ] = 10.**rng.uniform(-6., 0., nuh.all_values.shape)
 
-# Set diffusivity at all masked points to NaN
-nuh.all_values[:, domain.T.mask.all_values != 1] = np.nan
 
-# Set diffusivity at the very surface and bottom to NaN,
-# so we can later check that this value has not been propagated (used)
-nuh.all_values[0, ...] = np.nan
-nuh.all_values[-1, ...] = np.nan
+def for_each_grid(test_func):
+    @wraps(test_func)
+    def wrapper(self: unittest.TestCase, *args, **kwargs):
+        for grid_args in ({}, {"ddu": 1}, {"ddl": 1}):
+            with self.subTest(grid=grid_args):
+                EXTENT = 50000
+                domain = pygetm.domain.create_cartesian(
+                    np.linspace(0, EXTENT, 50),
+                    np.linspace(0, EXTENT, 52),
+                    25,
+                    f=0,
+                    H=50.0,
+                    **grid_args
+                )
+                # randomly mask half of the domain
+                domain.mask[...] = rng.random(domain.mask.shape) > 0.5
+                self.sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_3D)
+                assert (domain.T.ho.all_values == domain.T.hn.all_values).all()
+                test_func(self, domain.T, *args, **kwargs)
 
-constant_value = 35.
-tracer.all_values[...] = np.nan
-tracer.values[:, domain.T.mask.values == 1] = constant_value
-for _ in range(nstep):
-    vdif(nuh, dt, tracer)
-error = np.abs(tracer.ma / constant_value - 1.).max()
-if error > tolerance:
-    print('ERROR: error %s in tracer after using vertical diffusion solver on tracer without gradient exceeds tolerance %s' % (error, tolerance))
-    sys.exit(1)
+    return wrapper
+
+
+def for_each_cnpar(test_func):
+    @wraps(test_func)
+    def wrapper(self: unittest.TestCase, *args, **kwargs):
+        for cnpar in [0.5, 0.75, 1.0]:
+            with self.subTest(cnpar=cnpar):
+                test_func(self, cnpar, *args, **kwargs)
+
+    return wrapper
+
+
+def repeat(test_func):
+    @wraps(test_func)
+    def wrapper(self: unittest.TestCase, *args, **kwargs):
+        for i in range(10):
+            with self.subTest(repeat=i):
+                test_func(self, *args, **kwargs)
+
+    return wrapper
+
+
+class TestVerticalDiffusion(unittest.TestCase):
+    DT = 600.0
+    NSTEP = 100
+
+    def diffuse(self, tracer_in, nuh, cnpar, tolerance=1e-13, sources=None):
+        self.assertTrue(
+            np.isfinite(tracer_in.ma).all(),
+            "tracer contains non-finite values before diffusion",
+        )
+
+        tracer = tracer_in.grid.array(z=tracer_in.z)
+        tracer.all_values[...] = tracer_in.all_values
+        vdif = pygetm.operators.VerticalDiffusion(tracer.grid, cnpar=cnpar)
+
+        # Set diffusivity at all masked points to NaN
+        nuh.all_values[:, nuh.grid.mask.all_values != 1] = np.nan
+
+        # Set diffusivity at the very surface and bottom to NaN,
+        # so we can later check that this value has not been propagated (used)
+        nuh.all_values[0, ...] = np.nan
+        nuh.all_values[-1, ...] = np.nan
+
+        for _ in range(self.NSTEP):
+            vdif(nuh, self.DT, tracer, ea4=sources)
+
+        self.assertTrue(
+            np.isfinite(tracer.ma)[...].all(),
+            "tracer contains non-finite values after diffusion",
+        )
+
+        col_min = tracer.ma.min(axis=(1, 2))
+        col_max = tracer.ma.max(axis=(1, 2))
+
+        col_range = col_max - col_min
+        self.assertEqual(
+            col_range.max(), 0.0, "horizontal variability in tracer after diffusion"
+        )
+        if sources is None:
+            ini_min, ini_max = tracer_in.ma.min(), tracer_in.ma.max()
+            global_min, global_max = col_min.min(), col_max.max()
+            eps = tolerance * max(abs(global_min), abs(global_max))
+            self.assertLessEqual(
+                global_max,
+                ini_max + eps,
+                "final global maximum value exceeds initial maximum",
+            )
+            self.assertGreaterEqual(
+                global_min,
+                ini_min - eps,
+                "final global minimum value below initial minimum",
+            )
+
+        expected_integral = (tracer_in.ma * tracer_in.grid.hn).sum(axis=0)
+        if sources is not None:
+            expected_integral += sources.values.sum(axis=0) * self.NSTEP
+        integral = (tracer.ma * tracer.grid.hn).sum(axis=0)
+        delta = np.abs(integral - expected_integral).max()
+        reldelta = delta / np.abs(expected_integral).max()
+        self.assertLessEqual(
+            reldelta, tolerance, "depth integral differs from expected value"
+        )
+
+    @for_each_grid
+    @for_each_cnpar
+    def test_mixing_from_bottom(self, cnpar: float, grid: pygetm.domain.Grid):
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=0.01)
+        tracer = grid.array(z=pygetm.CENTERS, fill=0.0)
+        tracer.values[0, ...] = 1.0
+        self.diffuse(tracer, nuh, cnpar)
+
+    @for_each_grid
+    @for_each_cnpar
+    def test_mixing_from_surface(self, cnpar: float, grid: pygetm.domain.Grid):
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=0.01)
+        tracer = grid.array(z=pygetm.CENTERS, fill=0.0)
+        tracer.values[-1, ...] = 1.0
+        self.diffuse(tracer, nuh, cnpar)
+
+    @repeat
+    @for_each_grid
+    @for_each_cnpar
+    def test_mixing_of_random_state(self, cnpar: float, grid: pygetm.domain.Grid):
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=0.01)
+        tracer = grid.array(z=pygetm.CENTERS)
+        tracer[...] = rng.uniform(0.0, 1.0, (tracer.shape[0], 1, 1))
+        self.diffuse(tracer, nuh, cnpar)
+
+    @for_each_grid
+    @for_each_cnpar
+    def test_source(self, cnpar: float, grid: pygetm.domain.Grid):
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=0.01)
+        tracer = grid.array(z=pygetm.CENTERS, fill=0.0)
+        # note that sources should be time- and layer-integrated!
+        sources = grid.array(fill=1.0 / self.DT, z=pygetm.CENTERS)
+        self.diffuse(tracer, nuh, cnpar, sources=sources * self.DT * grid.hn)
+
+    @for_each_grid
+    def test_relative_source(self, grid):
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=0.01)
+        vdif = pygetm.operators.VerticalDiffusion(grid, cnpar=1.0)
+
+        tracer = grid.array(z=pygetm.CENTERS, fill=1.0)
+
+        # Now try without spatial gradient and relative [linear] source term only
+        tolerance = 1e-13
+        r = 0.1  # relative rate of increase
+        # note that sources should be time- and layer-integrated!
+        rel_sources = grid.array(fill=r / self.DT, z=pygetm.CENTERS) * self.DT * grid.hn
+        for _ in range(self.NSTEP):
+            vdif(nuh, self.DT, tracer, ea2=rel_sources)
+        expected = 1.0 / (1.0 - r) ** self.NSTEP
+        delta = tracer.ma - expected
+        rel_delta = delta / expected
+        rel_delta_min = rel_delta.min(axis=(1, 2))
+        rel_delta_max = rel_delta.max(axis=(1, 2))
+        self.assertFalse(
+            (rel_delta_min - rel_delta_max).any(),
+            "relative error in tracer varies horizontally after using vertical diffusion solver to integrate relative sources: %s vs %s"
+            % (rel_delta_min, rel_delta_max),
+        )
+        rel_error = np.abs(rel_delta).max()
+        self.assertLessEqual(
+            rel_error,
+            tolerance,
+            "maximum relative error %s in tracer after using vertical diffusion solver to integrate relative sources exceeds tolerance %s"
+            % (rel_error, tolerance),
+        )
+
+    @repeat
+    @for_each_grid
+    @for_each_cnpar
+    def test_random_diffusivity(self, cnpar: float, grid: pygetm.domain.Grid):
+        tracer = grid.array(z=pygetm.CENTERS, fill_value=np.nan)
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=np.nan)
+        nuh.fill(10.0 ** rng.uniform(-6.0, 0.0, (nuh.shape[0], 1, 1)))
+        tracer.fill(35.0)
+        self.diffuse(tracer, nuh, cnpar, tolerance=1e-11)
+
+    @repeat
+    @for_each_grid
+    @for_each_cnpar
+    def test_random_diffusivity_random_tracer(
+        self, cnpar: float, grid: pygetm.domain.Grid
+    ):
+        tracer = grid.array(z=pygetm.CENTERS, fill_value=np.nan)
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=np.nan)
+        nuh.fill(10.0 ** rng.uniform(-6.0, 0.0, (nuh.shape[0], 1, 1)))
+        tracer.fill(rng.uniform(0.0, 1.0, (tracer.shape[0], 1, 1)))
+        self.diffuse(tracer, nuh, cnpar, tolerance=1e-11)
+
+    @repeat
+    @for_each_grid
+    @for_each_cnpar
+    def test_random_diffusivity_random_tracer_with_sources(
+        self, cnpar: float, grid: pygetm.domain.Grid
+    ):
+        tracer = grid.array(z=pygetm.CENTERS, fill_value=np.nan)
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=np.nan)
+        nuh.fill(10.0 ** rng.uniform(-6.0, 0.0, (nuh.shape[0], 1, 1)))
+        tracer.fill(rng.uniform(0.0, 1.0, (tracer.shape[0], 1, 1)))
+        sources = grid.array(fill=1.0, z=pygetm.CENTERS)
+        sources.fill(rng.uniform(0.0, 1.0, (sources.shape[0], 1, 1)))
+        self.diffuse(
+            tracer, nuh, cnpar, tolerance=1e-11, sources=sources * self.DT * grid.hn
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
+
