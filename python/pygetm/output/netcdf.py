@@ -6,7 +6,6 @@ import cftime
 import netCDF4
 
 from . import File
-from ..constants import INTERFACES
 import pygetm.core
 
 
@@ -19,7 +18,7 @@ class NetCDFFile(File):
         rank: int,
         sync_interval: Optional[int] = 1,
         time_reference: Optional[cftime.datetime] = None,
-        format="NETCDF4",
+        format: str = "NETCDF4",
         **kwargs,
     ):
         """Create a NetCDF file for output

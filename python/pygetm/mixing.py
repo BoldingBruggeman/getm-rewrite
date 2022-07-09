@@ -11,10 +11,10 @@ from .constants import INTERFACES, FILL_VALUE, ZERO_GRADIENT
 
 
 class Turbulence:
-    """Base class that provides the turbulent viscosity ``num`` and diffusivity ``nuh``.
-    When using this class directly, viscosity and diffusivity are prescribed, not
-    calculated. In this case, both default to zero; assign to ``num``/``nuh`` or call
-    ``num.set``/``nuh.set`` to change this.
+    """Base class that provides the turbulent viscosity :attr:`num` and diffusivity
+    :attr:`nuh`. When using this class directly, viscosity and diffusivity are
+    prescribed, not calculated. In this case, both default to zero; assign to
+    :attr:`num`/:attr:`nuh` or call ``num.set``/``nuh.set`` to change this.
     """
 
     def initialize(self, grid: domain.Grid):
@@ -53,9 +53,9 @@ class Turbulence:
 
 
 class GOTM(Turbulence):
-    """Calculate the turbulent viscosity ``num`` and diffusivity ``nuh`` using
-    the `General Ocean Turbulence Model (GOTM) <https://gotm.net>`_.
-   """
+    """Calculate the turbulent viscosity :attr:`num` and diffusivity :attr:`nuh`
+    using the `General Ocean Turbulence Model (GOTM) <https://gotm.net>`_.
+    """
 
     def __init__(self, path: Optional[str] = None):
         super().__init__()

@@ -13,7 +13,7 @@ import pygsw
 
 
 class Density:
-    CP = pygsw.CP
+    CP = pygsw.CP  #: specific heat (J kg-1 K-1)
 
     @staticmethod
     def get_buoyancy_frequency(
