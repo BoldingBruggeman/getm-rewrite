@@ -61,13 +61,13 @@ add_library(cgotm
 target_link_libraries(cgotm turbulence util yaml)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
-  COMMAND ${Python3_EXECUTABLE} -m cython _pygetm.pyx
+  COMMAND cython _pygetm.pyx
   MAIN_DEPENDENCY _pygetm.pyx
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygotm.c
-  COMMAND ${Python3_EXECUTABLE} -m cython _pygotm.pyx
+  COMMAND cython _pygotm.pyx
   MAIN_DEPENDENCY _pygotm.pyx
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
