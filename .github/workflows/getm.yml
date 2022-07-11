@@ -29,8 +29,8 @@ jobs:
         run: |
           source ${CONDA}/etc/profile.d/conda.sh
           conda activate pygetm
-          python -m pygetm.util.interpolate 1
           cd python/tests
+          python test_interpolate.py -v
           python test_vertical_diffusion.py -v
           python test_2d_transport.py
           python test_2d_flow_symmetry.py
