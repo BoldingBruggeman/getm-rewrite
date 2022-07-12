@@ -143,13 +143,14 @@ class Simulation(_pygetm.Simulation):
         density: Optional[pygetm.density.Density] = None,
         radiation: Optional[pygetm.radiation.Radiation] = None,
         logger: Optional[logging.Logger] = None,
-        log_level: int = logging.INFO,
+        log_level: Optional[int] = None,
         internal_pressure_method: InternalPressure = InternalPressure.OFF,
         Am: float = 0.0,
     ):
 
         self.logger = dom.root_logger
-        self.logger.setLevel(log_level)
+        if log_level is not None:
+            self.logger.setLevel(log_level)
         self.output_manager = output.OutputManager(
             dom.fields,
             rank=dom.tiling.rank,
