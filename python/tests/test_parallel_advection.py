@@ -185,7 +185,6 @@ def main():
     duration = timeit.default_timer() - start
     print("Time spent in loop: %.4f s" % duration)
     print("%.4f ms per iteration" % (1000 * duration / Nmax,))
-    outman.close()
 
 
 if args.profile:
