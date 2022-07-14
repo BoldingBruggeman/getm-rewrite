@@ -117,7 +117,9 @@ class Density:
         return out
 
     @staticmethod
-    def convert_ts(sp: core.Array, pt: core.Array, p: core.Array = None) -> None:
+    def convert_ts(
+        salt: core.Array, temp: core.Array, p: core.Array = None, in_situ: bool = False
+    ) -> None:
         """Convert practical salinity and potential temperature to absolute salinity
         and conservative temperature. The conversion happens in-place: absolute salinity
         will replace practical salinity, conservative temperature (degrees Celsius)
@@ -125,24 +127,43 @@ class Density:
 
         Args:
             sp: practical salinity (PSU)
-            pt: potential temperature (degrees Celsius)
+            pt: potential temperature or, if ``in_situ=True``, in-situ temperature
+                (degrees Celsius)
             p: pressure (dbar). If not provided, the water depth in m will be used as
                 approximate pressure.
+            in_situ: input is in-situ temperature rather than potential temperature
         """
-        assert sp.grid is pt.grid
+        assert salt.grid is temp.grid
+        grid = salt.grid
+
+        # Prepare additional inputs: pressure, longitude, latitude
         if p is None:
-            p = _pygetm.thickness2center_depth(sp.grid.mask, sp.grid.hn)
-        assert p.grid is sp.grid
-        out = np.empty_like(sp.all_values)
-        lon = np.broadcast_to(sp.grid.lon.all_values, out.shape)
-        lat = np.broadcast_to(sp.grid.lat.all_values, out.shape)
+            p = _pygetm.thickness2center_depth(grid.mask, grid.hn)
+        assert p.grid is grid
+        out = np.empty_like(salt.all_values)
+        lon = np.broadcast_to(grid.lon.all_values, out.shape)
+        lat = np.broadcast_to(grid.lat.all_values, out.shape)
+
+        # Convert from practical to absolute salinity
         pygsw.sa_from_sp(
             lon.ravel(),
             lat.ravel(),
             p.all_values.ravel(),
-            sp.all_values.ravel(),
+            salt.all_values.ravel(),
             out.ravel(),
         )
-        sp.fill(out)
-        pygsw.ct_from_pt(sp.all_values.ravel(), pt.all_values.ravel(), out.ravel())
-        pt.fill(out)
+        salt.fill(out)
+
+        if in_situ:
+            # Convert from in-situ to potential temperature
+            pygsw.pt0_from_t(
+                salt.all_values.ravel(),
+                temp.all_values.ravel(),
+                p.all_values.ravel(),
+                out.ravel(),
+            )
+            temp.fill(out)
+
+        # Convert from potential to conservative temperature
+        pygsw.ct_from_pt(salt.all_values.ravel(), temp.all_values.ravel(), out.ravel())
+        temp.fill(out)
