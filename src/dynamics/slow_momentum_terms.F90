@@ -26,10 +26,10 @@ MODULE SUBROUTINE slow_momentum_terms(self,dt)
 !---------------------------------------------------------------------------
    if(associated(self%logs)) call self%logs%info('slow_momentum_terms()',level=2)
    ! [GETM Scientific Report: eqs. 2.21, 2.22]
-   call self%slow_advection(dt)
+!KB   call self%slow_advection(dt,.false.)
 
    ! [GETM Scientific Report: eqs. 2.18, 2.19]
-   if (self%apply_diffusion) call self%slow_diffusion()
+!KB   if (self%apply_diffusion) call self%slow_diffusion()
 
    ! [GETM Scientific Report: eqs. 2.22, 2.23]
    if (self%apply_bottom_friction) call self%slow_bottom_friction()

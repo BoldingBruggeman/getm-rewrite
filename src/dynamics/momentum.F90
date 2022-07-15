@@ -310,20 +310,29 @@ MODULE getm_momentum
       END SUBROUTINE coriolis_fqk
 
       ! advection
-      MODULE SUBROUTINE uv_advection_2d(self,dt)
+      MODULE SUBROUTINE uv_advection_2d(self,dt,apply_diffusion,Ah)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
+         logical, intent(in) :: apply_diffusion
+         real(real64), intent(in) :: Ah(:,:)
+           !! diffusion coefficient [m^2/s]
       END SUBROUTINE uv_advection_2d
-      MODULE SUBROUTINE slow_advection(self,dt)
+      MODULE SUBROUTINE slow_advection(self,dt,apply_diffusion,Ah)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
+         logical, intent(in) :: apply_diffusion
+         real(real64), intent(in) :: Ah(:,:)
+           !! diffusion coefficient [m^2/s]
       END SUBROUTINE slow_advection
-      MODULE SUBROUTINE uv_advection_3d(self,dt)
+      MODULE SUBROUTINE uv_advection_3d(self,dt,apply_diffusion,Ah)
          class(type_getm_momentum), intent(inout) :: self
          real(real64), intent(in) :: dt
             !! timestep [s]
+         logical, intent(in) :: apply_diffusion
+         real(real64), intent(in) :: Ah(:,:)
+           !! diffusion coefficient [m^2/s]
       END SUBROUTINE uv_advection_3d
 
       ! diffusion

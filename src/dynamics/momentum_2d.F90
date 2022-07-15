@@ -149,7 +149,7 @@ MODULE SUBROUTINE uv_momentum_2d(self,runtype,dt,tausx,tausy,dpdx,dpdy)
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('uv_momentum_2d()',level=2)
    if (self%apply_bottom_friction) call self%bottom_friction_2d(runtype)
-   if (self%advection_scheme > 0) call self%uv_advection_2d(dt)
+!KB   if (self%advection_scheme > 0) call self%uv_advection_2d(dt)
    if (self%apply_diffusion) call self%uv_diffusion_2d(dt)
    if(self%ufirst) then
       call u_2d(self,dt,tausx,dpdx)

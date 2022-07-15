@@ -123,7 +123,7 @@ MODULE SUBROUTINE uvw_momentum_3d(self,dt,tausx,tausy,dpdx,dpdy,idpdx,idpdy,visc
    end if
    call self%w_momentum_3d(dt)
    call self%velocities_3d()
-   call self%uv_advection_3d(dt)
+!KB   call self%uv_advection_3d(dt)
 #if 0
    call self%uv_diffusion_3d(dt) !KB - makes model go wrong
 #else

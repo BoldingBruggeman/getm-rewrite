@@ -8,7 +8,7 @@ CONTAINS
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE uv_advection_2d(self,dt)
+MODULE SUBROUTINE uv_advection_2d(self,dt,apply_diffusion,Ah)
 
    IMPLICIT NONE
 
@@ -16,6 +16,9 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    class(type_getm_momentum), intent(inout) :: self
    real(real64), intent(in) :: dt
       !! timestep [s]
+   logical, intent(in) :: apply_diffusion
+   real(real64), intent(in) :: Ah(:,:)
+      !! diffusion coefficient [m^2/s]
 
 !  Local constants
 
@@ -40,7 +43,7 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    self%advU=self%U
 #endif
    where(UG%mask > 0) self%u1 = self%U/UG%D
-   call self%advection%calculate(self%uuadvgrid,self%ua,self%uvadvgrid,self%va,0._real64,dt,UG,self%u1)
+   call self%advection%calculate(self%uuadvgrid,self%ua,self%uvadvgrid,self%va,apply_diffusion,Ah,dt,UG,self%u1)
 #ifdef _APPLY_ADV_DIFF_
    where(UG%mask > 0) self%U = self%u1*UG%D
 #else
@@ -59,7 +62,7 @@ MODULE SUBROUTINE uv_advection_2d(self,dt)
    self%advV=self%V
 #endif
    where(VG%mask > 0) self%v1 = self%V/VG%D
-   call self%advection%calculate(self%vuadvgrid,self%ua,self%vvadvgrid,self%va,0._real64,dt,VG,self%v1)
+   call self%advection%calculate(self%vuadvgrid,self%ua,self%vvadvgrid,self%va,apply_diffusion,Ah,dt,VG,self%v1)
 #ifdef _APPLY_ADV_DIFF_
    where(VG%mask > 0) self%V = self%v1*VG%D
 #else
@@ -74,7 +77,7 @@ END SUBROUTINE uv_advection_2d
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE uv_advection_3d(self,dt)
+MODULE SUBROUTINE uv_advection_3d(self,dt,apply_diffusion,Ah)
    !! 3D velocity advection
 
    IMPLICIT NONE
@@ -82,6 +85,9 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
    class(type_getm_momentum), intent(inout) :: self
    real(real64), intent(in) :: dt
       !! timestep [s]
+   logical, intent(in) :: apply_diffusion
+   real(real64), intent(in) :: Ah(:,:)
+      !! diffusion coefficient [m^2/s]
 
 !  Local constants
 
@@ -103,7 +109,7 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
       end do
    end do
    self%advpk=self%pk
-   call self%advection%calculate(self%uuadvgrid,self%pka,self%uvadvgrid,self%qka,0._real64,dt,UG,self%pk)
+   call self%advection%calculate(self%uuadvgrid,self%pka,self%uvadvgrid,self%qka,apply_diffusion,Ah,dt,UG,self%pk)
    self%advpk=(self%pk-self%advpk)/dt
    do j=VG%jmin-1,UG%jmax
       do i=VG%imin-1,UG%imax
@@ -114,7 +120,7 @@ MODULE SUBROUTINE uv_advection_3d(self,dt)
       end do
    end do
    self%advqk=self%qk
-   call self%advection%calculate(self%vuadvgrid,self%pka,self%vvadvgrid,self%qka,0._real64,dt,VG,self%qk)
+   call self%advection%calculate(self%vuadvgrid,self%pka,self%vvadvgrid,self%qka,apply_diffusion,Ah,dt,VG,self%qk)
    self%advqk=(self%qk-self%advqk)/dt
    end associate VGrid
    end associate UGrid
@@ -124,7 +130,7 @@ END SUBROUTINE uv_advection_3d
 
 !---------------------------------------------------------------------------
 
-MODULE SUBROUTINE slow_advection(self,dt)
+MODULE SUBROUTINE slow_advection(self,dt,apply_diffusion,Ah)
 
    !! Advection of time averaged depth integrated transports and slow advection update
 
@@ -134,6 +140,8 @@ MODULE SUBROUTINE slow_advection(self,dt)
    class(type_getm_momentum), intent(inout) :: self
    real(real64), intent(in) :: dt
       !! timestep [s]
+   logical, intent(in) :: apply_diffusion
+   real(real64), intent(in) :: Ah(:,:)
 
 !  Local constants
 
@@ -157,7 +165,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
       end do
    end do
    self%SxA=self%Ui
-   call self%advection%calculate(self%uuadvgrid,self%Ua,self%uvadvgrid,self%Va,0._real64,dt,UG,self%Ui)
+   call self%advection%calculate(self%uuadvgrid,self%Ua,self%uvadvgrid,self%Va,apply_diffusion,Ah,dt,UG,self%Ui)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
          if (UG%mask(i,j) .ge. 1) then
@@ -176,7 +184,7 @@ MODULE SUBROUTINE slow_advection(self,dt)
       end do
    end do
    self%SyA=self%Vi
-   call self%advection%calculate(self%vuadvgrid,self%Ua,self%vvadvgrid,self%Va,0._real64,dt,VG,self%Vi)
+   call self%advection%calculate(self%vuadvgrid,self%Ua,self%vvadvgrid,self%Va,apply_diffusion,Ah,dt,VG,self%Vi)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
          if (VG%mask(i,j) .ge. 1) then

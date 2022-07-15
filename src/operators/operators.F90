@@ -57,21 +57,23 @@ MODULE getm_operators
          type(type_getm_grid), intent(in) :: tgrid
       end subroutine advection_initialize
 
-      module subroutine advection_calculate_2d(self, ugrid, u, vgrid, v, Ah, dt, tgrid, f)
+      module subroutine advection_calculate_2d(self, ugrid, u, vgrid, v, apply_diffusion, Ah, dt, tgrid, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:), v(:,:)
-         real(real64), intent(in) :: Ah
+         logical, intent(in) :: apply_diffusion
+         real(real64), intent(in) :: Ah(:,:)
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
          real(real64), intent(inout) :: f(:,:)
       end subroutine advection_calculate_2d
 
-      module subroutine advection_calculate_3d(self, ugrid, u, vgrid, v, Ah, dt, tgrid, f)
+      module subroutine advection_calculate_3d(self, ugrid, u, vgrid, v, apply_diffusion, Ah, dt, tgrid, f)
          class(type_advection), intent(inout) :: self
          type(type_getm_grid), intent(in) :: ugrid, vgrid
          real(real64), intent(in) :: u(:,:,:), v(:,:,:)
-         real(real64), intent(in) :: Ah
+         logical, intent(in) :: apply_diffusion
+         real(real64), intent(in) :: Ah(:,:)
          real(real64), intent(in) :: dt
          type(type_getm_grid), intent(inout) :: tgrid
          real(real64), intent(inout) :: f(:,:,:)
