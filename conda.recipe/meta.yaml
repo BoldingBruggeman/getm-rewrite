@@ -2,6 +2,12 @@ package:
   name: pygetm
   version: "0.5"
 
+build:
+  entry_points:
+    - pygetm-subdiv = pygetm.subdiv:main
+    - pygetm-test-scaling = pygetm.parallel:test_scaling_command
+    - pygetm-compare-nc = pygetm.util.compare_nc:compare_command
+
 requirements:
   host:
     - python
