@@ -1,0 +1,36 @@
+package:
+  name: pygetm
+  version: "0.5"
+
+requirements:
+  host:
+    - python
+    - numpy
+    - pip
+    - setuptools
+  build:
+    - cython
+    - cmake
+    - make                       # [not win]
+    - {{ compiler('c') }}
+    - {{ compiler('fortran') }}  # [not win]
+  run:
+    - python
+    - {{ pin_compatible('numpy') }}
+    - xarray
+    - mpi4py
+    - netCDF4
+
+test:
+  requires:
+    - scipy
+  imports:
+    - pygetm
+  commands:
+    - python {{ RECIPE_DIR }}/../python/tests/test_interpolate.py -v
+    - python {{ RECIPE_DIR }}/../python/tests/test_vertical_diffusion.py -v
+    - python {{ RECIPE_DIR }}/../python/tests/test_2d_transport.py -v  
+
+about:
+  home: https://pygetm.readthedocs.io
+  license: GPL

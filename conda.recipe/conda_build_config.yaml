@@ -1,0 +1,6 @@
+fortran_compiler_version: # [unix]
+  - 11 # [linux]
+
+python:
+    - 3.8
+    - 3.9
