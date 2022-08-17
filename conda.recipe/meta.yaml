@@ -36,6 +36,9 @@ test:
     - python {{ RECIPE_DIR }}/../python/tests/test_interpolate.py -v
     - python {{ RECIPE_DIR }}/../python/tests/test_vertical_diffusion.py -v
     - python {{ RECIPE_DIR }}/../python/tests/test_2d_transport.py -v  
+    - pygetm-subdiv -h
+    - pygetm-test-scaling -h
+    - pygetm-compare-nc -h
 
 about:
   home: https://pygetm.readthedocs.io
