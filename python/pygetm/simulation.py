@@ -257,7 +257,7 @@ class Simulation(_pygetm.Simulation):
 
         #: List of variables for which the domain-integrated total needs to be reported.
         #: These can be depth-integrated (2D) or depth-explicit (3D).
-        self.tracer_totals: List[core.Array] = []
+        self.tracer_totals: List[pygetm.tracer.TracerTotal] = []
 
         self.fabm = None
 
@@ -381,7 +381,19 @@ class Simulation(_pygetm.Simulation):
             self.buoy = dom.T.array(
                 z=CENTERS, name="buoy", units="m s-2", long_name="buoyancy"
             )
-            self.tracer_totals.append(self.salt)
+            self.tracer_totals += [
+                pygetm.tracer.TracerTotal(
+                    self.salt, units="g", per_mass=True, long_name="salt"
+                ),
+                pygetm.tracer.TracerTotal(
+                    self.temp,
+                    units="J",
+                    per_mass=True,
+                    scale_factor=self.density.CP,
+                    offset=self.density.CP * 273.15,
+                    long_name="heat",
+                ),
+            ]
             self.temp_sf = self.temp.isel(z=-1)
             self.salt_sf = self.salt.isel(z=-1)
             if internal_pressure_method == InternalPressure.OFF:
@@ -925,23 +937,37 @@ class Simulation(_pygetm.Simulation):
         """Write totals of selected variables over the global domain
         (those in :attr:`tracer_totals`) to the log.
         """
-        total_volume = (self.domain.T.D * self.domain.T.area).global_sum(
-            where=self.domain.T.mask != 0
-        )
+        unmasked = self.domain.T.mask != 0
+        total_volume = (self.domain.T.D * self.domain.T.area).global_sum(where=unmasked)
+        if any(tt.per_mass for tt in self.tracer_totals):
+            vol = self.domain.T.hn * self.domain.T.area
+            vol.all_values *= self.rho.all_values
+            total_mass = vol.global_sum(where=unmasked)
         if total_volume is not None:
             self.logger.info("Integrals over global domain:")
             self.logger.info("  volume: %.15e m3" % total_volume)
         if self.fabm:
             self.fabm.update_totals()
-        for var in self.tracer_totals:
-            total = var * var.grid.area
+        for tt in self.tracer_totals:
+            ar = tt.array
+            total = ar * ar.grid.area
+            if tt.scale_factor != 1.0:
+                total.all_values *= tt.scale_factor
+            if tt.offset != 0.0:
+                total.all_values += tt.offset * ar.grid.area.all_values
             if total.ndim == 3:
-                total.all_values *= var.grid.hn.all_values
-            total = total.global_sum(where=var.grid.mask != 0)
+                if tt.per_mass:
+                    total.all_values *= self.rho.all_values
+                total.all_values *= ar.grid.hn.all_values
+            total = total.global_sum(where=ar.grid.mask != 0)
+            long_name = tt.long_name if tt.long_name is not None else ar.long_name
+            units = tt.units if tt.units is not None else f"{ar.units} m3"
             if total is not None:
+                ref = total_volume if not tt.per_mass else total_mass
+                mean = (total / ref - tt.offset) / tt.scale_factor
                 self.logger.info(
-                    "  %s: %.15e %s m3 (per volume: %s %s)"
-                    % (var.name, total, var.units, total / total_volume, var.units)
+                    "  %s: %.15e %s (mean %s: %s %s)"
+                    % (long_name, total, units, ar.long_name, mean, ar.units,)
                 )
 
     def advance_surface_elevation(

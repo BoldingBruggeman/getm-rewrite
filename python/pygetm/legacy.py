@@ -84,7 +84,7 @@ def domain_from_topo(
                         nc["z0"], ioffset, joffset, nx, ny
                     )
                 )
-            domain = pygetm.domain.Domain.create(
+            domain = pygetm.domain.create(
                 nx,
                 ny,
                 nlev,
@@ -213,7 +213,7 @@ def load_riverinfo(dom: pygetm.domain.Domain, path: str):
 
             if name2split[name] > 1:
                 imouth = name2count.get(name, 0)
-                mouth_name = '%s[%i]' % (name, imouth)
+                mouth_name = "%s[%i]" % (name, imouth)
                 name2count[name] = imouth + 1
 
             # Note: we convert from 1-based indices to 0-based indices!

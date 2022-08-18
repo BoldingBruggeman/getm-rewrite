@@ -17,28 +17,12 @@ from . import input
 from .constants import FILL_VALUE, CENTERS, GRAVITY, INTERFACES
 
 
-class Side(enum.IntEnum):
-    WEST = 1
-    NORTH = 2
-    EAST = 3
-    SOUTH = 4
-
-
 class VerticalCoordinates(enum.IntEnum):
     SIGMA = 1
     #    Z = 2
     GVC = 3
     #    HYBRID = 4
     #    ADAPTIVE = 5
-
-
-def find_interfaces(c: np.ndarray):
-    c_if = np.empty((c.size + 1),)
-    d = np.diff(c)
-    c_if[1:-1] = c[:-1] + 0.5 * d
-    c_if[0] = c[0] - 0.5 * d[0]
-    c_if[-1] = c[-1] + 0.5 * d[-1]
-    return c_if
 
 
 class Grid(_pygetm.Grid):
@@ -386,208 +370,12 @@ for membername in Grid._all_arrays:
     setattr(Grid, membername[1:], property(operator.attrgetter(membername), doc=doc))
 
 
-def centers_to_supergrid_2d(
-    source: ArrayLike,
-    ioffset: int,
-    joffset: int,
-    nx: int,
-    ny: int,
-    dtype=None,
-    missing_values=(),
-):
-    if dtype is None:
-        dtype = source.dtype
-    data = np.ma.masked_all(source.shape[:-2] + (ny * 2 + 1, nx * 2 + 1), dtype=dtype)
-
-    # Create an array to hold data at centers (T points),
-    # with strips of size 1 on all sides to support interpolation to interfaces
-    data_centers = np.ma.masked_all(source.shape[:-2] + (ny + 2, nx + 2), dtype=dtype)
-
-    # Extend the read domain (T grid) by 1 each side, where possible
-    # That will allow us to interpolate (rater than extrapolate) to values at the
-    # interfaces
-    ex_imin = 0 if ioffset == 0 else 1
-    ex_imax = 0 if ioffset + nx == source.shape[-1] else 1
-    ex_jmin = 0 if joffset == 0 else 1
-    ex_jmax = 0 if joffset + ny == source.shape[-2] else 1
-    data_centers[
-        ..., 1 - ex_jmin : 1 + ny + ex_jmax, 1 - ex_imin : 1 + nx + ex_imax
-    ] = source[
-        ...,
-        joffset - ex_jmin : joffset + ny + ex_jmax,
-        ioffset - ex_imin : ioffset + nx + ex_imax,
-    ]
-    for missing_value in missing_values:
-        data_centers = np.ma.masked_equal(data_centers, missing_value, copy=False)
-
-    data_if_ip = np.ma.masked_all(
-        (4,) + source.shape[:-2] + (ny + 1, nx + 1), dtype=dtype
-    )
-    data_if_ip[0, ...] = data_centers[..., :-1, :-1]
-    data_if_ip[1, ...] = data_centers[..., 1:, :-1]
-    data_if_ip[2, ...] = data_centers[..., :-1, 1:]
-    data_if_ip[3, ...] = data_centers[..., 1:, 1:]
-    data[..., 1::2, 1::2] = data_centers[1:-1, 1:-1]
-    data[..., ::2, ::2] = data_if_ip.mean(axis=0)
-
-    data_if_ip[0, ..., :-1] = data_centers[..., :-1, 1:-1]
-    data_if_ip[1, ..., :-1] = data_centers[..., 1:, 1:-1]
-    data[..., ::2, 1::2] = data_if_ip[:2, ..., :-1].mean(axis=0)
-
-    data_if_ip[0, ..., :-1, :] = data_centers[..., 1:-1, :-1]
-    data_if_ip[1, ..., :-1, :] = data_centers[
-        ..., 1:-1, 1:,
-    ]
-    data[..., 1::2, ::2] = data_if_ip[:2, ..., :-1, :].mean(axis=0)
-
-    return data
-
-
-DEG2RAD = np.pi / 180  # degree to radian conversion
-R_EARTH = 6378815.0  # radius of the earth (m)
-OMEGA = (
-    2.0 * np.pi / 86164.0
-)  # rotation rate of the earth (rad/s), 86164 is number of seconds in a sidereal day
-
-
-def coriolis(lat: ArrayLike) -> ArrayLike:
-    """Calculate Coriolis parameter f for the given latitude.
-
-    Args:
-        lat: latitude in degrees North
-
-    Returns:
-        Coriolis parameter f
-    """
-    return 2.0 * OMEGA * np.sin(DEG2RAD * lat)
-
-
-def centers_to_supergrid_1d(data) -> np.ndarray:
-    assert data.ndim == 1, "data must be one-dimensional"
-    assert data.size > 1, "data must have at least 2 elements"
-    data_sup = np.empty((data.size * 2 + 1,))
-    data_sup[1::2] = data
-    data_sup[2:-2:2] = 0.5 * (data[1:] + data[:-1])
-    data_sup[0] = 2 * data_sup[1] - data_sup[2]
-    data_sup[-1] = 2 * data_sup[-2] - data_sup[-3]
-    return data_sup
-
-
-def interfaces_to_supergrid_1d(data, out: Optional[np.ndarray] = None) -> np.ndarray:
-    assert data.ndim == 1, "data must be one-dimensional"
-    assert data.size > 1, "data must have at least 2 elements"
-    if out is None:
-        out = np.empty((data.size * 2 - 1,))
-    out[0::2] = data
-    out[1::2] = 0.5 * (data[1:] + data[:-1])
-    return out
-
-
-def interfaces_to_supergrid_2d(data, out: Optional[np.ndarray] = None) -> np.ndarray:
-    assert data.ndim == 2, "data must be two-dimensional"
-    assert data.shape[0] > 1 and data.shape[1] > 1, "dimensions must have length >= 2"
-    if out is None:
-        out = np.empty((data.shape[0] * 2 - 1, data.shape[1] * 2 - 1))
-    out[0::2, 0::2] = data
-    out[1::2, 0::2] = 0.5 * (data[:-1, :] + data[1:, :])
-    out[0::2, 1::2] = 0.5 * (data[:, :-1] + data[:, 1:])
-    out[1::2, 1::2] = 0.25 * (
-        data[:-1, :-1] + data[:-1, 1:] + data[1:, :-1] + data[1:, 1:]
-    )
-    return out
-
-
-def create_cartesian(x, y, nz: int, interfaces=False, **kwargs) -> "Domain":
-    """Create Cartesian domain from 1D arrays with x coordinates and  y coordinates."""
-    assert x.ndim == 1, "x coordinate must be one-dimensional"
-    assert y.ndim == 1, "y coordinate must be one-dimensional"
-
-    if interfaces:
-        nx, ny = x.size - 1, y.size - 1
-        x, y = interfaces_to_supergrid_1d(x), interfaces_to_supergrid_1d(y)
-    else:
-        nx, ny = x.size, y.size
-        x, y = centers_to_supergrid_1d(x), centers_to_supergrid_1d(y)
-    return Domain.create(nx, ny, nz, x=x, y=y[:, np.newaxis], **kwargs)
-
-
-def create_spherical(lon, lat, nz: int, interfaces=False, **kwargs) -> "Domain":
-    """Create spherical domain from 1D arrays with longitudes and latitudes."""
-    assert lon.ndim == 1, "longitude coordinate must be one-dimensional"
-    assert lat.ndim == 1, "latitude coordinate must be one-dimensional"
-
-    if interfaces:
-        nx, ny = lon.size - 1, lat.size - 1
-        lon, lat = interfaces_to_supergrid_1d(lon), interfaces_to_supergrid_1d(lat)
-    else:
-        nx, ny = lon.size, lat.size
-        lon, lat = centers_to_supergrid_1d(lon), centers_to_supergrid_1d(lat)
-    return Domain.create(
-        nx, ny, nz, lon=lon, lat=lat[:, np.newaxis], spherical=True, **kwargs
-    )
-
-
-def create_spherical_at_resolution(
-    minlon: float,
-    maxlon: float,
-    minlat: float,
-    maxlat: float,
-    resolution: float,
-    nz: int,
-    **kwargs
-) -> "Domain":
-    """Create spherical domain encompassing the specified longitude range and latitude
-    range and desired resolution in m.
-    """
-    assert maxlon > minlon, (
-        "Maximum longitude %s must be greater than minimum longitude %s"
-        % (maxlon, minlon)
-    )
-    assert (
-        maxlat > minlat
-    ), "Maximum latitude %s must be greater than minimum latitude %s" % (maxlat, minlat)
-    assert resolution > 0, "Desired resolution must be greater than 0, but is %s m" % (
-        resolution,
-    )
-    dlat = resolution / (DEG2RAD * R_EARTH)
-    minabslat = min(abs(minlat), abs(maxlat))
-    dlon = resolution / (DEG2RAD * R_EARTH) / np.cos(DEG2RAD * minabslat)
-    nx = int(np.ceil((maxlon - minlon) / dlon)) + 1
-    ny = int(np.ceil((maxlat - minlat) / dlat)) + 1
-    return create_spherical(
-        np.linspace(minlon, maxlon, nx),
-        np.linspace(minlat, maxlat, ny),
-        nz=nz,
-        interfaces=True,
-        **kwargs
-    )
-
-
-def load(path: str, nz: int, **kwargs) -> "Domain":
-    """Load domain from file. Typically this is a file created by :meth:`Domain.save`.
-
-    Args:
-        path: NetCDF file to load from
-        nz: number of vertical layers
-        **kwargs: additional keyword arguments to pass to :class:`Domain`
-    """
-    with netCDF4.Dataset(path) as nc:
-        for name in ("lon", "lat", "x", "y", "H", "mask", "z0b_min", "cor"):
-            if name in nc.variables and name not in kwargs:
-                kwargs[name] = nc.variables[name][...]
-    spherical = kwargs.get("spherical", "lon" in kwargs)
-    ny, nx = kwargs["lon" if spherical else "x"].shape
-    nx = (nx - 1) // 2
-    ny = (ny - 1) // 2
-    return Domain.create(nx, ny, nz, spherical=spherical, **kwargs)
-
-
 class RiverTracer(core.Array):
     __slots__ = ("_follow",)
 
     def __init__(
         self,
-        grid,
+        grid: Grid,
         river_name: str,
         tracer_name: str,
         value: np.ndarray,
@@ -605,7 +393,7 @@ class RiverTracer(core.Array):
 
     @property
     def follow_target_cell(self) -> bool:
-        return self._follow
+        return bool(self._follow)
 
     @follow_target_cell.setter
     def follow_target_cell(self, value: bool):
@@ -689,7 +477,6 @@ class Rivers(Mapping[str, River]):
     def __init__(self, grid: Grid):
         self.grid = grid
         self._rivers: List[River] = []
-        self._tracers = []
         self._frozen = False
 
     def add_by_index(self, name: str, i: int, j: int, **kwargs):
@@ -761,6 +548,13 @@ class Rivers(Mapping[str, River]):
 
     def __iter__(self):
         return map(operator.attrgetter("name"), self._rivers)
+
+
+class Side(enum.IntEnum):
+    WEST = 1
+    NORTH = 2
+    EAST = 3
+    SOUTH = 4
 
 
 class OpenBoundary:
@@ -1063,6 +857,390 @@ class OpenBoundaries(Mapping):
         return iter(self._boundaries)
 
 
+def find_interfaces(c: ArrayLike) -> np.ndarray:
+    c_if = np.empty((c.size + 1),)
+    d = np.diff(c)
+    c_if[1:-1] = c[:-1] + 0.5 * d
+    c_if[0] = c[0] - 0.5 * d[0]
+    c_if[-1] = c[-1] + 0.5 * d[-1]
+    return c_if
+
+
+DEG2RAD = np.pi / 180  # degree to radian conversion
+R_EARTH = 6378815.0  # radius of the earth (m)
+OMEGA = (
+    2.0 * np.pi / 86164.0
+)  # rotation rate of the earth (rad/s), 86164 is number of seconds in a sidereal day
+
+
+def coriolis(lat: ArrayLike) -> ArrayLike:
+    """Calculate Coriolis parameter f for the given latitude.
+
+    Args:
+        lat: latitude in degrees North
+
+    Returns:
+        Coriolis parameter f
+    """
+    return 2.0 * OMEGA * np.sin(DEG2RAD * lat)
+
+
+def centers_to_supergrid_1d(data: ArrayLike) -> np.ndarray:
+    assert data.ndim == 1, "data must be one-dimensional"
+    assert data.size > 1, "data must have at least 2 elements"
+    data_sup = np.empty((data.size * 2 + 1,))
+    data_sup[1::2] = data
+    data_sup[2:-2:2] = 0.5 * (data[1:] + data[:-1])
+    data_sup[0] = 2 * data_sup[1] - data_sup[2]
+    data_sup[-1] = 2 * data_sup[-2] - data_sup[-3]
+    return data_sup
+
+
+def centers_to_supergrid_2d(
+    source: ArrayLike,
+    ioffset: int,
+    joffset: int,
+    nx: int,
+    ny: int,
+    dtype=None,
+    missing_values=(),
+):
+    if dtype is None:
+        dtype = source.dtype
+    data = np.ma.masked_all(source.shape[:-2] + (ny * 2 + 1, nx * 2 + 1), dtype=dtype)
+
+    # Create an array to hold data at centers (T points),
+    # with strips of size 1 on all sides to support interpolation to interfaces
+    data_centers = np.ma.masked_all(source.shape[:-2] + (ny + 2, nx + 2), dtype=dtype)
+
+    # Extend the read domain (T grid) by 1 each side, where possible
+    # That will allow us to interpolate (rater than extrapolate) to values at the
+    # interfaces
+    ex_imin = 0 if ioffset == 0 else 1
+    ex_imax = 0 if ioffset + nx == source.shape[-1] else 1
+    ex_jmin = 0 if joffset == 0 else 1
+    ex_jmax = 0 if joffset + ny == source.shape[-2] else 1
+    data_centers[
+        ..., 1 - ex_jmin : 1 + ny + ex_jmax, 1 - ex_imin : 1 + nx + ex_imax
+    ] = source[
+        ...,
+        joffset - ex_jmin : joffset + ny + ex_jmax,
+        ioffset - ex_imin : ioffset + nx + ex_imax,
+    ]
+    for missing_value in missing_values:
+        data_centers = np.ma.masked_equal(data_centers, missing_value, copy=False)
+
+    data_if_ip = np.ma.masked_all(
+        (4,) + source.shape[:-2] + (ny + 1, nx + 1), dtype=dtype
+    )
+    data_if_ip[0, ...] = data_centers[..., :-1, :-1]
+    data_if_ip[1, ...] = data_centers[..., 1:, :-1]
+    data_if_ip[2, ...] = data_centers[..., :-1, 1:]
+    data_if_ip[3, ...] = data_centers[..., 1:, 1:]
+    data[..., 1::2, 1::2] = data_centers[1:-1, 1:-1]
+    data[..., ::2, ::2] = data_if_ip.mean(axis=0)
+
+    data_if_ip[0, ..., :-1] = data_centers[..., :-1, 1:-1]
+    data_if_ip[1, ..., :-1] = data_centers[..., 1:, 1:-1]
+    data[..., ::2, 1::2] = data_if_ip[:2, ..., :-1].mean(axis=0)
+
+    data_if_ip[0, ..., :-1, :] = data_centers[..., 1:-1, :-1]
+    data_if_ip[1, ..., :-1, :] = data_centers[
+        ..., 1:-1, 1:,
+    ]
+    data[..., 1::2, ::2] = data_if_ip[:2, ..., :-1, :].mean(axis=0)
+
+    return data
+
+
+def interfaces_to_supergrid_1d(
+    data: ArrayLike, out: Optional[np.ndarray] = None
+) -> np.ndarray:
+    assert data.ndim == 1, "data must be one-dimensional"
+    assert data.size > 1, "data must have at least 2 elements"
+    if out is None:
+        out = np.empty((data.size * 2 - 1,))
+    out[0::2] = data
+    out[1::2] = 0.5 * (data[1:] + data[:-1])
+    return out
+
+
+def interfaces_to_supergrid_2d(
+    data: ArrayLike, out: Optional[np.ndarray] = None
+) -> np.ndarray:
+    assert data.ndim == 2, "data must be two-dimensional"
+    assert data.shape[0] > 1 and data.shape[1] > 1, "dimensions must have length >= 2"
+    if out is None:
+        out = np.empty((data.shape[0] * 2 - 1, data.shape[1] * 2 - 1))
+    out[0::2, 0::2] = data
+    out[1::2, 0::2] = 0.5 * (data[:-1, :] + data[1:, :])
+    out[0::2, 1::2] = 0.5 * (data[:, :-1] + data[:, 1:])
+    out[1::2, 1::2] = 0.25 * (
+        data[:-1, :-1] + data[:-1, 1:] + data[1:, :-1] + data[1:, 1:]
+    )
+    return out
+
+
+def create_cartesian(
+    x: ArrayLike, y: ArrayLike, nz: int, interfaces=False, **kwargs
+) -> "Domain":
+    """Create Cartesian domain from 1D arrays with x coordinates and  y coordinates.
+
+    Args:
+        x: 1d array with x coordinates
+            (at cell interfaces if `interfaces=True`, else at cell centers)
+        y: 1d array with y coordinates
+            (at cell interfaces if `interfaces=True`, else at cell centers)
+        nz: number of vertical layers
+        interfaces: coordinates are given at cell interfaces, rather than cell centers.
+        **kwargs: additional arguments passed to :func:`create`
+    """
+    assert x.ndim == 1, "x coordinate must be one-dimensional"
+    assert y.ndim == 1, "y coordinate must be one-dimensional"
+
+    if interfaces:
+        nx, ny = x.size - 1, y.size - 1
+        x, y = interfaces_to_supergrid_1d(x), interfaces_to_supergrid_1d(y)
+    else:
+        nx, ny = x.size, y.size
+        x, y = centers_to_supergrid_1d(x), centers_to_supergrid_1d(y)
+    return create(nx, ny, nz, x=x, y=y[:, np.newaxis], **kwargs)
+
+
+def create_spherical(
+    lon: ArrayLike, lat: ArrayLike, nz: int, interfaces=False, **kwargs
+) -> "Domain":
+    """Create spherical domain from 1D arrays with longitudes and latitudes.
+
+    Args:
+        lon: 1d array with longitude coordinates
+            (at cell interfaces if `interfaces=True`, else at cell centers)
+        lat: 1d array with latitude coordinates
+            (at cell interfaces if `interfaces=True`, else at cell centers)
+        nz: number of vertical layers
+        interfaces: coordinates are given at cell interfaces, rather than cell centers.
+        **kwargs: additional arguments passed to :func:`create`
+    """
+    assert lon.ndim == 1, "longitude coordinate must be one-dimensional"
+    assert lat.ndim == 1, "latitude coordinate must be one-dimensional"
+
+    if interfaces:
+        nx, ny = lon.size - 1, lat.size - 1
+        lon, lat = interfaces_to_supergrid_1d(lon), interfaces_to_supergrid_1d(lat)
+    else:
+        nx, ny = lon.size, lat.size
+        lon, lat = centers_to_supergrid_1d(lon), centers_to_supergrid_1d(lat)
+    return create(nx, ny, nz, lon=lon, lat=lat[:, np.newaxis], spherical=True, **kwargs)
+
+
+def create_spherical_at_resolution(
+    minlon: float,
+    maxlon: float,
+    minlat: float,
+    maxlat: float,
+    resolution: float,
+    nz: int,
+    **kwargs
+) -> "Domain":
+    """Create spherical domain encompassing the specified longitude range and latitude
+    range and desired resolution in m.
+
+    Args:
+        minlon: minimum longitude
+        maxlon: maximum longitude
+        minlat: minimum latitude
+        maxlat: maximum latitude
+        resolution: maximum grid cell length and width (m)
+        nz: number of vertical layers
+        **kwargs: additional arguments passed to :func:`create`
+    """
+    assert maxlon > minlon, (
+        "Maximum longitude %s must be greater than minimum longitude %s"
+        % (maxlon, minlon)
+    )
+    assert (
+        maxlat > minlat
+    ), "Maximum latitude %s must be greater than minimum latitude %s" % (maxlat, minlat)
+    assert resolution > 0, "Desired resolution must be greater than 0, but is %s m" % (
+        resolution,
+    )
+    dlat = resolution / (DEG2RAD * R_EARTH)
+    minabslat = min(abs(minlat), abs(maxlat))
+    dlon = resolution / (DEG2RAD * R_EARTH) / np.cos(DEG2RAD * minabslat)
+    nx = int(np.ceil((maxlon - minlon) / dlon)) + 1
+    ny = int(np.ceil((maxlat - minlat) / dlat)) + 1
+    return create_spherical(
+        np.linspace(minlon, maxlon, nx),
+        np.linspace(minlat, maxlat, ny),
+        nz=nz,
+        interfaces=True,
+        **kwargs
+    )
+
+
+def create(
+    nx: int,
+    ny: int,
+    nz: int,
+    lon: Optional[np.ndarray] = None,
+    lat: Optional[np.ndarray] = None,
+    x: Optional[np.ndarray] = None,
+    y: Optional[np.ndarray] = None,
+    spherical: bool = False,
+    mask: Optional[np.ndarray] = 1,
+    H: Optional[np.ndarray] = None,
+    z0: Optional[np.ndarray] = 0.0,
+    f: Optional[np.ndarray] = None,
+    tiling: Optional[parallel.Tiling] = None,
+    periodic_x: bool = False,
+    periodic_y: bool = False,
+    logger: Optional[logging.Logger] = None,
+    glob: bool = False,
+    **kwargs
+) -> "Domain":
+    """Create new domain. By default, the local subdomain is returned if
+    multiple processing cores are active (and `glob` is `False`)
+
+    Args:
+        nx: number of tracer points in x direction
+        ny: number of tracer points in y direction
+        nz: number of vertical layers
+        lon: longitude (degrees East)
+        lat: latitude (degrees North)
+        x: x coordinate (m)
+        y: y coordinate (m)
+        spherical: grid is spherical (as opposed to Cartesian). If True, at least
+            ``lon`` and ``lat`` must be provided. Otherwise at least ``x`` and ``y``
+            must be provided.
+        mask: initial mask (0: land, 1: water)
+        H: initial bathymetric depth. This is the distance between the bottom and
+            some arbitrary depth reference (m, positive if bottom lies below the
+            depth reference). Typically the depth reference is mean sea level.
+        z0: initial bottom roughness (m)
+        f: Coriolis parameter. By default this is calculated from latitude ``lat``
+            if provided.
+        tiling: subdomain decomposition
+        periodic_x: use periodic boundary in x direction (left == right)
+            This is only used if `tiling` is not provided.
+        periodic_y: use periodic boundary in y direction (top == bottom)
+            This is only used if `tiling` is not provided.
+        logger: target for log messages
+        glob: return the global domain rather than the local subdomain
+        **kwargs: additional keyword arguments passed to :class:`Domain`
+    """
+    global_domain = None
+    logger = logger or parallel.get_logger()
+    parlogger = logger.getChild("parallel")
+
+    # Determine subdomain division
+
+    if glob:
+        # We need to return the global domain. Create a dummy subdomain layout.
+        tiling = parallel.Tiling(
+            nrow=1, ncol=1, ncpus=1, periodic_x=periodic_x, periodic_y=periodic_y
+        )
+        tiling.rank = 0
+
+    if tiling is None:
+        # No tiling provided - autodetect
+        mask = np.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
+        tiling = parallel.Tiling.autodetect(
+            mask=mask[1::2, 1::2],
+            logger=parlogger,
+            periodic_x=periodic_x,
+            periodic_y=periodic_y,
+        )
+    elif isinstance(tiling, str):
+        # Path to dumped Tiling object provided
+        if not os.path.isfile(tiling):
+            logger.critical(
+                "Cannot find file %s. If tiling is a string, it must be the path to"
+                " an existing file with a pickled tiling object." % tiling
+            )
+            raise Exception()
+        tiling = parallel.Tiling.load(tiling)
+    else:
+        # Existing tiling object provided
+        # Transfer extent of global domain to determine subdomain sizes
+        if isinstance(tiling, tuple):
+            tiling = parallel.Tiling(
+                nrow=tiling[0],
+                ncol=tiling[1],
+                periodic_x=periodic_x,
+                periodic_y=periodic_y,
+            )
+        tiling.set_extent(nx, ny)
+    tiling.report(parlogger)
+
+    global_tiling = tiling
+    if tiling.n > 1:
+        # The global tiling object is a simple 1x1 partition
+        global_tiling = parallel.Tiling(
+            nrow=1, ncol=1, ncpus=1, periodic_x=periodic_x, periodic_y=periodic_y
+        )
+        global_tiling.set_extent(nx, ny)
+
+    # If on master node (possibly only node), create global domain object
+    if tiling.rank == 0:
+        global_domain = Domain(
+            nx,
+            ny,
+            nz,
+            lon,
+            lat,
+            x,
+            y,
+            spherical,
+            tiling=global_tiling,
+            mask=mask,
+            H=H,
+            z0=z0,
+            f=f,
+            logger=logger,
+            **kwargs
+        )
+
+    # If there is only one node, return the global domain immediately
+    if tiling.n == 1:
+        return global_domain
+
+    # Create the subdomain, and (if on root) attach a pointer to the global domain
+    subdomain = Domain.partition(
+        tiling,
+        nx,
+        ny,
+        nz,
+        global_domain,
+        has_xy=x is not None,
+        has_lonlat=lon is not None,
+        spherical=spherical,
+        logger=logger,
+        **kwargs
+    )
+    subdomain.glob = global_domain
+
+    return subdomain
+
+
+def load(path: str, nz: int, **kwargs) -> "Domain":
+    """Load domain from file. Typically this is a file created by :meth:`Domain.save`.
+
+    Args:
+        path: NetCDF file to load from
+        nz: number of vertical layers
+        **kwargs: additional keyword arguments to pass to :class:`Domain`
+    """
+    with netCDF4.Dataset(path) as nc:
+        for name in ("lon", "lat", "x", "y", "H", "mask", "z0b_min", "cor"):
+            if name in nc.variables and name not in kwargs:
+                kwargs[name] = nc.variables[name][...]
+    spherical = kwargs.get("spherical", "lon" in kwargs)
+    ny, nx = kwargs["lon" if spherical else "x"].shape
+    nx = (nx - 1) // 2
+    ny = (ny - 1) // 2
+    return create(nx, ny, nz, spherical=spherical, **kwargs)
+
+
 class Domain(_pygetm.Domain):
     @staticmethod
     def partition(
@@ -1292,117 +1470,6 @@ class Domain(_pygetm.Domain):
 
         target[target_slice] = source[source_slice]
 
-    @staticmethod
-    def create(
-        nx: int,
-        ny: int,
-        nz: int,
-        lon: Optional[np.ndarray] = None,
-        lat: Optional[np.ndarray] = None,
-        x: Optional[np.ndarray] = None,
-        y: Optional[np.ndarray] = None,
-        spherical: bool = False,
-        mask: Optional[np.ndarray] = 1,
-        H: Optional[np.ndarray] = None,
-        z0: Optional[np.ndarray] = 0.0,
-        f: Optional[np.ndarray] = None,
-        tiling: Optional[parallel.Tiling] = None,
-        periodic_x: bool = False,
-        periodic_y: bool = False,
-        logger: Optional[logging.Logger] = None,
-        glob: bool = False,
-        **kwargs
-    ):
-        global_domain = None
-        logger = logger or parallel.get_logger()
-        parlogger = logger.getChild("parallel")
-
-        # Determine subdomain division
-        if glob:
-            tiling = parallel.Tiling(
-                nrow=1, ncol=1, ncpus=1, periodic_x=periodic_x, periodic_y=periodic_y
-            )
-            tiling.rank = 0
-        if tiling is None:
-            # No tiling provided - autodetect
-            mask = np.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
-            tiling = parallel.Tiling.autodetect(
-                mask=mask[1::2, 1::2],
-                logger=parlogger,
-                periodic_x=periodic_x,
-                periodic_y=periodic_y,
-            )
-        elif isinstance(tiling, str):
-            # Path to dumped Tiling object provided
-            if not os.path.isfile(tiling):
-                logger.critical(
-                    "Cannot find file %s. If tiling is a string, it must be the path to"
-                    " an existing file with a pickled tiling object." % tiling
-                )
-                raise Exception()
-            tiling = parallel.Tiling.load(tiling)
-        else:
-            # Existing tiling object provided - transfer extent of global domain to
-            # determine subdomain sizes
-            if isinstance(tiling, tuple):
-                tiling = parallel.Tiling(
-                    nrow=tiling[0],
-                    ncol=tiling[1],
-                    periodic_x=periodic_x,
-                    periodic_y=periodic_y,
-                )
-            tiling.set_extent(nx, ny)
-        tiling.report(parlogger)
-
-        global_tiling = tiling
-        if tiling.n > 1:
-            # The global tiling object is a simple 1x1 partition
-            global_tiling = parallel.Tiling(
-                nrow=1, ncol=1, ncpus=1, periodic_x=periodic_x, periodic_y=periodic_y
-            )
-            global_tiling.set_extent(nx, ny)
-
-        # If on master node (possibly only node), create global domain object
-        if tiling.rank == 0:
-            global_domain = Domain(
-                nx,
-                ny,
-                nz,
-                lon,
-                lat,
-                x,
-                y,
-                spherical,
-                tiling=global_tiling,
-                mask=mask,
-                H=H,
-                z0=z0,
-                f=f,
-                logger=logger,
-                **kwargs
-            )
-
-        # If there is only one node, return the global domain immediately
-        if tiling.n == 1:
-            return global_domain
-
-        # Create the subdomain, and (if on root) attach a pointer to the global domain
-        subdomain = Domain.partition(
-            tiling,
-            nx,
-            ny,
-            nz,
-            global_domain,
-            has_xy=x is not None,
-            has_lonlat=lon is not None,
-            spherical=spherical,
-            logger=logger,
-            **kwargs
-        )
-        subdomain.glob = global_domain
-
-        return subdomain
-
     def __init__(
         self,
         nx: int,
@@ -1510,6 +1577,8 @@ class Domain(_pygetm.Domain):
         # Set up subdomain partition information to enable halo exchanges
         if tiling is None:
             tiling = parallel.Tiling(**kwargs)
+        elif kwargs:
+            raise Exception("Encountered unexpected arguments: %s" % ", ".join(kwargs))
         self.tiling = tiling
 
         def setup_metric(

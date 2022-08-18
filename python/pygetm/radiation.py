@@ -19,7 +19,7 @@ class Radiation:
     """Base class that provides heating due to shortwave absorption throughout the
     water column. When using this class directly, heating is effectively prescribed,
     not calculated. In this case, the heating per layer defaults to zero; assign to
-    swr_abs or call swr_abs.set to change this."""
+    attr:`swr_abs` or call ``swr_abs.set`` to change this."""
 
     def initialize(self, grid: domain.Grid):
         self.grid = grid

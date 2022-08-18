@@ -20,7 +20,7 @@ class FABM:
         self,
         grid: domain.Grid,
         tracer_collection: tracer.TracerCollection,
-        tracer_totals: List[core.Array],
+        tracer_totals: List[tracer.TracerTotal],
         logger: logging.Logger,
     ):
         self.grid = grid
@@ -108,7 +108,7 @@ class FABM:
                 attrs=dict(_time_varying=TimeVarying.MACRO),
             )
             ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
-            tracer_totals.append(ar)
+            tracer_totals.append(tracer.TracerTotal(ar))
 
     def start(self, time: Optional[cftime.datetime] = None):
         """Prepare FABM. This includes flagging which diagnostics need saving based on

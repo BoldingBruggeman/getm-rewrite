@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, List, Sequence
+from typing import Mapping, Optional, List, Sequence, NamedTuple
 
 import numpy as np
 
@@ -6,6 +6,15 @@ from .constants import ZERO_GRADIENT, CENTERS, INTERFACES, TimeVarying
 from . import core
 from . import domain
 from . import operators
+
+
+class TracerTotal(NamedTuple):
+    array: core.Array
+    scale_factor: float = 1.0
+    offset: float = 0.0
+    units: Optional[str] = None
+    long_name: Optional[str] = None
+    per_mass: bool = False
 
 
 class OpenBoundaries:
