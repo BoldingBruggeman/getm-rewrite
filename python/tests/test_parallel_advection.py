@@ -6,8 +6,6 @@ import numpy as np
 import pygetm
 import pygetm.parallel
 
-import matplotlib.pyplot
-
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-d", "--debug", action="store_true", help="diagnose individual subdomains"
@@ -92,6 +90,8 @@ f.scatter(f_glob)
 u_glob = u.gather()
 v_glob = v.gather()
 if u_glob is not None and args.plot:
+    import matplotlib.pyplot
+
     fig, ax = matplotlib.pyplot.subplots()
     u_destag, v_destag = (
         u_glob.interp(u_glob.grid.domain.T),
@@ -102,6 +102,8 @@ if u_glob is not None and args.plot:
 
 if args.debug:
     # Plot local velocities
+    import matplotlib.pyplot
+
     fig, ax = matplotlib.pyplot.subplots()
     u_destag, v_destag = u.interp(subdomain.T), v.interp(subdomain.T)
     ax.quiver(
