@@ -1,14 +1,20 @@
+# This conda environment is for systems that already have a Fortran compiler
+# and MPI library installed, and that will only run pygetm from the command
+# line. This is suitable for most HPC systems.
+# Packages for interactive simulations (e.g. jupyterlab) and for postprocessing
+# (e.g. matplotlib) are not included.
 name: pygetm
 channels:
   - conda-forge
 dependencies:
   - python=3.8
+  - cmake
   - pip
   - cython
-  - xarray
-  - cmake
+  - pyyaml
   - numpy
-  - scipy
+  - xarray
   - netcdf4
+  - scipy
   - pip:
     - mpi4py

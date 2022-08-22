@@ -26,6 +26,7 @@ requirements:
     - xarray
     - mpi4py
     - netCDF4
+    - pyyaml # for FABM
 
 test:
   requires:

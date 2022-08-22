@@ -1,21 +1,30 @@
+# This conda environment includes everything needed to use pygetm.
+# This includes:
+# - build and install tools (cmake, a Fortran compiler, cython, pip)
+# - an MPI library for parallal simulations
+# - support for plotting and postprocessing (matplotlib, cmocean, cartopy)
+# - support for interactive simulation (jupyterlab)
+# Note: if you are working on a HPC system, you likely want to use
+# environment-min.yml instead.
 name: pygetm
 channels:
   - conda-forge
 dependencies:
-  - python=3.8
+  - python=3.8.11
+  - cmake
   - fortran-compiler
   - cython
+  - pip
   - mpi4py
-  - xarray
-  - jupyterlab
-  - cmake
-  - numpy
-  - matplotlib
-  - scipy
-  - ipympl
-  - netcdf4
   - pyyaml
-  - dask
+  - numpy
+  - xarray
+  - netcdf4
+  - scipy
+  - matplotlib
+  - cmocean
   - cartopy
   - proj
-  - cmocean
+  - jupyterlab
+  - ipympl
+

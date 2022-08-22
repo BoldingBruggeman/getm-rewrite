@@ -1,14 +1,15 @@
+# This conda environment supports pygetm installation on Read the Docs servers
 name: pygetm
 channels:
   - conda-forge
 dependencies:
-  - gfortran=9
   - python=3.8
-  - pip
-  - cython
-  - xarray
   - cmake
-  - numpy
-  - scipy
-  - netcdf4
+  - gfortran=9
+  - cython
+  - pip
   - mpi4py
+  - numpy
+  - xarray
+  - netcdf4
+  - scipy
