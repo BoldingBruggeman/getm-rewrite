@@ -4,6 +4,8 @@ jobs:
    gfortran:
       runs-on: ubuntu-latest
       steps:
+      - name: Install dependencies
+        run: sudo apt-get install gfortran-9 mpich
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
@@ -18,7 +20,7 @@ jobs:
           git clone https://git.code.sf.net/p/getm/getm-setups
       - name: Install conda environment
         run: |
-          conda env create -f environment.yml
+          conda env create -f environment-min.yml   # environment.yml
           conda init bash
       - name: Compile
         run: |
