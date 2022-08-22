@@ -1,0 +1,14 @@
+name: pygetm
+channels:
+  - conda-forge
+dependencies:
+  - gfortran=9
+  - python=3.8
+  - pip
+  - cython
+  - xarray
+  - cmake
+  - numpy
+  - scipy
+  - netcdf4
+  - mpi4py
