@@ -1,3 +1,4 @@
+import enum
 import operator
 import logging
 
@@ -9,6 +10,12 @@ from . import operators
 import pygetm.domain
 import pygetm._pygetm
 from .constants import FILL_VALUE, BAROTROPIC_2D, CENTERS
+
+
+class CoriolisScheme(enum.IntEnum):
+    OFF = 0
+    DEFAULT = 1
+    ESPELID = 2  #: Espelid et al. [2000], IJNME 49, 1521-1545
 
 
 class Momentum(pygetm._pygetm.Momentum):
@@ -154,8 +161,9 @@ class Momentum(pygetm._pygetm.Momentum):
         Am: float = 0.0,
         cnpar: float = 1.0,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.HSIMT,
+        coriolis_scheme: CoriolisScheme = CoriolisScheme.DEFAULT,
     ):
-        super().__init__(domain, runtype, Am, cnpar)
+        super().__init__(domain, runtype, Am, cnpar, coriolis_scheme)
 
         for name in self._arrays:
             setattr(

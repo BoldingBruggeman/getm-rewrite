@@ -13,3 +13,4 @@ from .operators import AdvectionScheme
 from .domain import VerticalCoordinates, Side
 from .airsea import HumidityMeasure, LongwaveMethod, AlbedoMethod
 from .output import TimeUnit
+from .momentum import CoriolisScheme

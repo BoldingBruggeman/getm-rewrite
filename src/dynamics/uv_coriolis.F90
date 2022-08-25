@@ -125,7 +125,7 @@ MODULE SUBROUTINE coriolis_fv(self)
 
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         if(VG%mask(i,j) > 0) then
+         if(UG%mask(i,j) > 0) then
             if (self%domain%domain_type /= 1) then
                cord_curv=(self%work2d(i,j)*(TG%dy(i+1,j)-TG%dy(i,j))) &
                          +self%U(i,j)*(XG%dx(i,j)-XG%dx(i,j-1))/UG%D(i,j)*UG%iarea(i,j)

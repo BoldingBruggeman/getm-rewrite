@@ -186,8 +186,8 @@ contains
          select case (pname(:index(pname, C_NULL_CHAR) - 1))
          case ('U');   p = c_loc(momentum%U); grid_type = 2
          case ('V');   p = c_loc(momentum%V); grid_type = 3
-         case ('fU');  p = c_loc(momentum%fU); grid_type = 2
-         case ('fV');  p = c_loc(momentum%fV); grid_type = 3
+         case ('fU');  p = c_loc(momentum%fU); grid_type = 3
+         case ('fV');  p = c_loc(momentum%fV); grid_type = 2
          case ('fpk');  if (allocated(momentum%fpk)) p = c_loc(momentum%fpk); grid_type = 3; sub_type = subtype_depth_explicit
          case ('fqk');  if (allocated(momentum%fqk)) p = c_loc(momentum%fqk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advU');  p = c_loc(momentum%advU); grid_type = 2
@@ -473,8 +473,8 @@ contains
                     w, w_var, tgrid%mask, timestep, h, var)
    end subroutine
 
-   function momentum_create(runtype, pdomain, Am0, cnpar) result(pmomentum) bind(c)
-      integer(c_int), intent(in), value :: runtype
+   function momentum_create(runtype, pdomain, Am0, cnpar, coriolis_scheme) result(pmomentum) bind(c)
+      integer(c_int), intent(in), value :: runtype, coriolis_scheme
       type(c_ptr),    intent(in), value :: pdomain
       real(c_double), intent(in), value :: Am0, cnpar
       type(c_ptr) :: pmomentum
@@ -488,6 +488,7 @@ contains
       momentum%advection_scheme = 0
       momentum%Am0 = Am0
       momentum%cnpar = cnpar
+      momentum%coriolis_scheme = coriolis_scheme
       call momentum%initialize(runtype, domain)
       allocate(momentum%vertical_diffusion)
       call momentum%vertical_diffusion%initialize(domain%T)
