@@ -76,13 +76,13 @@ class Density:
         Returns:
             array with density values (kg m-3)
         """
-        assert SA.grid is ct.grid
+        assert SA.grid is ct.grid and SA.z == ct.z
+        assert out is None or (out.grid is SA.grid and out.z == SA.z)
+        assert p is None or (p.grid is SA.grid and p.z == SA.z)
         if out is None:
             out = SA.grid.array(z=SA.z)
-        assert out.grid is SA.grid
         if p is None:
             p = _pygetm.thickness2center_depth(SA.grid.mask, SA.grid.hn)
-        assert p.grid is SA.grid
         pygsw.rho(
             SA.all_values.ravel(),
             ct.all_values.ravel(),
