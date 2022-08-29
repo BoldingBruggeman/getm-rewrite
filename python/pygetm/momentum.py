@@ -1,6 +1,7 @@
 import enum
 import operator
 import logging
+from typing import Union
 
 import numpy as np
 
@@ -80,6 +81,7 @@ class Momentum(pygetm._pygetm.Momentum):
         "_u3dfirst",
         "diffuse_momentum",
         "apply_bottom_friction",
+        "An",
     )
 
     _array_args = {
@@ -159,6 +161,7 @@ class Momentum(pygetm._pygetm.Momentum):
         runtype: int,
         apply_bottom_friction: bool = True,
         Am: float = 0.0,
+        An: Union[float, core.Array] = 0.0,
         cnpar: float = 1.0,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.HSIMT,
         coriolis_scheme: CoriolisScheme = CoriolisScheme.DEFAULT,
@@ -221,6 +224,14 @@ class Momentum(pygetm._pygetm.Momentum):
         self.uva3d = domain.UV.array(fill=np.nan, z=CENTERS)
         self.vua3d = domain.VU.array(fill=np.nan, z=CENTERS)
         self.vva3d = domain.VV.array(fill=np.nan, z=CENTERS)
+
+        if An == 0.0:
+            An = None
+        elif isinstance(An, float):
+            An = domain.T.array(fill=An)
+        else:
+            assert An.grid is domain.T
+        self.An = An
 
         #: Whether to start the depth-integrated (2D) momentum update with u
         # (as opposed to v)
@@ -463,6 +474,7 @@ class Momentum(pygetm._pygetm.Momentum):
             self.ww.interp(self.uk.grid),
             timestep,
             self.uk,
+            Ah=self.An,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
@@ -475,6 +487,7 @@ class Momentum(pygetm._pygetm.Momentum):
             self.ww.interp(self.vk.grid),
             timestep,
             self.vk,
+            Ah=self.An,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
@@ -604,7 +617,12 @@ class Momentum(pygetm._pygetm.Momentum):
         self.uua.all_values /= self.domain.UU.D.all_values
         self.uva.all_values /= self.domain.UV.D.all_values
         self.uadv(
-            self.uua, self.uva, timestep, self.u1, skip_initial_halo_exchange=True
+            self.uua,
+            self.uva,
+            timestep,
+            self.u1,
+            Ah=self.An,
+            skip_initial_halo_exchange=True,
         )
         advU.all_values[...] = (
             self.u1.all_values * self.uadv.D - U.all_values
@@ -616,7 +634,12 @@ class Momentum(pygetm._pygetm.Momentum):
         self.vua.all_values /= self.domain.VU.D.all_values
         self.vva.all_values /= self.domain.VV.D.all_values
         self.vadv(
-            self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True
+            self.vua,
+            self.vva,
+            timestep,
+            self.v1,
+            Ah=self.An,
+            skip_initial_halo_exchange=True,
         )
         advV.all_values[...] = (
             self.v1.all_values * self.vadv.D - V.all_values

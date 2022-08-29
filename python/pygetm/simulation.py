@@ -146,7 +146,16 @@ class Simulation(_pygetm.Simulation):
         log_level: Optional[int] = None,
         internal_pressure_method: InternalPressure = InternalPressure.OFF,
         Am: float = 0.0,
+        An: Union[float, core.Array] = 0.0,
     ):
+        """Create a new simulation
+
+        Args:
+            Am: horizontal viscosity (m2 s-1)
+                If provided, this must be a constant.
+            Am: horizontal diffusivity (m2 s-1)
+                If provided, this must be a constant or an array defined on the T grid.
+        """
 
         self.logger = dom.root_logger
         if log_level is not None:
@@ -187,6 +196,7 @@ class Simulation(_pygetm.Simulation):
             runtype,
             apply_bottom_friction=apply_bottom_friction,
             Am=Am,
+            An=An,
             advection_scheme=advection_scheme,
         )
 
