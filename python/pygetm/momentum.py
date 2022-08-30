@@ -194,7 +194,7 @@ class Momentum(pygetm._pygetm.Momentum):
         self.apply_bottom_friction = apply_bottom_friction
         self.diffuse_momentum = Am > 0.0
         if not self.diffuse_momentum:
-            self.logger.info("Diffusion of momentum if off because Am is 0")
+            self.logger.info("Diffusion of momentum is off because Am is 0")
 
         self.U.all_values.fill(0.0)
         self.V.all_values.fill(0.0)
@@ -225,13 +225,14 @@ class Momentum(pygetm._pygetm.Momentum):
         self.vua3d = domain.VU.array(fill=np.nan, z=CENTERS)
         self.vva3d = domain.VV.array(fill=np.nan, z=CENTERS)
 
-        if An == 0.0:
-            An = None
-        elif isinstance(An, float):
-            An = domain.T.array(fill=An)
-        else:
-            assert An.grid is domain.T
-        self.An = An
+        self.An = domain.T.array(
+            name="An",
+            units="m2 s-1",
+            long_name="horizontal diffusivity of momentum",
+            fill_value=FILL_VALUE,
+            attrs=dict(_require_halos=True),
+        )
+        self.An.fill(An)
 
         #: Whether to start the depth-integrated (2D) momentum update with u
         # (as opposed to v)
@@ -258,6 +259,9 @@ class Momentum(pygetm._pygetm.Momentum):
             ]
         for array in zero_masked:
             array.all_values[..., array.grid.mask.all_values == 0] = 0.0
+        if (self.An.ma == 0.0).all():
+            self.logger.info("Disabling An because it is 0 everywhere")
+            self.An = None
 
     def advance_depth_integrated(
         self,
