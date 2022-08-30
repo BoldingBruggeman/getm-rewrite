@@ -237,6 +237,7 @@ class Momentum(pygetm._pygetm.Momentum):
             attrs=dict(_require_halos=True),
         )
         self.An.fill(An)
+        self.An_uu = self.An_uv = self.An_vu = self.An_vv = None
 
         #: Whether to start the depth-integrated (2D) momentum update with u
         # (as opposed to v)
@@ -265,7 +266,6 @@ class Momentum(pygetm._pygetm.Momentum):
             array.all_values[..., array.grid.mask.all_values == 0] = 0.0
         if (self.An.ma == 0.0).all():
             self.logger.info("Disabling An because it is 0 everywhere")
-            self.An_uu = self.An_uv = self.An_vu = self.An_vv = None
         else:
             self.An_uu = self.domain.UU.array(fill=np.nan)
             self.An_uv = self.domain.UV.array(fill=np.nan)
