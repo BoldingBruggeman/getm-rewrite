@@ -3,6 +3,7 @@ from typing import Union, Optional, List
 import logging
 import datetime
 import timeit
+import functools
 
 import numpy as np
 import cftime
@@ -48,6 +49,7 @@ class InternalPressure(enum.IntEnum):
 
 
 def log_exceptions(method):
+    @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
         try:
             return method(self, *args, **kwargs)
