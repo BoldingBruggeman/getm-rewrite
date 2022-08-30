@@ -82,6 +82,10 @@ class Momentum(pygetm._pygetm.Momentum):
         "diffuse_momentum",
         "apply_bottom_friction",
         "An",
+        "An_uu",
+        "An_uv",
+        "An_vu",
+        "An_vv",
     )
 
     _array_args = {
@@ -261,7 +265,18 @@ class Momentum(pygetm._pygetm.Momentum):
             array.all_values[..., array.grid.mask.all_values == 0] = 0.0
         if (self.An.ma == 0.0).all():
             self.logger.info("Disabling An because it is 0 everywhere")
-            self.An = None
+            self.An_uu = self.An_uv = self.An_vu = self.An_vv = None
+        else:
+            self.An_uu = self.domain.UU.array(fill=np.nan)
+            self.An_uv = self.domain.UV.array(fill=np.nan)
+            self.An_vu = self.domain.VU.array(fill=np.nan)
+            self.An_vv = self.domain.VV.array(fill=np.nan)
+            An_x = self.An.interp(self.domain.X)
+            self.An_uu.all_values[:, :-1] = self.An.all_values[:, 1:]
+            self.An_vv.all_values[:-1, :] = self.An.all_values[1:, :]
+            self.An_uv.all_values[:, :] = self.An_vu.all_values[:, :] = An_x.all_values[
+                1:, 1:
+            ]
 
     def advance_depth_integrated(
         self,
@@ -478,7 +493,8 @@ class Momentum(pygetm._pygetm.Momentum):
             self.ww.interp(self.uk.grid),
             timestep,
             self.uk,
-            Ah=self.An,
+            Ah_u=self.An_uu,
+            Ah_v=self.An_uv,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
@@ -491,7 +507,8 @@ class Momentum(pygetm._pygetm.Momentum):
             self.ww.interp(self.vk.grid),
             timestep,
             self.vk,
-            Ah=self.An,
+            Ah_u=self.An_vu,
+            Ah_v=self.An_vv,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
@@ -625,7 +642,8 @@ class Momentum(pygetm._pygetm.Momentum):
             self.uva,
             timestep,
             self.u1,
-            Ah=self.An,
+            Ah_u=self.An_uu,
+            Ah_v=self.An_uv,
             skip_initial_halo_exchange=True,
         )
         advU.all_values[...] = (
@@ -642,7 +660,8 @@ class Momentum(pygetm._pygetm.Momentum):
             self.vva,
             timestep,
             self.v1,
-            Ah=self.An,
+            Ah_u=self.An_vu,
+            Ah_v=self.An_vv,
             skip_initial_halo_exchange=True,
         )
         advV.all_values[...] = (

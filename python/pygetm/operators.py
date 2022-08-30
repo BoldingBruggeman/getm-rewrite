@@ -31,7 +31,8 @@ class Advection(_pygetm.Advection):
         v: core.Array,
         timestep: float,
         var: core.Array,
-        Ah: Optional[core.Array] = None,
+        Ah_u: Optional[core.Array] = None,
+        Ah_v: Optional[core.Array] = None,
         skip_initial_halo_exchange: bool = False,
     ):
         assert u.grid is self.ugrid and not u.z
@@ -40,11 +41,11 @@ class Advection(_pygetm.Advection):
         self.D[...] = self.grid.D.all_values
         if not skip_initial_halo_exchange:
             var.update_halos(parallel.Neighbor.TOP_AND_BOTTOM)
-        self.v_2d(v, 0.5 * timestep, var, Ah)
+        self.v_2d(v, 0.5 * timestep, var, Ah_v)
         var.update_halos(parallel.Neighbor.LEFT_AND_RIGHT)
-        self.u_2d(u, timestep, var, Ah)
+        self.u_2d(u, timestep, var, Ah_u)
         var.update_halos(parallel.Neighbor.TOP_AND_BOTTOM)
-        self.v_2d(v, 0.5 * timestep, var, Ah)
+        self.v_2d(v, 0.5 * timestep, var, Ah_v)
 
     def apply_3d(
         self,
@@ -53,7 +54,8 @@ class Advection(_pygetm.Advection):
         w: core.Array,
         timestep: float,
         var: core.Array,
-        Ah: Optional[core.Array] = None,
+        Ah_u: Optional[core.Array] = None,
+        Ah_v: Optional[core.Array] = None,
         new_h: bool = False,
         skip_initial_halo_exchange: bool = False,
         w_var: Optional[core.Array] = None,
@@ -68,14 +70,14 @@ class Advection(_pygetm.Advection):
         self.h[...] = (self.grid.hn if new_h else self.grid.ho).all_values
         if not skip_initial_halo_exchange:
             var.update_halos(parallel.Neighbor.LEFT_AND_RIGHT)
-        self.u_3d(u, 0.5 * timestep, var, Ah)
+        self.u_3d(u, 0.5 * timestep, var, Ah_u)
         var.update_halos(parallel.Neighbor.TOP_AND_BOTTOM)
-        self.v_3d(v, 0.5 * timestep, var, Ah)
+        self.v_3d(v, 0.5 * timestep, var, Ah_v)
         self.w_3d(w, w_var, timestep, var)
         var.update_halos(parallel.Neighbor.TOP_AND_BOTTOM)
-        self.v_3d(v, 0.5 * timestep, var, Ah)
+        self.v_3d(v, 0.5 * timestep, var, Ah_v)
         var.update_halos(parallel.Neighbor.LEFT_AND_RIGHT)
-        self.u_3d(u, 0.5 * timestep, var, Ah)
+        self.u_3d(u, 0.5 * timestep, var, Ah_u)
 
     def apply_3d_batch(
         self,
