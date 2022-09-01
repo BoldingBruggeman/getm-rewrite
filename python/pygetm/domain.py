@@ -1627,15 +1627,24 @@ class Domain(_pygetm.Domain):
         self.dx, self.dx_ = setup_metric()
         self.dy, self.dy_ = setup_metric()
         if spherical:
-            dlon_ = self.lon_[:, 2:] - self.lon_[:, :-2]
-            dlat_ = self.lat_[2:, :] - self.lat_[:-2, :]
-            self.dx_[:, 1:-1] = (
-                DEG2RAD * dlon_ * R_EARTH * np.cos(DEG2RAD * self.lat_[:, 1:-1])
-            )
-            self.dy_[1:-1, :] = DEG2RAD * dlat_ * R_EARTH
+            dlon = self.lon_[:, 2:] - self.lon_[:, :-2]
+            dlat = self.lat_[:, 2:] - self.lat_[:, :-2]
+            dx = DEG2RAD * dlon * R_EARTH * np.cos(DEG2RAD * self.lat_[:, 1:-1])
+            dy = DEG2RAD * dlat * R_EARTH
+            self.dx_[:, 1:-1] = np.sqrt(dx ** 2 + dy ** 2)
+
+            dlon = self.lon_[2:, :] - self.lon_[:-2, :]
+            dlat = self.lat_[2:, :] - self.lat_[:-2, :]
+            dx = DEG2RAD * dlon * R_EARTH * np.cos(DEG2RAD * self.lat_[1:-1, :])
+            dy = DEG2RAD * dlat * R_EARTH
+            self.dy_[1:-1, :] = np.sqrt(dx ** 2 + dy ** 2)
         else:
-            self.dx_[:, 1:-1] = self.x_[:, 2:] - self.x_[:, :-2]
-            self.dy_[1:-1, :] = self.y_[2:, :] - self.y_[:-2, :]
+            dx = self.x_[:, 2:] - self.x_[:, :-2]
+            dy = self.y_[:, 2:] - self.y_[:, :-2]
+            self.dx_[:, 1:-1] = np.sqrt(dx ** 2 + dy ** 2)
+            dx = self.x_[2:, :] - self.x_[:-2, :]
+            dy = self.y_[2:, :] - self.y_[:-2, :]
+            self.dy_[1:-1, :] = np.sqrt(dx ** 2 + dy ** 2)
 
         # Halo exchange for dx, dy, needed to ensure the outer strips of the halos are
         # valid. Those outermost strips could not be computed by central-differencing
@@ -2012,6 +2021,21 @@ class Domain(_pygetm.Domain):
             1 + 2 * jstart : 1 + 2 * jstop, 1 + 2 * istart : 1 + 2 * istop
         ] = value
 
+    def transpose(self) -> "Domain":
+        def tp(array):
+            return None if array is None else np.transpose(array)
+
+        x = tp(self.x)
+        y = tp(self.y)
+        lon = tp(self.lon)
+        lat = tp(self.lat)
+        mask = tp(self.mask)
+        H = tp(self.H)
+        z0b_min = tp(self.z0b_min)
+        return create(
+            self.ny, self.nx, self.nz, lon, lat, x, y, self.spherical, mask, H, z0b_min
+        )
+
     def plot(
         self,
         fig=None,
@@ -2021,6 +2045,7 @@ class Domain(_pygetm.Domain):
         show_rivers: bool = True,
         editable: bool = False,
         sub: bool = False,
+        spherical: Optional[bool] = None,
     ):
         """Plot the domain, optionally including bathymetric depth, mesh and river positions.
 
@@ -2060,7 +2085,9 @@ class Domain(_pygetm.Domain):
         else:
             ax = fig.gca()
 
-        x, y = (self.lon, self.lat) if self.spherical else (self.x, self.y)
+        if spherical is None:
+            spherical = self.spherical
+        x, y = (self.lon, self.lat) if spherical else (self.x, self.y)
 
         local_slice, _, _, _ = self.tiling.subdomain2slices(
             halo_sub=0, halo_glob=4, scale=2, share=1, exclude_global_halos=True
@@ -2112,9 +2139,9 @@ class Domain(_pygetm.Domain):
             # pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  np.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
             ax.plot(x[::2, ::2], y[::2, ::2], ".k", markersize=3.0)
             ax.plot(x[1::2, 1::2], y[1::2, 1::2], "xk", markersize=2.5)
-        ax.set_xlabel("longitude (degrees East)" if self.spherical else "x (m)")
-        ax.set_ylabel("latitude (degrees North)" if self.spherical else "y (m)")
-        if not self.spherical:
+        ax.set_xlabel("longitude (degrees East)" if spherical else "x (m)")
+        ax.set_ylabel("latitude (degrees North)" if spherical else "y (m)")
+        if not spherical:
             ax.axis("equal")
         xmin, xmax = np.nanmin(x), np.nanmax(x)
         ymin, ymax = np.nanmin(y), np.nanmax(y)
