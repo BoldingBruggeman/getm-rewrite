@@ -38,6 +38,8 @@ class Advection(_pygetm.Advection):
         assert u.grid is self.ugrid and not u.z
         assert v.grid is self.vgrid and not v.z
         assert var.grid is self.grid and not var.z
+        assert Ah_u is None or (Ah_u.grid is self.ugrid and not Ah_u.z)
+        assert Ah_v is None or (Ah_v.grid is self.vgrid and not Ah_v.z)
         self.D[...] = self.grid.D.all_values
         if not skip_initial_halo_exchange:
             var.update_halos(parallel.Neighbor.TOP_AND_BOTTOM)
@@ -67,6 +69,8 @@ class Advection(_pygetm.Advection):
         assert w.grid is self.grid and w.z == INTERFACES
         assert w_var.grid is self.grid and w_var.z == INTERFACES
         assert var.grid is self.grid and var.z == CENTERS
+        assert Ah_u is None or (Ah_u.grid is self.ugrid and not Ah_u.z)
+        assert Ah_v is None or (Ah_v.grid is self.vgrid and not Ah_v.z)
         self.h[...] = (self.grid.hn if new_h else self.grid.ho).all_values
         if not skip_initial_halo_exchange:
             var.update_halos(parallel.Neighbor.LEFT_AND_RIGHT)
