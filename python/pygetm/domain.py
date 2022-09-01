@@ -1991,6 +1991,23 @@ class Domain(_pygetm.Domain):
             selected &= y <= ymax
         self.mask[selected] = value
 
+    def mask_indices(self, istart, istop, jstart, jstop, value: int = 0):
+        """Mask all points that fall within the specified rectangle.
+
+        Args:
+            istart: lower x index (first that is included)
+            istop: lower x index (first that is EXcluded)
+            jstart: lower y index (first that is included)
+            jstop: lower y index (first that is EXcluded)
+        """
+        istart = max(0, istart - self.tiling.xoffset + self.halox)
+        istop = min(self.nx + 2 * self.halox, istop - self.tiling.xoffset + self.halox)
+        jstart = max(0, jstart - self.tiling.yoffset + self.haloy)
+        jstop = min(self.ny + 2 * self.haloy, jstop - self.tiling.yoffset + self.haloy)
+        self.mask_[
+            1 + 2 * jstart : 1 + 2 * jstop, 1 + 2 * istart : 1 + 2 * istop
+        ] = value
+
     def plot(
         self,
         fig=None,
