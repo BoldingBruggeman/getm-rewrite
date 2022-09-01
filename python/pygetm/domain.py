@@ -2000,13 +2000,15 @@ class Domain(_pygetm.Domain):
             jstart: lower y index (first that is included)
             jstop: lower y index (first that is EXcluded)
         """
-        istart = max(0, istart - self.tiling.xoffset + self.halox)
-        istop = min(self.nx + 2 * self.halox, istop - self.tiling.xoffset + self.halox)
-        jstart = max(0, jstart - self.tiling.yoffset + self.haloy)
-        jstop = min(self.ny + 2 * self.haloy, jstop - self.tiling.yoffset + self.haloy)
-        self.mask_[
-            1 + 2 * jstart : 1 + 2 * jstop, 1 + 2 * istart : 1 + 2 * istop
-        ] = value
+        istart = istart - self.tiling.xoffset + self.halox
+        istop = istop - self.tiling.xoffset + self.halox
+        jstart = jstart - self.tiling.yoffset + self.haloy
+        jstop = jstop - self.tiling.yoffset + self.haloy
+        istart = 1 + 2 * max(0, istart)
+        istop = 1 + 2 * max(istart, min(self.nx + 2 * self.halox, istop))
+        jstart = 1 + 2 * max(0, jstart)
+        jstop = 1 + 2 * max(jstart, min(self.ny + 2 * self.haloy, jstop))
+        self.mask_[jstart:jstop, istart:istop] = value
 
     def plot(
         self,
