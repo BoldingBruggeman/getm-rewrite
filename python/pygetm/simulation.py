@@ -156,7 +156,7 @@ class Simulation(_pygetm.Simulation):
             Am: horizontal viscosity (m2 s-1)
                 If provided, this must be a constant.
             Am: horizontal diffusivity (m2 s-1)
-                If provided, this must be a constant or an array defined on the T grid.
+                If provided, this must be a constant.
         """
 
         self.logger = dom.root_logger
@@ -884,7 +884,8 @@ class Simulation(_pygetm.Simulation):
         # First update halos for the net freshwater flux, as we need to ensure that the
         # layer heights updated as a result remain valid in the halos.
         self.airsea.pe.update_halos()
-        h_increase_pe = self.airsea.pe.all_values * timestep
+        unmasked = self.domain.T.mask.all_values != 0
+        h_increase_pe = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
         h = self.domain.T.hn.all_values[-1, :, :]
         h_new = h + h_increase_pe
         for tracer in self.tracers:
@@ -1016,6 +1017,7 @@ class Simulation(_pygetm.Simulation):
                 continue
             finite = np.isfinite(field.values)
             unmasked = True if field.on_boundary else field.grid.mask.values > 0
+            unmasked = np.broadcast_to(unmasked, field.shape)
             if not finite.all(where=unmasked):
                 nbad += 1
                 unmasked_count = unmasked.sum()
