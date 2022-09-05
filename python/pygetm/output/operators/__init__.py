@@ -545,7 +545,7 @@ class TimeAverage(UnivariateTransformWithData):
 
 
 class Regrid(UnivariateTransformWithData):
-    __slots__ = ("interpolate", "_grid", "_slice")
+    __slots__ = ("interpolate", "_grid", "_z", "_slice")
 
     def __init__(
         self,
@@ -577,6 +577,7 @@ class Regrid(UnivariateTransformWithData):
         dims = grid2dims(grid, z)
         expression = "%s(%s%s)" % (self.__class__.__name__, source.expression, args)
         self._grid = grid
+        self._z = z
         super().__init__(source, shape=shape, dims=dims, expression=expression)
 
     def get(
@@ -588,6 +589,17 @@ class Regrid(UnivariateTransformWithData):
     @property
     def grid(self) -> None:
         return self._grid
+
+    @property
+    def coords(self):
+        if self._grid.domain.spherical:
+            yield Field(self._grid.lon)
+            yield Field(self._grid.lat)
+        else:
+            yield Field(self._grid.x)
+            yield Field(self._grid.y)
+        if self._z:
+            yield Field(self._grid.zf if self._z == INTERFACES else self._grid.zc)
 
 
 class InterpZ(UnivariateTransformWithData):
