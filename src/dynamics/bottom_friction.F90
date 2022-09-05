@@ -67,7 +67,7 @@ MODULE SUBROUTINE bottom_friction_2d(self,runtype)
          if (VG%mask(i,j) > 0) then
             hh=max(self%domain%Dmin,VG%D(i,j))
             ustar2_per_u2(i,j)=(kappa/log((VG%z0b(i,j)+0.5_real64*hh)/VG%z0b(i,j)))**2
-            self%work2d(i,j)=0.25_real64*(self%u1(i,j)+self%u1(i+1,j)+self%u1(i,j-1)+self%u1(i+1,j-1))
+            self%work2d(i,j)=0.25_real64*(self%u1(i,j)+self%u1(i-1,j)+self%u1(i,j+1)+self%u1(i-1,j+1))
          end if
       end do
    end do
