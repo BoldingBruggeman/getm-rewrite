@@ -129,7 +129,10 @@ class Simulation(_pygetm.Simulation):
         + _time_arrays
     )
 
-    _array_args = {}
+    _array_args = {
+        "dpdx": dict(units="-", long_name="surface pressure gradient in x direction"),
+        "dpdy": dict(units="-", long_name="surface pressure gradient in y direction"),
+    }
 
     @log_exceptions
     def __init__(
@@ -942,7 +945,7 @@ class Simulation(_pygetm.Simulation):
 
         # Start tracer halo exchange (to prepare for advection)
         for tracer in self.tracers:
-            tracer.update_halos_start(parallel.Neighbor.LEFT_AND_RIGHT)
+            tracer.update_halos_start(self.tracers._advection.halo1)
 
         self._cum_river_height_increase.fill(0.0)
 
