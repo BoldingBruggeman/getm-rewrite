@@ -83,14 +83,6 @@ class GOTM(Turbulence):
                 standard_name="specific_turbulent_kinetic_energy_of_sea_water",
             ),
         )
-        self.tkeo = grid.array(
-            fill=self.mix.tkeo[:, np.newaxis, np.newaxis],
-            z=INTERFACES,
-            name="tkeo",
-            units="m2 s-2",
-            long_name="turbulent kinetic energy at previous timestep",
-            attrs=dict(_part_of_state=True),
-        )
         self.eps = grid.array(
             fill=self.mix.eps[:, np.newaxis, np.newaxis],
             z=INTERFACES,
@@ -172,7 +164,6 @@ class GOTM(Turbulence):
             NN.all_values,
             SS.all_values,
             self.tke.all_values,
-            self.tkeo.all_values,
             self.eps.all_values,
             self.L.all_values,
             self.num.all_values,

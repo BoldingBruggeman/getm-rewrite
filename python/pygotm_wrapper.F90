@@ -1,7 +1,7 @@
 module pygotm
    use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, C_NULL_CHAR, C_NULL_PTR
 
-   use turbulence, only: init_turbulence, post_init_turbulence, do_turbulence, tke, tkeo, eps, L, num, nuh, clean_turbulence
+   use turbulence, only: init_turbulence, post_init_turbulence, do_turbulence, tke, eps, L, num, nuh, clean_turbulence
    use mtridiagonal, only: init_tridiagonal, clean_tridiagonal
    use yaml_settings
 
@@ -25,10 +25,10 @@ contains
       close(unit=6)
    end subroutine
 
-   subroutine initialize(nlev, pnml_file, pyaml_file, ptke, ptkeo, peps, pL, pnum, pnuh) bind(c)
+   subroutine initialize(nlev, pnml_file, pyaml_file, ptke, peps, pL, pnum, pnuh) bind(c)
       integer(c_int), value,          intent(in)  :: nlev
       character(kind=c_char), target, intent(in)  :: pnml_file(*), pyaml_file(*)
-      type(c_ptr),                    intent(out) :: ptke, ptkeo, peps, pL, pnum, pnuh
+      type(c_ptr),                    intent(out) :: ptke, peps, pL, pnum, pnuh
 
       type (type_settings), target :: store
       class (type_settings), pointer :: branch
@@ -57,7 +57,6 @@ contains
       call post_init_turbulence(nlev)
 
       ptke = c_loc(tke)
-      ptkeo = c_loc(tkeo)
       peps = c_loc(eps)
       pL   = c_loc(L)
       pnum = c_loc(num)
@@ -76,14 +75,14 @@ contains
    end subroutine
 
    subroutine calculate_3d(nx, ny, nz, istart, istop, jstart, jstop, dt, mask, h3d, D, u_taus, u_taub, z0s, z0b, NN, SS, &
-         tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d) bind(c)
+         tke3d, eps3d, L3d, num3d, nuh3d) bind(c)
       integer(c_int), intent(in), value                        :: nx, ny, nz, istart, istop, jstart, jstop
       real(c_double), intent(in), value                        :: dt
       integer(c_int), intent(in),    dimension(nx, ny)         :: mask
       real(c_double), intent(in),    dimension(nx, ny)         :: D, u_taus, u_taub, z0s, z0b
       real(c_double), intent(in),    dimension(nx, ny, nz)     :: h3d
       real(c_double), intent(in),    dimension(nx, ny, nz + 1) :: SS, NN
-      real(c_double), intent(inout), dimension(nx, ny, nz + 1) :: tke3d, tkeo3d, eps3d, L3d, num3d, nuh3d
+      real(c_double), intent(inout), dimension(nx, ny, nz + 1) :: tke3d, eps3d, L3d, num3d, nuh3d
 
       real(c_double) :: h(0:nz), NN_loc(0:nz), SS_loc(0:nz)
       integer i, j
@@ -92,7 +91,6 @@ contains
          do i = istart, istop
             if (mask(i, j) == 1) then
                tke(:) = tke3d(i, j, :)
-               tkeo(:) = tkeo3d(i, j, :)
                eps(:) = eps3d(i, j, :)
                L(:) = L3d(i, j, :)
                num(:) = num3d(i, j, :)
@@ -102,7 +100,6 @@ contains
                SS_loc(:) = SS(i, j, :)
                call do_turbulence(nz, dt, D(i, j), u_taus(i, j), u_taub(i, j), z0s(i, j), z0b(i, j), h, NN_loc, SS_loc)
                tke3d(i, j, :) = tke(:)
-               tkeo3d(i, j, :) = tkeo(:)
                eps3d(i, j, :) = eps(:)
                L3d(i, j, :) = L(:)
                num3d(i, j, :) = num(:)
