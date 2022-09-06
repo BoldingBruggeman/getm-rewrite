@@ -59,6 +59,7 @@ class Test(unittest.TestCase):
         sim.update_internal_pressure_gradient(
             sim.buoy, sim.momentum.SxB, sim.momentum.SyB
         )
+        self.assertTrue((sim.idpdy.ma == 0.0).all())
         self.assertTrue(
             (np.abs(sim.idpdx.ma[:, 0, :] - sim.idpdx.values[:, 0, :1]) < tol).all()
         )
@@ -88,6 +89,7 @@ class Test(unittest.TestCase):
         sim.update_internal_pressure_gradient(
             sim.buoy, sim.momentum.SxB, sim.momentum.SyB
         )
+        self.assertTrue((sim.idpdx.ma == 0.0).all())
         self.assertTrue(
             (np.abs(sim.idpdy.ma[:, :, 0] - sim.idpdy.values[:, :1, 0]) < tol).all()
         )

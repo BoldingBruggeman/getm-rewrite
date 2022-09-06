@@ -1,4 +1,3 @@
-from typing import Optional
 import unittest
 import logging
 from functools import wraps
