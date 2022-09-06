@@ -73,6 +73,7 @@ class Grid(_pygetm.Grid):
         "nbdyp",
         "overlap",
         "_interpolators",
+        "rotated",
     )
 
     _array_args = {
@@ -199,6 +200,7 @@ class Grid(_pygetm.Grid):
             name="rotation" + self.postfix,
             units="rad",
             long_name="grid rotation with respect to true North",
+            fill_value=np.nan,
         )
         self._setup_array("rotation", self.rotation)
         self.zc.all_values.fill(0.0)
@@ -209,6 +211,7 @@ class Grid(_pygetm.Grid):
         self.zio.all_values[...] = self.z.all_values
         self.zin.all_values[...] = self.z.all_values
         self.nbdyp = nbdyp
+        self.rotated = self.rotation.all_values[self.mask.all_values != 0].any()
 
     def _setup_array(
         self, name: str, array: Optional[core.Array] = None, from_supergrid: bool = True
@@ -295,9 +298,14 @@ class Grid(_pygetm.Grid):
                 (Northward velocity if the source is a geocentric velocity field)
             to_grid: rotate from geocentric to model coordinate system, not vice versa
         """
-        if self._sin_rot is None:
+        if not self.rotated:
+            return u, v
+        elif self._sin_rot is None:
             self._sin_rot = np.sin(self.rotation.all_values)
             self._cos_rot = np.cos(self.rotation.all_values)
+
+            # hardcode cos(0.5*pi)=0 to increase precision in 90 degree rotaton tests
+            self._cos_rot[self.rotation.all_values == 0.5 * np.pi] = 0
         sin_rot = -self._sin_rot if to_grid else self._sin_rot
         u_new = u * self._cos_rot - v * sin_rot
         v_new = u * sin_rot + v * self._cos_rot
@@ -1627,24 +1635,21 @@ class Domain(_pygetm.Domain):
         self.dx, self.dx_ = setup_metric()
         self.dy, self.dy_ = setup_metric()
         if spherical:
-            dlon = self.lon_[:, 2:] - self.lon_[:, :-2]
-            dlat = self.lat_[:, 2:] - self.lat_[:, :-2]
-            dx = DEG2RAD * dlon * R_EARTH * np.cos(DEG2RAD * self.lat_[:, 1:-1])
-            dy = DEG2RAD * dlat * R_EARTH
-            self.dx_[:, 1:-1] = np.sqrt(dx ** 2 + dy ** 2)
-
-            dlon = self.lon_[2:, :] - self.lon_[:-2, :]
-            dlat = self.lat_[2:, :] - self.lat_[:-2, :]
-            dx = DEG2RAD * dlon * R_EARTH * np.cos(DEG2RAD * self.lat_[1:-1, :])
-            dy = DEG2RAD * dlat * R_EARTH
-            self.dy_[1:-1, :] = np.sqrt(dx ** 2 + dy ** 2)
+            dlon_x = self.lon_[:, 2:] - self.lon_[:, :-2]
+            dlat_x = self.lat_[:, 2:] - self.lat_[:, :-2]
+            dx_x = DEG2RAD * dlon_x * R_EARTH * np.cos(DEG2RAD * self.lat_[:, 1:-1])
+            dy_x = DEG2RAD * dlat_x * R_EARTH
+            dlon_y = self.lon_[2:, :] - self.lon_[:-2, :]
+            dlat_y = self.lat_[2:, :] - self.lat_[:-2, :]
+            dx_y = DEG2RAD * dlon_y * R_EARTH * np.cos(DEG2RAD * self.lat_[1:-1, :])
+            dy_y = DEG2RAD * dlat_y * R_EARTH
         else:
-            dx = self.x_[:, 2:] - self.x_[:, :-2]
-            dy = self.y_[:, 2:] - self.y_[:, :-2]
-            self.dx_[:, 1:-1] = np.sqrt(dx ** 2 + dy ** 2)
-            dx = self.x_[2:, :] - self.x_[:-2, :]
-            dy = self.y_[2:, :] - self.y_[:-2, :]
-            self.dy_[1:-1, :] = np.sqrt(dx ** 2 + dy ** 2)
+            dx_x = self.x_[:, 2:] - self.x_[:, :-2]
+            dy_x = self.y_[:, 2:] - self.y_[:, :-2]
+            dx_y = self.x_[2:, :] - self.x_[:-2, :]
+            dy_y = self.y_[2:, :] - self.y_[:-2, :]
+        self.dx_[:, 1:-1] = np.hypot(dx_x, dy_x)
+        self.dy_[1:-1, :] = np.hypot(dx_y, dy_y)
 
         # Halo exchange for dx, dy, needed to ensure the outer strips of the halos are
         # valid. Those outermost strips could not be computed by central-differencing
@@ -2021,19 +2026,29 @@ class Domain(_pygetm.Domain):
             1 + 2 * jstart : 1 + 2 * jstop, 1 + 2 * istart : 1 + 2 * istop
         ] = value
 
-    def transpose(self) -> "Domain":
+    def rotate(self) -> "Domain":
         def tp(array):
-            return None if array is None else np.transpose(array)
+            return None if array is None else np.transpose(array)[::-1, :]
 
-        x = tp(self.x)
-        y = tp(self.y)
-        lon = tp(self.lon)
-        lat = tp(self.lat)
-        mask = tp(self.mask)
-        H = tp(self.H)
-        z0b_min = tp(self.z0b_min)
         return create(
-            self.ny, self.nx, self.nz, lon, lat, x, y, self.spherical, mask, H, z0b_min
+            self.ny,
+            self.nx,
+            self.nz,
+            tp(self.lon),
+            tp(self.lat),
+            tp(self.x),
+            tp(self.y),
+            self.spherical,
+            tp(self.mask),
+            tp(self.H),
+            tp(self.z0b_min),
+            tp(self.cor),
+            Dmin=self.Dmin,
+            vertical_coordinate_method=self.vertical_coordinate_method,
+            ddl=self.ddl,
+            ddu=self.ddu,
+            Dgamma=self.Dgamma,
+            gamma_surf=self.gamma_surf,
         )
 
     def plot(

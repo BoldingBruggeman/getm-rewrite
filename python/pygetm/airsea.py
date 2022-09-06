@@ -283,6 +283,7 @@ class FluxesFromMeteo(Fluxes):
         self.cd_mom = grid.array()
         self.cd_latent = grid.array()
         self.cd_sensible = grid.array()
+        self.grid = grid
 
     def update_humidity(self, sst: core.Array):
         """Update humidity metrics: saturation vapor pressure :attr:`es`,
@@ -351,9 +352,7 @@ class FluxesFromMeteo(Fluxes):
         t2m_K = self.t2m.all_values + 273.15
 
         # Wind speed
-        np.sqrt(
-            self.u10.all_values ** 2 + self.v10.all_values ** 2, out=self.w.all_values
-        )
+        np.hypot(self.u10.all_values, self.v10.all_values, out=self.w.all_values)
 
         pyairsea.transfer_coefficients(
             1,
@@ -392,8 +391,9 @@ class FluxesFromMeteo(Fluxes):
 
         # Momentum flux in x and y direction
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
-        self.taux.all_values[...] = tmp * self.u10.all_values
-        self.tauy.all_values[...] = tmp * self.v10.all_values
+        u10, v10 = self.grid.rotate(self.u10, self.v10)
+        self.taux.all_values[...] = tmp * u10.all_values
+        self.tauy.all_values[...] = tmp * v10.all_values
 
         if calculate_heat_flux:
             # Latent heat of vaporization (J/kg) at sea surface
