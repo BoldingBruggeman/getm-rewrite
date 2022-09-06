@@ -110,7 +110,7 @@ class File(operators.FieldCollection):
         self.update(macro=macro)
         if self.save_on_close_only:
             return
-        now = itimestep if self.interval == TimeUnit.TIMESTEPS else seconds_passed
+        now = itimestep if self.interval_units == TimeUnit.TIMESTEPS else seconds_passed
         if now >= self.next:
             self._logger.debug("Saving")
             self.save_now(seconds_passed, time)
