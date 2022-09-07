@@ -87,10 +87,7 @@ def test(
 
     domain.mask[distance_from_center < extent * (1.0 / 6.0 + 1e-12)] = 0
     sim = pygetm.Simulation(
-        domain,
-        runtype=1,
-        advection_scheme=1,
-        apply_bottom_friction=apply_bottom_friction,
+        domain, runtype=pygetm.BAROTROPIC, apply_bottom_friction=apply_bottom_friction,
     )
     assert timestep < domain.maxdt, "Request time step %s exceeds maxdt=%.5f s" % (
         timestep,
