@@ -48,6 +48,22 @@ class InternalPressure(enum.IntEnum):
     #    STELLING_VANKESTER=7
 
 
+def to_cftime(time: Union[datetime.datetime, cftime.datetime]) -> cftime.datetime:
+    if isinstance(time, cftime.datetime):
+        return time
+    elif isinstance(time, datetime.datetime):
+        return cftime.datetime(
+            time.year,
+            time.month,
+            time.day,
+            time.hour,
+            time.minute,
+            time.second,
+            time.microsecond,
+        )
+    raise Exception("Unable to convert %r to cftime.datetime" % time)
+
+
 def log_exceptions(method):
     @functools.wraps(method)
     def wrapper(self, *args, **kwargs):
@@ -449,16 +465,48 @@ class Simulation(_pygetm.Simulation):
         kwargs["use_cftime"] = True
         with xarray.open_dataset(path, **kwargs) as ds:
             timevar = ds["zt"].getm.time
-            time_coord = timevar.values
+            if timevar.ndim > 1:
+                raise Exception(
+                    "Time coordinate must be 0D or 1D (%i dimensions found)"
+                    % timevar.ndim
+                )
+
+            # Use time reference of restart as default time reference for new output
             self.default_time_reference = cftime.num2date(
                 0.0,
                 units=timevar.encoding["units"],
                 calendar=timevar.encoding["calendar"],
             )
-            assert (
-                time_coord.size == 1
-            ), "Currently a restart file should contain a single time point only"
-        with xarray.open_dataset(path, **kwargs) as ds:
+
+            # Determine time index to load restart information from
+            time_coord = timevar.values.reshape((-1,))
+            itime = -1
+            if time is not None:
+                # Find time index that matches requested time
+                time = to_cftime(time)
+                itimes = np.where(time_coord == time)[0]
+                if itimes.size == 0:
+                    raise Exception(
+                        "Requested restart time %s not found in %s, which spans %s - %s"
+                        % (
+                            time.isoformat(),
+                            path,
+                            time_coord[0].isoformat(),
+                            time_coord[-1].isoformat(),
+                        )
+                    )
+                itime = itimes[0]
+            elif time_coord.size > 1:
+                self.logger.info(
+                    "Restart file %s contains %i time points. Using last: %s"
+                    % (path, time_coord.size, time_coord[-1].isoformat())
+                )
+
+            # Slice restart file at the required time index
+            if time_coord.size > 1:
+                ds = ds.isel({timevar.dims[0]: itime})
+
+            # Load all fields that are part of the model state
             for name, field in self.output_manager.fields.items():
                 if field.attrs.get("_part_of_state", False):
                     if name not in ds:
@@ -467,10 +515,12 @@ class Simulation(_pygetm.Simulation):
                         )
                     field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
                     self._initialized_variables.add(name)
+
         if self.runtype > BAROTROPIC_2D:
             # Restore elevation from before open boundary condition was applied
             self.domain.T.z.all_values[...] = self.domain.T.zin.all_values
-        return time_coord[0]
+
+        return time_coord[itime]
 
     @log_exceptions
     def start(
@@ -502,16 +552,7 @@ class Simulation(_pygetm.Simulation):
                 becomes ``<profile>-<rank>.prof``. If the argument is not provided,
                 profiling is disabled.
         """
-        if isinstance(time, datetime.datetime):
-            time = cftime.datetime(
-                time.year,
-                time.month,
-                time.day,
-                time.hour,
-                time.minute,
-                time.second,
-                time.microsecond,
-            )
+        time = to_cftime(time)
         self.logger.info("Starting simulation at %s" % time)
         self.timestep = timestep
         self.split_factor = split_factor
