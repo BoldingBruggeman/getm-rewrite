@@ -234,7 +234,7 @@ class Momentum(pygetm._pygetm.Momentum):
             units="m2 s-1",
             long_name="horizontal diffusivity of momentum",
             fill_value=FILL_VALUE,
-            attrs=dict(_require_halos=True),
+            attrs=dict(_require_halos=True, _time_varying=False),
         )
         self.An.fill(An)
         self.An_uu = self.An_uv = self.An_vu = self.An_vv = None
