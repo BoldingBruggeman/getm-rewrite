@@ -1,7 +1,7 @@
 import enum
 import operator
 import logging
-from typing import Union
+from typing import Optional
 
 import numpy as np
 
@@ -81,6 +81,11 @@ class Momentum(pygetm._pygetm.Momentum):
         "_u3dfirst",
         "diffuse_momentum",
         "apply_bottom_friction",
+        "_Am_const",
+        "_An_const",
+        "cnpar",
+        "advection_scheme",
+        "coriolis_scheme",
         "An",
         "An_uu",
         "An_uv",
@@ -160,17 +165,40 @@ class Momentum(pygetm._pygetm.Momentum):
 
     def __init__(
         self,
+        apply_bottom_friction: bool = True,
+        Am: float = 0.0,
+        An: float = 0.0,
+        cnpar: float = 1.0,
+        advection_scheme: Optional[operators.AdvectionScheme] = None,
+        coriolis_scheme: CoriolisScheme = CoriolisScheme.DEFAULT,
+    ):
+        """Create momentum handler
+
+        Args:
+            Am: horizontal viscosity (m2 s-1)
+                If provided, this must be a constant.
+            An: horizontal diffusivity (m2 s-1)
+                If provided, this must be a constant.
+                It can subsequently be changed through attribute :attr:`An`, which also
+                allows spatially varying diffusivities to be set.
+        """
+        self.apply_bottom_friction = apply_bottom_friction
+        self._Am_const = Am
+        self._An_const = An
+        self.cnpar = cnpar
+        self.advection_scheme = advection_scheme
+        self.coriolis_scheme = coriolis_scheme
+
+    def initialize(
+        self,
         logger: logging.Logger,
         domain: pygetm.domain.Domain,
         runtype: int,
-        apply_bottom_friction: bool = True,
-        Am: float = 0.0,
-        An: Union[float, core.Array] = 0.0,
-        cnpar: float = 1.0,
-        advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.HSIMT,
-        coriolis_scheme: CoriolisScheme = CoriolisScheme.DEFAULT,
+        default_advection_scheme: operators.AdvectionScheme,
     ):
-        super().__init__(domain, runtype, Am, cnpar, coriolis_scheme)
+        super().__init__(
+            domain, runtype, self._Am_const, self.cnpar, self.coriolis_scheme
+        )
 
         for name in self._arrays:
             setattr(
@@ -186,17 +214,15 @@ class Momentum(pygetm._pygetm.Momentum):
         self.runtype = runtype
 
         # Disable bottom friction if physical bottom roughness is 0 everywhere
-        if (
-            apply_bottom_friction
-            and (np.ma.array(domain.z0b_min, mask=domain.mask == 0) == 0.0).any()
-        ):
+        z0b = domain.z0b_min[domain.mask > 0]
+        if self.apply_bottom_friction and (z0b == 0.0).any():
             self.logger.warning(
-                "Disabling bottom friction because bottom roughness is 0"
-                " in one or more points."
+                "Disabling bottom friction because bottom roughness is 0 in"
+                " %i of %i unmasked supergrid cells." % ((z0b == 0.0).sum(), z0b.size)
             )
-            apply_bottom_friction = False
-        self.apply_bottom_friction = apply_bottom_friction
-        self.diffuse_momentum = Am > 0.0
+            self.apply_bottom_friction = False
+
+        self.diffuse_momentum = self._Am_const > 0.0
         if not self.diffuse_momentum:
             self.logger.info("Diffusion of momentum is off because Am is 0")
 
@@ -216,8 +242,10 @@ class Momentum(pygetm._pygetm.Momentum):
             self.ww.all_values.fill(0.0)
             self.SS.fill(0.0)  # for surface/bottom interfaces, which are not updated
 
-        self.uadv = operators.Advection(domain.U, scheme=advection_scheme)
-        self.vadv = operators.Advection(domain.V, scheme=advection_scheme)
+        if self.advection_scheme is None:
+            self.advection_scheme = default_advection_scheme
+        self.uadv = operators.Advection(domain.U, scheme=self.advection_scheme)
+        self.vadv = operators.Advection(domain.V, scheme=self.advection_scheme)
 
         self.uua = domain.UU.array(fill=np.nan)
         self.uva = domain.UV.array(fill=np.nan)
@@ -236,7 +264,7 @@ class Momentum(pygetm._pygetm.Momentum):
             fill_value=FILL_VALUE,
             attrs=dict(_require_halos=True, _time_varying=False),
         )
-        self.An.fill(An)
+        self.An.fill(self._An_const)
         self.An_uu = self.An_uv = self.An_vu = self.An_vv = None
 
         #: Whether to start the depth-integrated (2D) momentum update with u

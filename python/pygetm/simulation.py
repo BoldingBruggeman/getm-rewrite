@@ -159,6 +159,7 @@ class Simulation(_pygetm.Simulation):
         apply_bottom_friction: bool = True,
         fabm: Union[pygetm.fabm.FABM, bool, str, None] = None,
         gotm: Union[str, None] = None,
+        momentum: Optional[pygetm.momentum.Momentum] = None,
         turbulence: Optional[pygetm.mixing.Turbulence] = None,
         airsea: Optional[pygetm.airsea.Fluxes] = None,
         density: Optional[pygetm.density.Density] = None,
@@ -166,18 +167,7 @@ class Simulation(_pygetm.Simulation):
         logger: Optional[logging.Logger] = None,
         log_level: Optional[int] = None,
         internal_pressure_method: InternalPressure = InternalPressure.OFF,
-        Am: float = 0.0,
-        An: Union[float, core.Array] = 0.0,
     ):
-        """Create a new simulation
-
-        Args:
-            Am: horizontal viscosity (m2 s-1)
-                If provided, this must be a constant.
-            Am: horizontal diffusivity (m2 s-1)
-                If provided, this must be a constant.
-        """
-
         self.logger = dom.root_logger
         if log_level is not None:
             self.logger.setLevel(log_level)
@@ -211,14 +201,13 @@ class Simulation(_pygetm.Simulation):
             dom.V.z0b.attrs["_part_of_state"] = True
 
         # Configure momentum provider
-        self.momentum = pygetm.momentum.Momentum(
-            self.logger.getChild("momentum"),
-            dom,
-            runtype,
-            apply_bottom_friction=apply_bottom_friction,
-            Am=Am,
-            An=An,
-            advection_scheme=advection_scheme,
+        if momentum is None:
+            momentum = pygetm.momentum.Momentum(
+                apply_bottom_friction=apply_bottom_friction
+            )
+        self.momentum = momentum
+        self.momentum.initialize(
+            self.logger.getChild("momentum"), dom, runtype, advection_scheme
         )
 
         # Make open boundary conditions for elevation and transport/velocity
