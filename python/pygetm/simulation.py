@@ -360,6 +360,9 @@ class Simulation(_pygetm.Simulation):
         )
 
         if runtype == BAROCLINIC:
+            self.logger.info(
+                "Internal pressure method: %s" % internal_pressure_method.name
+            )
             self.density = density or pygetm.density.Density()
 
             self.radiation = radiation or pygetm.radiation.TwoBand()

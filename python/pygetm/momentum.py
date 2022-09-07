@@ -224,7 +224,9 @@ class Momentum(pygetm._pygetm.Momentum):
 
         self.diffuse_momentum = self._Am_const > 0.0
         if not self.diffuse_momentum:
-            self.logger.info("Diffusion of momentum is off because Am is 0")
+            self.logger.info(
+                "Disabling horizontal diffusion because horizontal viscosity Am is 0"
+            )
 
         self.U.all_values.fill(0.0)
         self.V.all_values.fill(0.0)
@@ -244,8 +246,12 @@ class Momentum(pygetm._pygetm.Momentum):
 
         if self.advection_scheme is None:
             self.advection_scheme = default_advection_scheme
+        self.logger.info("Advection scheme: %s" % self.advection_scheme.name)
         self.uadv = operators.Advection(domain.U, scheme=self.advection_scheme)
         self.vadv = operators.Advection(domain.V, scheme=self.advection_scheme)
+
+        self.logger.info("Crank-Nicolson parameter: %s" % self.cnpar)
+        self.logger.info("Coriolis interpolation: %s" % self.coriolis_scheme.name)
 
         self.uua = domain.UU.array(fill=np.nan)
         self.uva = domain.UV.array(fill=np.nan)

@@ -115,6 +115,16 @@ class FluxesFromMeteo(Fluxes):
     def initialize(self, grid: pygetm.domain.Grid):
         super().initialize(grid)
 
+        self.logger.info("Longwave method: %s" % self.longwave_method.name)
+        self.logger.info("Albedo method: %s" % self.albedo_method.name)
+        self.logger.info("Humidity measure method: %s" % self.humidity_measure.name)
+        if self.calculate_swr:
+            self.logger.info(
+                "Shortwave radiation calculated from time, location and cloud cover"
+            )
+        if self.calculate_evaporation:
+            self.logger.info("Evaporation calculated from latent heat flux")
+
         self.es = grid.array(
             name="es",
             long_name="vapor pressure at saturation",
