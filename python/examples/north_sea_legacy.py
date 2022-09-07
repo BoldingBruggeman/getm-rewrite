@@ -71,15 +71,15 @@ sim.airsea.tp.set(pygetm.input.from_nc(met_path, "precip"))
 
 sim.logger.info("Setting up output")
 output = sim.output_manager.add_netcdf_file(
-    "meteo.nc", interval=datetime.timedelta(hours=1), sync_interval=None
+    "meteo.nc", interval=datetime.timedelta(hours=1)
 )
 output.request("u10", "v10", "sp", "t2m", "qa", "tcc")
 output = sim.output_manager.add_netcdf_file(
-    "north_sea_2d.nc", interval=datetime.timedelta(hours=1), sync_interval=None
+    "north_sea_2d.nc", interval=datetime.timedelta(hours=1)
 )
 output.request("zt", "Dt", "u1", "v1", "tausxu", "tausyv")
 output = sim.output_manager.add_netcdf_file(
-    "north_sea_3d.nc", interval=datetime.timedelta(hours=6), sync_interval=None
+    "north_sea_3d.nc", interval=datetime.timedelta(hours=6)
 )
 output.request("uk", "vk", "ww", "SS", "num")
 output.request("temp", "salt", "rho", "NN", "rad", "sst", "hnt", "nuh")

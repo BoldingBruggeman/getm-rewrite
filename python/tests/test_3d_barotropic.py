@@ -18,7 +18,7 @@ def test(
     domain = pygetm.domain.create_cartesian(
         500.0 * np.arange(100), 500.0 * np.arange(30), 50, f=0, H=50
     )
-    sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_3D, advection_scheme=1)
+    sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_3D)
     sim.logger.info(
         "Starting 3d barotropic test with tau_x=%s, tau_y=%s, apply_bottom_friction=%s"
         % (tau_x, tau_y, apply_bottom_friction)
