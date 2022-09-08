@@ -28,7 +28,6 @@ pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, "riverinfo.dat
 sim = pygetm.Simulation(
     domain,
     runtype=pygetm.BAROCLINIC,
-    advection_scheme=pygetm.AdvectionScheme.HSIMT,
     gotm=os.path.join(args.setup_dir, "gotmturb.nml"),
     airsea=pygetm.airsea.FluxesFromMeteo(
         humidity_measure=pygetm.HumidityMeasure.SPECIFIC_HUMIDITY,
@@ -59,7 +58,7 @@ sim.temp.set(11.6)
 sim.salt.set(35.2)
 sim.density.convert_ts(sim.salt, sim.temp)
 
-sim.logger.info("Setting up NS original meteorological forcing")
+sim.logger.info("Setting up meteorological forcing")
 met_path = os.path.join(args.setup_dir, "Forcing/Meteo/CFSR.daymean.2006.nc")
 sim.airsea.tcc.set(pygetm.input.from_nc(met_path, "tcc"))
 sim.airsea.t2m.set(pygetm.input.from_nc(met_path, "t2"))
@@ -71,18 +70,9 @@ sim.airsea.tp.set(pygetm.input.from_nc(met_path, "precip"))
 
 sim.logger.info("Setting up output")
 output = sim.output_manager.add_netcdf_file(
-    "meteo.nc", interval=datetime.timedelta(hours=1)
+    "north_sea_3d.nc", interval=datetime.timedelta(days=1)
 )
-output.request("u10", "v10", "sp", "t2m", "qa", "tcc")
-output = sim.output_manager.add_netcdf_file(
-    "north_sea_2d.nc", interval=datetime.timedelta(hours=1)
-)
-output.request("zt", "Dt", "u1", "v1", "tausxu", "tausyv")
-output = sim.output_manager.add_netcdf_file(
-    "north_sea_3d.nc", interval=datetime.timedelta(hours=6)
-)
-output.request("uk", "vk", "ww", "SS", "num")
-output.request("temp", "salt", "rho", "NN", "rad", "sst", "hnt", "nuh")
+output.request("temp", "salt", "tke", "num", "SS", "NN")
 
 sim.start(datetime.datetime(2006, 1, 2), timestep=60.0, split_factor=30, report=60)
 while sim.time < datetime.datetime(2007, 1, 1):
