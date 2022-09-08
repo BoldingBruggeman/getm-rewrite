@@ -34,6 +34,7 @@ jobs:
           cd python/tests
           python test_interpolate.py -v
           python test_vertical_diffusion.py -v
+          python test_grid.py -v
           python test_2d_transport.py -v
           python test_coriolis.py -v
           python test_internal_pressure.py -v
