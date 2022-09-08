@@ -151,6 +151,10 @@ class TracerCollection(Sequence[Tracer]):
         advection_scheme: operators.AdvectionScheme,
         cnpar: float = 1.0,
     ):
+        self.logger = grid.domain.root_logger.getChild("tracers")
+        self.logger.info("Advection scheme: %s" % advection_scheme.name)
+        self.logger.info("Crank-Nicolson parameter: %s" % cnpar)
+
         self.grid: domain.Grid = grid
         self._tracers: List[Tracer] = []
         self._source = grid.array(z=CENTERS)
