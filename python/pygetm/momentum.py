@@ -85,6 +85,7 @@ class Momentum(pygetm._pygetm.Momentum):
         "_An_const",
         "cnpar",
         "advection_scheme",
+        "advection_split_2d",
         "coriolis_scheme",
         "An",
         "An_uu",
@@ -170,6 +171,7 @@ class Momentum(pygetm._pygetm.Momentum):
         An: float = 0.0,
         cnpar: float = 1.0,
         advection_scheme: Optional[operators.AdvectionScheme] = None,
+        advection_split_2d: operators.AdvectionSplit = operators.AdvectionSplit.FULL,
         coriolis_scheme: CoriolisScheme = CoriolisScheme.DEFAULT,
     ):
         """Create momentum handler
@@ -187,6 +189,7 @@ class Momentum(pygetm._pygetm.Momentum):
         self._An_const = An
         self.cnpar = cnpar
         self.advection_scheme = advection_scheme
+        self.advection_split_2d = advection_split_2d
         self.coriolis_scheme = coriolis_scheme
 
     def initialize(
@@ -247,8 +250,12 @@ class Momentum(pygetm._pygetm.Momentum):
         if self.advection_scheme is None:
             self.advection_scheme = default_advection_scheme
         self.logger.info("Advection scheme: %s" % self.advection_scheme.name)
-        self.uadv = operators.Advection(domain.U, scheme=self.advection_scheme)
-        self.vadv = operators.Advection(domain.V, scheme=self.advection_scheme)
+        self.uadv = operators.Advection(
+            domain.U, scheme=self.advection_scheme, split_2d=self.advection_split_2d
+        )
+        self.vadv = operators.Advection(
+            domain.V, scheme=self.advection_scheme, split_2d=self.advection_split_2d
+        )
 
         self.logger.info("Crank-Nicolson parameter: %s" % self.cnpar)
         self.logger.info("Coriolis interpolation: %s" % self.coriolis_scheme.name)

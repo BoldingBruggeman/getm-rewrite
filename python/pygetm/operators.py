@@ -10,22 +10,32 @@ from .constants import CENTERS, INTERFACES
 
 
 class AdvectionScheme(enum.IntEnum):
-    HSIMT = 1
+    HSIMT = 1     #: Wu & Zhu (2010), https://doi.org/10.1016/j.ocemod.2009.12.001
     MUSCL = 2
     P2_PDM = 3
     SPLMAX13 = 4
     SUPERBEE = 5
     UPSTREAM = 6
+    DEFAULT = SUPERBEE
+
+
+class AdvectionSplit(enum.Enum):
+    FULL = 1  #: full splitting: u-v in 2D, u-v-w in 3D
+    HALF = 2  #: half splitting: u/2-v-u/2 in 2D, u/2-v/2-w-v/2-u/2 in 3D
 
 
 class Advection(_pygetm.Advection):
-    __slots__ = ("_ufirst", "halo1", "halo2")
+    __slots__ = ("_ufirst", "halo1", "halo2", "split_2d")
 
     def __init__(
-        self, grid: domain.Grid, scheme: AdvectionScheme = AdvectionScheme.HSIMT,
+        self,
+        grid: domain.Grid,
+        scheme: AdvectionScheme = AdvectionScheme.DEFAULT,
+        split_2d: AdvectionSplit = AdvectionSplit.HALF,
     ):
         super().__init__(grid, scheme)
         self.ufirst = False
+        self.split_2d = split_2d
 
     @property
     def ufirst(self) -> bool:
@@ -63,11 +73,16 @@ class Advection(_pygetm.Advection):
         self.D[...] = self.grid.D.all_values
         if not skip_initial_halo_exchange:
             var.update_halos(self.halo1)
-        adv1(0.5 * timestep, var)
-        var.update_halos(self.halo2)
-        adv2(timestep, var)
-        var.update_halos(self.halo1)
-        adv1(0.5 * timestep, var)
+        if self.split_2d == AdvectionSplit.HALF:
+            adv1(0.5 * timestep, var)
+            var.update_halos(self.halo2)
+            adv2(timestep, var)
+            var.update_halos(self.halo1)
+            adv1(0.5 * timestep, var)
+        else:
+            adv1(timestep, var)
+            var.update_halos(self.halo2)
+            adv2(timestep, var)
 
     def apply_3d(
         self,

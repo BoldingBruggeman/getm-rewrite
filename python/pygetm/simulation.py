@@ -155,7 +155,7 @@ class Simulation(_pygetm.Simulation):
         self,
         dom: domain.Domain,
         runtype: int,
-        advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.HSIMT,
+        advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.DEFAULT,
         apply_bottom_friction: bool = True,
         fabm: Union[pygetm.fabm.FABM, bool, str, None] = None,
         gotm: Union[str, None] = None,
