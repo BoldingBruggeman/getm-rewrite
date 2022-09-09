@@ -8,6 +8,7 @@ add_library( getm_operators
     advection_schemes/advection_hsimt.F90
     advection_schemes/advection_muscl.F90
     advection_schemes/advection_upstream.F90
+    advection_schemes/limiters.h
     diffusion.F90
 )
 target_link_libraries(getm_operators getm_domain)
