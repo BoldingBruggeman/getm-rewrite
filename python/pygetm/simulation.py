@@ -148,6 +148,12 @@ class Simulation(_pygetm.Simulation):
     _array_args = {
         "dpdx": dict(units="-", long_name="surface pressure gradient in x direction"),
         "dpdy": dict(units="-", long_name="surface pressure gradient in y direction"),
+        "idpdx": dict(
+            units="m2 s-2", long_name="internal pressure gradient in x direction"
+        ),
+        "idpdy": dict(
+            units="m2 s-2", long_name="internal pressure gradient in y direction"
+        ),
     }
 
     @log_exceptions

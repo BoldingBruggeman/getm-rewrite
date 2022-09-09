@@ -18,7 +18,7 @@ class Test(unittest.TestCase):
         rho_min = 1020.0
         rho_max = 1025.0
 
-        x = np.linspace(0, 100000, 100)
+        x = np.linspace(0, 50000, 101)
         y = np.linspace(0, 100000, 100)
         domain = pygetm.domain.create_cartesian(
             x,
@@ -42,13 +42,13 @@ class Test(unittest.TestCase):
             sim.buoy, sim.momentum.SxB, sim.momentum.SyB
         )
         self.assertTrue((sim.idpdy.ma == 0.0).all())
-        F = (
+        dP_dx = (
             -domain.U.zc.values[:, 0, 0]
             * GRAVITY
             * (rho_max - rho_min)
             / domain.U.dx.values[0, 0]
         )
-        acceleration = -F / RHO0
+        acceleration = -dP_dx / RHO0
         dU = acceleration * domain.U.hn.values[:, 0, 0]
         tol = 1e-15
         self.assertTrue((np.abs(dU - sim.idpdx.values[:, 0, 49]) < tol).all())
@@ -64,7 +64,7 @@ class Test(unittest.TestCase):
             (np.abs(sim.idpdx.ma[:, 0, :] - sim.idpdx.values[:, 0, :1]) < tol).all()
         )
 
-        # lock exchange density in x direction
+        # lock exchange density in y direction
         sim.rho.values[:, :50, :] = rho_min
         sim.rho.values[:, 50:, :] = rho_max
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
@@ -72,16 +72,16 @@ class Test(unittest.TestCase):
             sim.buoy, sim.momentum.SxB, sim.momentum.SyB
         )
         self.assertTrue((sim.idpdx.ma == 0.0).all())
-        F = (
+        dP_dy = (
             -domain.V.zc.values[:, 0, 0]
             * GRAVITY
             * (rho_max - rho_min)
-            / domain.V.dx.values[0, 0]
+            / domain.V.dy.values[0, 0]
         )
-        acceleration = -F / RHO0
-        dv = acceleration * domain.V.hn.values[:, 0, 0]
+        acceleration = -dP_dy / RHO0
+        dV = acceleration * domain.V.hn.values[:, 0, 0]
         tol = 1e-15
-        self.assertTrue((np.abs(dv - sim.idpdy.values[:, 49, 0]) < tol).all())
+        self.assertTrue((np.abs(dV - sim.idpdy.values[:, 49, 0]) < tol).all())
 
         # linearly increasing density in y direction
         sim.rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.y / 100000
