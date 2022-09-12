@@ -20,13 +20,13 @@ def domain_from_topo(
     Args:
         path: NetCDF file with legacy domain topography
         nlev: number of vertical layers
-        ioffset: starting point in x direction
+        ioffset: starting point in x-direction
             (default: 0 = start of the domain in the topo file)
-        joffset: starting point in y direction
+        joffset: starting point in y-direction
             (default: 0 = start of the domain in the topo file)
-        nx: number of points to read in x direction
+        nx: number of points to read in x-direction
             (default: read till end of the domain in the topo file)
-        ny: number of points to read in y direction
+        ny: number of points to read in y-direction
             (default: read till end of the domain in the topo file)
         **kwargs: keyword arguments that are ultimately passed to
             :class:`pygetm.domain.Domain`

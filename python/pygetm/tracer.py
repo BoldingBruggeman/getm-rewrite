@@ -190,9 +190,9 @@ class TracerCollection(Sequence[Tracer]):
 
         Args:
             timestep: time step (s)
-            u: velocity in x direction (m s-1)
-            v: velocity in y direction (m s-1)
-            w: velocity in z direction (m s-1)
+            u: velocity in x-direction (m s-1)
+            v: velocity in y-direction (m s-1)
+            w: velocity in z-direction (m s-1)
             diffusivity: vertical turbulent diffusivity (m2 s-1)
 
         This uses operator splitting: advection and horizontal diffusion is done first,

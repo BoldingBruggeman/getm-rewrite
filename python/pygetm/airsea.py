@@ -23,14 +23,14 @@ class Fluxes:
 
         self.taux = grid.array(
             name="tausx",
-            long_name="wind stress in x direction",
+            long_name="wind stress in x-direction",
             units="Pa",
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="downward_x_stress_at_sea_water_surface"),
         )
         self.tauy = grid.array(
             name="tausy",
-            long_name="wind stress in y direction",
+            long_name="wind stress in y-direction",
             units="Pa",
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="downward_y_stress_at_sea_water_surface"),
@@ -444,7 +444,7 @@ class FluxesFromMeteo(Fluxes):
         # Transfer coefficients of heat and momentum
         self.update_transfer_coefficients(sst)
 
-        # Momentum flux in x and y direction
+        # Momentum flux in x and y-direction
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
         u10, v10 = self.grid.rotate(self.u10, self.v10)
         self.taux.all_values[...] = tmp * u10.all_values

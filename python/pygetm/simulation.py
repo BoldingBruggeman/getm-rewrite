@@ -146,13 +146,13 @@ class Simulation(_pygetm.Simulation):
     )
 
     _array_args = {
-        "dpdx": dict(units="-", long_name="surface pressure gradient in x direction"),
-        "dpdy": dict(units="-", long_name="surface pressure gradient in y direction"),
+        "dpdx": dict(units="-", long_name="surface pressure gradient in x-direction"),
+        "dpdy": dict(units="-", long_name="surface pressure gradient in y-direction"),
         "idpdx": dict(
-            units="m2 s-2", long_name="internal pressure gradient in x direction"
+            units="m2 s-2", long_name="internal pressure gradient in x-direction"
         ),
         "idpdy": dict(
-            units="m2 s-2", long_name="internal pressure gradient in y direction"
+            units="m2 s-2", long_name="internal pressure gradient in y-direction"
         ),
     }
 
@@ -1032,8 +1032,8 @@ class Simulation(_pygetm.Simulation):
 
         Args:
             timestep: time step (s)
-            U: depth-integrated velocity in x direction (m2 s-1)
-            V: depth-integrated velocity in y direction (m2 s-1)
+            U: depth-integrated velocity in x-direction (m2 s-1)
+            V: depth-integrated velocity in y-direction (m2 s-1)
             fwf: freshwater flux (m s-1)
 
         This also updates the surface elevation halos.

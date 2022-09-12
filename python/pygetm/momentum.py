@@ -97,13 +97,13 @@ class Momentum(pygetm._pygetm.Momentum):
     _array_args = {
         "U": dict(
             units="m2 s-1",
-            long_name="depth-integrated transport in x direction",
+            long_name="depth-integrated transport in x-direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
         "V": dict(
             units="m2 s-1",
-            long_name="depth-integrated transport in y direction",
+            long_name="depth-integrated transport in y-direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
@@ -119,37 +119,37 @@ class Momentum(pygetm._pygetm.Momentum):
         ),
         "u1": dict(
             units="m s-1",
-            long_name="depth-averaged velocity in x direction",
+            long_name="depth-averaged velocity in x-direction",
             fill_value=FILL_VALUE,
             attrs={"_mask_output": True},
         ),
         "v1": dict(
             units="m s-1",
-            long_name="depth-averaged velocity in y direction",
+            long_name="depth-averaged velocity in y-direction",
             fill_value=FILL_VALUE,
             attrs={"_mask_output": True},
         ),
         "pk": dict(
             units="m2 s-1",
-            long_name="layer-integrated transport in x direction",
+            long_name="layer-integrated transport in x-direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
         "qk": dict(
             units="m2 s-1",
-            long_name="layer-integrated transport in y direction",
+            long_name="layer-integrated transport in y-direction",
             fill_value=FILL_VALUE,
             attrs={"_part_of_state": True, "_mask_output": True},
         ),
         "uk": dict(
             units="m s-1",
-            long_name="velocity in x direction",
+            long_name="velocity in x-direction",
             fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True, standard_name="sea_water_x_velocity"),
         ),
         "vk": dict(
             units="m s-1",
-            long_name="velocity in y direction",
+            long_name="velocity in y-direction",
             fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True, standard_name="sea_water_y_velocity"),
         ),
@@ -161,6 +161,46 @@ class Momentum(pygetm._pygetm.Momentum):
         ),
         "SS": dict(
             units="s-2", long_name="shear frequency squared", fill_value=FILL_VALUE
+        ),
+        "SxA": dict(
+            units="m-2 s-2",
+            long_name="slow advection in x-direction",
+            fill_value=FILL_VALUE,
+        ),
+        "SyA": dict(
+            units="m-2 s-2",
+            long_name="slow advection in y-direction",
+            fill_value=FILL_VALUE,
+        ),
+        "SxB": dict(
+            units="m-2 s-2",
+            long_name="depth-integrated internal pressure in x-direction",
+            fill_value=FILL_VALUE,
+        ),
+        "SyB": dict(
+            units="m-2 s-2",
+            long_name="depth-integrated internal pressure in y-direction",
+            fill_value=FILL_VALUE,
+        ),
+        "SxD": dict(
+            units="m-2 s-2",
+            long_name="slow diffusion in x-direction",
+            fill_value=FILL_VALUE,
+        ),
+        "SyD": dict(
+            units="m-2 s-2",
+            long_name="slow diffusion in y-direction",
+            fill_value=FILL_VALUE,
+        ),
+        "SxF": dict(
+            units="m-2 s-2",
+            long_name="slow bottom friction in x-direction",
+            fill_value=FILL_VALUE,
+        ),
+        "SyF": dict(
+            units="m-2 s-2",
+            long_name="slow bottom friction in y-direction",
+            fill_value=FILL_VALUE,
         ),
     }
 
@@ -337,10 +377,10 @@ class Momentum(pygetm._pygetm.Momentum):
 
         Args:
             timestep: time step (s)
-            tausx: surface stress (Pa) in x direction
-            tausy: surface stress (Pa) in y direction
-            dpdx: surface pressure gradient (dimensionless) in x direction
-            dpdx: surface pressure gradient (dimensionless) in y direction
+            tausx: surface stress (Pa) in x-direction
+            tausy: surface stress (Pa) in y-direction
+            dpdx: surface pressure gradient (dimensionless) in x-direction
+            dpdx: surface pressure gradient (dimensionless) in y-direction
         """
         # Update 2D transports from t-1/2 to t+1/2.
         # This uses advection, diffusion and bottom friction terms
@@ -414,12 +454,12 @@ class Momentum(pygetm._pygetm.Momentum):
         Args:
             timestep: (macro) time step (s)
             split_factor: number of microtimesteps per macrotimestep
-            tausx: surface stress (Pa) in x direction
-            tausy: surface stress (Pa) in y direction
-            dpdx: surface pressure gradient (dimensionless) in x direction
-            dpdy: surface pressure gradient (dimensionless) in y direction
-            idpdx: internal pressure gradient (m2 s-2) in x direction
-            idpdy: internal pressure gradient (m2 s-2) in y direction
+            tausx: surface stress (Pa) in x-direction
+            tausy: surface stress (Pa) in y-direction
+            dpdx: surface pressure gradient (dimensionless) in x-direction
+            dpdy: surface pressure gradient (dimensionless) in y-direction
+            idpdx: internal pressure gradient (m2 s-2) in x-direction
+            idpdy: internal pressure gradient (m2 s-2) in y-direction
             viscosity: turbulent viscosity (m2 s-1)
         """
 
@@ -646,8 +686,8 @@ class Momentum(pygetm._pygetm.Momentum):
         This routine also updates bottom friction :attr:`ru` and  :attr:`rv`.
 
         Args:
-            U: depth-integrated velocity (m2 s-1) in x direction
-            V: depth-integrated velocity (m2 s-1) in y direction
+            U: depth-integrated velocity (m2 s-1) in x-direction
+            V: depth-integrated velocity (m2 s-1) in y-direction
             timestep: time step (s) to calculate advection over
             advU: array for storing the change in transport ``U`` (m2 s-2)
                 due to advection

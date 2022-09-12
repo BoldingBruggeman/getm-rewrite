@@ -292,9 +292,9 @@ class Grid(_pygetm.Grid):
         or a model velocity field to the geocentric coordinate system.
 
         Args:
-            u: velocity in x direction in source coordinate system
+            u: velocity in x-direction in source coordinate system
                 (Eastward velocity if the source is a geocentric velocity field)
-            v: velocity in y direction in source coordinate system
+            v: velocity in y-direction in source coordinate system
                 (Northward velocity if the source is a geocentric velocity field)
             to_grid: rotate from geocentric to model coordinate system, not vice versa
         """
@@ -492,8 +492,8 @@ class Rivers(Mapping[str, River]):
 
         Args:
             name: river name
-            i: index in x direction (0-based)
-            j: index in y direction (0-based)
+            i: index in x-direction (0-based)
+            j: index in y-direction (0-based)
             **kwargs: additional keyword arguments passed to :class:`River`
         """
         assert not self._frozen, (
@@ -1110,8 +1110,8 @@ def create(
     multiple processing cores are active (and `glob` is `False`)
 
     Args:
-        nx: number of tracer points in x direction
-        ny: number of tracer points in y direction
+        nx: number of tracer points in x-direction
+        ny: number of tracer points in y-direction
         nz: number of vertical layers
         lon: longitude (degrees East)
         lat: latitude (degrees North)
@@ -1128,9 +1128,9 @@ def create(
         f: Coriolis parameter. By default this is calculated from latitude ``lat``
             if provided.
         tiling: subdomain decomposition
-        periodic_x: use periodic boundary in x direction (left == right)
+        periodic_x: use periodic boundary in x-direction (left == right)
             This is only used if `tiling` is not provided.
-        periodic_y: use periodic boundary in y direction (top == bottom)
+        periodic_y: use periodic boundary in y-direction (top == bottom)
             This is only used if `tiling` is not provided.
         logger: target for log messages
         glob: return the global domain rather than the local subdomain
@@ -1506,8 +1506,8 @@ class Domain(_pygetm.Domain):
         """Create domain with coordinates, bathymetry, mask defined on the supergrid.
 
         Args:
-            nx: number of tracer points in x direction
-            ny: number of tracer points in y direction
+            nx: number of tracer points in x-direction
+            ny: number of tracer points in y-direction
             nz: number of vertical layers
             lon: longitude (degrees East)
             lat: latitude (degrees North)

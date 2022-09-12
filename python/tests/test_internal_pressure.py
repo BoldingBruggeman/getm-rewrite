@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
             domain, pygetm.BAROCLINIC, internal_pressure_method=method,
         )
 
-        # lock exchange density in x direction
+        # lock exchange density in x-direction
         sim.rho.values[:, :, :50] = rho_min
         sim.rho.values[:, :, 50:] = rho_max
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
@@ -53,7 +53,7 @@ class Test(unittest.TestCase):
         tol = 1e-15
         self.assertTrue((np.abs(dU - sim.idpdx.values[:, 0, 49]) < tol).all())
 
-        # linearly increasing density in x direction
+        # linearly increasing density in x-direction
         sim.rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.x / 100000
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
         sim.update_internal_pressure_gradient(
@@ -64,7 +64,7 @@ class Test(unittest.TestCase):
             (np.abs(sim.idpdx.ma[:, 0, :] - sim.idpdx.values[:, 0, :1]) < tol).all()
         )
 
-        # lock exchange density in y direction
+        # lock exchange density in y-direction
         sim.rho.values[:, :50, :] = rho_min
         sim.rho.values[:, 50:, :] = rho_max
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
@@ -83,7 +83,7 @@ class Test(unittest.TestCase):
         tol = 1e-15
         self.assertTrue((np.abs(dV - sim.idpdy.values[:, 49, 0]) < tol).all())
 
-        # linearly increasing density in y direction
+        # linearly increasing density in y-direction
         sim.rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.y / 100000
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
         sim.update_internal_pressure_gradient(
