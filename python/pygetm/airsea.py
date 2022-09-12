@@ -76,10 +76,16 @@ class Fluxes:
     def __call__(
         self, time: cftime.datetime, sst: core.Array, calculate_heat_flux: bool,
     ) -> None:
-        """Update surface fluxes. Stresses and air pressure are always updated.
-        The surface heat flux (:attr:`shf`), net downwelling shortwave flux
-        (:attr:`swr`) and net freshwater flux (:attr:`pe`) are updated only if
-        ``calculate_heat_flux`` is ``True``.
+        """Update surface fluxes. Stresses and air pressure are always updated,
+        but heat, shortwave and freshwater fluxes only if ``calculate_heat_flux``
+        if set.
+
+        Args:
+            time: date and time
+            sst: temperature of the water surface
+            calculate_heat_flux: update the surface heat flux (:attr:`shf`),
+                net downwelling shortwave flux (:attr:`swr`) and net freshwater
+                flux (:attr:`pe`)
         """
         if not self._ready:
             assert (
@@ -93,11 +99,6 @@ class Fluxes:
 
 
 class FluxesFromMeteo(Fluxes):
-    """Calculate air-water fluxes of heat and momentum, as well as surface air
-    pressure, using the :mod:`pyairsea` library. The heat flux is the sum of the
-    sensible heat flux, the latent heat flux, and net downwelling longwave radiation.
-    """
-
     def __init__(
         self,
         longwave_method: LongwaveMethod = LongwaveMethod.CLARK,
@@ -106,6 +107,27 @@ class FluxesFromMeteo(Fluxes):
         calculate_swr: bool = True,
         calculate_evaporation: bool = False,
     ):
+        """Calculate air-water fluxes of heat and momentum, as well as surface air
+        pressure, using the :mod:`pyairsea` library. The heat flux is the sum of the
+        sensible heat flux, the latent heat flux, and net downwelling longwave
+        radiation.
+
+        Args:
+            longwave_method: method used to calculate net longwave radiation
+            albedo_method: method used to calculate surface albedo
+            humidity_measure: the units in which air humidity will be provided
+            calculate_swr: whether to calculate surface shortwave radation
+                If this is ``False``, shortwave radation defaults to 0, but
+                it can be manually specified by calling :meth:`pygetm.core.Array.set`
+                on :attr:`swr`.
+            calculate_evaporation: whether to calculate evaporation from the latent
+                heat flux. If this is ``True``, precipitation should be prescribed
+                to esure the net freshwater budget is correct. This can be done by
+                by calling :meth:`pygetm.core.Array.set` on :attr:`tp`. If this is
+                ``False``, the net surface freshwater flux defaults to 0. It can be
+                manually specified by calling :meth:`pygetm.core.Array.set`
+                on :attr:`e`.
+        """
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
         self.humidity_measure = humidity_measure
@@ -299,6 +321,9 @@ class FluxesFromMeteo(Fluxes):
         """Update humidity metrics: saturation vapor pressure :attr:`es`,
         actual vapor pressure :attr:`ea`, saturation specific humidity :attr:`qs`,
         actual specific humidity :attr:`qa` and air density :attr:`rhoa`
+
+        Args:
+            sst: temperature of the water surface
         """
         pyairsea.humidity(
             self.humidity_measure,
@@ -315,6 +340,9 @@ class FluxesFromMeteo(Fluxes):
 
     def update_longwave_radiation(self, sst: core.Array):
         """Update net downwelling longwave radiation :attr:`ql`
+
+        Args:
+            sst: temperature of the water surface
         """
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
@@ -333,6 +361,9 @@ class FluxesFromMeteo(Fluxes):
         """Update net downwelling shortwave radiation :attr:`swr`.
         This represents the value just below the water surface
         (i.e., what is left after reflection).
+
+        Args:
+            time: date and time
         """
         hh = time.hour + time.minute / 60.0 + time.second / 3600.0
         yday = time.timetuple().tm_yday
@@ -355,6 +386,9 @@ class FluxesFromMeteo(Fluxes):
     def update_transfer_coefficients(self, sst: core.Array):
         """Update transfer coefficients for momentum (:attr:`cd_mom`), latent heat
         (:attr:`cd_latent`) and sensible heat (:attr:`cd_sensible`)
+
+        Args:
+            sst: temperature of the water surface
         """
 
         # Air and water temperature in Kelvin
@@ -377,6 +411,17 @@ class FluxesFromMeteo(Fluxes):
     def __call__(
         self, time: cftime.datetime, sst: core.Array, calculate_heat_flux: bool,
     ) -> None:
+        """Update surface fluxes. Stresses and air pressure are always updated,
+        but heat, shortwave and freshwater fluxes only if ``calculate_heat_flux``
+        if set.
+
+        Args:
+            time: date and time
+            sst: temperature of the water surface
+            calculate_heat_flux: update the surface heat flux (:attr:`shf`),
+                net downwelling shortwave flux (:attr:`swr`) and net freshwater
+                flux (:attr:`pe`)
+        """
 
         if not self._ready:
             assert (

@@ -16,7 +16,7 @@ from .constants import FILL_VALUE, BAROTROPIC_2D, CENTERS
 class CoriolisScheme(enum.IntEnum):
     OFF = 0
     DEFAULT = 1
-    ESPELID = 2  #: Espelid et al. [2000], IJNME 49, 1521-1545
+    ESPELID = 2  #: Espelid et al. (2000), <https://doi.org/10.1002/1097-0207(20001230)49:12<1521::AID-NME9>3.0.CO;2-F>_
 
 
 class Momentum(pygetm._pygetm.Momentum):
@@ -183,6 +183,11 @@ class Momentum(pygetm._pygetm.Momentum):
                 If provided, this must be a constant.
                 It can subsequently be changed through attribute :attr:`An`, which also
                 allows spatially varying diffusivities to be set.
+            cnpar: parameter for the Crank–Nicolson vertical diffusion solver
+            advection_scheme: advection scheme
+            advection_split_2d: directional splitting for advection solver
+            coriolis_scheme: interpolation method to use to recontruct velocities for
+                Coriolis terms
         """
         self.apply_bottom_friction = apply_bottom_friction
         self._Am_const = Am
@@ -371,6 +376,7 @@ class Momentum(pygetm._pygetm.Momentum):
             skip_coriolis: flag to indicate that Coriolis terms are already up-to-date
                 and do not need recomputing, for instance, after a recent call to
                 :meth:`advance_depth_integrated`
+            update_z0b: whether to iteratively update hydrodynamic bottom roughness
         """
         if not skip_coriolis:
             self.coriolis_fu()

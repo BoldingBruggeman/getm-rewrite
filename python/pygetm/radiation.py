@@ -131,9 +131,9 @@ class TwoBand(Radiation):
             )
 
     def set_jerlov_type(self, jerlov_type: int):
-        """Derive non-visible fraction of shortwave radiation (A), attenuation
-        coefficients of non-visible shortwave radiation (kc1), and attenuation
-        length of visible shortwave radiation (kc2) from the Jerlov water type
+        """Derive non-visible fraction of shortwave radiation (:attr:`A`), attenuation
+        coefficients of non-visible shortwave radiation (:attr:`kc1`), and attenuation
+        length of visible shortwave radiation (:attr:`kc2`) from the Jerlov water type
         """
         # Note that attentuation in the dictionary below is described by
         # a length scale (g1, g2 in GOTM/old GETM)
