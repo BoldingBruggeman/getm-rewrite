@@ -289,6 +289,10 @@ class Operator(LazyArray):
                     shapes.append(input.shape)
             shape = np.broadcast_shapes(*shapes)
 
+        for i in range(len(self.inputs)):
+            if isinstance(self.inputs[i], np.ndarray):
+                self.inputs[i] = np.broadcast_to(self.inputs[i], shape)
+
         # Process dimensions for which we can passthrough slices to inputs
         # This can be True (= all dimensions), an iterable, or a dictionary mapping
         # sliced dimensions to input dimensions (if the current operator adds or

@@ -1,10 +1,13 @@
-from typing import Optional
+from typing import Optional, Union
+import numbers
 
 import numpy as np
+import xarray
 
 from . import core
 from . import _pygetm
 from .constants import INTERFACES
+from .input import Operator, LazyArray
 import pygsw
 
 # Below we package up all equation-of-state/TEOS10 methods in a class.
@@ -118,7 +121,10 @@ class Density:
 
     @staticmethod
     def convert_ts(
-        salt: core.Array, temp: core.Array, p: core.Array = None, in_situ: bool = False
+        salt: core.Array,
+        temp: core.Array,
+        p: Optional[core.Array] = None,
+        in_situ: bool = False,
     ) -> None:
         """Convert practical salinity and potential temperature to absolute salinity
         and conservative temperature. The conversion happens in-place: absolute salinity
@@ -167,3 +173,69 @@ class Density:
         # Convert from potential to conservative temperature
         pygsw.ct_from_pt(salt.all_values.ravel(), temp.all_values.ravel(), out.ravel())
         temp.fill(out)
+
+    @staticmethod
+    def lazy_convert_ts(
+        salt: xarray.DataArray,
+        temp: xarray.DataArray,
+        p: Optional[core.Array] = None,
+        lon: Optional[core.Array] = None,
+        lat: Optional[core.Array] = None,
+        in_situ: bool = False,
+    ) -> None:
+        gridsrc = salt if isinstance(salt, xarray.DataArray) else temp
+        if lon is None:
+            lon = gridsrc.getm.longitude
+        if lat is None:
+            lat = gridsrc.getm.latitude
+        if p is None:
+            p = gridsrc.getm.z
+        lon = np.asarray(lon)
+        lat = np.asarray(lat)
+        p = np.asarray(p)
+        salt = salt if not isinstance(salt, xarray.DataArray) else salt.variable
+        temp = temp if not isinstance(temp, xarray.DataArray) else temp.variable
+        csalt = LazyConvert(salt, temp, lon, lat, p, in_situ, True)
+        ctemp = LazyConvert(salt, temp, lon, lat, p, in_situ, False)
+        return (
+            xarray.DataArray(csalt, coords=gridsrc.coords, dims=gridsrc.dims),
+            xarray.DataArray(ctemp, coords=gridsrc.coords, dims=gridsrc.dims),
+        )
+
+
+class LazyConvert(Operator):
+    def __init__(
+        self,
+        salt: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
+        temp: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
+        lon: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
+        lat: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
+        p: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
+        in_situ: bool = False,
+        return_salt: bool = True,
+    ):
+        if np.all(p < 0):
+            p = -p
+        lon = np.asarray(lon, dtype=float)
+        lat = np.asarray(lat, dtype=float)
+        p = np.asarray(p, dtype=float)
+        super().__init__(salt, temp, lon, lat, p, passthrough=True)
+        self.in_situ = in_situ
+        self.return_salt = return_salt
+
+    def apply(self, salt, temp, lon, lat, p, dtype=None) -> np.ndarray:
+        salt = np.asarray(salt, dtype=float)
+        temp = np.asarray(temp, dtype=float)
+        salt, temp, lon, lat, p = np.broadcast_arrays(salt, temp, lon, lat, p)
+        sa = np.empty_like(salt)
+        pygsw.sa_from_sp(lon.ravel(), lat.ravel(), p.ravel(), salt.ravel(), sa.ravel())
+        if self.return_salt:
+            return sa
+        pt0 = temp
+        if self.in_situ:
+            # Convert from in-situ to potential temperature
+            pt0 = np.empty_like(temp)
+            pygsw.pt0_from_t(salt.ravel(), temp.ravel(), p.ravel(), pt0.ravel())
+        ct = np.empty_like(pt0)
+        pygsw.ct_from_pt(sa.ravel(), pt0.ravel(), ct.ravel())
+        return ct
