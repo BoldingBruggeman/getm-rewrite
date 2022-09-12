@@ -75,15 +75,17 @@ class Test2DTransport(unittest.TestCase):
             )
             sim.domain.update_depth()
 
-        u_ref = ntime * timestep * tau_x / pygetm.RHO0
-        v_ref = ntime * timestep * tau_y / pygetm.RHO0
-        u_tgt = None if apply_bottom_friction else u_ref
-        v_tgt = None if apply_bottom_friction else v_ref
+        # Expected transport at time t: t * acceleration * water depth D
+        # = t * (force/area = tau) / (mass/area = rho*D) * D = t * tau / rho
+        U_ref = ntime * timestep * tau_x / pygetm.RHO0
+        V_ref = ntime * timestep * tau_y / pygetm.RHO0
+        U_tgt = None if apply_bottom_friction else U_ref
+        V_tgt = None if apply_bottom_friction else V_ref
         self.check_range(
-            "U", sim.momentum.U, target_value=u_tgt,
+            "U", sim.momentum.U, target_value=U_tgt,
         )
         self.check_range(
-            "V", sim.momentum.V, target_value=v_tgt,
+            "V", sim.momentum.V, target_value=V_tgt,
         )
         self.check_range("z", domain.T.z, target_value=0.0)
 
