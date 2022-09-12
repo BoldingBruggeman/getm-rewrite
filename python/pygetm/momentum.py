@@ -19,6 +19,10 @@ class CoriolisScheme(enum.IntEnum):
     ESPELID = 2  #: `Espelid et al. (2000) <https://doi.org/10.1002/1097-0207(20001230)49:12<1521::AID-NME9>3.0.CO;2-F>`_
 
 
+MASK_ZERO_2D = ("U", "V", "u1", "v1")
+MASK_ZERO_3D = ("pk", "qk", "uk", "vk", "ww", "Ui", "Vi")
+
+
 class Momentum(pygetm._pygetm.Momentum):
     _arrays = (
         "U",
@@ -276,21 +280,18 @@ class Momentum(pygetm._pygetm.Momentum):
                 "Disabling horizontal diffusion because horizontal viscosity Am is 0"
             )
 
-        self.U.all_values.fill(0.0)
-        self.V.all_values.fill(0.0)
-        self.u1.all_values.fill(0.0)
-        self.v1.all_values.fill(0.0)
-        self.Ui.all_values.fill(0.0)
-        self.Vi.all_values.fill(0.0)
+        ZERO_EVERYWHERE = MASK_ZERO_2D
+        ZERO_UNMASKED = ("SxA", "SyA", "SxB", "SyB", "SxD", "SyD", "SxF", "SyF")
+        if runtype > BAROTROPIC_2D:
+            ZERO_EVERYWHERE = ZERO_EVERYWHERE + MASK_ZERO_3D
+            ZERO_UNMASKED = ZERO_UNMASKED + ("SS",)
+        for v in ZERO_EVERYWHERE:
+            getattr(self, v).all_values.fill(0.0)
+        for v in ZERO_UNMASKED:
+            getattr(self, v).fill(0.0)
+
         self.Ui_tmp = np.zeros_like(self.Ui.all_values)
         self.Vi_tmp = np.zeros_like(self.Vi.all_values)
-        if runtype > BAROTROPIC_2D:
-            self.pk.all_values.fill(0.0)
-            self.qk.all_values.fill(0.0)
-            self.uk.all_values.fill(0.0)
-            self.vk.all_values.fill(0.0)
-            self.ww.all_values.fill(0.0)
-            self.SS.fill(0.0)  # for surface/bottom interfaces, which are not updated
 
         if self.advection_scheme is None:
             self.advection_scheme = default_advection_scheme
@@ -337,18 +338,11 @@ class Momentum(pygetm._pygetm.Momentum):
         # Ensure transports and velocities are 0 in masked points
         # NB velocities will be computed from transports, but only in unmasked points,
         # so zeroing them here is needed.
-        zero_masked = [self.U, self.V, self.u1, self.v1]
+        ZERO = MASK_ZERO_2D
         if self.runtype > BAROTROPIC_2D:
-            zero_masked += [
-                self.Ui,
-                self.Vi,
-                self.pk,
-                self.qk,
-                self.uk,
-                self.vk,
-                self.ww,
-            ]
-        for array in zero_masked:
+            ZERO = ZERO + MASK_ZERO_3D
+        for v in ZERO:
+            array = getattr(self, v)
             array.all_values[..., array.grid.mask.all_values == 0] = 0.0
         if (self.An.ma == 0.0).all():
             self.logger.info("Disabling An because it is 0 everywhere")
