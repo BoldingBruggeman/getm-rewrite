@@ -474,6 +474,8 @@ class Momentum(pygetm._pygetm.Momentum):
         # Do the halo exchange for viscosity, as this needs to be interpolated
         # to the U and V grids. For that, information from the halos is used.
         viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
+        viscosity_u = viscosity.interp(self.domain.U)
+        viscosity_v = viscosity.interp(self.domain.V)
 
         # Update horizontal transports. Also update the halos so that transports
         # (and more importantly, the velocities derived subsequently) are valid there.
@@ -491,17 +493,17 @@ class Momentum(pygetm._pygetm.Momentum):
         # - to calculate vertical velocities, which requires horizontal transports at
         #   the four interfaces around every T point
         if self._u3dfirst:
-            self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity.interp(self.domain.U))
+            self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity_u)
             self.pk.update_halos()
             self.coriolis_fpk()
-            self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity.interp(self.domain.V))
+            self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity_v)
             self.qk.update_halos()
             self.coriolis_fqk()
         else:
-            self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity.interp(self.domain.V))
+            self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity_v)
             self.qk.update_halos()
             self.coriolis_fqk()
-            self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity.interp(self.domain.U))
+            self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity_u)
             self.pk.update_halos()
             self.coriolis_fpk()
         self._u3dfirst = not self._u3dfirst
