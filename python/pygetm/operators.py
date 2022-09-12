@@ -10,7 +10,7 @@ from .constants import CENTERS, INTERFACES
 
 
 class AdvectionScheme(enum.IntEnum):
-    HSIMT = 1     #: Wu & Zhu (2010), https://doi.org/10.1016/j.ocemod.2009.12.001
+    HSIMT = 1  #: `Wu & Zhu (2010) <https://doi.org/10.1016/j.ocemod.2009.12.001>`_
     MUSCL = 2
     P2_PDM = 3
     SPLMAX13 = 4
@@ -20,8 +20,8 @@ class AdvectionScheme(enum.IntEnum):
 
 
 class AdvectionSplit(enum.Enum):
-    FULL = 1  #: full splitting: u-v in 2D, u-v-w in 3D
-    HALF = 2  #: half splitting: u/2-v-u/2 in 2D, u/2-v/2-w-v/2-u/2 in 3D
+    FULL = 1  #: full splitting (first order in time): u-v in 2D, u-v-w in 3D
+    HALF = 2  #: Strang splitting (second order in time): u/2-v-u/2 in 2D, u/2-v/2-w-v/2-u/2 in 3D
 
 
 class Advection(_pygetm.Advection):

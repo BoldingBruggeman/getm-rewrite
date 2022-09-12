@@ -16,7 +16,7 @@ from .constants import FILL_VALUE, BAROTROPIC_2D, CENTERS
 class CoriolisScheme(enum.IntEnum):
     OFF = 0
     DEFAULT = 1
-    ESPELID = 2  #: Espelid et al. (2000), <https://doi.org/10.1002/1097-0207(20001230)49:12<1521::AID-NME9>3.0.CO;2-F>_
+    ESPELID = 2  #: `Espelid et al. (2000) <https://doi.org/10.1002/1097-0207(20001230)49:12<1521::AID-NME9>3.0.CO;2-F>`_
 
 
 class Momentum(pygetm._pygetm.Momentum):
