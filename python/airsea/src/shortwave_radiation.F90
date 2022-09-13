@@ -14,7 +14,7 @@ contains
 ! !ROUTINE: Calculate the short--wave radiation \label{sec:swr}
 !
 ! !INTERFACE:
-   elemental real(rk) function shortwave_radiation(zenith_angle,yday,dlon,dlat,cloud)
+   elemental real(rk) function shortwave_radiation(zenith_angle, yday, dlon, dlat, cloud)
 !
 ! !DESCRIPTION:
 !  This subroutine calculates the short--wave net radiation based on
@@ -91,7 +91,7 @@ contains
 
 !  Cloud cover correction from Reed(1977), Simpson and Paulson(1979), Rosati & Miyakoda (1988), Eq 3.8
 #if 1
-   shortwave_radiation  = qtot * min(1.0_rk - 0.62_rk * cloud + 0.0019_rk * sunbet, 1.0_rk)
+   shortwave_radiation  = qtot * min(1.0_rk, 1.0_rk - 0.62_rk * cloud + 0.0019_rk * sunbet)
 #else
 !  original implementation
    if(cloud < 0.3_rk) then
