@@ -1,6 +1,6 @@
 module mod_humidity
 
-   use mod_airsea_variables, only: kelvin, const06, rgas, rk
+   use mod_airsea_variables, only: kelvin, mw_per_ma, Ra, Rw, rk
 
    implicit none
 
@@ -26,18 +26,32 @@ module mod_humidity
       qa = qa * 100.0_rk ! Conversion millibar --> Pascal
    end function
 
-   ! Specific humidity (kg/kg) at given vapor pressure (Pa) and air pressure
+   ! Specific humidity (kg water/kg moist air) at given vapor pressure (Pa) and air pressure (Pa)
    elemental function specific_humidity(ea, airp) result(qa)
       real(rk), intent(in) ::  ea, airp
       real(rk) :: qa
-      qa = const06 * ea / (airp - 0.377_rk * ea)
+
+      ! Mixing ratio r (kg water/kg dry air) = mw_per_ma * ea / (airp - ea)
+      ! This relates to specific humidity (kg water/kg moist air) qa = r / (1 + r)
+      ! After rearranging we obtain:
+      qa = mw_per_ma * ea / (airp - (1.0_rk - mw_per_ma) * ea)
    end function
 
-   ! Air density at given air pressure, temperature (Celsius) and specific humidity (kg/kg)
+   ! vapor pressure (Pa) at given specific humidity (kg water/kg moist air) and air pressure (Pa)
+   elemental function vapor_pressure(qa, airp) result(ea)
+      real(rk), intent(in) ::  qa, airp
+      real(rk) :: ea
+
+      ! Expression below obtained by isolating ea from expression for specific_humidity in previous routine
+      ea = (qa * airp) / (mw_per_ma + (1.0_rk - mw_per_ma) * qa)
+   end function
+
+   ! Air density at given air pressure (Pa), temperature (Celsius) and specific humidity (kg water/kg moist air)
    elemental function air_density(airp, ta, qa) result(rhoa)
       real(rk), intent(in) :: airp, ta, qa
       real(rk) :: rhoa
-      rhoa = airp / (rgas * (ta + kelvin) * (1.0_rk + const06 * qa))
+
+      rhoa = airp / (((1.0_rk - qa) * Ra + qa * Rw) * (ta + kelvin))
    end function
 
 end module
