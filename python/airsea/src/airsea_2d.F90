@@ -72,8 +72,7 @@ contains
          case (4)  ! specific humidity in kg/kg is given
             qa(istart:istop, jstart:jstop) = hum(istart:istop, jstart:jstop)
    !        actual water vapor pressure in Pascal
-            ea(istart:istop, jstart:jstop) = qa(istart:istop, jstart:jstop) *airp(istart:istop, jstart:jstop) &
-               / (const06 + 0.378_rk * qa(istart:istop, jstart:jstop))
+            ea(istart:istop, jstart:jstop) = vapor_pressure(qa(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
          case default
             stop 'humidity_2d()'
       end select
