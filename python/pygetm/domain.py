@@ -149,6 +149,7 @@ class Grid(_pygetm.Grid):
         ),
         "alpha": dict(units="1", long_name="dampening"),
     }
+    domain: "Domain"
 
     def __init__(
         self,
@@ -863,6 +864,17 @@ class OpenBoundaries(Mapping):
 
     def __iter__(self):
         return iter(self._boundaries)
+
+    @property
+    def local_to_global_indices(self) -> np.ndarray:
+        indices = np.arange(self.np, dtype=int)
+        if self.local_to_global is not None:
+            i = 0
+            for start, stop in self.local_to_global:
+                indices[i : i + stop - start] = np.arange(start, stop)
+                i += stop - start
+            assert i == self.np
+        return indices
 
 
 def find_interfaces(c: ArrayLike) -> np.ndarray:
