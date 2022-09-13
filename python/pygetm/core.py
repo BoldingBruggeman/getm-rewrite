@@ -39,6 +39,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "update_halos_finish",
         "compare_halos",
     )
+    grid: "domain.Grid"
 
     def __init__(
         self,
@@ -176,6 +177,32 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             out = self.grid.domain.glob.grids[self.grid.type].array(dtype=self.dtype)
             out[...] = result
         return out
+
+    def allgather(self) -> np.ndarray:
+        if self.grid.domain.tiling.n == 1:
+            return self.values
+        if self.on_boundary:
+            comm = self.grid.domain.tiling.comm
+            open_boundaries = self.grid.domain.open_boundaries
+
+            # Gather the number of open boundary points in each subdomain
+            np_bdy = np.empty((comm.size,), dtype=int)
+            np_local = np.array(open_boundaries.np, dtype=int)
+            comm.Allgather(np_local, np_bdy)
+
+            # Gather the global indices of open boundary points from each subdomain
+            indices = np.empty((np_bdy.sum(),), dtype=int)
+            comm.Allgatherv(open_boundaries.local_to_global_indices, (indices, np_bdy))
+            assert frozenset(indices) == frozenset(range(open_boundaries.np_glob))
+
+            # Gather the values at the open boundary points from each subdomain
+            values = np.empty((np_bdy.sum(),), dtype=self.values.dtype)
+            comm.Allgatherv(self.values, (values, np_bdy))
+
+            # Map retrieved values to the appropriate indices in the global array
+            all_values = np.empty((open_boundaries.np_glob,), dtype=values.dtype)
+            all_values[indices] = values
+            return all_values
 
     def global_sum(
         self, reproducible: bool = False, where: Optional["Array"] = None
