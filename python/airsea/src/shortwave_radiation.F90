@@ -39,71 +39,67 @@ contains
 ! !INPUT PARAMETERS:
    real(rk), intent(in)                :: zenith_angle
    integer, intent(in)                 :: yday
-   real(rk), intent(in)                :: dlon,dlat
+   real(rk), intent(in)                :: dlon, dlat
    real(rk), intent(in)                :: cloud
 !
 ! !REVISION HISTORY:
 !  Original author(s): Karsten Bolding & Hans Burchard
 !
 ! !LOCAL VARIABLES:
-   real(rk), parameter       :: pi=3.14159265358979323846_rk
-   real(rk), parameter       :: deg2rad=pi/180._rk
-   real(rk), parameter       :: rad2deg=180._rk/pi
+   real(rk), parameter       :: pi = 3.14159265358979323846_rk
+   real(rk), parameter       :: deg2rad = pi / 180._rk
+   real(rk), parameter       :: rad2deg = 180._rk / pi
 
-   real(rk), parameter       :: solar=1350._rk
-   real(rk), parameter       :: eclips=23.439_rk*deg2rad
-   real(rk), parameter       :: tau=0.7_rk
-   real(rk), parameter       :: aozone=0.09_rk
+   real(rk), parameter       :: solar = 1350._rk
+   real(rk), parameter       :: eclips = 23.439_rk * deg2rad
+   real(rk), parameter       :: tau = 0.7_rk
+   real(rk), parameter       :: aozone = 0.09_rk
+   real(rk), parameter       :: yrdays = 365._rk
 
-   real(rk)                  :: coszen,sunbet
-   real(rk)                  :: qatten,qzer,qdir,qdiff,qtot,qshort
-   real(rk)                  :: rlon,rlat,eqnx
-   real(rk)                  :: yrdays
+   real(rk)                  :: coszen, sunbet
+   real(rk)                  :: qatten, qzer, qdir, qdiff, qtot
+   real(rk)                  :: rlon, rlat, eqnx
 !EOP
 !-----------------------------------------------------------------------
 !BOC
-   coszen = cos(deg2rad*zenith_angle)
-   if (coszen .le. 0.0) then
+
+!  Calculate downwelling shortwave at sea surface, qtot (W m-2), before reflection [albedo]
+!  From Rosati & Miyakoda (1988), Eqs 3.3 - 3.7
+
+   coszen = cos(deg2rad * zenith_angle)
+   if (coszen <= 0.0) then
       coszen = 0.0
       qatten = 0.0
    else
-      qatten = tau**(1._rk/coszen)
+      qatten = tau**(1._rk / coszen)
    end if
 
-   qzer  = coszen * solar
-   qdir  = qzer * qatten
-   qdiff = ((1._rk-aozone)*qzer - qdir) * 0.5
-   qtot  =  qdir + qdiff
+   qzer  = coszen * solar                             ! radiation at top of the atmosphere
+   qdir  = qzer * qatten                              ! direct radiation at water surface
+   qdiff = ((1._rk - aozone) * qzer - qdir) * 0.5_rk  ! diffuse radiation at water surface
+   qtot  =  qdir + qdiff                              ! total downwelling shortwave radiation at water surface
 
 !  from now on everything in radians
-   rlon = deg2rad*dlon
-   rlat = deg2rad*dlat
+   rlon = deg2rad * dlon
+   rlat = deg2rad * dlat
 
-   yrdays=365.
-   eqnx = (yday-81.)/yrdays*2.*pi
-!  sin of the solar noon altitude in radians :
-   sunbet=sin(rlat)*sin(eclips*sin(eqnx))+cos(rlat)*cos(eclips*sin(eqnx))
+   eqnx = (yday - 81._rk) / yrdays * 2.0_rk * pi
+!  sin of the solar noon altitude in radians (Rosati & Miyakoda (1988), Eqs 3.9):
+   sunbet = sin(rlat) * sin(eclips * sin(eqnx)) + cos(rlat) * cos(eclips * sin(eqnx))
 !  solar noon altitude in degrees :
-   sunbet = asin(sunbet)*rad2deg
+   sunbet = asin(sunbet) * rad2deg
 
-!  radiation as from Reed(1977), Simpson and Paulson(1979)
-!  calculates SHORT WAVE FLUX ( watt/m*m )
-!  Rosati,Miyakoda 1988 ; eq. 3.8
-!  clouds from COADS perpetual data set
+!  Cloud cover correction from Reed(1977), Simpson and Paulson(1979), Rosati & Miyakoda (1988), Eq 3.8
 #if 1
-   qshort  = qtot*(1-0.62*cloud + .0019*sunbet)
-   if(qshort .gt. qtot ) then
-      qshort  = qtot
-   end if
+   shortwave_radiation  = qtot * min(1.0_rk - 0.62_rk * cloud + 0.0019_rk * sunbet, 1.0_rk)
 #else
 !  original implementation
-   if(cloud .lt. 0.3) then
-      qshort  = qtot
+   if(cloud < 0.3_rk) then
+      shortwave_radiation  = qtot
    else
-      qshort  = qtot*(1-0.62*cloud + 0.0019*sunbet)
+      shortwave_radiation  = qtot * (1.0_rk - 0.62_rk * cloud + 0.0019_rk * sunbet)
    endif
 #endif
-   shortwave_radiation = qshort
 
    end function shortwave_radiation
 !EOC
