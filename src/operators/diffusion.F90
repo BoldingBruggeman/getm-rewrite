@@ -137,6 +137,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    integer :: i,j,k
 !---------------------------------------------------------------------------
    if (.not. is_initialized) stop 'vertical_diffusion is not initialized'
+   if (size(nuh,3) /= size(var,3)-1) stop 'diffusivity should exclude top and bottom interface'
    if (self%kmax == 1) return
 
    ! Setting up the matrix
