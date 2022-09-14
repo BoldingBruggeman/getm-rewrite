@@ -116,8 +116,8 @@ class FluxesFromMeteo(Fluxes):
             longwave_method: method used to calculate net longwave radiation
             albedo_method: method used to calculate surface albedo
             humidity_measure: the units in which air humidity will be provided
-            calculate_swr: whether to calculate surface shortwave radation
-                If this is ``False``, shortwave radation defaults to 0, but
+            calculate_swr: whether to calculate surface shortwave radiation.
+                If this is ``False``, shortwave radiation defaults to 0, but
                 it can be manually specified by calling :meth:`pygetm.core.Array.set`
                 on :attr:`swr`.
             calculate_evaporation: whether to calculate evaporation from the latent
@@ -126,7 +126,7 @@ class FluxesFromMeteo(Fluxes):
                 by calling :meth:`pygetm.core.Array.set` on :attr:`tp`. If
                 ``calculate_evaporation`` is ``False``, the net surface freshwater
                 flux defaults to 0. This flux can be then manually specified by
-                calling :meth:`pygetm.core.Array.set` on :attr:`e`.
+                calling :meth:`pygetm.core.Array.set` on :attr:`pe`.
         """
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
@@ -416,7 +416,7 @@ class FluxesFromMeteo(Fluxes):
 
         Args:
             time: date and time
-            sst: temperature of the water surface
+            sst: temperature of the water surface (degrees Celsius)
             calculate_heat_flux: update the surface heat flux (:attr:`shf`),
                 net downwelling shortwave flux (:attr:`swr`) and net freshwater
                 flux (:attr:`pe`)

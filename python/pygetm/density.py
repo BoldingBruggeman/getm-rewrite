@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 import numbers
 
 import numpy as np
@@ -182,7 +182,26 @@ class Density:
         lon: Optional[core.Array] = None,
         lat: Optional[core.Array] = None,
         in_situ: bool = False,
-    ) -> None:
+    ) -> Tuple[xarray.DataArray, xarray.DataArray]:
+        """Lazily convert practical salinity and potential temperature to absolute salinity
+        and conservative temperature. The conversion is done only when the returned
+        objects are indexed or cast to a :class:`numpy.ndarray`.
+
+        Args:
+            salt: practical salinity (PSU)
+            temp: potential temperature or, if ``in_situ=True``, in-situ temperature
+                (degrees Celsius)
+            p: pressure (dbar). If not provided, it will be inferred from the depth
+                coordinate of ``salt`` or ``temp``.
+            lon: longitude (degrees East). If not provided, it will be inferred from
+                the coordinates of ``salt`` or ``temp``.
+            lat: latitude (degrees North). If not provided, it will be inferred from
+                the coordinates of ``salt`` or ``temp``.
+            in_situ: input is in-situ temperature rather than potential temperature
+
+        Returns:
+            a tuple with lazy arrays for absolute salinity and conservative temperature
+        """
         gridsrc = salt if isinstance(salt, xarray.DataArray) else temp
         if lon is None:
             lon = gridsrc.getm.longitude
