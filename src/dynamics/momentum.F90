@@ -61,7 +61,7 @@ MODULE getm_momentum
       real(real64), dimension(:,:), allocatable :: Ua,Va
       real(real64), dimension(:,:), allocatable :: fU,fV
       real(real64), dimension(:,:), allocatable :: advU,advV
-      real(real64), dimension(:,:), allocatable :: diffu1,diffv1
+      real(real64), dimension(:,:), allocatable :: diffU,diffV
       real(real64), dimension(:,:), allocatable :: dampU,dampV
       real(real64), dimension(:,:), allocatable :: u1,v1
       real(real64), dimension(:,:), allocatable :: SxA,SyA ! Slow advection

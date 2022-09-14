@@ -31,8 +31,8 @@ class Momentum(pygetm._pygetm.Momentum):
         "fV",
         "advU",
         "advV",
-        "diffu1",
-        "diffv1",
+        "diffU",
+        "diffV",
         "u1",
         "v1",
         "uk",
@@ -378,7 +378,7 @@ class Momentum(pygetm._pygetm.Momentum):
         """
         # Update 2D transports from t-1/2 to t+1/2.
         # This uses advection, diffusion and bottom friction terms
-        # (advU, advV, diffu1, diffv1, ru, rv) that were calculated by the call
+        # (advU, advV, diffU, diffV, ru, rv) that were calculated by the call
         # to update_2d_momentum_diagnostics
         if self._ufirst:
             self.u_2d(timestep, tausx, dpdx)
@@ -417,7 +417,7 @@ class Momentum(pygetm._pygetm.Momentum):
             self.coriolis_fv()
 
         # Calculate sources of transports U and V due to advection (advU, advV)
-        # and diffusion (diffu1, diffv1)
+        # and diffusion (diffU, diffV)
         # Transports generally come in at time=-1/2 and are then advanced to time+1/2
         self.transport_2d_momentum(
             self.U,
@@ -425,8 +425,8 @@ class Momentum(pygetm._pygetm.Momentum):
             timestep,
             self.advU,
             self.advV,
-            self.diffu1,
-            self.diffv1,
+            self.diffU,
+            self.diffV,
             update_z0b,
         )
 

@@ -31,14 +31,14 @@ MODULE SUBROUTINE uv_diffusion_2d(self,dt)
    if (self%Am0 > 0._real64) then !KB - another check is required
       where(UG%mask > 0) self%u1 = self%U/UG%D
       where(VG%mask > 0) self%v1 = self%V/VG%D
-      call diffusion_driver(self,TG%D,XG%D,self%u1,self%v1,self%diffu1,self%diffv1)
+      call diffusion_driver(self,TG%D,XG%D,self%u1,self%v1,self%diffU,self%diffV)
    end if
    if (self%An_method > 0) then
       call numerical_damping(self,self%U,self%V)
    end if
 #ifdef _APPLY_ADV_DIFF_
-   self%U=dt*(self%diffu1+self%dampU)
-   self%V=dt*(self%diffv1+self%dampV)
+   self%U=dt*(self%diffU+self%dampU)
+   self%V=dt*(self%diffV+self%dampV)
 #endif
    end associate XGrid
    end associate VGrid

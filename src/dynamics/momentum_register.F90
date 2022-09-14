@@ -101,22 +101,22 @@ MODULE SUBROUTINE momentum_register(self,runtype)
    end if
 
    if (self%store_diffusion) then
-      call self%fm%register('diffu1', 'm2/s2', 'momentum diffusion term in local x-direction', &
+      call self%fm%register('diffU', 'm2/s2', 'momentum diffusion term in local x-direction', &
                             standard_name='', &
                             dimensions=(self%domain%U%dim_2d_ids), &
 !KB                         output_level=output_level_debug, &
                             part_of_state=.true., &
                             category='2d', field=f)
       call f%attributes%set('axis', 'X Y')
-      call self%fm%send_data('diffu1', self%diffu1(UG%imin:UG%imax,UG%jmin:UG%jmax))
-      call self%fm%register('diffv1', 'm2/s2', 'momentum diffusion term in local y-direction', &
+      call self%fm%send_data('diffU', self%diffU(UG%imin:UG%imax,UG%jmin:UG%jmax))
+      call self%fm%register('diffV', 'm2/s2', 'momentum diffusion term in local y-direction', &
                             standard_name='', &
                             dimensions=(self%domain%V%dim_2d_ids), &
   !KB                       output_level=output_level_debug, &
                             part_of_state=.true., &
                             category='2d', field=f)
       call f%attributes%set('axis', 'X Y')
-      call self%fm%send_data('diffv1', self%diffv1(VG%imin:VG%imax,VG%jmin:VG%jmax))
+      call self%fm%send_data('diffV', self%diffV(VG%imin:VG%imax,VG%jmin:VG%jmax))
    end if
 
    if (self%store_damping) then

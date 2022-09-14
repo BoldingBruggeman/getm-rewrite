@@ -192,8 +192,8 @@ contains
          case ('fqk');  if (allocated(momentum%fqk)) p = c_loc(momentum%fqk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('advU');  p = c_loc(momentum%advU); grid_type = 2
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
-         case ('diffu1');  p = c_loc(momentum%diffu1); grid_type = 2
-         case ('diffv1');  p = c_loc(momentum%diffv1); grid_type = 3
+         case ('diffU');  p = c_loc(momentum%diffU); grid_type = 2
+         case ('diffV');  p = c_loc(momentum%diffV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
          case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
