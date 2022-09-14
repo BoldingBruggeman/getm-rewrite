@@ -122,11 +122,11 @@ class FluxesFromMeteo(Fluxes):
                 on :attr:`swr`.
             calculate_evaporation: whether to calculate evaporation from the latent
                 heat flux. If this is ``True``, precipitation should be prescribed
-                to esure the net freshwater budget is correct. This can be done by
-                by calling :meth:`pygetm.core.Array.set` on :attr:`tp`. If this is
-                ``False``, the net surface freshwater flux defaults to 0. It can be
-                manually specified by calling :meth:`pygetm.core.Array.set`
-                on :attr:`e`.
+                to ensure the net freshwater budget is correct. This can be done by
+                by calling :meth:`pygetm.core.Array.set` on :attr:`tp`. If
+                ``calculate_evaporation`` is ``False``, the net surface freshwater
+                flux defaults to 0. This flux can be then manually specified by
+                calling :meth:`pygetm.core.Array.set` on :attr:`e`.
         """
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
@@ -323,7 +323,7 @@ class FluxesFromMeteo(Fluxes):
         actual specific humidity :attr:`qa` and air density :attr:`rhoa`
 
         Args:
-            sst: temperature of the water surface
+            sst: temperature of the water surface (degrees Celsius)
         """
         pyairsea.humidity(
             self.humidity_measure,
@@ -342,7 +342,7 @@ class FluxesFromMeteo(Fluxes):
         """Update net downwelling longwave radiation :attr:`ql`
 
         Args:
-            sst: temperature of the water surface
+            sst: temperature of the water surface (degrees Celsius)
         """
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
@@ -366,7 +366,7 @@ class FluxesFromMeteo(Fluxes):
             time: date and time
         """
         hh = time.hour + time.minute / 60.0 + time.second / 3600.0
-        yday = time.timetuple().tm_yday
+        yday = time.timetuple().tm_yday  # 1 for all of 1 January
         pyairsea.solar_zenith_angle(
             yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values
         )
@@ -388,7 +388,7 @@ class FluxesFromMeteo(Fluxes):
         (:attr:`cd_latent`) and sensible heat (:attr:`cd_sensible`)
 
         Args:
-            sst: temperature of the water surface
+            sst: temperature of the water surface (degrees Celsius)
         """
 
         # Air and water temperature in Kelvin
