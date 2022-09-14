@@ -815,7 +815,7 @@
          hh = secs*(_ONE_/3600)
          zenith_angle = solar_zenith_angle(yearday,hh,dlon,dlat)
          have_zenith_angle = .true.
-         I_0%value = I_0%scale_factor*shortwave_radiation(zenith_angle,yearday,dlon,dlat,cloud%value)
+         I_0%value = I_0%scale_factor*shortwave_radiation(zenith_angle,yearday,dlat,cloud%value)
       end if
       heat%value = heat%scale_factor*heat%value
    end if

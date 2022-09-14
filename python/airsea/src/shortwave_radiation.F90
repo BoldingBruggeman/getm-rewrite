@@ -14,7 +14,7 @@ contains
 ! !ROUTINE: Calculate the short--wave radiation \label{sec:swr}
 !
 ! !INTERFACE:
-   elemental real(rk) function shortwave_radiation(zenith_angle, yday, dlon, dlat, cloud)
+   elemental real(rk) function shortwave_radiation(zenith_angle, yday, dlat, cloud)
 !
 ! !DESCRIPTION:
 !  This subroutine calculates the short--wave net radiation based on
@@ -39,7 +39,7 @@ contains
 ! !INPUT PARAMETERS:
    real(rk), intent(in)                :: zenith_angle
    integer, intent(in)                 :: yday
-   real(rk), intent(in)                :: dlon, dlat
+   real(rk), intent(in)                :: dlat
    real(rk), intent(in)                :: cloud
 !
 ! !REVISION HISTORY:
@@ -80,7 +80,6 @@ contains
    qtot  =  qdir + qdiff                              ! total downwelling shortwave radiation at water surface
 
 !  from now on everything in radians
-   rlon = deg2rad * dlon
    rlat = deg2rad * dlat
 
    eqnx = (yday - 81._rk) / yrdays * 2.0_rk * pi

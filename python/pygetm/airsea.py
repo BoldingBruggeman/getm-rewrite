@@ -373,7 +373,6 @@ class FluxesFromMeteo(Fluxes):
         pyairsea.shortwave_radiation(
             yday,
             self.zen.all_values,
-            self.lon.all_values,
             self.lat.all_values,
             self.tcc.all_values,
             self.swr.all_values,
