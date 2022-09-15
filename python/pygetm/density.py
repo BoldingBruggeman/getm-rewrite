@@ -132,12 +132,12 @@ class Density:
         will replace potential temperature.
 
         Args:
-            sp: practical salinity (PSU)
-            pt: potential temperature or, if ``in_situ=True``, in-situ temperature
+            salt: practical salinity (PSU)
+            temp: potential temperature or, if ``in_situ=True``, in-situ temperature
                 (degrees Celsius)
             p: pressure (dbar). If not provided, the water depth in m will be used as
                 approximate pressure.
-            in_situ: input is in-situ temperature rather than potential temperature
+            in_situ: ``temp`` is in-situ temperature rather than potential temperature
         """
         assert salt.grid is temp.grid
         grid = salt.grid

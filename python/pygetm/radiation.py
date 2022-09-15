@@ -39,17 +39,31 @@ class Radiation:
 
 
 class TwoBand(Radiation):
-    """Two-band (visible and non-visible) model for shortwave radiation and absorption
-    throughout the water column. It is driven by downwelling shortwave radiation just
-    below the water surface, in combination with the fraction of shortwave radiation
-    that is non-visible, and the attenuation coefficients for the visible and
-    non-visible fractions. All of these can vary spatially, but the non-visible fraction
-    and attenuation coefficients can vary only horizontally, not vertically.
-    """
-
     def __init__(
         self, jerlov_type: Optional[int] = None, reflect_at_bottom: bool = False
     ):
+        """Two-band (visible and non-visible) model for shortwave radiation and
+        absorption throughout the water column. It is driven by downwelling shortwave
+        radiation just below the water surface, in combination with the fraction of
+        shortwave radiation that is non-visible, and the attenuation coefficients for
+        the visible and non-visible fractions. All of these can vary spatially, but
+        the non-visible fraction and attenuation coefficients can vary only
+        horizontally, not vertically.
+
+        Args:
+            jerlov_type: Jerlov water type to infer attenuation coefficients
+                (:attr:`kc1` and :attr:`kc2`) and the non-visible fraction of shortwave
+                radiation (:attr:`A`) from. If not provided, these quantities
+                are potentially horizontally and temporally variable; they can be set
+                by calling :meth:`core.Array.set` on :attr:`kc1`, :attr:`kc2` and
+                :attr:`A`.
+            reflect_at_bottom: reflect part of the radiation arriving at the bottom,
+                and track this stream upward, attenuating it along the way.
+                The spatially explicit :attr:`bottom_albedo` can subsequently be set
+                by calling :meth:`core.Array.set` on it. Radiation that is absorbed
+                at the bottom (the fraction that is not reflected) will heat the
+                bottom water layer, as the heat budget of sediments is not modelled.
+        """
         self.reflect_at_bottom = reflect_at_bottom
         self.initial_jerlov_type = jerlov_type
         self._first = True
@@ -136,7 +150,7 @@ class TwoBand(Radiation):
         length of visible shortwave radiation (:attr:`kc2`) from the Jerlov water type
         """
         # Note that attentuation in the dictionary below is described by
-        # a length scale (g1, g2 in GOTM/old GETM)
+        # a length scale (g1, g2 in GOTM/legacy GETM)
         # Its reciprocal is then calculated to set kc1, kc2.
         A, g1, g2 = {
             JERLOV_I: (0.58, 0.35, 23.0),
@@ -153,7 +167,12 @@ class TwoBand(Radiation):
     jerlov_type = property(fset=set_jerlov_type)
 
     def __call__(self, swr: core.Array):
-        """Compute heating due to shortwave radiation throughout the water column"""
+        """Compute heating due to shortwave radiation throughout the water column
+        
+        Args:
+            swr: net downwelling shortwave radiation just below the water surface
+                (i.e., what is left after reflection).
+        """
         if self._first:
             assert (
                 self.A.require_set(self.logger)
