@@ -54,11 +54,9 @@ class Test2DTransport(unittest.TestCase):
             periodic_y=periodic_y,
             logger=pygetm.parallel.get_logger(level="ERROR"),
         )
-        sim = pygetm.Simulation(
-            domain,
-            runtype=pygetm.BAROTROPIC_2D,
-            apply_bottom_friction=apply_bottom_friction,
-        )
+        if not apply_bottom_friction:
+            domain.z0b_min[...] = 0
+        sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC_2D)
 
         # Idealized surface forcing
         tausx = domain.U.array(fill=tau_x)

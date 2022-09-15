@@ -210,7 +210,6 @@ class Momentum(pygetm._pygetm.Momentum):
 
     def __init__(
         self,
-        apply_bottom_friction: bool = True,
         Am: float = 0.0,
         An: float = 0.0,
         cnpar: float = 1.0,
@@ -233,7 +232,6 @@ class Momentum(pygetm._pygetm.Momentum):
             coriolis_scheme: interpolation method to use to recontruct velocities for
                 Coriolis terms
         """
-        self.apply_bottom_friction = apply_bottom_friction
         self._Am_const = Am
         self._An_const = An
         self.cnpar = cnpar
@@ -267,12 +265,12 @@ class Momentum(pygetm._pygetm.Momentum):
 
         # Disable bottom friction if physical bottom roughness is 0 everywhere
         z0b = domain.z0b_min[domain.mask > 0]
-        if self.apply_bottom_friction and (z0b == 0.0).any():
+        self.apply_bottom_friction = not (z0b == 0.0).any()
+        if not self.apply_bottom_friction:
             self.logger.warning(
                 "Disabling bottom friction because bottom roughness is 0 in"
                 " %i of %i unmasked supergrid cells." % ((z0b == 0.0).sum(), z0b.size)
             )
-            self.apply_bottom_friction = False
 
         self.diffuse_momentum = self._Am_const > 0.0
         if not self.diffuse_momentum:

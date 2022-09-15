@@ -162,7 +162,6 @@ class Simulation(_pygetm.Simulation):
         dom: domain.Domain,
         runtype: int,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.DEFAULT,
-        apply_bottom_friction: bool = True,
         fabm: Union[pygetm.fabm.FABM, bool, str, None] = None,
         gotm: Union[str, None] = None,
         momentum: Optional[pygetm.momentum.Momentum] = None,
@@ -208,9 +207,7 @@ class Simulation(_pygetm.Simulation):
 
         # Configure momentum provider
         if momentum is None:
-            momentum = pygetm.momentum.Momentum(
-                apply_bottom_friction=apply_bottom_friction
-            )
+            momentum = pygetm.momentum.Momentum()
         self.momentum = momentum
         self.momentum.initialize(
             self.logger.getChild("momentum"), dom, runtype, advection_scheme

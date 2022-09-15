@@ -81,14 +81,14 @@ def test(
         periodic_x=periodic_x,
         periodic_y=periodic_y,
     )
+    if not apply_bottom_friction:
+        domain.z0b_min[...] = 0
     distance_from_center = np.sqrt(
         (domain.x - 0.5 * extent) ** 2 + (domain.y - 0.5 * extent) ** 2
     )
 
     domain.mask[distance_from_center < extent * (1.0 / 6.0 + 1e-12)] = 0
-    sim = pygetm.Simulation(
-        domain, runtype=pygetm.BAROTROPIC, apply_bottom_friction=apply_bottom_friction,
-    )
+    sim = pygetm.Simulation(domain, runtype=pygetm.BAROTROPIC)
     assert timestep < domain.maxdt, "Request time step %s exceeds maxdt=%.5f s" % (
         timestep,
         domain.maxdt,
