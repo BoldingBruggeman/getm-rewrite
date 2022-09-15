@@ -19,7 +19,7 @@ class Radiation:
     """Base class that provides heating due to shortwave absorption throughout the
     water column. When using this class directly, heating is effectively prescribed,
     not calculated. In this case, the heating per layer defaults to zero; assign to
-    attr:`swr_abs` or call ``swr_abs.set`` to change this."""
+    :attr:`swr_abs` or call ``swr_abs.set`` to change this."""
 
     def initialize(self, grid: domain.Grid):
         self.grid = grid
@@ -52,17 +52,17 @@ class TwoBand(Radiation):
 
         Args:
             jerlov_type: Jerlov water type to infer attenuation coefficients
-                (:attr:`kc1` and :attr:`kc2`) and the non-visible fraction of shortwave
-                radiation (:attr:`A`) from. If not provided, these quantities
+                :attr:`kc1` and :attr:`kc2` and the non-visible fraction of shortwave
+                radiation :attr:`A` from. If not provided, these quantities
                 are potentially horizontally and temporally variable; they can be set
-                by calling :meth:`core.Array.set` on :attr:`kc1`, :attr:`kc2` and
+                by calling :meth:`pygetm.core.Array.set` on :attr:`kc1`, :attr:`kc2` and
                 :attr:`A`.
             reflect_at_bottom: reflect part of the radiation arriving at the bottom,
                 and track this stream upward, attenuating it along the way.
                 The spatially explicit :attr:`bottom_albedo` can subsequently be set
-                by calling :meth:`core.Array.set` on it. Radiation that is absorbed
-                at the bottom (the fraction that is not reflected) will heat the
-                bottom water layer, as the heat budget of sediments is not modelled.
+                by calling :meth:`pygetm.core.Array.set` on it. Radiation that is
+                absorbed at the bottom (the fraction that is not reflected) will heat
+                the bottom water layer, as the heat budget of sediments is not modelled.
         """
         self.reflect_at_bottom = reflect_at_bottom
         self.initial_jerlov_type = jerlov_type
