@@ -29,58 +29,55 @@ module SUBROUTINE mirror_bdy_2d(self,grid,f)
 !-----------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('mirror_bdy_2d()',level=2)
 
-!KB
-#define HALO 0
-!KB
    select case (grid%grid_type)
       case (1) ! TGRID
          do n = 1,self%NWB
             i = self%wi(n)
-            do j = self%wfj(n)-HALO,self%wlj(n)+HALO
+            do j = self%wfj(n), self%wlj(n)
                if (grid%mask(i,j) > 1) f(i-1,j) = f(i,j)
             end do
          end do
          do n = 1,self%NNB
             j = self%nj(n)
-            do i = self%nfi(n)-HALO,self%nli(n)+HALO
+            do i = self%nfi(n), self%nli(n)
                if (grid%mask(i,j) > 1) f(i,j+1) = f(i,j)
             end do
          end do
          do n = 1,self%NEB
             i = self%ei(n)
-            do j = self%efj(n)-HALO,self%elj(n)+HALO
+            do j = self%efj(n), self%elj(n)
                if (grid%mask(i,j) > 1) f(i+1,j) = f(i,j)
             end do
          end do
          do n = 1,self%NSB
             j = self%sj(n)
-            do i = self%sfi(n)-HALO,self%sli(n)+HALO
+            do i = self%sfi(n), self%sli(n)
                if (grid%mask(i,j) > 1) f(i,j-1) = f(i,j)
             end do
          end do
       case (2) ! UGRID
          do n = 1,self%NNB
             j = self%nj(n)
-            do i = self%nfi(n)-HALO,self%nli(n)+HALO
+            do i = max(grid%l(1), self%nfi(n)-1), self%nli(n)
                if (grid%mask(i,j) == 3) f(i,j) = f(i,j-1)
              end do
          end do
          do n = 1,self%NSB
             j = self%sj(n)
-            do i = self%sfi(n)-HALO,self%sli(n)+HALO
+            do i = max(grid%l(1), self%sfi(n)-1), self%sli(n)
                if (grid%mask(i,j) == 3) f(i,j) = f(i,j+1)
             end do
          end do
       case (3) ! VGRID
          do n = 1,self%NWB
             i = self%wi(n)
-            do j = self%wfj(n)-HALO,self%wlj(n)+HALO
+            do j = max(grid%l(2), self%wfj(n)-1), self%wlj(n)
                if (grid%mask(i,j) == 3) f(i,j) = f(i+1,j)
             end do
          end do
          do n = 1,self%NEB
             i = self%ei(n)
-            do j = self%efj(n)-HALO,self%elj(n)+HALO
+            do j = max(grid%l(2), self%efj(n)-1), self%elj(n)
                if (grid%mask(i,j) == 3) f(i,j) = f(i-1,j)
             end do
          end do
@@ -109,51 +106,51 @@ module SUBROUTINE mirror_bdy_3d(self,grid,f)
       case (1) ! TGRID
          do n = 1,self%NWB
             i = self%wi(n)
-            do j = self%wfj(n)-HALO,self%wlj(n)+HALO
+            do j = self%wfj(n), self%wlj(n)
                if (grid%mask(i,j) > 1) f(i-1,j,:) = f(i,j,:)
             end do
          end do
          do n = 1,self%NNB
             j = self%nj(n)
-            do i = self%nfi(n)-HALO,self%nli(n)+HALO
+            do i = self%nfi(n), self%nli(n)
                if (grid%mask(i,j) > 1) f(i,j+1,:) = f(i,j,:)
             end do
          end do
          do n = 1,self%NEB
             i = self%ei(n)
-            do j = self%efj(n)-HALO,self%elj(n)+HALO
+            do j = self%efj(n), self%elj(n)
                if (grid%mask(i,j) > 1) f(i+1,j,:) = f(i,j,:)
             end do
          end do
          do n = 1,self%NSB
             j = self%sj(n)
-            do i = self%sfi(n)-HALO,self%sli(n)+HALO
+            do i = self%sfi(n), self%sli(n)
                if (grid%mask(i,j) > 1) f(i,j-1,:) = f(i,j,:)
             end do
          end do
       case (2) ! UGRID
          do n = 1,self%NNB
             j = self%nj(n)
-            do i = self%nfi(n)-HALO,self%nli(n)+HALO
+            do i = max(grid%l(1), self%nfi(n)-1), self%nli(n)
                if (grid%mask(i,j) == 3) f(i,j,:) = f(i,j-1,:)
              end do
          end do
          do n = 1,self%NSB
             j = self%sj(n)
-            do i = self%sfi(n)-HALO,self%sli(n)+HALO
+            do i = max(grid%l(1), self%sfi(n)-1), self%sli(n)
                if (grid%mask(i,j) == 3) f(i,j,:) = f(i,j+1,:)
             end do
          end do
       case (3) ! VGRID
          do n = 1,self%NWB
             i = self%wi(n)
-            do j = self%wfj(n)-HALO,self%wlj(n)+HALO
+            do j = max(grid%l(2), self%wfj(n)-1), self%wlj(n)
                if (grid%mask(i,j) == 3) f(i,j,:) = f(i+1,j,:)
             end do
          end do
          do n = 1,self%NEB
             i = self%ei(n)
-            do j = self%efj(n)-HALO,self%elj(n)+HALO
+            do j = max(grid%l(2), self%efj(n)-1), self%elj(n)
                if (grid%mask(i,j) == 3) f(i,j,:) = f(i-1,j,:)
             end do
          end do

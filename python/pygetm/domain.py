@@ -699,6 +699,9 @@ class OpenBoundaries(Mapping):
         bdyinfo, bdy_i, bdy_j = [], [], []
         side2count = {}
         self.local_to_global = []
+        umask = self.domain.mask_[1::2, 2::2]
+        vmask = self.domain.mask_[2::2, 1::2]
+        tmask = self.domain.mask_[1::2, 1::2]
         for side in (Side.WEST, Side.NORTH, Side.EAST, Side.SOUTH):
             n = 0
             for boundary in [b for b in self._boundaries if b.side == side]:
@@ -719,75 +722,54 @@ class OpenBoundaries(Mapping):
                             dtype=np.intc,
                         )
                     )
-                    nbdyp += boundary.mstop - boundary.mstart
+                    len_bdy = boundary.mstop - boundary.mstart
+                    nbdyp += len_bdy
 
-                    # In the mask assignment below, mask=3 points are always in between
-                    # mask=2 points. This will not be correct if the boundary only
-                    # partially falls within this subdomain (i.e., it starts outside),
-                    # but as this only affects points at the outer edge of the halo
-                    # zone, it will be solved by the halo exchange of the mask later on.
                     if side in (Side.WEST, Side.EAST):
-                        t_mask = self.domain.mask_[
-                            1 + 2 * boundary.mstart : 2 * boundary.mstop : 2,
-                            1 + boundary.l * 2,
-                        ]
-                        vel_mask = self.domain.mask_[
-                            2 + 2 * boundary.mstart : 2 * boundary.mstop : 2,
-                            1 + boundary.l * 2,
-                        ]
-                        boundary.i = np.repeat(
-                            boundary.l, boundary.mstop - boundary.mstart
-                        )
+                        bdy_mask = tmask[boundary.mstart : boundary.mstop, boundary.l]
+                        boundary.i = np.repeat(boundary.l, len_bdy)
                         boundary.j = np.arange(boundary.mstart, boundary.mstop)
                     else:
-                        t_mask = self.domain.mask_[
-                            1 + boundary.l * 2,
-                            1 + 2 * boundary.mstart : 2 * boundary.mstop : 2,
-                        ]
-                        vel_mask = self.domain.mask_[
-                            1 + boundary.l * 2,
-                            2 + 2 * boundary.mstart : 2 * boundary.mstop : 2,
-                        ]
+                        bdy_mask = tmask[boundary.l, boundary.mstart : boundary.mstop]
                         boundary.i = np.arange(boundary.mstart, boundary.mstop)
-                        boundary.j = np.repeat(
-                            boundary.l, boundary.mstop - boundary.mstart
-                        )
-                    if (t_mask == 0).any():
+                        boundary.j = np.repeat(boundary.l, len_bdy)
+
+                    if (bdy_mask == 0).any():
                         self.domain.logger.error(
                             "Open boundary %s: %i of %i points of this %sern boundary"
                             " are on land"
                             % (
                                 boundary.name,
-                                (t_mask == 0).sum(),
-                                boundary.mstop - boundary.mstart,
+                                (bdy_mask == 0).sum(),
+                                len_bdy,
                                 side.name.capitalize(),
                             )
                         )
                         raise Exception()
-                    t_mask[...] = 2
-                    vel_mask[...] = 3
+
+                    bdy_mask[:] = 2
                     bdy_i.append(boundary.i)
                     bdy_j.append(boundary.j)
 
+                    start_glob = nbdyp_glob + mskip
                     if (
                         self.local_to_global
-                        and self.local_to_global[-1][1] == nbdyp_glob + mskip
+                        and self.local_to_global[-1][1] == start_glob
                     ):
                         # attach to previous boundary
-                        self.local_to_global[-1][1] += boundary.mstop - boundary.mstart
+                        self.local_to_global[-1][1] += len_bdy
                     else:
                         # gap; add new slice
-                        self.local_to_global.append(
-                            [
-                                nbdyp_glob + mskip,
-                                nbdyp_glob + mskip + boundary.mstop - boundary.mstart,
-                            ]
-                        )
+                        self.local_to_global.append([start_glob, start_glob + len_bdy])
                     n += 1
                 else:
                     self._boundaries.remove(boundary)
                 nbdyp_glob += boundary.mstop_ - boundary.mstart_
             side2count[side] = n
+
+        umask[:, :-1][(tmask[:, :-1] == 2) & (tmask[:, 1:] == 2)] = 3
+        vmask[:-1, :][(tmask[:-1, :] == 2) & (tmask[1:, :] == 2)] = 3
+
         self.np = nbdyp
         self.np_glob = nbdyp_glob
         self.i = (
@@ -2164,8 +2146,8 @@ class Domain(_pygetm.Domain):
             )
             # ax.pcolor(x[1::2, 1::2], y[1::2, 1::2], np.ma.array(x[1::2, 1::2], mask=True), edgecolors='k', linestyles='--', linewidth=.2)
             # pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  np.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
-            ax.plot(x[::2, ::2], y[::2, ::2], ".k", markersize=3.0)
-            ax.plot(x[1::2, 1::2], y[1::2, 1::2], "xk", markersize=2.5)
+            ax.plot(x[::2, ::2], y[::2, ::2], "xk", markersize=3.0)
+            ax.plot(x[1::2, 1::2], y[1::2, 1::2], ".k", markersize=2.5)
         ax.set_xlabel("longitude (degrees East)" if spherical else "x (m)")
         ax.set_ylabel("latitude (degrees North)" if spherical else "y (m)")
         if not spherical:
