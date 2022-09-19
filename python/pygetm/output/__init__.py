@@ -21,7 +21,12 @@ class TimeUnit(enum.Enum):
     YEARS = enum.auto()
 
 
-time_unit2seconds = {TimeUnit.MINUTES: 60, TimeUnit.HOURS: 3600, TimeUnit.DAYS: 86400}
+time_unit2seconds = {
+    TimeUnit.SECONDS: 1,
+    TimeUnit.MINUTES: 60,
+    TimeUnit.HOURS: 3600,
+    TimeUnit.DAYS: 86400,
+}
 
 
 class File(operators.FieldCollection):
@@ -94,11 +99,21 @@ class File(operators.FieldCollection):
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
     ):
+        if (
+            self.interval_units not in time_unit2seconds
+            and self.interval_units != TimeUnit.TIMESTEPS
+            and time is None
+        ):
+            raise Exception(
+                "For %s to be used, OutputManager.start should be called with"
+                " an actual cftime.datetime object." % self.interval_units
+            )
         self.start_now(seconds_passed, time, default_time_reference)
         if self.save_initial:
             self._logger.debug("Saving initial state")
             self.save_now(seconds_passed, time)
         self.next = self._next_time(seconds_passed, itimestep, time)
+        self.update(macro=True)
 
     def save(
         self,
@@ -107,14 +122,17 @@ class File(operators.FieldCollection):
         time: Optional[cftime.datetime],
         macro: bool,
     ):
+        if not self.save_on_close_only:
+            now = (
+                itimestep
+                if self.interval_units == TimeUnit.TIMESTEPS
+                else seconds_passed
+            )
+            if now >= self.next:
+                self._logger.debug("Saving")
+                self.save_now(seconds_passed, time)
+                self.next = self._next_time(seconds_passed, itimestep, time)
         self.update(macro=macro)
-        if self.save_on_close_only:
-            return
-        now = itimestep if self.interval_units == TimeUnit.TIMESTEPS else seconds_passed
-        if now >= self.next:
-            self._logger.debug("Saving")
-            self.save_now(seconds_passed, time)
-            self.next = self._next_time(seconds_passed, itimestep, time)
 
     def close(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if self.save_on_close_only:
