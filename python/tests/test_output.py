@@ -16,6 +16,7 @@ class Test(unittest.TestCase):
             10,
             interfaces=True,
             f=0.0,
+            logger=pygetm.parallel.get_logger(level="ERROR"),
         )
         domain.logger.parent.setLevel("ERROR")
         domain.initialize(pygetm.BAROTROPIC_2D)
@@ -67,19 +68,24 @@ class Test(unittest.TestCase):
             if macro:
                 domain.fields["month_macro_2d"].values[...] = time.month
                 domain.fields["month_macro_3d"].values[...] = time.month
+            else:
+                domain.fields["month_macro_2d"].values[...] = np.nan
+                domain.fields["month_macro_3d"].values[...] = np.nan
 
         time = cftime.datetime(2000, 1, 1)
         itime = 0
+        macro = True
         timedelta = datetime.timedelta(seconds=dt)
         update_vars(True)
         om.start(time=time)
 
         while True:
+            om.prepare_save(itime * dt, itime, time, macro=macro)
             itime += 1
             time = time + timedelta
             macro = itime % split_factor == 0
             update_vars(macro)
-            om.save(itime * dt, itime, time, macro=macro)
+            om.save(itime * dt, itime, time)
             if time.year == 2000 + nyear:
                 break
         om.close(itime * dt, time)
