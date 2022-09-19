@@ -113,26 +113,18 @@ class File(operators.FieldCollection):
             self._logger.debug("Saving initial state")
             self.save_now(seconds_passed, time)
         self.next = self._next_time(seconds_passed, itimestep, time)
-        self.update(macro=True)
 
     def save(
-        self,
-        seconds_passed: float,
-        itimestep: int,
-        time: Optional[cftime.datetime],
-        macro: bool,
+        self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime]
     ):
-        if not self.save_on_close_only:
-            now = (
-                itimestep
-                if self.interval_units == TimeUnit.TIMESTEPS
-                else seconds_passed
-            )
-            if now >= self.next:
-                self._logger.debug("Saving")
-                self.save_now(seconds_passed, time)
-                self.next = self._next_time(seconds_passed, itimestep, time)
-        self.update(macro=macro)
+        if self.save_on_close_only:
+            return
+
+        now = itimestep if self.interval_units == TimeUnit.TIMESTEPS else seconds_passed
+        if now >= self.next:
+            self._logger.debug("Saving")
+            self.save_now(seconds_passed, time)
+            self.next = self._next_time(seconds_passed, itimestep, time)
 
     def close(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if self.save_on_close_only:
@@ -240,13 +232,11 @@ class OutputManager:
                 file._start = 0.0
             if file._stop is not None:
                 file._stop = (file._stop - time).total_seconds()
-        self._start_stop_files(0.0, itimestep, time)
+        self._start_files(0.0, itimestep, time)
+        self._stop_files(0.0, time)
 
-    def _start_stop_files(
-        self,
-        seconds_passed: float,
-        itimestep: int,
-        time: Optional[cftime.datetime] = None,
+    def _start_files(
+        self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime]
     ):
         for i in range(len(self._startable_files) - 1, -1, -1):
             file = self._startable_files[i]
@@ -256,23 +246,38 @@ class OutputManager:
                 if file._stop is not None:
                     self._stoppable_files.append(file)
                 del self._startable_files[i]
+
+    def _stop_files(self, seconds_passed: float, time: Optional[cftime.datetime]):
         for i in range(len(self._stoppable_files) - 1, -1, -1):
             file = self._stoppable_files[i]
-            if file._stop < seconds_passed:
+            if file._stop <= seconds_passed:
                 self._active_files.remove(file)
                 del self._stoppable_files[i]
                 file.close(seconds_passed, time)
 
-    def save(
+    def prepare_save(
         self,
         seconds_passed: float,
         itimestep: int,
         time: Optional[cftime.datetime] = None,
         macro: bool = True,
     ):
-        self._start_stop_files(seconds_passed, itimestep, time)
+        """Begin a new time step. For time-averaged outputs, the current variable
+        values will be added to the temporal mean."""
+        self._start_files(seconds_passed, itimestep, time)
         for file in self._active_files:
-            file.save(seconds_passed, itimestep, time, macro)
+            file.update(macro)
+
+    def save(
+        self,
+        seconds_passed: float,
+        itimestep: int,
+        time: Optional[cftime.datetime] = None,
+    ):
+        """End the current time step and save outputs."""
+        for file in self._active_files:
+            file.save(seconds_passed, itimestep, time)
+        self._stop_files(seconds_passed, time)
 
     def close(self, seconds_passed: float, time: Optional[cftime.datetime] = None):
         for file in self._active_files:

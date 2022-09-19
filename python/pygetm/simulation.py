@@ -644,6 +644,17 @@ class Simulation(_pygetm.Simulation):
             check_finite: after the state update, verify that all fields only contain
                 finite values
         """
+        # Update the time
+        macro_updated = self.istep % self.split_factor == 0
+        self.time += self.timedelta
+        self.istep += 1
+        macro_active = self.istep % self.split_factor == 0
+        if self.report != 0 and self.istep % self.report == 0:
+            self.logger.info(self.time)
+
+        self.output_manager.prepare_save(
+            self.timestep * self.istep, self.istep, self.time, macro=macro_updated
+        )
 
         # Update transports U and V from time=-1/2 to +1/2, using surface stresses and
         # pressure gradients defined at time=0
@@ -667,13 +678,6 @@ class Simulation(_pygetm.Simulation):
         self._cum_river_height_increase += (
             self.domain.rivers.flow * self.domain.rivers.iarea * self.timestep
         )
-
-        # Update the time
-        self.time += self.timedelta
-        self.istep += 1
-        macro_active = self.istep % self.split_factor == 0
-        if self.report != 0 and self.istep % self.report == 0:
-            self.logger.info(self.time)
 
         if self.runtype > BAROTROPIC_2D and macro_active:
             # Use previous source terms for biogeochemistry (valid for the start of the
@@ -761,9 +765,7 @@ class Simulation(_pygetm.Simulation):
             update_z0b=self.runtype == BAROTROPIC_2D,
         )
 
-        self.output_manager.save(
-            self.timestep * self.istep, self.istep, self.time, macro=macro_active
-        )
+        self.output_manager.save(self.timestep * self.istep, self.istep, self.time)
 
         if check_finite:
             self.check_finite(_3d=macro_active)
