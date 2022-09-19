@@ -762,8 +762,6 @@ class OpenBoundaries(Mapping):
                         # gap; add new slice
                         self.local_to_global.append([start_glob, start_glob + len_bdy])
                     n += 1
-                else:
-                    self._boundaries.remove(boundary)
                 nbdyp_glob += boundary.mstop_ - boundary.mstart_
             side2count[side] = n
 

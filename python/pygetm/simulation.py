@@ -796,7 +796,7 @@ class Simulation(_pygetm.Simulation):
             # Update tracer values at open boundaries. This must be done after
             # input_manager.update, but before diagnostics/forcing variables derived
             # from the tracers are calculated
-            if self.domain.open_boundaries:
+            if self.domain.open_boundaries.np:
                 for tracer in self.tracers:
                     tracer.open_boundaries.update()
 
