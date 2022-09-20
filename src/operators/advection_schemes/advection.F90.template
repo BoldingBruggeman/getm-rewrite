@@ -65,8 +65,8 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,idxu,dyu,hu,u,tmask,iA,apply_diffu
 !  TODO: (vertical) interation!!!
    do j=jmin,jmax
       do i=imin-1,imax
-         QU(i,j) = u(i,j) * hu(i,j) * dyu(i,j)
          if (umask(i,j) == 1 .or. umask(i,j) == 2) then
+            QU(i,j) = u(i,j) * hu(i,j) * dyu(i,j)
             cfl = abs(u(i,j)*dt*idxu(i,j))
             if (u(i,j) .gt. 0) then
                fu  = f(i,j)
@@ -169,8 +169,8 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,idyv,hv,v,tmask,iA,apply_diffu
 !  TODO: (vertical) interation!!!
    do j=jmin-1,jmax
       do i=imin,imax
-         QV(i,j) = v(i,j) * hv(i,j) * dxv(i,j)
          if (vmask(i,j) == 1 .or. vmask(i,j) == 2) then
+            QV(i,j) = v(i,j) * hv(i,j) * dxv(i,j)
             cfl = abs(v(i,j)*dt*idyv(i,j))
             if (v(i,j) .gt. 0) then
                fu  = f(i,j)
