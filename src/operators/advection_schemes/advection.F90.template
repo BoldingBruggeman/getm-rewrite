@@ -93,6 +93,7 @@ SUBROUTINE u2d(imin,imax,jmin,jmax,halo,umask,idxu,dyu,hu,u,tmask,iA,apply_diffu
             end if
             flux(i,j) = QU(i,j)*fu
          else
+            QU(i,j) = 0._real64
             flux(i,j) = 0._real64
          end if
       end do
@@ -197,6 +198,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,idyv,hv,v,tmask,iA,apply_diffu
             end if
             flux(i,j) = QV(i,j)*fu
          else
+            QV(i,j) = 0._real64
             flux(i,j) = 0._real64
          end if
       end do
