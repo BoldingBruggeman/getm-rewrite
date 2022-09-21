@@ -40,7 +40,7 @@ cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy)
 cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* )
 cdef extern void* pressure_create(int runtype, void* pdomain, int method_internal_pressure) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
-cdef extern void pressure_internal(void* pressure, double* buoy, double* SxB, double* SyB) nogil
+cdef extern void pressure_internal(void* pressure, double* buoy) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
@@ -314,11 +314,9 @@ cdef class Simulation:
         assert sp.grid is self.domain.T
         pressure_surface(self.ppressure, <double *>z.p, <double *>sp.p)
 
-    def update_internal_pressure_gradient(self, Array buoy not None, Array SxB not None, Array SyB not None):
+    def update_internal_pressure_gradient(self, Array buoy not None):
         assert buoy.grid is self.domain.T and buoy.z == CENTERS
-        assert SxB.grid is self.domain.U and not SxB.z
-        assert SyB.grid is self.domain.V and not SyB.z
-        pressure_internal(self.ppressure, <double *>buoy.p, <double *>SxB.p, <double *>SyB.p)
+        pressure_internal(self.ppressure, <double *>buoy.p)
 
     def advance_surface_elevation(self, double timestep, Array U not None, Array V not None, Array fwf not None):
         assert U.grid is self.domain.U

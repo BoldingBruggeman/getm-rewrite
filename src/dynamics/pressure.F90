@@ -77,15 +77,11 @@ MODULE getm_pressure
          class(type_getm_pressure), intent(inout) :: self
          integer, intent(in) :: runtype
       end subroutine pressure_internal_initialize
-      module subroutine pressure_internal(self,buoy,SxB,SyB)
+      module subroutine pressure_internal(self,buoy)
          class(type_getm_pressure), intent(inout) :: self
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
          real(real64), intent(in) :: buoy(_T3_)
 #undef _T3_
-#define _T2_ self%domain%T%l(1):,self%domain%T%l(2):
-         real(real64), intent(inout) :: SxB(_T2_)
-         real(real64), intent(inout) :: SyB(_T2_)
-#undef _T2_
       end subroutine pressure_internal
    END INTERFACE
 

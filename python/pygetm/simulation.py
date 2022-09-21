@@ -809,9 +809,9 @@ class Simulation(_pygetm.Simulation):
             # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
             self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)
             self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-            self.update_internal_pressure_gradient(
-                self.buoy, self.momentum.SxB, self.momentum.SyB
-            )
+            self.update_internal_pressure_gradient(self.buoy)
+            self.momentum.SxB.all_values[...] = self.idpdx.all_values.sum(axis=0)
+            self.momentum.SyB.all_values[...] = self.idpdy.all_values.sum(axis=0)
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface

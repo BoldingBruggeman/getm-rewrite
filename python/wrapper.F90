@@ -676,18 +676,16 @@ contains
       call pressure%surface(z, sp)
    end subroutine
 
-   subroutine pressure_internal(ppressure, pbuoy, pSxB, pSyB) bind(c)
+   subroutine pressure_internal(ppressure, pbuoy) bind(c)
       type(c_ptr), intent(in), value :: ppressure
-      type(c_ptr), intent(in), value :: pbuoy, pSxB, pSyB
+      type(c_ptr), intent(in), value :: pbuoy
 
       type (type_getm_pressure), pointer :: pressure
-      real(real64), contiguous, pointer :: buoy(:,:,:), SxB(:,:), SyB(:,:)
+      real(real64), contiguous, pointer :: buoy(:,:,:)
 
       call c_f_pointer(ppressure, pressure)
       call c_f_pointer(pbuoy, buoy, pressure%domain%T%u - pressure%domain%T%l + 1)
-      call c_f_pointer(pSxB, SxB, pressure%domain%U%u(1:2) - pressure%domain%U%l(1:2) + 1)
-      call c_f_pointer(pSyB, SyB, pressure%domain%V%u(1:2) - pressure%domain%V%l(1:2) + 1)
-      call pressure%internal(buoy, SxB, SyB)
+      call pressure%internal(buoy)
    end subroutine
 
    function sealevel_create(pdomain) result(psealevel) bind(c)

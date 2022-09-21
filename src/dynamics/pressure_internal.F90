@@ -93,7 +93,7 @@ END SUBROUTINE pressure_internal_initialize
 
 !-----------------------------------------------------------------------------
 
-module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
+module SUBROUTINE pressure_internal(self,buoy)
    !! Internal/baroclinic pressure gradients
 
    IMPLICIT NONE
@@ -103,17 +103,6 @@ module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
 #define _T3_ self%domain%T%l(1):,self%domain%T%l(2):,self%domain%T%l(3):
    real(real64), intent(in) :: buoy(_T3_)
 #undef _T3_
-#define _U2_ self%domain%U%l(1):,self%domain%U%l(2):
-   real(real64), intent(inout) :: SxB(_U2_)
-#undef _U2_
-#define _V2_ self%domain%V%l(1):,self%domain%V%l(2):
-   real(real64), intent(inout) :: SyB(_V2_)
-#undef _V2_
-
-!  Local constants
-
-!  Local variables
-   integer :: i,j
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('pressure_internal()',level=2)
 
@@ -123,27 +112,7 @@ module SUBROUTINE pressure_internal(self,buoy,SxB,SyB)
       case(method_shchepetkin_mcwilliams)
          call shchepetkin_mcwilliams(self,buoy)
    end select
-   UGrid: associate( UG => self%domain%U )
-   if(associated(self%logs)) call self%logs%info('slow_buoyancy()',level=3)
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
-         if (UG%mask(i,j) > 0) then
-            ! [GETM Scientific Report: eqs. 2.24]
-            SxB(i,j)=-SUM(self%idpdx(i,j,1:))
-         end if
-      end do
-   end do
-   end associate UGrid
-   VGrid: associate( VG => self%domain%V )
-   do j=VG%jmin,VG%jmax
-      do i=VG%imin,VG%imax
-         if (VG%mask(i,j) > 0) then
-            ! [GETM Scientific Report: eqs. 2.25]
-            SyB(i,j)=-SUM(self%idpdy(i,j,1:))
-         end if
-      end do
-   end do
-   end associate VGrid
+
 END SUBROUTINE pressure_internal
 
 !---------------------------------------------------------------------------
