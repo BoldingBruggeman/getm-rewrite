@@ -12,7 +12,10 @@ import north_sea
 
 class TestRotation(unittest.TestCase):
     def setUp(self) -> None:
-        self.setup_dir = "../../../getm-setups/NorthSea"
+        setups_dir = "../../../getm-setups"
+        if "GETM_SETUPS_DIR" in os.environ:
+            setups_dir = os.environ["GETM_SETUPS_DIR"]
+        self.setup_dir = os.path.join(setups_dir, "NorthSea")
         self.domain = north_sea.create_domain(
             self.setup_dir,
             use_boundaries=False,

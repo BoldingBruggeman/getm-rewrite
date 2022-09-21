@@ -54,6 +54,8 @@ jobs:
           mpiexec -n 2 python test_parallel_advection.py --nrow 1 --ncol 2 --noplot -n 1 -o par_adv_1x2.nc
           diff -s par_adv_1x1.nc par_adv_2x1.nc
           diff -s par_adv_1x1.nc par_adv_1x2.nc
+        env:
+          GETM_SETUPS_DIR: ../../getm-setups
       - name: Test box with spherical coordinates
         run: |
           source ${CONDA}/etc/profile.d/conda.sh
