@@ -276,4 +276,4 @@ if __name__ == "__main__":
     if args.load_restart:
         simstart = sim.load_restart(args.load_restart)
 
-    run(sim, profile=args.profile)
+    run(sim, args.start, args.stop, profile=args.profile)
