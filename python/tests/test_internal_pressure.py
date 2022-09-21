@@ -38,9 +38,7 @@ class Test(unittest.TestCase):
         sim.rho.values[:, :, :50] = rho_min
         sim.rho.values[:, :, 50:] = rho_max
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(
-            sim.buoy, sim.momentum.SxB, sim.momentum.SyB
-        )
+        sim.update_internal_pressure_gradient(sim.buoy)
         self.assertTrue((sim.idpdy.ma == 0.0).all())
         dP_dx = (
             -domain.U.zc.values[:, 0, 0]
@@ -56,9 +54,7 @@ class Test(unittest.TestCase):
         # linearly increasing density in x-direction
         sim.rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.x / 100000
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(
-            sim.buoy, sim.momentum.SxB, sim.momentum.SyB
-        )
+        sim.update_internal_pressure_gradient(sim.buoy)
         self.assertTrue((sim.idpdy.ma == 0.0).all())
         self.assertTrue(
             (np.abs(sim.idpdx.ma[:, 0, :] - sim.idpdx.values[:, 0, :1]) < tol).all()
@@ -68,9 +64,7 @@ class Test(unittest.TestCase):
         sim.rho.values[:, :50, :] = rho_min
         sim.rho.values[:, 50:, :] = rho_max
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(
-            sim.buoy, sim.momentum.SxB, sim.momentum.SyB
-        )
+        sim.update_internal_pressure_gradient(sim.buoy)
         self.assertTrue((sim.idpdx.ma == 0.0).all())
         dP_dy = (
             -domain.V.zc.values[:, 0, 0]
@@ -86,9 +80,7 @@ class Test(unittest.TestCase):
         # linearly increasing density in y-direction
         sim.rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.y / 100000
         sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(
-            sim.buoy, sim.momentum.SxB, sim.momentum.SyB
-        )
+        sim.update_internal_pressure_gradient(sim.buoy)
         self.assertTrue((sim.idpdx.ma == 0.0).all())
         self.assertTrue(
             (np.abs(sim.idpdy.ma[:, :, 0] - sim.idpdy.values[:, :1, 0]) < tol).all()
