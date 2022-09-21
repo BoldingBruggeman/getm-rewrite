@@ -7,7 +7,7 @@ import pathlib
 
 import pygetm
 import pygetm.legacy
-import pygetm.input.tpxo
+from pygetm.input import tpxo
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -98,12 +98,12 @@ if args.rivers:
 # Select between original or ERA5 meteo forcing
 if args.meteo_dir:
     airsea = pygetm.airsea.FluxesFromMeteo(
-        humidity_measure=pygetm.airsea.HumidityMeasure.DEW_POINT_TEMPERATURE,
+        humidity_measure=pygetm.HumidityMeasure.DEW_POINT_TEMPERATURE,
         calculate_evaporation=True,
     )
 else:
     airsea = pygetm.airsea.FluxesFromMeteo(
-        humidity_measure=pygetm.airsea.HumidityMeasure.SPECIFIC_HUMIDITY,
+        humidity_measure=pygetm.HumidityMeasure.SPECIFIC_HUMIDITY,
         calculate_evaporation=True,
     )
 
@@ -117,66 +117,41 @@ sim = pygetm.Simulation(
     #        fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
 )
 
-sim.logger.info("Setting up TPXO tidal boundary forcing")
 if domain.open_boundaries:
     if args.tpxo9_dir is None:
         sim.logger.info("Reading 2D boundary data from file")
-        domain.open_boundaries.z.set(
-            pygetm.input.from_nc(
-                os.path.join(args.setup_dir, "Forcing/2D/bdy.2d.2006.nc"), "elev"
-            )
-        )
-        domain.open_boundaries.u.set(
-            pygetm.input.from_nc(
-                os.path.join(args.setup_dir, "Forcing/2D/bdy.2d.2006.nc"), "u"
-            )
-        )
-        domain.open_boundaries.v.set(
-            pygetm.input.from_nc(
-                os.path.join(args.setup_dir, "Forcing/2D/bdy.2d.2006.nc"), "v"
-            )
-        )
+        bdy_2d_path = os.path.join(args.setup_dir, "Forcing/2D/bdy.2d.2006.nc")
+        domain.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
+        domain.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
+        domain.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
     else:
         sim.logger.info("set handling of TPXO boundary input")
         bdy_lon = domain.open_boundaries.lon
         bdy_lat = domain.open_boundaries.lat
-        domain.open_boundaries.z.set(
-            pygetm.input.tpxo.get(bdy_lon, bdy_lat, root=args.tpxo9_dir)
-        )
+        domain.open_boundaries.z.set(tpxo.get(bdy_lon, bdy_lat, root=args.tpxo9_dir))
         domain.open_boundaries.u.set(
-            pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable="u", root=args.tpxo9_dir)
+            tpxo.get(bdy_lon, bdy_lat, variable="u", root=args.tpxo9_dir)
         )
         domain.open_boundaries.v.set(
-            pygetm.input.tpxo.get(bdy_lon, bdy_lat, variable="v", root=args.tpxo9_dir)
+            tpxo.get(bdy_lon, bdy_lat, variable="v", root=args.tpxo9_dir)
         )
 
     if sim.runtype == pygetm.BAROCLINIC:
+        bdy_3d_path = os.path.join(args.setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc")
         sim.temp.open_boundaries.type = pygetm.SPONGE
-        sim.temp.open_boundaries.values.set(
-            pygetm.input.from_nc(
-                os.path.join(args.setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc"), "temp"
-            )
-        )
+        sim.temp.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "temp"))
         sim.salt.open_boundaries.type = pygetm.SPONGE
-        sim.salt.open_boundaries.values.set(
-            pygetm.input.from_nc(
-                os.path.join(args.setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc"), "salt"
-            )
-        )
+        sim.salt.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "salt"))
 
 if domain.rivers:
-    for name, river in domain.rivers.items():
+    river_path = os.path.join(args.setup_dir, "Forcing/River/rivers.nc")
+    for river in domain.rivers.values():
         river.flow.set(
-            pygetm.input.from_nc(
-                os.path.join(args.setup_dir, "Forcing/River/rivers.nc"), name
-            )
+            pygetm.input.from_nc(river_path, river.original_name) / river.split
         )
         if sim.runtype == pygetm.BAROCLINIC:
             river["salt"].set(
-                pygetm.input.from_nc(
-                    os.path.join(args.setup_dir, "Forcing/River/rivers.nc"),
-                    "%s_salt" % name,
-                )
+                pygetm.input.from_nc(river_path, "%s_salt" % river.original_name,)
             )
 
 if sim.runtype < pygetm.BAROCLINIC:
