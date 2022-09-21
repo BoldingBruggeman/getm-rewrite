@@ -39,6 +39,7 @@ jobs:
           python test_2d_transport.py -v
           python test_coriolis.py -v
           python test_internal_pressure.py -v
+          python test_rotation.py -v
           python test_2d_flow_symmetry.py
           python test_3d_barotropic.py --tau_x=0.1
           python test_3d_barotropic.py --tau_x=-0.1
