@@ -136,10 +136,10 @@ def test(
 
     sim.output_manager.close(istep * timestep)
 
-    E_input = (E_input * domain.T.area).global_sum()
+    E_input = (E_input * domain.T.area).global_sum(where=domain.T.mask != 0)
 
     # Compute total kinetic energy
-    ke = sim.Ekin.global_sum()
+    ke = sim.Ekin.global_sum(where=domain.T.mask != 0)
 
     success = True
     success = (
