@@ -1812,13 +1812,13 @@ class Domain(_pygetm.Domain):
         umask = self.mask_[1::2, 2::2]
         vmask = self.mask_[2::2, 1::2]
         xmask = self.mask_[::2, ::2]
-        umask[:, :-1][(tmask[:, 1:] == 0) & (tmask[:, :-1] == 0)] = 0
-        vmask[:-1, :][(tmask[1:, :] == 0) & (tmask[:-1, :] == 0)] = 0
+        umask[:, :-1][(tmask[:, 1:] != 0) | (tmask[:, :-1] != 0)] = 1
+        vmask[:-1, :][(tmask[1:, :] != 0) | (tmask[:-1, :] != 0)] = 1
         xmask[1:-1, 1:-1][
-            (tmask[1:, 1:] == 0)
-            & (tmask[:-1, 1:] == 0)
-            & (tmask[1:, :-1] == 0)
-            & (tmask[:-1, :-1] == 0)
+            (tmask[1:, 1:] != 0)
+            | (tmask[:-1, 1:] != 0)
+            | (tmask[1:, :-1] != 0)
+            | (tmask[:-1, :-1] != 0)
         ] = 0
         self._exchange_metric(self.mask_)
 
