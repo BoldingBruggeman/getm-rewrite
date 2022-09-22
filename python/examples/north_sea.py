@@ -52,7 +52,7 @@ def create_simulation(
         humidity_measure=humidity_measure, calculate_evaporation=True
     )
 
-    if tpxo9_dir:
+    if domain.open_boundaries and tpxo9_dir:
         for boundary in domain.open_boundaries:
             boundary.type_2d = -4  # flather based on transport instead of velocity
 
