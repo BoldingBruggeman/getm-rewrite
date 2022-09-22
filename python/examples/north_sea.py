@@ -43,29 +43,27 @@ def create_simulation(
     setup_dir: str,
     meteo_dir: Optional[str] = None,
     tpxo9_dir: Optional[str] = None,
+    **kwargs
 ) -> pygetm.simulation.Simulation:
+    humidity_measure = pygetm.HumidityMeasure.SPECIFIC_HUMIDITY
     if meteo_dir:
-        # ERA5 forcing
-        airsea = pygetm.airsea.FluxesFromMeteo(
-            humidity_measure=pygetm.HumidityMeasure.DEW_POINT_TEMPERATURE,
-            calculate_evaporation=True,
-        )
-    else:
-        # Original forcing
-        airsea = pygetm.airsea.FluxesFromMeteo(
-            humidity_measure=pygetm.HumidityMeasure.SPECIFIC_HUMIDITY,
-            calculate_evaporation=True,
-        )
+        humidity_measure = pygetm.HumidityMeasure.DEW_POINT_TEMPERATURE
+    airsea = pygetm.airsea.FluxesFromMeteo(
+        humidity_measure=humidity_measure, calculate_evaporation=True
+    )
+
+    if tpxo9_dir:
+        for boundary in domain.open_boundaries:
+            boundary.type_2d = -4  # flather based on transport instead of velocity
 
     sim = pygetm.Simulation(
         domain,
         runtype=runtype,
-        advection_scheme=pygetm.AdvectionScheme.HSIMT,
+        advection_scheme=pygetm.AdvectionScheme.SUPERBEE,
         gotm=os.path.join(setup_dir, "gotmturb.nml"),
         airsea=airsea,
         internal_pressure_method=pygetm.InternalPressure.SHCHEPETKIN_MCWILLIAMS,
-        # fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
-        # fabm="../../../ersem-stable/testcases/fabm-ersem-15.06-L4-ben-docdyn-iop.yaml",
+        **kwargs
     )
 
     if domain.open_boundaries:
@@ -86,8 +84,6 @@ def create_simulation(
             domain.open_boundaries.v.set(
                 tpxo.get(bdy_lon, bdy_lat, variable="v", root=tpxo9_dir)
             )
-            for boundary in domain.open_boundaries:
-                boundary.type_2d = -4  # flather based on transport instead of velocity
 
         if sim.runtype == pygetm.BAROCLINIC:
             bdy_3d_path = os.path.join(setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc")
@@ -235,7 +231,13 @@ if __name__ == "__main__":
     domain = create_domain(args.setup_dir, args.boundaries, args.rivers)
 
     sim = create_simulation(
-        domain, args.runtype, args.setup_dir, args.meteo_dir, args.tpxo9_dir
+        domain,
+        args.runtype,
+        args.setup_dir,
+        args.meteo_dir,
+        args.tpxo9_dir,
+        # fabm='../../extern/fabm/testcases/fabm-jrc-med_ergom.yaml',
+        # fabm="../../../ersem-stable/testcases/fabm-ersem-15.06-L4-ben-docdyn-iop.yaml",
     )
 
     if args.output:
