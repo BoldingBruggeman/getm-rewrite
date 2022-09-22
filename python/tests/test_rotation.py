@@ -2,6 +2,8 @@ import sys
 import os.path
 import unittest
 
+import cftime
+
 import pygetm
 import pygetm.util.compare_nc
 
@@ -25,7 +27,7 @@ class TestRotation(unittest.TestCase):
 
     def test_2d(self):
         outputs = "u1", "v1", "zt", "U", "V"
-        stop = "2006-01-03 00:00:00"
+        stop = cftime.datetime(2006, 1, 3)
         name_map = {
             "u1": "v1",
             "v1": "u1",
@@ -69,7 +71,7 @@ class TestRotation(unittest.TestCase):
 
     def test_3d(self):
         outputs = "uk", "vk", "temp", "salt", "zt", "nuh"
-        stop = "2006-01-02 00:30:00"
+        stop = cftime.datetime(2006, 1, 2, 0, 30)
         name_map = {
             "uk": "vk",
             "vk": "uk",

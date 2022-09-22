@@ -6,6 +6,8 @@ import os.path
 import pathlib
 from typing import Optional
 
+import cftime
+
 import pygetm
 import pygetm.legacy
 from pygetm.input import tpxo
@@ -153,15 +155,12 @@ def create_simulation(
 
 def run(
     sim: pygetm.simulation.Simulation,
-    start: str = "2006-01-02 00:00:00",
-    stop: str = "2007-01-01 00:00:00",
+    start: cftime.datetime = cftime.datetime(2006, 1, 2),
+    stop: cftime.datetime = cftime.datetime(2007, 1, 1),
     **kwargs
 ):
-    simstart = datetime.datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
-    simstop = datetime.datetime.strptime(stop, "%Y-%m-%d %H:%M:%S")
-
-    sim.start(simstart, timestep=60.0, split_factor=30, report=60, **kwargs)
-    while sim.time < simstop:
+    sim.start(start, timestep=60.0, split_factor=30, report=60, **kwargs)
+    while sim.time < stop:
         sim.advance()
     sim.finish()
 
@@ -228,6 +227,9 @@ if __name__ == "__main__":
     parser.add_argument("--load_restart", help="File to load restart from")
     args = parser.parse_args()
 
+    simstart = datetime.datetime.strptime(args.start, "%Y-%m-%d %H:%M:%S")
+    simstop = datetime.datetime.strptime(args.stop, "%Y-%m-%d %H:%M:%S")
+
     tiling = args.tiling if args.tiling is not None else None
 
     domain = create_domain(args.setup_dir, args.boundaries, args.rivers)
@@ -276,4 +278,4 @@ if __name__ == "__main__":
     if args.load_restart:
         simstart = sim.load_restart(args.load_restart)
 
-    run(sim, args.start, args.stop, profile=args.profile)
+    run(sim, simstart, simstop, profile=args.profile)
