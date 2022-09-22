@@ -1812,6 +1812,8 @@ class Domain(_pygetm.Domain):
         umask = self.mask_[1::2, 2::2]
         vmask = self.mask_[2::2, 1::2]
         xmask = self.mask_[::2, ::2]
+
+        backup = self.mask_.copy()
         umask[:, :-1][(tmask[:, 1:] != 0) | (tmask[:, :-1] != 0)] = 1
         vmask[:-1, :][(tmask[1:, :] != 0) | (tmask[:-1, :] != 0)] = 1
         xmask[1:-1, 1:-1][
@@ -1826,6 +1828,7 @@ class Domain(_pygetm.Domain):
         self.U._water_contact = umask != 0
         self.V._water_contact = vmask != 0
         self.X._water_contact = xmask != 0
+        self.mask_[...] = backup
 
         self.open_boundaries.initialize()
 

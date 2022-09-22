@@ -27,7 +27,7 @@ class Debug:
             slicespec[-1] = slice(None, -1)
         elif field.grid.type == pygetm._pygetm.VGRID:
             slicespec[-2] = slice(None, -1)
-        field = field[tuple(slicespec)]
+        field = field.ma[tuple(slicespec)]
         flipspec = [slice(None)] * field.ndim
         flipspec[axis] = slice(None, None, -1)
 
