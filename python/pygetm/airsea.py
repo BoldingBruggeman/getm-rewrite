@@ -136,6 +136,11 @@ class FluxesFromMeteo(Fluxes):
 
     def initialize(self, grid: pygetm.domain.Grid):
         super().initialize(grid)
+        self.taux.attrs["_mask_output"] = True
+        self.tauy.attrs["_mask_output"] = True
+        self.shf.attrs["_mask_output"] = True
+        self.pe.attrs["_mask_output"] = True
+        self.swr.attrs["_mask_output"] = True
 
         self.logger.info("Longwave method: %s" % self.longwave_method.name)
         self.logger.info("Albedo method: %s" % self.albedo_method.name)
@@ -152,22 +157,28 @@ class FluxesFromMeteo(Fluxes):
             long_name="vapor pressure at saturation",
             units="Pa",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         )
         self.ea = grid.array(
-            name="ea", long_name="vapor pressure", units="Pa", fill_value=FILL_VALUE
+            name="ea",
+            long_name="vapor pressure",
+            units="Pa",
+            fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         )
         self.qs = grid.array(
             name="qs",
             long_name="specific humidity at saturation",
             units="kg kg-1",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         )
         self.qa = grid.array(
             name="qa",
             long_name="specific humidity",
             units="kg kg-1",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="specific_humidity"),
+            attrs=dict(standard_name="specific_humidity", _mask_output=True),
         )
         if self.humidity_measure == HumidityMeasure.DEW_POINT_TEMPERATURE:
             self.hum = self.d2m = grid.array(
@@ -175,7 +186,7 @@ class FluxesFromMeteo(Fluxes):
                 long_name="dew point temperature @ 2 m",
                 units="degrees_Celsius",
                 fill_value=FILL_VALUE,
-                attrs=dict(standard_name="dew_point_temperature"),
+                attrs=dict(standard_name="dew_point_temperature", _mask_output=True),
             )
         elif self.humidity_measure == HumidityMeasure.RELATIVE_HUMIDITY:
             self.hum = self.rh = grid.array(
@@ -183,7 +194,7 @@ class FluxesFromMeteo(Fluxes):
                 long_name="relative humidity @ 2 m",
                 units="%",
                 fill_value=FILL_VALUE,
-                attrs=dict(standard_name="relative_humidity"),
+                attrs=dict(standard_name="relative_humidity", _mask_output=True),
             )
         elif self.humidity_measure == HumidityMeasure.WET_BULB_TEMPERATURE:
             self.hum = self.wbt = grid.array(
@@ -191,7 +202,7 @@ class FluxesFromMeteo(Fluxes):
                 long_name="wet bulb temperature @ 2 m",
                 units="degrees_Celsius",
                 fill_value=FILL_VALUE,
-                attrs=dict(standard_name="wet_bulb_temperature"),
+                attrs=dict(standard_name="wet_bulb_temperature", _mask_output=True),
             )
         else:
             self.hum = self.qa
@@ -200,7 +211,7 @@ class FluxesFromMeteo(Fluxes):
             long_name="air density",
             units="kg m-3",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="air_density"),
+            attrs=dict(standard_name="air_density", _mask_output=True),
         )
 
         self.zen = grid.array(
@@ -209,7 +220,7 @@ class FluxesFromMeteo(Fluxes):
             units="degree",
             fill_value=FILL_VALUE,
             attrs=dict(
-                _time_varying=TimeVarying.MACRO, standard_name="solar_zenith_angle"
+                _time_varying=TimeVarying.MACRO, standard_name="solar_zenith_angle",
             ),
         )
         self.albedo = grid.array(
@@ -217,7 +228,11 @@ class FluxesFromMeteo(Fluxes):
             long_name="albedo",
             units="1",
             fill_value=FILL_VALUE,
-            attrs=dict(_time_varying=TimeVarying.MACRO, standard_name="surface_albedo"),
+            attrs=dict(
+                _time_varying=TimeVarying.MACRO,
+                standard_name="surface_albedo",
+                _mask_output=True,
+            ),
         )
 
         self.t2m = grid.array(
@@ -272,6 +287,7 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(
                 _time_varying=TimeVarying.MACRO,
                 standard_name="surface_downward_latent_heat_flux",
+                _mask_output=True,
             ),
         )
         self.qh = grid.array(
@@ -282,6 +298,7 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(
                 _time_varying=TimeVarying.MACRO,
                 standard_name="surface_downward_sensible_heat_flux",
+                _mask_output=True,
             ),
         )
         self.ql = grid.array(
@@ -292,6 +309,7 @@ class FluxesFromMeteo(Fluxes):
             attrs=dict(
                 _time_varying=TimeVarying.MACRO,
                 standard_name="surface_net_downward_longwave_flux",
+                _mask_output=True,
             ),
         )
 
@@ -309,7 +327,7 @@ class FluxesFromMeteo(Fluxes):
             long_name="evaporation minus condensation",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs=dict(_time_varying=TimeVarying.MACRO),
+            attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
         )
 
         self.cd_mom = grid.array()

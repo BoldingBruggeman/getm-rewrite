@@ -22,10 +22,10 @@ from .constants import (
 )
 from . import _pygetm
 from . import core
-from . import domain
 from . import parallel
 from . import output
 from . import operators
+import pygetm.domain
 import pygetm.airsea
 import pygetm.ice
 import pygetm.density
@@ -156,10 +156,13 @@ class Simulation(_pygetm.Simulation):
         ),
     }
 
+    domain: pygetm.domain.Domain
+    runtype: int
+
     @log_exceptions
     def __init__(
         self,
-        dom: domain.Domain,
+        domain: pygetm.domain.Domain,
         runtype: int,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.DEFAULT,
         fabm: Union[pygetm.fabm.FABM, bool, str, None] = None,
@@ -173,44 +176,49 @@ class Simulation(_pygetm.Simulation):
         log_level: Optional[int] = None,
         internal_pressure_method: InternalPressure = InternalPressure.OFF,
     ):
-        self.logger = dom.root_logger
+        """Simulation
+        
+        Args:
+            domain: simulation domain
+            """
+        self.logger = domain.root_logger
         if log_level is not None:
             self.logger.setLevel(log_level)
         self.output_manager = output.OutputManager(
-            dom.fields,
-            rank=dom.tiling.rank,
+            domain.fields,
+            rank=domain.tiling.rank,
             logger=self.logger.getChild("output_manager"),
         )
-        self.input_manager = dom.input_manager
+        self.input_manager = domain.input_manager
 
         self.input_manager.set_logger(self.logger.getChild("input_manager"))
 
-        assert not dom._initialized
+        assert not domain._initialized
         super().__init__(
-            dom, runtype, internal_pressure_method=internal_pressure_method
+            domain, runtype, internal_pressure_method=internal_pressure_method
         )
 
         # Flag selected domain/grid fields (elevations, thicknesses, bottom roughness)
         # as part of model state (saved in/loaded from restarts)
-        dom.T.z.attrs["_part_of_state"] = True
-        dom.T.zo.attrs["_part_of_state"] = True
+        domain.T.z.attrs["_part_of_state"] = True
+        domain.T.zo.attrs["_part_of_state"] = True
         if self.runtype > BAROTROPIC_2D:
-            dom.T.zio.attrs["_part_of_state"] = True
-            dom.T.zin.attrs["_part_of_state"] = True
+            domain.T.zio.attrs["_part_of_state"] = True
+            domain.T.zin.attrs["_part_of_state"] = True
 
             # ho cannot be computed from zio,
             # because rivers modify ho-from-zio before it is stored
-            dom.T.ho.attrs["_part_of_state"] = True
+            domain.T.ho.attrs["_part_of_state"] = True
         if self.runtype == BAROTROPIC_2D:
-            dom.U.z0b.attrs["_part_of_state"] = True
-            dom.V.z0b.attrs["_part_of_state"] = True
+            domain.U.z0b.attrs["_part_of_state"] = True
+            domain.V.z0b.attrs["_part_of_state"] = True
 
         # Configure momentum provider
         if momentum is None:
             momentum = pygetm.momentum.Momentum()
         self.momentum = momentum
         self.momentum.initialize(
-            self.logger.getChild("momentum"), dom, runtype, advection_scheme
+            self.logger.getChild("momentum"), domain, runtype, advection_scheme
         )
 
         # Make open boundary conditions for elevation and transport/velocity
@@ -256,18 +264,19 @@ class Simulation(_pygetm.Simulation):
         self.ice.initialize(self.domain.T)
 
         # Surface stresses interpolated to U and V grids
-        self.tausx = dom.U.array(
+        self.tausx = domain.U.array(
             name="tausxu", fill_value=FILL_VALUE, attrs={"_mask_output": True}
         )
-        self.tausy = dom.V.array(
+        self.tausy = domain.V.array(
             name="tausyv", fill_value=FILL_VALUE, attrs={"_mask_output": True}
         )
 
-        self.fwf = dom.T.array(
+        self.fwf = domain.T.array(
             name="fwf",
             units="m s-1",
             long_name="freshwater flux",
             fill_value=FILL_VALUE,
+            attrs={"_mask_output": self.airsea.pe.attrs.get("_mask_output", False)},
         )
         self.fwf.fill(0.0)
 
@@ -290,7 +299,7 @@ class Simulation(_pygetm.Simulation):
             #: turbulence to :class:`Simulation`.
             self.turbulence = turbulence or pygetm.mixing.GOTM(gotm)
             self.turbulence.initialize(self.domain.T)
-            self.NN = dom.T.array(
+            self.NN = domain.T.array(
                 z=INTERFACES,
                 name="NN",
                 units="s-2",
@@ -301,42 +310,45 @@ class Simulation(_pygetm.Simulation):
                 ),
             )
             self.NN.fill(0.0)
-            self.ustar_s = dom.T.array(
+            self.ustar_s = domain.T.array(
                 fill=0.0,
                 name="ustar_s",
                 units="m s-1",
                 long_name="shear velocity (surface)",
                 fill_value=FILL_VALUE,
+                attrs=dict(_mask_output=True),
             )
-            self.ustar_b = dom.T.array(
+            self.ustar_b = domain.T.array(
                 fill=0.0,
                 name="ustar_b",
                 units="m s-1",
                 long_name="shear velocity (bottom)",
                 fill_value=FILL_VALUE,
+                attrs=dict(_mask_output=True),
             )
-            self.z0s = dom.T.array(
-                fill=0.1,
+            self.z0s = domain.T.array(
                 name="z0s",
                 units="m",
                 long_name="hydrodynamic roughness (surface)",
                 fill_value=FILL_VALUE,
             )
-            self.taub = dom.T.array(
+            self.z0s.fill(0.1)
+            self.taub = domain.T.array(
                 fill=0.0,
                 name="taub",
                 units="Pa",
                 long_name="bottom shear stress",
                 fill_value=FILL_VALUE,
                 fabm_standard_name="bottom_stress",
+                attrs=dict(_mask_output=True),
             )
 
             # Forcing variables for macro/3D momentum update
             # These lag behind the forcing for the micro/2D momentum update
-            self.tausxo = dom.U.array()
-            self.tausyo = dom.V.array()
-            self.dpdxo = dom.U.array()
-            self.dpdyo = dom.V.array()
+            self.tausxo = domain.U.array()
+            self.tausyo = domain.V.array()
+            self.dpdxo = domain.U.array()
+            self.dpdyo = domain.V.array()
 
             if fabm:
                 if not isinstance(fabm, pygetm.fabm.FABM):
@@ -351,15 +363,15 @@ class Simulation(_pygetm.Simulation):
                     self.logger.getChild("FABM"),
                 )
 
-            self.pres = dom.depth
+            self.pres = domain.depth
             self.pres.fabm_standard_name = "pressure"
 
-        self.sst = dom.T.array(
+        self.sst = domain.T.array(
             name="sst",
             units="degrees_Celsius",
             long_name="sea surface temperature",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="sea_surface_temperature"),
+            attrs=dict(standard_name="sea_surface_temperature", _mask_output=True),
         )
 
         if runtype == BAROCLINIC:
@@ -395,17 +407,21 @@ class Simulation(_pygetm.Simulation):
             self.pres.saved = True
             self.temp.fill(5.0)
             self.salt.fill(35.0)
-            self.rho = dom.T.array(
+            self.rho = domain.T.array(
                 z=CENTERS,
                 name="rho",
                 units="kg m-3",
                 long_name="density",
                 fabm_standard_name="density",
                 fill_value=FILL_VALUE,
-                attrs=dict(standard_name="sea_water_density"),
+                attrs=dict(standard_name="sea_water_density", _mask_output=True),
             )
-            self.buoy = dom.T.array(
-                z=CENTERS, name="buoy", units="m s-2", long_name="buoyancy"
+            self.buoy = domain.T.array(
+                z=CENTERS,
+                name="buoy",
+                units="m s-2",
+                long_name="buoyancy",
+                attrs=dict(_mask_output=True),
             )
             self.tracer_totals += [
                 pygetm.tracer.TracerTotal(
@@ -563,6 +579,14 @@ class Simulation(_pygetm.Simulation):
         self.report_totals = report_totals
 
         self.momentum.start()
+
+        # Ensure U and V points at the land-water interface have non-zero water depth
+        # and layer thickness, as (zero) transports at these points will be divided by
+        # these quantities
+        for grid in (self.domain.U, self.domain.V):
+            edges = grid._water_contact & grid._land
+            grid.D.all_values[edges] = FILL_VALUE
+            grid.hn.all_values[..., edges] = FILL_VALUE
 
         if self.fabm:
             self.fabm.start(self.time)
@@ -925,7 +949,7 @@ class Simulation(_pygetm.Simulation):
         # First update halos for the net freshwater flux, as we need to ensure that the
         # layer heights updated as a result remain valid in the halos.
         self.airsea.pe.update_halos()
-        unmasked = self.domain.T.mask.all_values != 0
+        unmasked = self.domain.T._water
         h_increase_pe = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
         h = self.domain.T.hn.all_values[-1, :, :]
         h_new = h + h_increase_pe
@@ -1072,11 +1096,10 @@ class Simulation(_pygetm.Simulation):
 
     @property
     def Ekin(self, rho0: float = RHO0):
-        dom = self.domain
-        U = self.momentum.U.interp(dom.T)
-        V = self.momentum.V.interp(dom.T)
+        U = self.momentum.U.interp(self.domain.T)
+        V = self.momentum.V.interp(self.domain.T)
         vel2_D2 = U ** 2 + V ** 2
-        return 0.5 * rho0 * dom.T.area * vel2_D2 / dom.T.D
+        return 0.5 * rho0 * self.domain.T.area * vel2_D2 / self.domain.T.D
 
 
 # Expose all Fortran arrays that are a member of Simulation as read-only properties

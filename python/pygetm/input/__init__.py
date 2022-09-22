@@ -1306,7 +1306,7 @@ class InputManager:
                     value = concatenate_slices(
                         value,
                         idim,
-                        [slice(start, stop) for (start, stop,) in local_to_global],
+                        [slice(start, stop) for (start, stop) in local_to_global],
                     )
             elif value.shape[idim] != grid.domain.open_boundaries.np:
                 raise Exception(
@@ -1412,8 +1412,7 @@ class InputManager:
             if array.ndim == 0 or array.on_boundary:
                 unmasked = np.broadcast_to(True, target.shape)
             else:
-                target_mask = grid.mask.all_values[target_slice]
-                unmasked = np.broadcast_to(target_mask != 0, target.shape)
+                unmasked = np.broadcast_to(grid._water[target_slice], target.shape)
                 if array.fill_value is not None:
                     keep_mask = unmasked if mask else unmasked | finite
                     target[~keep_mask] = array.fill_value

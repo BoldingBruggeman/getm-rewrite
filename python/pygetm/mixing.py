@@ -70,10 +70,8 @@ class GOTM(Turbulence):
         nml_path = b"" if not self.path or has_yaml else self.path.encode("ascii")
         yaml_path = b"" if not has_yaml else self.path.encode("ascii")
         self.mix = _pygotm.Mixing(grid.nz, nml_path, yaml_path)
-        self.nuh.fill(self.mix.nuh[:, np.newaxis, np.newaxis])
-        self.num.fill(self.mix.num[:, np.newaxis, np.newaxis])
         self.tke = grid.array(
-            fill=self.mix.tke[:, np.newaxis, np.newaxis],
+            fill_value=FILL_VALUE,
             z=INTERFACES,
             name="tke",
             units="m2 s-2",
@@ -84,7 +82,7 @@ class GOTM(Turbulence):
             ),
         )
         self.eps = grid.array(
-            fill=self.mix.eps[:, np.newaxis, np.newaxis],
+            fill_value=FILL_VALUE,
             z=INTERFACES,
             name="eps",
             units="m2 s-3",
@@ -95,7 +93,7 @@ class GOTM(Turbulence):
             ),
         )
         self.L = grid.array(
-            fill=self.mix.L[:, np.newaxis, np.newaxis],
+            fill_value=FILL_VALUE,
             z=INTERFACES,
             name="L",
             units="m",
@@ -105,6 +103,11 @@ class GOTM(Turbulence):
                 standard_name="turbulent_mixing_length_of_sea_water",
             ),
         )
+        self.tke.fill(self.mix.tke[:, np.newaxis, np.newaxis])
+        self.eps.fill(self.mix.eps[:, np.newaxis, np.newaxis])
+        self.L.fill(self.mix.L[:, np.newaxis, np.newaxis])
+        self.num.fill(self.mix.num[:, np.newaxis, np.newaxis])
+        self.nuh.fill(self.mix.nuh[:, np.newaxis, np.newaxis])
         self._log()
 
     def _log(self):

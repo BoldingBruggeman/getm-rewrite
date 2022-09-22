@@ -295,7 +295,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """
         self.all_values[...] = value
         if self.fill_value is not None and not (self.ndim == 0 or self.on_boundary):
-            self.all_values[..., self.grid.mask.all_values == 0] = self.fill_value
+            self.all_values[..., self.grid._land] = self.fill_value
 
     @property
     def ma(self) -> np.ma.MaskedArray:

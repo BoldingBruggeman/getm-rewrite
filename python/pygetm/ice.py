@@ -20,7 +20,7 @@ class Ice:
         )
         self.ice.fill(0.0)
         self.has_ice = False
-        self.covered = np.full(grid.mask.all_values.shape, False)
+        self.covered = np.full(grid.z.all_values.shape, False)
 
     def __call__(
         self,
@@ -33,7 +33,7 @@ class Ice:
             # 1st order freezing point approximation based on
             # gsw_mod_freezing_poly_coefficients
             ct_freezing = 0.017947064327968736 - 0.06076099099929818 * sa_sf.all_values
-            unmasked = self.grid.mask.all_values > 0
+            unmasked = self.grid._water
             np.logical_and(ct_sf.all_values <= ct_freezing, unmasked, out=self.covered)
             self.has_ice = self.covered.any()
             self.ice.all_values[unmasked] = np.where(self.covered[unmasked], 1.0, 0.0)

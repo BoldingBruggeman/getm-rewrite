@@ -161,7 +161,7 @@ class FABM:
 
         # Apply mask to all state variables (interior, bottom, surface)
         for variable in self.model.state_variables:
-            variable.value[..., self.grid.mask.all_values == 0] = variable.missing_value
+            variable.value[..., self.grid._land] = variable.missing_value
 
     def get_dependency(self, name: str) -> core.Array:
         """Retrieve the array that will hold values for the specified FABM dependency.

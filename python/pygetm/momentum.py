@@ -103,47 +103,47 @@ class Momentum(pygetm._pygetm.Momentum):
             units="m2 s-1",
             long_name="depth-integrated transport in x-direction",
             fill_value=FILL_VALUE,
-            attrs={"_part_of_state": True, "_mask_output": True},
+            attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "V": dict(
             units="m2 s-1",
             long_name="depth-integrated transport in y-direction",
             fill_value=FILL_VALUE,
-            attrs={"_part_of_state": True, "_mask_output": True},
+            attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "Ui": dict(
             units="m2 s-1",
             fill_value=FILL_VALUE,
-            attrs={"_part_of_state": True, "_mask_output": True},
+            attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "Vi": dict(
             units="m2 s-1",
             fill_value=FILL_VALUE,
-            attrs={"_part_of_state": True, "_mask_output": True},
+            attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "u1": dict(
             units="m s-1",
             long_name="depth-averaged velocity in x-direction",
             fill_value=FILL_VALUE,
-            attrs={"_mask_output": True},
+            attrs=dict(_mask_output=True),
         ),
         "v1": dict(
             units="m s-1",
             long_name="depth-averaged velocity in y-direction",
             fill_value=FILL_VALUE,
-            attrs={"_mask_output": True},
+            attrs=dict(_mask_output=True),
         ),
         "pk": dict(
             units="m2 s-1",
             long_name="layer-integrated transport in x-direction",
             fill_value=FILL_VALUE,
-            attrs={"_part_of_state": True, "_mask_output": True},
+            attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "qk": dict(
             units="m2 s-1",
             long_name="layer-integrated transport in y-direction",
             fill_value=FILL_VALUE,
-            attrs={"_part_of_state": True, "_mask_output": True},
+            attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "uk": dict(
             units="m s-1",
@@ -170,41 +170,49 @@ class Momentum(pygetm._pygetm.Momentum):
             units="m-2 s-2",
             long_name="slow advection in x-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
         "SyA": dict(
             units="m-2 s-2",
             long_name="slow advection in y-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
         "SxB": dict(
             units="m-2 s-2",
             long_name="depth-integrated internal pressure in x-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
         "SyB": dict(
             units="m-2 s-2",
             long_name="depth-integrated internal pressure in y-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
         "SxD": dict(
             units="m-2 s-2",
             long_name="slow diffusion in x-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
         "SyD": dict(
             units="m-2 s-2",
             long_name="slow diffusion in y-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
         "SxF": dict(
             units="m-2 s-2",
             long_name="slow bottom friction in x-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
         "SyF": dict(
             units="m-2 s-2",
             long_name="slow bottom friction in y-direction",
             fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
         ),
     }
 
@@ -284,7 +292,8 @@ class Momentum(pygetm._pygetm.Momentum):
             ZERO_EVERYWHERE = ZERO_EVERYWHERE + MASK_ZERO_3D
             ZERO_UNMASKED = ZERO_UNMASKED + ("SS",)
         for v in ZERO_EVERYWHERE:
-            getattr(self, v).all_values.fill(0.0)
+            array = getattr(self, v)
+            array.all_values[..., array.grid._water_contact] = 0.0
         for v in ZERO_UNMASKED:
             getattr(self, v).fill(0.0)
 
@@ -341,7 +350,8 @@ class Momentum(pygetm._pygetm.Momentum):
             ZERO = ZERO + MASK_ZERO_3D
         for v in ZERO:
             array = getattr(self, v)
-            array.all_values[..., array.grid.mask.all_values == 0] = 0.0
+            edges = array.grid._land & array.grid._water_contact
+            array.all_values[..., edges] = 0.0
         if (self.An.ma == 0.0).all():
             self.logger.info("Disabling An because it is 0 everywhere")
         else:
@@ -532,16 +542,10 @@ class Momentum(pygetm._pygetm.Momentum):
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by
         # layer heights Both velocities and U/V thicknesses are now at time 1/2
         np.divide(
-            self.pk.all_values,
-            self.pk.grid.hn.all_values,
-            where=self.pk.grid.mask.all_values != 0,
-            out=self.uk.all_values,
+            self.pk.all_values, self.pk.grid.hn.all_values, out=self.uk.all_values
         )
         np.divide(
-            self.qk.all_values,
-            self.qk.grid.hn.all_values,
-            where=self.qk.grid.mask.all_values != 0,
-            out=self.vk.all_values,
+            self.qk.all_values, self.qk.grid.hn.all_values, out=self.vk.all_values
         )
 
         # Use updated velocities (uk, vk) to compute shear frequency (SS) at T points
@@ -600,16 +604,10 @@ class Momentum(pygetm._pygetm.Momentum):
         # Restore velocity at time=1/2
         # (the final value at the end of the current timestep)
         np.divide(
-            self.pk.all_values,
-            self.pk.grid.hn.all_values,
-            where=self.pk.grid.mask.all_values != 0,
-            out=self.uk.all_values,
+            self.pk.all_values, self.pk.grid.hn.all_values, out=self.uk.all_values
         )
         np.divide(
-            self.qk.all_values,
-            self.qk.grid.hn.all_values,
-            where=self.qk.grid.mask.all_values != 0,
-            out=self.vk.all_values,
+            self.qk.all_values, self.qk.grid.hn.all_values, out=self.vk.all_values
         )
 
         if self.diffuse_momentum:

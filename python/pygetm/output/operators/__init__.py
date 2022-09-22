@@ -90,7 +90,7 @@ class Base:
 
     @property
     def mask(self) -> np.ndarray:
-        return self.grid.mask.all_values
+        return self.grid._land
 
 
 class WrappedArray(Base):
@@ -491,7 +491,7 @@ class Mask(UnivariateTransformWithData):
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
     ) -> ArrayLike:
         self._source.get(out=self.values)
-        self.values[..., self._mask == 0] = self.fill_value
+        self.values[..., self._mask] = self.fill_value
         return super().get(out, slice_spec)
 
 

@@ -70,6 +70,7 @@ class TwoBand(Radiation):
 
     def initialize(self, grid: domain.Grid):
         super().initialize(grid)
+        self.swr_abs.attrs["_mask_output"] = True
 
         # Inputs
         self.A = grid.array(
@@ -211,7 +212,7 @@ class TwoBand(Radiation):
                 self.bottom_albedo.all_values,
                 rad_bot,
                 out=self.rad_bot_up.all_values,
-                where=self.grid.mask.all_values != 0,
+                where=self.grid._water,
             )
             rad_bot -= self.rad_bot_up.all_values
             _pygetm.exponential_profile_2band_interfaces(

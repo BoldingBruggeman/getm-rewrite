@@ -74,6 +74,9 @@ class Grid(_pygetm.Grid):
         "overlap",
         "_interpolators",
         "rotated",
+        "_water_contact",
+        "_land",
+        "_water",
     )
 
     _array_args = {
@@ -185,9 +188,10 @@ class Grid(_pygetm.Grid):
 
         for name in self._readonly_arrays:
             self._setup_array(name)
-        self._iarea.all_values[...] = 1.0 / self._area.all_values
-        self._idx.all_values[...] = 1.0 / self._dx.all_values
-        self._idy.all_values[...] = 1.0 / self._dy.all_values
+        with np.errstate(divide="ignore"):
+            self._iarea.all_values[...] = 1.0 / self._area.all_values
+            self._idx.all_values[...] = 1.0 / self._dx.all_values
+            self._idy.all_values[...] = 1.0 / self._dy.all_values
         for name in self._readonly_arrays:
             getattr(self, name).all_values.flags.writeable = False
 
@@ -204,15 +208,25 @@ class Grid(_pygetm.Grid):
             fill_value=np.nan,
         )
         self._setup_array("rotation", self.rotation)
-        self.zc.all_values.fill(0.0)
-        self.zf.all_values.fill(0.0)
+
+        self._land = self.mask.all_values == 0
+        self._water = ~self._land
+        self.zc.all_values[...] = -self.H.all_values
+        self.zf.all_values[...] = -self.H.all_values
+
+        self.H.all_values[self._land] = FILL_VALUE
+        self.z0b_min.all_values[self._land] = FILL_VALUE
+        self.H.all_values.flags.writeable = False
+        self.z0b_min.all_values.flags.writeable = False
         self.z0b.all_values[...] = self.z0b_min.all_values
-        self.z.all_values[self.mask.all_values > 0] = 0.0
+
+        self.z.all_values[self._water] = 0.0
         self.zo.all_values[...] = self.z.all_values
         self.zio.all_values[...] = self.z.all_values
         self.zin.all_values[...] = self.z.all_values
+
         self.nbdyp = nbdyp
-        self.rotated = self.rotation.all_values[self.mask.all_values != 0].any()
+        self.rotated = self.rotation.all_values[self._water].any()
 
     def _setup_array(
         self, name: str, array: Optional[core.Array] = None, from_supergrid: bool = True
@@ -1584,7 +1598,7 @@ class Domain(_pygetm.Domain):
         def setup_metric(
             source: Optional[np.ndarray] = None,
             optional: bool = False,
-            fill_value=np.nan,
+            fill_value=FILL_VALUE,
             relative_in_x: bool = False,
             relative_in_y: bool = False,
             dtype: np.typing.DTypeLike = float,
@@ -1785,8 +1799,6 @@ class Domain(_pygetm.Domain):
         outside = np.full(self.H_.shape, True)
         outside[local_slice] = False
         self.mask_[outside] = 0
-        self.H_[outside] = np.nan
-        self.z0b_min_[outside] = np.nan
 
         # Now update halos.
         # This ensures the mask in halos is valid only if there is an actual neighbor.
@@ -1809,6 +1821,11 @@ class Domain(_pygetm.Domain):
             & (tmask[:-1, :-1] == 0)
         ] = 0
         self._exchange_metric(self.mask_)
+
+        self.T._water_contact = tmask != 0
+        self.U._water_contact = umask != 0
+        self.V._water_contact = vmask != 0
+        self.X._water_contact = xmask != 0
 
         self.open_boundaries.initialize()
 
@@ -1848,6 +1865,20 @@ class Domain(_pygetm.Domain):
                 (self.X.mask.values > 0).sum(),
             )
         )
+
+        # Water depth and thicknesses on UU/VV grids will be taken from T grid,
+        # which near land has valid values where UU/VV are masked
+        self.UU.D.attrs["_mask_output"] = True
+        self.VV.D.attrs["_mask_output"] = True
+        self.UU.hn.attrs["_mask_output"] = True
+        self.VV.hn.attrs["_mask_output"] = True
+
+        # Elevation on U/V/X will be interpolated from the T grid and therefore
+        # contain values other than fill_value in masked points
+        for grid in (self.U, self.V, self.X):
+            grid.z.attrs["_mask_output"] = True
+            grid.zio.attrs["_mask_output"] = True
+            grid.zin.attrs["_mask_output"] = True
 
         self.H_.flags.writeable = self.H.flags.writeable = False
         self.z0b_min_.flags.writeable = self.z0b_min.flags.writeable = False
@@ -2380,25 +2411,25 @@ class Domain(_pygetm.Domain):
         np.add(
             self.T.H.all_values,
             z_T.all_values,
-            where=self.T.mask.all_values > 0,
+            where=self.T._water,
             out=self.T.D.all_values,
         )
         np.add(
             self.U.H.all_values,
             z_U.all_values,
-            where=self.U.mask.all_values > 0,
+            where=self.U._water,
             out=self.U.D.all_values,
         )
         np.add(
             self.V.H.all_values,
             z_V.all_values,
-            where=self.V.mask.all_values > 0,
+            where=self.V._water,
             out=self.V.D.all_values,
         )
         np.add(
             self.X.H.all_values,
             z_X.all_values,
-            where=self.X.mask.all_values > 0,
+            where=self.X._water,
             out=self.X.D.all_values,
         )
 
