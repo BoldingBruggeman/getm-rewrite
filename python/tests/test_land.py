@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../examples"))
 import north_sea
 
 
-class TestRotation(unittest.TestCase):
+class TestLandMask(unittest.TestCase):
     def setUp(self) -> None:
         setups_dir = "../../../getm-setups"
         if "GETM_SETUPS_DIR" in os.environ:
