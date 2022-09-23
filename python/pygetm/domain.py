@@ -1349,11 +1349,12 @@ class Domain(_pygetm.Domain):
         )
 
         HALO = 4  # supergrid
-        valid_before = np.logical_not(np.isnan(data))
+        fill_value = 0 if np.issubdtype(data.dtype, np.integer) else FILL_VALUE
+        valid_before = data != fill_value
+        assert np.isfinite(data).all(), str(data)
 
         # Expand the data array one each side
         shape_ext = (data.shape[0] + 2, data.shape[1] + 2)
-        fill_value = 0 if np.issubdtype(data.dtype, np.integer) else np.nan
         data_ext = np.full(shape_ext, fill_value, dtype=data.dtype)
         data_ext[1 + HALO : -1 - HALO, 1 + HALO : -1 - HALO] = data[
             HALO:-HALO, HALO:-HALO
@@ -1415,7 +1416,8 @@ class Domain(_pygetm.Domain):
 
         # Values in halos where there is no matching neighbor should have been preserved
         # Therefore we cannot have gained invalid values anywhere - verify this.
-        valid_after = np.logical_not(np.isnan(data))
+        assert np.isfinite(data).all()
+        valid_after = True if isinstance(fill_value, int) else data != fill_value
         still_ok = np.where(valid_before, valid_after, True)
         assert still_ok.all(), "Rank %i: _exchange_metric corrupted %i values: %s." % (
             self.tiling.rank,
@@ -1482,7 +1484,7 @@ class Domain(_pygetm.Domain):
                 % (source_shape, target.shape)
             )
 
-        target[target_slice] = source[source_slice]
+        target[target_slice] = np.nan_to_num(source[source_slice], nan=FILL_VALUE)
 
     def __init__(
         self,
