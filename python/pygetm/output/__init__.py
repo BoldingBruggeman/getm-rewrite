@@ -209,7 +209,7 @@ class OutputManager:
         This is a wrapper around :meth:`add_netcdf_file` that automatically adds all
         arrays with the ``_part_of_state`` flag. By default, the restart file will be
         configured to be written at the end of the simulation, but this can be
-        customized by providing argument ``interval``.
+        customized by providing argument ``interval`` (see :class:`File`).
         """
         kwargs.setdefault("interval", -1)
         file = self.add_netcdf_file(path, **kwargs)
@@ -224,6 +224,20 @@ class OutputManager:
         time: Optional[cftime.datetime] = None,
         default_time_reference: Optional[cftime.datetime] = None,
     ):
+        """Tell the output manager that the simulation has started.
+        Output files that are registered to save from this time will be opened;
+        if they were also registered with ``save_initial`` (see :class:`File`),
+        they will have values written to them.
+
+        Args:
+            itimestep: index of the first time step
+            time: the current time
+            default_time_reference: default reference time to use in formats
+                that require this (e.g., NetCDF). This is usually the start time of
+                this simulation. However, if starting from a restart, it is the
+                time reference from that restart, and thus the start time of the
+                very first simulation.
+        """
         self._time_reference = default_time_reference or time
         for file in list(self._startable_files):
             if file._start is not None:
@@ -263,7 +277,20 @@ class OutputManager:
         macro: bool = True,
     ):
         """Begin a new time step. For time-averaged outputs, the current variable
-        values will be added to the temporal mean."""
+        values will be added to the temporal mean. Arguments representing the time
+        (``seconds_passed``, ``itimestep``, ``time``) must match those in the
+        future, complimentary call to :meth:`save`.
+        
+        Args:
+            seconds_passed: total number of seconds that will have passed at the
+                end of the newly starting time step
+            itimestep: index of the time step that is just starting
+            time: the time at the end of the newly starting time step
+            macro: whether quantities defined at the macrotimestep are up to date.
+                This is the case if the `previous` time step had "macro" processes
+                active. It does `not` relate to the processes of the timestep
+                that is newly starting!
+        """
         self._start_files(seconds_passed, itimestep, time)
         for file in self._active_files:
             file.update(macro)
@@ -274,11 +301,24 @@ class OutputManager:
         itimestep: int,
         time: Optional[cftime.datetime] = None,
     ):
-        """End the current time step and save outputs."""
+        """End the current time step and save outputs.
+
+        Args:
+            seconds_passed: total number of seconds since the start of the simulation
+            itimestep: index of the time step that has just finished
+            time: the current time
+        """
         for file in self._active_files:
             file.save(seconds_passed, itimestep, time)
         self._stop_files(seconds_passed, time)
 
     def close(self, seconds_passed: float, time: Optional[cftime.datetime] = None):
+        """Close all open files. Those marked to save at the end of the simulation
+        will first have the final variable values written to them
+
+        Args:
+            seconds_passed: total number of seconds since the start of the simulation
+            time: the current time
+        """
         for file in self._active_files:
             file.close(seconds_passed, time)
