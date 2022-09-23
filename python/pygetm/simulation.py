@@ -944,21 +944,6 @@ class Simulation(_pygetm.Simulation):
         """Update layer thicknesses and tracer concentrations to account for
         precipitation, evaporation and river inflow.
         """
-
-        # Precipitation and evaporation (surface layer only)
-        # First update halos for the net freshwater flux, as we need to ensure that the
-        # layer heights updated as a result remain valid in the halos.
-        self.airsea.pe.update_halos()
-        unmasked = self.domain.T._water
-        h_increase_pe = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
-        h = self.domain.T.hn.all_values[-1, :, :]
-        h_new = h + h_increase_pe
-        for tracer in self.tracers:
-            if not tracer.precipitation_follows_target_cell:
-                tracer.all_values[-1, :, :] *= h / h_new
-        h[:, :] = h_new
-        self.domain.T.zin.all_values += h_increase_pe
-
         # Local names for river-related variables
         rivers = self.domain.rivers
         z_increases = self._cum_river_height_increase
@@ -1004,6 +989,20 @@ class Simulation(_pygetm.Simulation):
                 tracer_values[:] = (tracer_values * h_old + add) * h_new_inv
             h_old[:] = h_new
             self.domain.T.zin.all_values[j, i] += z_increases[iriver]
+
+        # Precipitation and evaporation (surface layer only)
+        # First update halos for the net freshwater flux, as we need to ensure that the
+        # layer heights updated as a result remain valid in the halos.
+        self.airsea.pe.update_halos()
+        unmasked = self.domain.T._water
+        h_increase_pe = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
+        h = self.domain.T.hn.all_values[-1, :, :]
+        h_new = h + h_increase_pe
+        for tracer in self.tracers:
+            if not tracer.precipitation_follows_target_cell:
+                tracer.all_values[-1, :, :] *= h / h_new
+        h[:, :] = h_new
+        self.domain.T.zin.all_values += h_increase_pe
 
         # Start tracer halo exchange (to prepare for advection)
         for tracer in self.tracers:
