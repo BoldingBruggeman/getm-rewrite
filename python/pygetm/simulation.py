@@ -123,6 +123,10 @@ class Simulation(_pygetm.Simulation):
             "sst",
             "temp_sf",
             "salt_sf",
+            "ssu_U",
+            "ssv_V",
+            "ssu",
+            "ssv",
             "NN",
             "ustar_s",
             "ustar_b",
@@ -374,6 +378,9 @@ class Simulation(_pygetm.Simulation):
             attrs=dict(standard_name="sea_surface_temperature", _mask_output=True),
         )
 
+        self.ssu = domain.T.array(fill=0.0)
+        self.ssv = domain.T.array(fill=0.0)
+
         if runtype == BAROCLINIC:
             self.logger.info(
                 "Internal pressure method: %s" % internal_pressure_method.name
@@ -438,6 +445,8 @@ class Simulation(_pygetm.Simulation):
             ]
             self.temp_sf = self.temp.isel(z=-1)
             self.salt_sf = self.salt.isel(z=-1)
+            self.ssu_U = self.momentum.uk.isel(z=-1)
+            self.ssv_V = self.momentum.vk.isel(z=-1)
             if internal_pressure_method == InternalPressure.OFF:
                 self.idpdx.fill(0.0)
                 self.idpdy.fill(0.0)
@@ -849,6 +858,11 @@ class Simulation(_pygetm.Simulation):
                 self.salt, self.temp, p=self.pres, out=self.NN
             )
 
+            # Interpolate surface velocities to T grid.
+            # These are used by airsea as offset for wind speeds
+            self.ssu_U.interp(self.ssu)
+            self.ssv_V.interp(self.ssv)
+
         # Update surface elevation z on U, V, X grids and water depth D on all grids
         # This is based on old and new elevation (T grid) for the microtimestep.
         # Thus, for grids lagging 1/2 a timestep behind (U, V, X grids), the elevations
@@ -867,11 +881,16 @@ class Simulation(_pygetm.Simulation):
             self.timestep, skip_coriolis=skip_2d_coriolis, update_z0b=update_z0b
         )
 
-        # Update air-sea fluxes of heat and momentum (T grid for all, U and V grid for
-        # x and y stresses respectively)
+        # Update air-sea fluxes of heat and momentum (all on T grid)
         # Note: sst is the in-situ surface temperature, whereas temp_sf is the
         # conservative surface temperature (salt_sf is absolute salinity)
-        self.airsea(self.time, self.sst, calculate_heat_flux=baroclinic_active)
+        self.airsea(
+            self.time,
+            self.sst,
+            self.ssu,
+            self.ssv,
+            calculate_heat_flux=baroclinic_active,
+        )
         self.ice(
             baroclinic_active, self.temp_sf, self.salt_sf, self.airsea,
         )

@@ -74,7 +74,12 @@ class Fluxes:
         self._ready = False
 
     def __call__(
-        self, time: cftime.datetime, sst: core.Array, calculate_heat_flux: bool,
+        self,
+        time: cftime.datetime,
+        sst: core.Array,
+        ssu: core.Array,
+        ssv: core.Array,
+        calculate_heat_flux: bool,
     ) -> None:
         """Update surface fluxes. Stresses and air pressure are always updated,
         but heat, shortwave and freshwater fluxes only if ``calculate_heat_flux``
@@ -83,6 +88,8 @@ class Fluxes:
         Args:
             time: date and time
             sst: temperature of the water surface
+            ssu: wind speed in x direction (model-centric, not rotated to be geocentric)
+            ssv: wind speed in y direction (model-centric, not rotated to be geocentric)
             calculate_heat_flux: update the surface heat flux (:attr:`shf`),
                 net downwelling shortwave flux (:attr:`swr`) and net freshwater
                 flux (:attr:`pe`)
@@ -412,9 +419,6 @@ class FluxesFromMeteo(Fluxes):
         sst_K = sst.all_values + 273.15
         t2m_K = self.t2m.all_values + 273.15
 
-        # Wind speed
-        np.hypot(self.u10.all_values, self.v10.all_values, out=self.w.all_values)
-
         pyairsea.transfer_coefficients(
             1,
             sst_K,
@@ -426,7 +430,12 @@ class FluxesFromMeteo(Fluxes):
         )
 
     def __call__(
-        self, time: cftime.datetime, sst: core.Array, calculate_heat_flux: bool,
+        self,
+        time: cftime.datetime,
+        sst: core.Array,
+        ssu: core.Array,
+        ssv: core.Array,
+        calculate_heat_flux: bool,
     ) -> None:
         """Update surface fluxes. Stresses and air pressure are always updated,
         but heat, shortwave and freshwater fluxes only if ``calculate_heat_flux``
@@ -435,6 +444,8 @@ class FluxesFromMeteo(Fluxes):
         Args:
             time: date and time
             sst: temperature of the water surface (degrees Celsius)
+            ssu: wind speed in x direction (model-centric, not rotated to be geocentric)
+            ssv: wind speed in y direction (model-centric, not rotated to be geocentric)
             calculate_heat_flux: update the surface heat flux (:attr:`shf`),
                 net downwelling shortwave flux (:attr:`swr`) and net freshwater
                 flux (:attr:`pe`)
@@ -458,14 +469,19 @@ class FluxesFromMeteo(Fluxes):
         # Air humidity
         self.update_humidity(sst)
 
+        # Wind speed
+        u10, v10 = self.grid.rotate(self.u10, self.v10)
+        u10 = u10.all_values - ssu.all_values
+        v10 = v10.all_values - ssv.all_values
+        np.hypot(u10, v10, out=self.w.all_values)
+
         # Transfer coefficients of heat and momentum
         self.update_transfer_coefficients(sst)
 
         # Momentum flux in x and y-direction
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
-        u10, v10 = self.grid.rotate(self.u10, self.v10)
-        self.taux.all_values[...] = tmp * u10.all_values
-        self.tauy.all_values[...] = tmp * v10.all_values
+        self.taux.all_values[...] = tmp * u10
+        self.tauy.all_values[...] = tmp * v10
 
         if calculate_heat_flux:
             # Latent heat of vaporization (J/kg) at sea surface
@@ -512,4 +528,4 @@ class FluxesFromMeteo(Fluxes):
                     self.tp.all_values, self.e.all_values, out=self.pe.all_values
                 )
 
-        super().__call__(time, sst, calculate_heat_flux)
+        super().__call__(time, sst, ssu, ssv, calculate_heat_flux)
