@@ -40,8 +40,8 @@ class Base:
     def __init__(
         self,
         expression: str,
-        shape: int,
-        dims: Tuple[str],
+        shape: Tuple[int, ...],
+        dims: Tuple[str, ...],
         dtype: DTypeLike,
         fill_value=None,
         time_varying: Union[TimeVarying, Literal[False]] = TimeVarying.MICRO,
@@ -58,7 +58,7 @@ class Base:
         self.coordinates = []
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
     ) -> ArrayLike:
         raise NotImplementedError
 
@@ -151,7 +151,7 @@ class FieldCollection:
         grid: Optional[pygetm.domain.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
         generate_unique_name: bool = False
-    ) -> Tuple[str]:
+    ) -> Tuple[str, ...]:
         """Add one or more arrays to this field collection.
 
         Args:
@@ -281,7 +281,7 @@ class FieldCollection:
             updater()
 
 
-def grid2dims(grid: pygetm.domain.Grid, z) -> Tuple[str]:
+def grid2dims(grid: pygetm.domain.Grid, z) -> Tuple[str, ...]:
     dims = ("y%s" % grid.postfix, "x%s" % grid.postfix)
     if z:
         dims = ("zi" if z == INTERFACES else "z",) + dims
@@ -314,7 +314,7 @@ class Field(Base):
         )
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
     ) -> ArrayLike:
         if out is None:
             return self.array.all_values
@@ -352,8 +352,8 @@ class UnivariateTransform(Base):
     def __init__(
         self,
         source: Base,
-        shape: Optional[Tuple[int]] = None,
-        dims: Optional[Tuple[str]] = None,
+        shape: Optional[Tuple[int, ...]] = None,
+        dims: Optional[Tuple[str, ...]] = None,
         dtype: Optional[DTypeLike] = None,
         expression: Optional[str] = None,
     ):
@@ -399,7 +399,7 @@ class UnivariateTransformWithData(UnivariateTransform):
         self.values = np.empty(self.shape, self.dtype)
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = (),
     ) -> ArrayLike:
         if out is None:
             return self.values
@@ -411,7 +411,7 @@ class UnivariateTransformWithData(UnivariateTransform):
 class Gather(UnivariateTransform):
     __slots__ = "global_array", "tiling", "_slice", "_gather"
 
-    def __init__(self, source: Field, tiling: pygetm.parallel.Tiling):
+    def __init__(self, source: Base, tiling: pygetm.parallel.Tiling):
         self.tiling = tiling
         nx = tiling.nx_glob + source.shape[-1] - 4 - tiling.nx_sub
         ny = tiling.ny_glob + source.shape[-2] - 4 - tiling.ny_sub
@@ -427,7 +427,7 @@ class Gather(UnivariateTransform):
         self._gather = pygetm.parallel.Gather(self.tiling, local_shape, self.dtype)
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = (),
     ) -> ArrayLike:
         # Get data for global array
         # If we have access to the full global field (root rank only), use that,
@@ -456,11 +456,11 @@ class Slice(UnivariateTransform):
         shape = list(source.shape)
         shape[-1] -= 4
         shape[-2] -= 4
-        super().__init__(source, shape=shape, expression=source.expression)
+        super().__init__(source, shape=tuple(shape), expression=source.expression)
         self._slice = (Ellipsis, slice(2, -2), slice(2, -2))
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = (),
     ) -> ArrayLike:
         values = self._source.get()[self._slice]
         if out is None:
@@ -488,7 +488,7 @@ class Mask(UnivariateTransformWithData):
         assert self._mask.shape == self.shape[-2:]
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = (),
     ) -> ArrayLike:
         self._source.get(out=self.values)
         self.values[..., self._mask] = self.fill_value
@@ -525,7 +525,7 @@ class TimeAverage(UnivariateTransformWithData):
         self._n += 1
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = (),
     ) -> ArrayLike:
         if self._n > 0:
             self.values *= 1.0 / self._n
@@ -553,6 +553,7 @@ class Regrid(UnivariateTransformWithData):
         grid: Optional[pygetm.domain.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
     ):
+        assert source.grid is not None
         grid = grid or source.grid
         if grid is not source.grid:
             assert z is None
@@ -581,13 +582,13 @@ class Regrid(UnivariateTransformWithData):
         super().__init__(source, shape=shape, dims=dims, expression=expression)
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = (),
     ) -> ArrayLike:
         self.interpolate(self._source.get()[self._slice], self.values[self._slice])
         return super().get(out, slice_spec)
 
     @property
-    def grid(self) -> None:
+    def grid(self) -> pygetm.domain.Grid:
         return self._grid
 
     @property
@@ -621,7 +622,7 @@ class InterpZ(UnivariateTransformWithData):
         super().__init__(source, shape=shape, dims=dims, expression=expression)
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int] = (),
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = (),
     ) -> ArrayLike:
         ip = pygetm.util.interpolate.LinearVectorized1D(
             self.z_tgt, self.z_src, 0, self.fill_value

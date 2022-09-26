@@ -49,10 +49,12 @@ class File(operators.FieldCollection):
             interval_units: units for time interval
                 (not used if ``interval`` is given as :class:`datetime.timedelta`)
             start: simulation time at which to start saving
+                This defaults to the start of the simulation
             stop: simulation time at which to stop saving
+                This defaults to the end of the simulation
             default_dtype: default data type for real-valued variables
             sub: whether to save separate files per subdomain
-            save_initial: whether to save at the very start
+            save_initial: whether to save at the very start of the simulation
         """
         super().__init__(available_fields, default_dtype=default_dtype, sub=sub)
         self._logger = logger

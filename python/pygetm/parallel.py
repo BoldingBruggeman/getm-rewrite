@@ -680,7 +680,7 @@ class Gather:
     def __init__(
         self,
         tiling: Tiling,
-        shape: Tuple[int],
+        shape: Tuple[int, ...],
         dtype: DTypeLike,
         fill_value=None,
         root: int = 0,
