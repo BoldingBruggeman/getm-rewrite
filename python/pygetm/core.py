@@ -382,6 +382,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             kwargs.setdefault("units", self.units)
         if self.long_name is not None:
             kwargs.setdefault("long_name", "%s @ k=%i" % (self.long_name, z))
+        kwargs["attrs"] = kwargs.get("attrs", {}).copy()
+        for att in ("_mask_output",):
+            if att in self.attrs:
+                kwargs["attrs"][att] = self.attrs[att]
         ar = Array(grid=self.grid, fill_value=self.fill_value, **kwargs)
         ar.wrap_ndarray(self.all_values[z, ...])
         return ar
