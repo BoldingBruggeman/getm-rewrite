@@ -442,6 +442,14 @@ class Momentum(pygetm._pygetm.Momentum):
             update_z0b,
         )
 
+        # Numerical damping of transports
+        pygetm._pygetm.horizontal_diffusion(
+            self.U, self.An_uu, self.An_uv, timestep, self.diffU
+        )
+        pygetm._pygetm.horizontal_diffusion(
+            self.V, self.An_vu, self.An_vv, timestep, self.diffV
+        )
+
     def advance(
         self,
         timestep: float,
@@ -582,8 +590,6 @@ class Momentum(pygetm._pygetm.Momentum):
             self.ww.interp(self.uk.grid),
             timestep,
             self.uk,
-            Ah_u=self.An_uu,
-            Ah_v=self.An_uv,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
@@ -596,8 +602,6 @@ class Momentum(pygetm._pygetm.Momentum):
             self.ww.interp(self.vk.grid),
             timestep,
             self.vk,
-            Ah_u=self.An_vu,
-            Ah_v=self.An_vv,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
@@ -721,13 +725,7 @@ class Momentum(pygetm._pygetm.Momentum):
         self.uua.all_values /= self.domain.UU.D.all_values
         self.uva.all_values /= self.domain.UV.D.all_values
         self.uadv(
-            self.uua,
-            self.uva,
-            timestep,
-            self.u1,
-            Ah_u=self.An_uu,
-            Ah_v=self.An_uv,
-            skip_initial_halo_exchange=True,
+            self.uua, self.uva, timestep, self.u1, skip_initial_halo_exchange=True,
         )
         advU.all_values[...] = (
             self.u1.all_values * self.uadv.D - U.all_values
@@ -739,13 +737,7 @@ class Momentum(pygetm._pygetm.Momentum):
         self.vua.all_values /= self.domain.VU.D.all_values
         self.vva.all_values /= self.domain.VV.D.all_values
         self.vadv(
-            self.vua,
-            self.vva,
-            timestep,
-            self.v1,
-            Ah_u=self.An_vu,
-            Ah_v=self.An_vv,
-            skip_initial_halo_exchange=True,
+            self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True,
         )
         advV.all_values[...] = (
             self.v1.all_values * self.vadv.D - V.all_values

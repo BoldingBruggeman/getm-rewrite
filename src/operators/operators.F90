@@ -17,6 +17,7 @@ MODULE getm_operators
    !!   Solves the - vertical - diffusion equation.
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
+   use iso_c_binding, only: c_int, c_double
    USE getm_domain
    use advection_base
 
@@ -132,7 +133,30 @@ MODULE getm_operators
          real(real64), intent(in), optional :: ea2(_T3_)
          real(real64), intent(in), optional :: ea4(_T3_)
 #undef _T3_
-      end subroutine vertical_diffusion_calculate
+   end subroutine vertical_diffusion_calculate
+
+   MODULE SUBROUTINE c_horizontal_diffusion(imin,imax,jmin,jmax,halox,haloy,umask,vmask,idxu,dyu,idyv,dxv,Ah_u,Ah_v,tmask,iA,dt,f,df) bind(c)
+      ! Subroutine arguments
+      integer(c_int), value, intent(in) :: imin,imax,jmin,jmax
+      integer(c_int), value, intent(in) :: halox
+      integer(c_int), value, intent(in) :: haloy
+#define _A_  imin-halox:imax+halox,jmin-haloy:jmax+haloy
+      integer(c_int), intent(in) :: umask(_A_)
+      integer(c_int), intent(in) :: vmask(_A_)
+      real(c_double), intent(in) :: idxu(_A_)
+      real(c_double), intent(in) :: dyu(_A_)
+      real(c_double), intent(in) :: idyv(_A_)
+      real(c_double), intent(in) :: dxv(_A_)
+      real(c_double), intent(in) :: Ah_u(_A_)
+      real(c_double), intent(in) :: Ah_v(_A_)
+      integer(c_int), intent(in) :: tmask(_A_)
+      real(c_double), intent(in) :: iA(_A_)
+      real(c_double), value, intent(in) :: dt
+      real(c_double), intent(inout) :: f(_A_)
+      real(c_double), intent(inout) :: df(_A_)
+#undef _A_
+   end subroutine c_horizontal_diffusion
+
    END INTERFACE
 
 !---------------------------------------------------------------------------

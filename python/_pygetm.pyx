@@ -51,6 +51,7 @@ cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, in
 cdef extern void c_thickness2vertical_coordinates(int nx, int ny, int nz, int* mask, double* bottom_depth, double* h, double* zc, double* zf) nogil
 cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha)
 cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
+cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int halox,int haloy,int* umask,int* vmask,double* idxu,double* dyu,double* idyv,double* dxv,double* Ah_u,double* Ah_v,int* tmask,double* iA,double dt,double* f,double* out)
 
 cpdef enum:
     TGRID = 1
@@ -458,6 +459,25 @@ def clip_z(Array z not None, double Dmin):
     mask = z.grid.mask
     H = z.grid.H
     c_clip_z(z._array.size, <double*>z.p, <double*>H.p, Dmin, <int*>mask.p)
+
+def horizontal_diffusion(Array f not None, Array Ah_u not None, Array Ah_v not None, double dt, Array out not None):
+    cdef int halox = f.grid.domain.halox
+    cdef int haloy = f.grid.domain.haloy
+    cdef int nx = f.grid.nx
+    cdef int ny = f.grid.ny
+    cdef Grid ugrid = f.grid.ugrid
+    cdef Grid vgrid = f.grid.vgrid
+    cdef Array umask = ugrid.mask
+    cdef Array vmask = vgrid.mask
+    cdef Array mask = f.grid.mask
+    cdef Array iarea = f.grid.iarea
+    cdef Array idx = ugrid.idx
+    cdef Array dy = ugrid.dy
+    cdef Array idy = vgrid.idy
+    cdef Array dx = ugrid.dx
+    c_horizontal_diffusion(1, nx, 1, ny, halox, haloy,
+        <int*>umask.p, <int*>vmask.p, <double*>idx.p, <double*>dy.p, <double*>idy.p, <double*>dx.p,
+        <double*>Ah_u.p, <double*>Ah_v.p, <int*>mask.p, <double*>iarea.p, dt, <double*>f.p, <double*>out.p)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
