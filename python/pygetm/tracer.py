@@ -2,7 +2,7 @@ from typing import Mapping, Optional, List, Sequence, NamedTuple
 
 import numpy as np
 
-from .constants import ZERO_GRADIENT, CENTERS, INTERFACES, TimeVarying
+from .constants import ZERO_GRADIENT, CENTERS, INTERFACES, TimeVarying, FILL_VALUE
 from . import core
 from . import domain
 from . import operators
@@ -161,6 +161,33 @@ class TracerCollection(Sequence[Tracer]):
         self._advection = operators.Advection(grid, scheme=advection_scheme)
         self._vertical_diffusion = operators.VerticalDiffusion(grid, cnpar=cnpar)
 
+        self.Ah = grid.array(
+            name="Ah",
+            units="m2 s-1",
+            long_name="horizontal diffusivity of tracers",
+            fill_value=FILL_VALUE,
+            attrs=dict(_require_halos=True, _time_varying=False),
+        )
+        self.Ah.fill(0.0)
+        self.Ah_u = self.Ah_v = None
+
+    def start(self):
+        if (self.Ah.ma == 0.0).all():
+            self.logger.info(
+                "Disabling horizontal diffusion because Ah is 0 everywhere"
+            )
+        else:
+            self.logger.info(
+                "Horizontal diffusivity Ah ranges between %s and %s m2 s-1"
+                % (self.Ah.ma.min(), self.Ah.ma.max())
+            )
+            self.Ah_u = self.grid.ugrid.array(fill=np.nan)
+            self.Ah_v = self.grid.vgrid.array(fill=np.nan)
+            self.Ah.interp(self.Ah_u)
+            self.Ah.interp(self.Ah_v)
+            self.Ah_u.update_halos()
+            self.Ah_v.update_halos()
+
     def __getitem__(self, index: int) -> Tracer:
         return self._tracers[index]
 
@@ -219,7 +246,14 @@ class TracerCollection(Sequence[Tracer]):
                 w_tracer.all_values += w.all_values
             w_tracers.append(w_tracer)
         self._advection.apply_3d_batch(
-            u, v, w, timestep, self._tracers, w_vars=w_tracers
+            u,
+            v,
+            w,
+            timestep,
+            self._tracers,
+            w_vars=w_tracers,
+            Ah_u=self.Ah_u,
+            Ah_v=self.Ah_v,
         )
 
         # Vertical diffusion of passive tracers (including biogeochemical ones)

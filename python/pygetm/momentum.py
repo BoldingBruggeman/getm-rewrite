@@ -355,6 +355,10 @@ class Momentum(pygetm._pygetm.Momentum):
         if (self.An.ma == 0.0).all():
             self.logger.info("Disabling An because it is 0 everywhere")
         else:
+            self.logger.info(
+                "Horizontal diffusivity An ranges between %s and %s m2 s-1"
+                % (self.An.ma.min(), self.An.ma.max())
+            )
             self.An_uu = self.domain.UU.array(fill=np.nan)
             self.An_uv = self.domain.UV.array(fill=np.nan)
             self.An_vu = self.domain.VU.array(fill=np.nan)

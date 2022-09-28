@@ -588,6 +588,7 @@ class Simulation(_pygetm.Simulation):
         self.report_totals = report_totals
 
         self.momentum.start()
+        self.tracers.start()
 
         # Ensure U and V points at the land-water interface have non-zero water depth
         # and layer thickness, as (zero) transports at these points will be divided by
