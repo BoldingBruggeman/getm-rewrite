@@ -857,4 +857,71 @@ contains
       where (mask /= 0) z = max(-H + Dmin, z)
    end subroutine
 
+   SUBROUTINE c_horizontal_diffusion(imin, imax, jmin, jmax, halox, haloy, umask, vmask, &
+   idxu,dyu,idyv,dxv,Ah_u,Ah_v,tmask,iA,dt,f,df) bind(c)
+   ! Subroutine arguments
+   integer(c_int), value, intent(in) :: imin,imax,jmin,jmax
+   integer(c_int), value, intent(in) :: halox
+   integer(c_int), value, intent(in) :: haloy
+#define _A_  imin-halox:imax+halox,jmin-haloy:jmax+haloy
+   integer(c_int), intent(in) :: umask(_A_)
+   integer(c_int), intent(in) :: vmask(_A_)
+   real(c_double), intent(in) :: idxu(_A_)
+   real(c_double), intent(in) :: dyu(_A_)
+   real(c_double), intent(in) :: idyv(_A_)
+   real(c_double), intent(in) :: dxv(_A_)
+   real(c_double), intent(in) :: Ah_u(_A_)
+   real(c_double), intent(in) :: Ah_v(_A_)
+   integer(c_int), intent(in) :: tmask(_A_)
+   real(c_double), intent(in) :: iA(_A_)
+   real(c_double), value, intent(in) :: dt
+   real(c_double), intent(inout) :: f(_A_)
+   real(c_double), intent(inout) :: df(_A_)
+#undef _A_
+
+!  Local constants
+
+!  Local variables
+#ifdef _AUTOMATIC_
+   real(real64) :: uflux(imin-halox:imax+halox,jmin-haloy:jmax+haloy)
+   real(real64) :: vflux(imin-halox:imax+halox,jmin-haloy:jmax+haloy)
+#else
+   real(real64), allocatable :: uflux(:,:), vflux(:,:)
+#endif
+   integer :: i, j
+!---------------------------------------------------------------------------
+#ifndef _AUTOMATIC_
+   allocate(uflux(imin-halox:imax+halox,jmin-haloy:jmax+haloy))
+   allocate(vflux(imin-halox:imax+halox,jmin-haloy:jmax+haloy))
+#endif
+
+   do j=jmin,jmax
+      do i=imin-1,imax
+         if (umask(i,j) == 1 .or. umask(i,j) == 2) then
+            uflux(i,j) = Ah_u(i,j) * (f(i+1,j)-f(i,j)) * idxu(i,j) * dyu(i,j)
+         else
+            uflux(i,j) = 0
+         end if
+      end do
+   end do
+
+   do j=jmin-1,jmax
+      do i=imin,imax
+         if (vmask(i,j) == 1 .or. vmask(i,j) == 2) then
+            vflux(i,j) = Ah_v(i,j) * (f(i,j+1)-f(i,j)) * idyv(i,j) * dxv(i,j)
+         else
+            vflux(i,j) = 0
+         end if
+      end do
+   end do
+
+   do j=jmin,jmax
+      do i=imin,imax
+         if (tmask(i,j) == 1) then
+            df(i,j) = dt * ( uflux(i,j)-uflux(i-1,j) + vflux(i,j)-vflux(i,j-1) ) * iA(i,j)
+         end if
+      end do
+   end do
+   END SUBROUTINE c_horizontal_diffusion
+
 end module
