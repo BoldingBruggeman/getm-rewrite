@@ -92,6 +92,10 @@ class TwoBand(Radiation):
             fill_value=FILL_VALUE,
         )
 
+        self._kc = grid.array(z=CENTERS)
+        self._rad = grid.array(z=INTERFACES, fill=0.0)
+        self._swr = grid.array()
+
         if self.initial_jerlov_type:
             self.jerlov_type = self.initial_jerlov_type
 
@@ -167,12 +171,14 @@ class TwoBand(Radiation):
 
     jerlov_type = property(fset=set_jerlov_type)
 
-    def __call__(self, swr: core.Array):
+    def __call__(self, swr: core.Array, kc2_add: Optional[core.Array] = None):
         """Compute heating due to shortwave radiation throughout the water column
         
         Args:
             swr: net downwelling shortwave radiation just below the water surface
                 (i.e., what is left after reflection).
+            kc2_add: additional depth-varying attentuation (m-1) of second waveband,
+                typically associated with chlorophyll or suspended matter
         """
         if self._first:
             assert (
@@ -183,25 +189,43 @@ class TwoBand(Radiation):
             self._first = False
 
         assert swr.grid is self.grid and not swr.z
-        _pygetm.exponential_profile_2band_interfaces(
-            self.grid.mask,
-            self.grid.hn,
-            self.A,
-            self.kc1,
-            self.kc2,
-            initial=swr,
-            out=self.rad,
+        assert kc2_add is None or (kc2_add.grid is self.grid and kc2_add.z == CENTERS)
+        self._kc.all_values[...] = self.kc1.all_values
+        self._swr.all_values[...] = self.A.all_values * swr.all_values
+        _pygetm.exponential_profile_1band_interfaces(
+            self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self._rad
         )
+        self._kc.all_values[...] = self.kc2.all_values
+        if kc2_add is not None:
+            self._kc.all_values += kc2_add.all_values
+        self._swr.all_values[...] = swr.all_values - self._swr.all_values
+        _pygetm.exponential_profile_1band_interfaces(
+            self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self.rad
+        )
+        self.rad.all_values += self._rad.all_values
 
-        if self.par0.saved or self.par.saved:
+        # tmp = self.grid.array(z=INTERFACES)
+        # _pygetm.exponential_profile_2band_interfaces(
+        #     self.grid.mask,
+        #     self.grid.hn,
+        #     self.A,
+        #     self.kc1,
+        #     self.kc2,
+        #     initial=swr,
+        #     out=tmp,
+        # )
+        # dif = self.rad.ma - tmp.ma
+        # print(dif.min(), dif.max())
+
+        if self.par0.saved:
             # Visible part of shortwave radiation just below sea surface
             # (i.e., reflection/albedo already accounted for)
-            self.par0.all_values[...] = (1.0 - self.A.all_values) * swr.all_values
+            self.par0.all_values[...] = self._swr.all_values
         if self.par.saved:
             # Visible part of shortwave radiation at layer centers,
             # often used by biogeochemistry
             _pygetm.exponential_profile_1band_centers(
-                self.grid.mask, self.grid.hn, self.kc2, top=self.par0, out=self.par
+                self.grid.mask, self.grid.hn, self._kc, top=self._swr, out=self.par
             )
 
         self.swr_abs.all_values[...] = np.diff(self.rad.all_values, axis=0)

@@ -732,34 +732,47 @@ contains
    subroutine c_exponential_profile_1band_centers(nx, ny, nz, istart, istop, jstart, jstop, mask, h, kc, top, out) bind(c)
       integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
       integer(c_int), intent(in)        :: mask(nx, ny)
-      real(c_double), intent(in)        :: h(nx, ny, nz), kc(nx, ny), top(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz), kc(nx, ny, nz), top(nx, ny)
       real(c_double), intent(inout)     :: out(nx, ny, nz)
 
       integer :: k
-      real(c_double) :: cumh(nx, ny)
+      real(c_double) :: hkc(nx, ny), cumkc(nx, ny)
 
-      cumh = 0.5_c_double * h(:,:,nz)
-      where (mask /= 0) out(:,:,nz) = top * exp(-kc * cumh)
-      do k=nz-1,1,-1
-         cumh = cumh + 0.5_c_double * (h(:,:,k) + h(:,:,k+1))
-         where (mask /= 0) out(:,:,k) = top * exp(-kc * cumh)
+      cumkc = 0._c_double
+      do k=nz,1,-1
+         hkc = h(:,:,k) * kc(:,:,k)
+         where (mask /= 0) out(:,:,k) = top * exp(-(cumkc + 0.5_c_double * hkc))
+         cumkc = cumkc + hkc
       end do
    end subroutine
 
-   subroutine c_exponential_profile_1band_interfaces(nx, ny, nz, istart, istop, jstart, jstop, mask, h, kc, top, out) bind(c)
-      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
+   subroutine c_exponential_profile_1band_interfaces(nx, ny, nz, istart, istop, jstart, jstop, mask, &
+      h, kc, initial, up, out) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop, up
       integer(c_int), intent(in)        :: mask(nx, ny)
-      real(c_double), intent(in)        :: h(nx, ny, nz), kc(nx, ny), top(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz), kc(nx, ny, nz), initial(nx, ny)
       real(c_double), intent(inout)     :: out(nx, ny, 0:nz)
 
-      integer :: k
-      real(c_double) :: cumh(nx, ny)
+      integer :: k, kstart, kstop, kstep, h_offset
+      real(c_double) :: cumkc(nx, ny)
 
-      where (mask /= 0) out(:,:,nz) = top
-      cumh = 0._c_double
-      do k=nz-1,0,-1
-         cumh = cumh + h(:,:,k+1)
-         where (mask /= 0) out(:,:,k) = top * exp(-kc * cumh)
+      if (up /= 0) then
+         kstart = 0
+         kstop = nz
+         kstep = 1
+         h_offset = 0
+      else
+         kstart = nz
+         kstop = 0
+         kstep = -1
+         h_offset = 1
+      end if
+
+      where (mask /= 0) out(:,:,kstart) = initial
+      cumkc = 0._c_double
+      do k = kstart + kstep, kstop, kstep
+         cumkc = cumkc + kc(:,:,k+h_offset) * h(:,:,k+h_offset)
+         where (mask /= 0) out(:,:,k) = initial * exp(-cumkc)
       end do
    end subroutine
 

@@ -44,7 +44,7 @@ cdef extern void pressure_internal(void* pressure, double* buoy) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
-cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
+cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* initial, int up, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* initial, int up, double* out) nogil
 cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
@@ -411,16 +411,16 @@ cdef class Momentum:
     def wrap(self, Array ar not None, bytes name):
         return ar.wrap_c_array(self.domain, 1, self.p, name)
 
-def exponential_profile_1band_interfaces(Array mask not None, Array h not None, Array k not None, Array top not None, Array out=None):
+def exponential_profile_1band_interfaces(Array mask not None, Array h not None, Array k not None, Array initial not None, bint up=False, Array out=None):
     assert mask.grid is h.grid and h.z == CENTERS
-    assert mask.grid is k.grid and not k.z
-    assert mask.grid is top.grid and not top.z
+    assert mask.grid is k.grid and k.z == CENTERS
+    assert mask.grid is initial.grid and not initial.z
     assert mask.grid is out.grid and out.z == INTERFACES
-    c_exponential_profile_1band_interfaces(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>k.p, <double *>top.p, <double *>out.p)
+    c_exponential_profile_1band_interfaces(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>k.p, <double *>initial.p, up, <double *>out.p)
 
 def exponential_profile_1band_centers(Array mask not None, Array h not None, Array k not None, Array top not None, Array out=None):
     assert mask.grid is h.grid and h.z == CENTERS
-    assert mask.grid is k.grid and not k.z
+    assert mask.grid is k.grid and k.z == CENTERS
     assert mask.grid is top.grid and not top.z
     assert mask.grid is out.grid and out.z == CENTERS
     c_exponential_profile_1band_centers(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, mask.grid.domain.halox, mask.grid.nx_ - mask.grid.domain.halox, mask.grid.domain.haloy, mask.grid.ny_ - mask.grid.domain.haloy, <int *>mask.p, <double *>h.p, <double *>k.p, <double *>top.p, <double *>out.p)
