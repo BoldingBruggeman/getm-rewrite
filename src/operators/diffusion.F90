@@ -243,7 +243,8 @@ END SUBROUTINE vertical_diffusion_calculate
 #undef _NORMAL_ORDER_
 
 
-MODULE SUBROUTINE c_horizontal_diffusion(imin,imax,jmin,jmax,halox,haloy,umask,vmask,idxu,dyu,idyv,dxv,Ah_u,Ah_v,tmask,iA,dt,f,df) bind(c)
+MODULE SUBROUTINE c_horizontal_diffusion(imin, imax, jmin, jmax, halox, haloy, umask, vmask, &
+   idxu,dyu,idyv,dxv,Ah_u,Ah_v,tmask,iA,dt,f,df) bind(c)
    ! Subroutine arguments
    integer(c_int), value, intent(in) :: imin,imax,jmin,jmax
    integer(c_int), value, intent(in) :: halox
