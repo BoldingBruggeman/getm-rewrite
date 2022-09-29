@@ -194,6 +194,8 @@ contains
          case ('advV');  p = c_loc(momentum%advV); grid_type = 3
          case ('diffU');  p = c_loc(momentum%diffU); grid_type = 2
          case ('diffV');  p = c_loc(momentum%diffV); grid_type = 3
+         case ('dampU');  p = c_loc(momentum%dampU); grid_type = 2
+         case ('dampV');  p = c_loc(momentum%dampV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
          case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary

@@ -33,6 +33,8 @@ class Momentum(pygetm._pygetm.Momentum):
         "advV",
         "diffU",
         "diffV",
+        "dampU",
+        "dampV",
         "u1",
         "v1",
         "uk",
@@ -353,10 +355,10 @@ class Momentum(pygetm._pygetm.Momentum):
             edges = array.grid._land & array.grid._water_contact
             array.all_values[..., edges] = 0.0
         if (self.An.ma == 0.0).all():
-            self.logger.info("Disabling An because it is 0 everywhere")
+            self.logger.info("Disabling numerical damping because An is 0 everywhere")
         else:
             self.logger.info(
-                "Horizontal diffusivity An ranges between %s and %s m2 s-1"
+                "Horizontal diffusivity An used for numerical damping ranges between %s and %s m2 s-1"
                 % (self.An.ma.min(), self.An.ma.max())
             )
             self.An_uu = self.domain.UU.array(fill=np.nan)
@@ -445,10 +447,10 @@ class Momentum(pygetm._pygetm.Momentum):
         if self.An_uu is not None:
             # Numerical damping of transports
             pygetm._pygetm.horizontal_diffusion(
-                self.U, self.An_uu, self.An_uv, timestep, self.diffU
+                self.U, self.An_uu, self.An_uv, timestep, self.dampU
             )
             pygetm._pygetm.horizontal_diffusion(
-                self.V, self.An_vu, self.An_vv, timestep, self.diffV
+                self.V, self.An_vu, self.An_vv, timestep, self.dampV
             )
 
     def advance(
