@@ -442,13 +442,14 @@ class Momentum(pygetm._pygetm.Momentum):
             update_z0b,
         )
 
-        # Numerical damping of transports
-        pygetm._pygetm.horizontal_diffusion(
-            self.U, self.An_uu, self.An_uv, timestep, self.diffU
-        )
-        pygetm._pygetm.horizontal_diffusion(
-            self.V, self.An_vu, self.An_vv, timestep, self.diffV
-        )
+        if self.An_uu is not None:
+            # Numerical damping of transports
+            pygetm._pygetm.horizontal_diffusion(
+                self.U, self.An_uu, self.An_uv, timestep, self.diffU
+            )
+            pygetm._pygetm.horizontal_diffusion(
+                self.V, self.An_vu, self.An_vv, timestep, self.diffV
+            )
 
     def advance(
         self,
