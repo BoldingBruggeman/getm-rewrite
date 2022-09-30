@@ -155,9 +155,11 @@ CONTAINS
                              *( buoy(i+1,j,k)- buoy(i,j,k)-x*(self%dRx(i+1,j)+self%dRx(i,j)))) &
 #endif
                              )
-               self%idpdx(i,j,k)=UG%hn(i,j,k)*UG%idx(i,j) &
-                                 *(self%P(i+1,j,k)-self%P(i,j,k)+FC &
-                                 -(TG%zin(i+1,j)-TG%zin(i,j))*0.5_real64*(buoy(i+1,j,TG%kmax)+buoy(i,j,TG%kmax)))
+               !self%idpdx(i,j,k)=UG%hn(i,j,k)*UG%idx(i,j) &
+               !                  *(self%P(i+1,j,k)-self%P(i,j,k)+FC &
+               !                  -(TG%zin(i+1,j)-TG%zin(i,j))*0.5_real64*(buoy(i+1,j,TG%kmax)+buoy(i,j,TG%kmax)))
+               self%idpdx(i,j,k)=0.5_real64*(TG%hn(i,j,k)+TG%hn(i+1,j,k))*UG%idx(i,j) &
+                                 *(self%P(i+1,j,k)-self%P(i,j,k)+FC)
             end if
          end do
       end do
@@ -219,9 +221,11 @@ CONTAINS
                              *(buoy(i,j+1,k)-buoy(i,j,k)-x*(self%dRx(i,j+1)+self%dRx(i,j)))) &
 #endif
                              )
-               self%idpdy(i,j,k)=VG%hn(i,j,k)*VG%idy(i,j) &
-                                 *(self%P(i,j+1,k)-self%P(i,j,k)+FC &
-                                 -(TG%zin(i,j+1)-TG%zin(i,j))*0.5_real64*(buoy(i,j+1,TG%kmax)+buoy(i,j,TG%kmax)))
+               !self%idpdy(i,j,k)=VG%hn(i,j,k)*VG%idy(i,j) &
+               !                  *(self%P(i,j+1,k)-self%P(i,j,k)+FC &
+               !                  -(TG%zin(i,j+1)-TG%zin(i,j))*0.5_real64*(buoy(i,j+1,TG%kmax)+buoy(i,j,TG%kmax)))
+               self%idpdy(i,j,k)=0.5_real64*(TG%hn(i,j,k)+TG%hn(i,j+1,k))*VG%idy(i,j) &
+                                 *(self%P(i,j+1,k)-self%P(i,j,k)+FC)
             end if
          end do
       end do
