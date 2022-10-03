@@ -178,7 +178,7 @@ class Simulation(_pygetm.Simulation):
         radiation: Optional[pygetm.radiation.Radiation] = None,
         logger: Optional[logging.Logger] = None,
         log_level: Optional[int] = None,
-        internal_pressure_method: InternalPressure = InternalPressure.OFF,
+        internal_pressure_method: InternalPressure = InternalPressure.SHCHEPETKIN_MCWILLIAMS,
     ):
         """Simulation
         
