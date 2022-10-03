@@ -293,7 +293,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """Set array to specified value, while respecting the mask: masked points are
         set to :attr:`fill_value`
         """
-        self.all_values[...] = value
+        try:
+            self.all_values[...] = value
+        except ValueError:
+            self.values[...] = value
+            self.update_halos()
         if self.fill_value is not None and not (self.ndim == 0 or self.on_boundary):
             self.all_values[..., self.grid._land] = self.fill_value
 
