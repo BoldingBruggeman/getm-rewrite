@@ -24,27 +24,28 @@ r = -(x[np.newaxis, :] ** 2 + y[:, np.newaxis] ** 2) / L ** 2
 H = HMAX * (1.0 - A * np.exp(r))
 
 domain = pygetm.domain.create_cartesian(
-    x, y, nz=nz, f=0.0, H=H, Dcrit=0.1, Dmin=0.02, z0=0.01, periodic_x=True
+    x, y, nz=nz, f=0.0, H=H, Dcrit=0.1, Dmin=0.02, z0=0.01
 )
 
 sim = pygetm.Simulation(
     domain,
     pygetm.BAROCLINIC,
-    airsea=pygetm.airsea.Fluxes(taux=0.1),
+    airsea=pygetm.airsea.Fluxes(taux=0.0),
     gotm=os.path.join("../../../getm-setups/seamount/gotmturb.nml"),
+    #internal_pressure_method=pygetm.InternalPressure.BLUMBERG_MELLOR,
 )
 
 sim.salt.fill(35.0)
-sim.temp.fill(5.0 + 15.0 * np.exp(domain.T.zc.all_values / 1000.0))
+sim.temp.fill(5.0 + 15.0 * np.exp(domain.T.zc / 1000.0))
 
 sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
 
 output = sim.output_manager.add_netcdf_file(
-    "seamount.nc", interval=datetime.timedelta(days=1)
+    "seamount.nc", interval=datetime.timedelta(hours=1)
 )
-output.request("zt", "temp", "Ht")
+output.request("zt", "temp", "Ht", "idpdx", "idpdy", "SxB", "SyB")
 
-stop = cftime.datetime(2001, 2, 1)
+stop = cftime.datetime(2001, 1, 4)
 sim.start(cftime.datetime(2001, 1, 1), 12.0, 30, report=datetime.timedelta(hours=1))
 while sim.time < stop:
     sim.advance()
