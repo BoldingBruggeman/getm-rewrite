@@ -623,12 +623,28 @@ class OpenBoundaries(Mapping):
         "local_to_global",
         "_boundaries",
         "_frozen",
+        "inflow",
+        "tmrlx",
+        "tmrlx_max",
+        "tmrlx_min",
+        "tmrlx_ucut",
+        "tmrlx_umin",
+        "rlxcoef",
+        "isponge",
+        "jsponge",
+        "wsponge",
     )
 
     def __init__(self, domain: "Domain"):
         self.domain = domain
         self._boundaries: List[OpenBoundary] = []
         self._frozen = False
+
+        self.tmrlx = False
+        self.tmrlx_max = 0.25
+        self.tmrlx_min = 0.0
+        self.tmrlx_ucut = 0.02
+        self.tmrlx_umin = -0.25 * self.tmrlx_ucut
 
     def add_by_index(
         self,
@@ -737,6 +753,8 @@ class OpenBoundaries(Mapping):
                         )
                     )
                     len_bdy = boundary.mstop - boundary.mstart
+                    boundary.start = nbdyp
+                    boundary.stop = nbdyp + len_bdy
                     nbdyp += len_bdy
 
                     if side in (Side.WEST, Side.EAST):
@@ -794,6 +812,31 @@ class OpenBoundaries(Mapping):
             if self.np == 0
             else np.concatenate(bdy_j, dtype=np.intc)
         )
+
+        self.isponge = np.empty((self.i.size, 3), dtype=self.i.dtype)
+        self.jsponge = np.empty((self.j.size, 3), dtype=self.j.dtype)
+        for boundary in self._boundaries:
+            if boundary.l is None:
+                continue
+            i_inward = {Side.WEST: 1, Side.EAST: -1}.get(boundary.side, 0)
+            j_inward = {Side.SOUTH: 1, Side.NORTH: -1}.get(boundary.side, 0)
+            for n in range(3):
+                self.isponge[boundary.start : boundary.stop, n] = (
+                    boundary.i + (n + 1) * i_inward
+                )
+                self.jsponge[boundary.start : boundary.stop, n] = (
+                    boundary.j + (n + 1) * j_inward
+                )
+        sponge_invalid = (
+            (self.isponge < 0)
+            | (self.jsponge < 0)
+            | (tmask[self.jsponge, self.isponge] == 0)
+        )
+        self.wsponge = np.empty((self.i.size, 3), dtype=float)
+        self.wsponge[...] = ((3.0 - np.arange(3)) / 4.0) ** 2
+        self.wsponge[sponge_invalid] = 0.0
+        self.wsponge /= self.wsponge.sum(axis=1, keepdims=True)
+
         self.i_glob = self.i - self.domain.halox + self.domain.tiling.xoffset
         self.j_glob = self.j - self.domain.haloy + self.domain.tiling.yoffset
         self.domain.logger.info(
@@ -833,6 +876,8 @@ class OpenBoundaries(Mapping):
         # Coordinates of open boundary points
         self.zc = self.domain.T.array(z=CENTERS, on_boundary=True)
         self.zf = self.domain.T.array(z=INTERFACES, on_boundary=True)
+        self.inflow = self.domain.T.array(z=CENTERS, on_boundary=True)
+        self.rlxcoef = self.domain.T.array(z=CENTERS, on_boundary=True)
         if self.domain.lon is not None:
             self.lon = self.domain.T.array(
                 on_boundary=True, fill=self.domain.T.lon.all_values[self.j, self.i]
@@ -869,6 +914,28 @@ class OpenBoundaries(Mapping):
                 i += stop - start
             assert i == self.np
         return indices
+
+    def update(self, u: core.Array, v: core.Array):
+        if not self.tmrlx:
+            return
+
+        for boundary in self._boundaries:
+            if boundary.side == Side.EAST:
+                inflow = -u.all_values[:, boundary.j, boundary.i - 1]
+            elif boundary.side == Side.WEST:
+                inflow = u.all_values[:, boundary.j, boundary.i]
+            elif boundary.side == Side.NORTH:
+                inflow = -v.all_values[:, boundary.j - 1, boundary.i]
+            elif boundary.side == Side.SOUTH:
+                inflow = v.all_values[:, boundary.j, boundary.i]
+            self.inflow.all_values[boundary.start : boundary.stop, :] = inflow.T
+
+        self.rlxcoef.all_values[...] = (self.tmrlx_max - self.tmrlx_min) * np.clip(
+            (self.inflow.all_values - self.tmrlx_umin)
+            / (self.tmrlx_ucut - self.tmrlx_umin),
+            0.0,
+            1.0,
+        ) + self.tmrlx_min
 
 
 def find_interfaces(c: ArrayLike) -> np.ndarray:

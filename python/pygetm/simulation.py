@@ -827,6 +827,8 @@ class Simulation(_pygetm.Simulation):
 
         baroclinic_active = self.runtype == BAROCLINIC and macro_active
         if baroclinic_active:
+            self.domain.open_boundaries.update(self.momentum.uk, self.momentum.vk)
+
             # Update tracer values at open boundaries. This must be done after
             # input_manager.update, but before diagnostics/forcing variables derived
             # from the tracers are calculated
