@@ -61,15 +61,10 @@ sim = pygetm.Simulation(
     domain,
     runtype=pygetm.BAROCLINIC,
     gotm=os.path.join(args.setup_dir, "gotmturb.nml"),
-    airsea=pygetm.airsea.Fluxes(),
+    airsea=pygetm.airsea.Fluxes(taux=0.1),
     internal_pressure_method=pygetm.InternalPressure.SHCHEPETKIN_MCWILLIAMS,
 )
 
-sim.airsea.taux[...] = 0.1
-sim.airsea.tauy[...] = 0.0
-sim.airsea.sp[...] = 0.0
-sim.airsea.shf[...] = 0.0
-sim.airsea.swr[...] = 0.0
 sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_I)
 
 sim.salt.set(0.0)

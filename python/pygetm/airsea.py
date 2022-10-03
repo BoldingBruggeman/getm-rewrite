@@ -10,12 +10,9 @@ from pyairsea import HumidityMeasure, LongwaveMethod, AlbedoMethod
 CPA = 1008.0  #: specific heat capacity of air (J kg-1 K-1)
 
 
-class Fluxes:
-    """Base class that provides air-water fluxes of heat and momentum, as well as
-    surface air pressure. When using this class directly, these fluxes (stresses
-    :attr:`taux` and :attr:`tauy`, surface heat flux :attr:`shf`, air pressure
-    :attr:`sp`, net downwelling shortwave radiation :attr:`swr` and the net
-    freshwater flux :attr:`pe`) are prescribed, not calculated.
+class Base:
+    """Base class that provides air-water fluxes of heat, momentum, freshwater,
+    as well as surface air pressure.
     """
 
     def initialize(self, grid: pygetm.domain.Grid):
@@ -69,7 +66,6 @@ class Fluxes:
             fill_value=FILL_VALUE,
             attrs=dict(_time_varying=TimeVarying.MACRO),
         )
-        self.pe.fill(0.0)
 
         self._ready = False
 
@@ -105,6 +101,47 @@ class Fluxes:
             self._ready = True
 
 
+class Fluxes(Base):
+    def __init__(
+        self,
+        taux: float = 0.0,
+        tauy: float = 0.0,
+        sp: float = 101325.0,  # 1 atmosphere
+        shf: float = 0.0,
+        swr: float = 0.0,
+        pe: float = 0.0,
+    ):
+        """Prescribed surface fluxes: stresses :attr:`taux` and :attr:`tauy`,
+        surface heat flux :attr:`shf`, air pressure :attr:`sp`, net downwelling
+        shortwave radiation :attr:`swr` and the net freshwater flux :attr:`pe`)
+        are prescribed, not calculated from meteorological conditions.
+
+        Args:
+            taux: wind stress in x-direction (Pa)
+            tauy: wind stress in y-direction (Pa)
+            sp: surface air pressure (Pa)
+            shf: surface heat flux (W m-2)
+            swr: surface net downwelling shortwave radiation (W m-2)
+            pe: net freshwater flux due to precipitation, condensation,
+                and evaporation (m s-1)
+        """
+        self._initial_taux = taux
+        self._initial_tauy = tauy
+        self._initial_sp = sp
+        self._initial_shf = shf
+        self._initial_swr = swr
+        self._initial_pe = pe
+
+    def initialize(self, grid: pygetm.domain.Grid):
+        super().initialize(grid)
+        self.taux.fill(self._initial_taux)
+        self.tauy.fill(self._initial_tauy)
+        self.sp.fill(self._initial_sp)
+        self.shf.fill(self._initial_shf)
+        self.swr.fill(self._initial_swr)
+        self.pe.fill(self._initial_pe)
+
+
 class FluxesFromMeteo(Fluxes):
     def __init__(
         self,
@@ -135,6 +172,7 @@ class FluxesFromMeteo(Fluxes):
                 flux defaults to 0. This flux can be then manually specified by
                 calling :meth:`pygetm.core.Array.set` on :attr:`pe`.
         """
+        super().__init__()
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
         self.humidity_measure = humidity_measure
@@ -148,6 +186,7 @@ class FluxesFromMeteo(Fluxes):
         self.shf.attrs["_mask_output"] = True
         self.pe.attrs["_mask_output"] = True
         self.swr.attrs["_mask_output"] = True
+        self.sp.fill(self.sp.fill_value)
 
         self.logger.info("Longwave method: %s" % self.longwave_method.name)
         self.logger.info("Albedo method: %s" % self.albedo_method.name)
@@ -457,6 +496,7 @@ class FluxesFromMeteo(Fluxes):
                 * self.hum.require_set(self.logger)
                 * self.u10.require_set(self.logger)
                 * self.v10.require_set(self.logger)
+                * self.sp.require_set(self.logger)
                 * (not calculate_heat_flux or self.tcc.require_set(self.logger))
                 * sst.require_set(self.logger)
                 * (
