@@ -145,6 +145,7 @@ class Simulation(_pygetm.Simulation):
             "_profile",
             "radiation",
             "_initialized_variables",
+            "delay_slow_ip",
         )
         + _time_arrays
     )
@@ -179,12 +180,17 @@ class Simulation(_pygetm.Simulation):
         logger: Optional[logging.Logger] = None,
         log_level: Optional[int] = None,
         internal_pressure_method: InternalPressure = InternalPressure.SHCHEPETKIN_MCWILLIAMS,
+        delay_slow_ip: bool = False,
     ):
         """Simulation
         
         Args:
             domain: simulation domain
-            """
+            runtype: simulation run type (BAROTROPIC_2D, BAROTROPIC_3D, BAROCLINIC)
+            delay_slow_ip: let slow internal pressure terms lag one macrotimestep
+                behind the 3d internal pressure terms. This can help stabilize
+                density-driven flows in deep water
+        """
         self.logger = domain.root_logger
         if log_level is not None:
             self.logger.setLevel(log_level)
@@ -447,7 +453,8 @@ class Simulation(_pygetm.Simulation):
             self.salt_sf = self.salt.isel(z=-1)
             self.ssu_U = self.momentum.uk.isel(z=-1)
             self.ssv_V = self.momentum.vk.isel(z=-1)
-            if internal_pressure_method == InternalPressure.OFF:
+            self.delay_slow_ip = delay_slow_ip
+            if internal_pressure_method == InternalPressure.OFF or delay_slow_ip:
                 self.idpdx.fill(0.0)
                 self.idpdy.fill(0.0)
         else:
@@ -847,9 +854,14 @@ class Simulation(_pygetm.Simulation):
             # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
             self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)
             self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-            self.update_internal_pressure_gradient(self.buoy)
-            self.momentum.SxB.all_values[...] = self.idpdx.all_values.sum(axis=0)
-            self.momentum.SyB.all_values[...] = self.idpdy.all_values.sum(axis=0)
+            if self.delay_slow_ip:
+                self.momentum.SxB.all_values[...] = self.idpdx.all_values.sum(axis=0)
+                self.momentum.SyB.all_values[...] = self.idpdy.all_values.sum(axis=0)
+                self.update_internal_pressure_gradient(self.buoy)
+            else:
+                self.update_internal_pressure_gradient(self.buoy)
+                self.momentum.SxB.all_values[...] = self.idpdx.all_values.sum(axis=0)
+                self.momentum.SyB.all_values[...] = self.idpdy.all_values.sum(axis=0)
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
