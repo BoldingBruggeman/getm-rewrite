@@ -561,14 +561,3 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     xarray = property(as_xarray)
 
-    def update_boundary(self, bdytype: int, bdy: Optional["Array"] = None):
-        if bdytype == SPONGE:
-            open_boundaries = self.grid.domain.open_boundaries
-            if open_boundaries.tmrlx:
-                r = open_boundaries.rlxcoef.all_values
-                values = self.all_values[
-                    ..., open_boundaries.jsponge, open_boundaries.isponge
-                ].T
-                interior_mean = (open_boundaries.wsponge * values.T).sum(axis=-1).T
-                bdy.all_values[...] = r * bdy.all_values + (1.0 - r) * interior_mean
-        super().update_boundary(bdytype, bdy)

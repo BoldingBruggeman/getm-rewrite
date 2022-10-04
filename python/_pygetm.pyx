@@ -16,7 +16,6 @@ cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int ima
 cdef extern void domain_initialize(void* domain, int runtype, double Dmin, int method_vertical_coordinates, double ddl, double ddu, double Dgamma, int gamma_surf, double* maxdt) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain, double timestep) nogil
-cdef extern void domain_tracer_bdy(void* domain, void* grid, int nz, double* field, int bdytype, double* bdy)
 cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
 cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* target, int joffset) nogil
 cdef extern void grid_interp_z(int nx, int ny, int nz1, int nz2, double* source, double* target, int koffset) nogil
@@ -147,11 +146,6 @@ cdef class Array:
         self.finish_initialization()
         if register:
             self.register()
-
-    def update_boundary(self, int bdytype, Array bdy=None):
-        assert not self.on_boundary, 'update_boundary cannot be called on boundary arrays.'
-        assert self.ndim == 2 or bdy is None or self._array.shape[0] == bdy._array.shape[1]
-        domain_tracer_bdy(self.grid.domain.p, self.grid.p, 1 if self.ndim == 2 else self._array.shape[0], <double*>self.p, bdytype, NULL if bdy is None else <double*>bdy.p)
 
 cdef class Grid:
     cdef void* p

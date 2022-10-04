@@ -18,12 +18,12 @@ class TracerTotal(NamedTuple):
 
 
 class OpenBoundaries:
-    __slots__ = "_tracer", "_type", "values"
+    __slots__ = "_tracer", "_type", "values", "_bdy"
 
     def __init__(self, tracer: "Tracer"):
         self._tracer = tracer
-        self._type = ZERO_GRADIENT
         self.values: Optional[core.Array] = None
+        self.type = ZERO_GRADIENT
 
     @property
     def type(self) -> int:
@@ -35,6 +35,7 @@ class OpenBoundaries:
         self._type = value
         if self._type == ZERO_GRADIENT:
             self.values = None
+            self._bdy = self._tracer.grid.domain.open_boundaries.zero_gradient
         elif self.values is None:
             self.values = self._tracer.grid.array(
                 name="%s_bdy" % self._tracer.name,
@@ -42,10 +43,11 @@ class OpenBoundaries:
                 on_boundary=True,
                 attrs={"_time_varying": TimeVarying.MACRO},
             )
+            self._bdy = self._tracer.grid.domain.open_boundaries.sponge
 
     def update(self):
         """Update the tracer at the open boundaries"""
-        self._tracer.update_boundary(self._type, self.values)
+        self._bdy(self._tracer, self.values)
 
 
 class Tracer(core.Array):

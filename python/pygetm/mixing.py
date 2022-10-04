@@ -177,6 +177,6 @@ class GOTM(Turbulence):
         # Viscosity (at T points) needs to be valid at open boundary points to so it
         # can be interpolated to inward-adjacent U/V points. However, it cannot be
         # computed as the shear frequency SS is not available at the boundary.
-        self.num.update_boundary(ZERO_GRADIENT)
+        self.grid.domain.open_boundaries.zero_gradient(self.num)
 
         self._log()
