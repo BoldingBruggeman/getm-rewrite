@@ -1,4 +1,4 @@
-from typing import Callable, MutableMapping, Optional, Tuple, List, Mapping
+from typing import Callable, MutableMapping, Optional, Tuple, List, Mapping, Sequence
 import operator
 import logging
 import os.path
@@ -623,8 +623,8 @@ class Sponge(BoundaryCondition):
 
     def initialize(self, open_boundaries: "OpenBoundaries"):
         tmask = open_boundaries.domain.mask_[1::2, 1::2]
-        self.i = np.empty((open_boundaries.np, self.n), dtype=np.intc)
-        self.j = np.empty((open_boundaries.np, self.n), dtype=np.intc)
+        self.i = np.empty((open_boundaries.np, self.n), dtype=np.intp)
+        self.j = np.empty((open_boundaries.np, self.n), dtype=np.intp)
         for boundary in open_boundaries.active:
             i_inward = {Side.WEST: 1, Side.EAST: -1}.get(boundary.side, 0)
             j_inward = {Side.SOUTH: 1, Side.NORTH: -1}.get(boundary.side, 0)
@@ -645,6 +645,9 @@ class Sponge(BoundaryCondition):
         self.w = self.sp / self.sp.sum(axis=1, keepdims=True)
         self.sp[tmask[self.j, self.i] != 1] = 0.0  # only relax water points
         self.open_boundaries = open_boundaries
+
+        self.i = np.where(sponge_valid, self.i, open_boundaries.i[:, np.newaxis])
+        self.j = np.where(sponge_valid, self.j, open_boundaries.j[:, np.newaxis])
 
         self.inflow = open_boundaries.domain.T.array(z=CENTERS, on_boundary=True)
         self.rlxcoef = open_boundaries.domain.T.array(z=CENTERS, on_boundary=True)
@@ -703,7 +706,7 @@ class ZeroGradient(BoundaryCondition):
         array.all_values[self.target_slice] = array.all_values[self.source_slice]
 
 
-class OpenBoundaries(Mapping):
+class OpenBoundaries(Sequence):
     __slots__ = (
         "domain",
         "np",
@@ -962,7 +965,7 @@ class OpenBoundaries(Mapping):
 
         self._frozen = True
 
-    def __getitem__(self, key) -> OpenBoundary:
+    def __getitem__(self, key: int) -> OpenBoundary:
         return self._boundaries[key]
 
     def __len__(self) -> int:
