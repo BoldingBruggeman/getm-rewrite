@@ -457,6 +457,9 @@ class Simulation(_pygetm.Simulation):
             if internal_pressure_method == InternalPressure.OFF or delay_slow_ip:
                 self.idpdx.fill(0.0)
                 self.idpdy.fill(0.0)
+            if delay_slow_ip:
+                self.momentum.SxB.attrs["_part_of_state"] = True
+                self.momentum.SyB.attrs["_part_of_state"] = True
         else:
             self.temp_sf = None
             self.salt_sf = None
