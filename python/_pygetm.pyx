@@ -468,7 +468,11 @@ def horizontal_diffusion(Array f not None, Array Ah_u not None, Array Ah_v not N
     cdef Array idx = ugrid.idx
     cdef Array dy = ugrid.dy
     cdef Array idy = vgrid.idy
-    cdef Array dx = ugrid.dx
+    cdef Array dx = vgrid.dx
+    assert not f.z
+    assert Ah_u.grid is ugrid and not Ah_u.z
+    assert Ah_v.grid is vgrid and not Ah_v.z
+    assert out.grid is f.grid and not out.z
     c_horizontal_diffusion(1, nx, 1, ny, halox, haloy,
         <int*>umask.p, <int*>vmask.p, <double*>idx.p, <double*>dy.p, <double*>idy.p, <double*>dx.p,
         <double*>Ah_u.p, <double*>Ah_v.p, <int*>mask.p, <double*>iarea.p, dt, <double*>f.p, <double*>out.p)
