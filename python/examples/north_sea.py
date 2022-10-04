@@ -31,7 +31,7 @@ def create_domain(
 
     if use_boundaries:
         pygetm.legacy.load_bdyinfo(domain, os.path.join(setup_dir, "bdyinfo.dat"))
-        domain.open_boundaries.tmrlx = True
+        domain.open_boundaries.sponge.tmrlx = True
     if use_rivers:
         pygetm.legacy.load_riverinfo(domain, os.path.join(setup_dir, "riverinfo.dat"))
 
