@@ -216,6 +216,8 @@ class Momentum(pygetm._pygetm.Momentum):
             fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
+        "dampU": dict(fill_value=FILL_VALUE,),
+        "dampV": dict(fill_value=FILL_VALUE,),
     }
 
     def __init__(
@@ -289,7 +291,18 @@ class Momentum(pygetm._pygetm.Momentum):
             )
 
         ZERO_EVERYWHERE = MASK_ZERO_2D
-        ZERO_UNMASKED = ("SxA", "SyA", "SxB", "SyB", "SxD", "SyD", "SxF", "SyF")
+        ZERO_UNMASKED = (
+            "SxA",
+            "SyA",
+            "SxB",
+            "SyB",
+            "SxD",
+            "SyD",
+            "SxF",
+            "SyF",
+            "dampU",
+            "dampV",
+        )
         if runtype > BAROTROPIC_2D:
             ZERO_EVERYWHERE = ZERO_EVERYWHERE + MASK_ZERO_3D
             ZERO_UNMASKED = ZERO_UNMASKED + ("SS",)
