@@ -625,9 +625,7 @@ class Sponge(BoundaryCondition):
         tmask = open_boundaries.domain.mask_[1::2, 1::2]
         self.i = np.empty((open_boundaries.np, self.n), dtype=np.intc)
         self.j = np.empty((open_boundaries.np, self.n), dtype=np.intc)
-        for boundary in open_boundaries:
-            if boundary.l is None:
-                continue
+        for boundary in open_boundaries.active:
             i_inward = {Side.WEST: 1, Side.EAST: -1}.get(boundary.side, 0)
             j_inward = {Side.SOUTH: 1, Side.NORTH: -1}.get(boundary.side, 0)
             for n in range(self.n):
@@ -655,7 +653,7 @@ class Sponge(BoundaryCondition):
         if not self.tmrlx:
             return
 
-        for boundary in self.open_boundaries:
+        for boundary in self.open_boundaries.active:
             if boundary.side == Side.EAST:
                 inflow = -u.all_values[:, boundary.j, boundary.i - 1]
             elif boundary.side == Side.WEST:
@@ -692,12 +690,11 @@ class ZeroGradient(BoundaryCondition):
         tmask = open_boundaries.domain.mask_[1::2, 1::2]
         i = np.empty_like(open_boundaries.i)
         j = np.empty_like(open_boundaries.j)
-        for boundary in open_boundaries:
-            if boundary.l is not None:
-                i_inward = {Side.WEST: 1, Side.EAST: -1}.get(boundary.side, 0)
-                j_inward = {Side.SOUTH: 1, Side.NORTH: -1}.get(boundary.side, 0)
-                i[boundary.start : boundary.stop] = boundary.i + i_inward
-                j[boundary.start : boundary.stop] = boundary.j + j_inward
+        for boundary in open_boundaries.active:
+            i_inward = {Side.WEST: 1, Side.EAST: -1}.get(boundary.side, 0)
+            j_inward = {Side.SOUTH: 1, Side.NORTH: -1}.get(boundary.side, 0)
+            i[boundary.start : boundary.stop] = boundary.i + i_inward
+            j[boundary.start : boundary.stop] = boundary.j + j_inward
         assert (tmask[j, i] != 0).all(), "Land at boundary interior"
         self.source_slice = (Ellipsis, j, i)
         self.target_slice = (Ellipsis, open_boundaries.j, open_boundaries.i)
@@ -727,6 +724,7 @@ class OpenBoundaries(Mapping):
         "_frozen",
         "sponge",
         "zero_gradient",
+        "active",
     )
 
     def __init__(self, domain: "Domain"):
@@ -734,6 +732,7 @@ class OpenBoundaries(Mapping):
         self._boundaries: List[OpenBoundary] = []
         self.sponge = Sponge()
         self.zero_gradient = ZeroGradient()
+        self.active = []
         self._frozen = False
 
     def add_by_index(
@@ -884,6 +883,7 @@ class OpenBoundaries(Mapping):
                         # gap; add new slice
                         self.local_to_global.append([start_glob, start_glob + len_bdy])
                     n += 1
+                    self.active.append(boundary)
                 nbdyp_glob += boundary.mstop_ - boundary.mstart_
             side2count[side] = n
 
