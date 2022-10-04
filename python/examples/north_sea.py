@@ -35,6 +35,8 @@ def create_domain(
     if use_rivers:
         pygetm.legacy.load_riverinfo(domain, os.path.join(setup_dir, "riverinfo.dat"))
 
+    domain.mask_indices(60, 61, 120, 124)
+
     return domain
 
 
