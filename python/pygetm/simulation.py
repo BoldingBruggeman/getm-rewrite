@@ -799,6 +799,10 @@ class Simulation(_pygetm.Simulation):
                     self.turbulence.nuh,
                 )
 
+                if self.delay_slow_ip:
+                    self.idpdx.all_values.sum(axis=0, out=self.momentum.SxB.all_values)
+                    self.idpdy.all_values.sum(axis=0, out=self.momentum.SyB.all_values)
+
         if self.report_totals != 0 and self.istep % self.report_totals == 0:
             self.report_domain_integrals()
 
@@ -857,14 +861,10 @@ class Simulation(_pygetm.Simulation):
             # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
             self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)
             self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-            if self.delay_slow_ip:
-                self.momentum.SxB.all_values[...] = self.idpdx.all_values.sum(axis=0)
-                self.momentum.SyB.all_values[...] = self.idpdy.all_values.sum(axis=0)
-                self.update_internal_pressure_gradient(self.buoy)
-            else:
-                self.update_internal_pressure_gradient(self.buoy)
-                self.momentum.SxB.all_values[...] = self.idpdx.all_values.sum(axis=0)
-                self.momentum.SyB.all_values[...] = self.idpdy.all_values.sum(axis=0)
+            self.update_internal_pressure_gradient(self.buoy)
+            if not self.delay_slow_ip:
+                self.idpdx.all_values.sum(axis=0, out=self.momentum.SxB.all_values)
+                self.idpdy.all_values.sum(axis=0, out=self.momentum.SyB.all_values)
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
