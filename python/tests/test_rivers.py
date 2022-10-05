@@ -42,7 +42,7 @@ class Base(unittest.TestCase):
         return sim
 
 
-class TestRiversNoTracer(Base):
+class TestRiversDilutedTracer(Base):
     def test_single_river(self):
         flow = 100.0
 
@@ -142,8 +142,31 @@ class TestRiversFollowingTracer(Base):
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
         self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
 
+    def test_withdrawal(self):
+        flow = -100.0
 
-class TestRiversTracer(Base):
+        domain = self.create_domain()
+        river = domain.rivers.add_by_index("dummy", 25, 25)
+        sim = self.create_simulation(domain)
+        river.flow.set(flow)
+
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        target = total_volume + DT * flow
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + flow * DT * 1.0
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
+        self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
+
+
+class TestRiversPrescribedTracer(Base):
     def test_single_river(self):
         flow = 100.0
         concentration = 5.0
@@ -166,6 +189,72 @@ class TestRiversTracer(Base):
         tt1, tot1, mean1 = total_tracers[-1]
         tt2, tot2, mean2 = total_tracers2[-1]
         target = tot1 + flow * DT * concentration
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
+
+    def test_collocated_rivers(self):
+        flow1 = 100.0
+        flow2 = 200.0
+        concentration1 = 10.0
+        concentration2 = 5.0
+
+        domain = self.create_domain()
+        river1 = domain.rivers.add_by_index("dummy1", 25, 25)
+        river2 = domain.rivers.add_by_index("dummy2", 25, 25)
+        sim = self.create_simulation(domain)
+        river1.flow.set(flow1)
+        river2.flow.set(flow2)
+        river1["dum"].values.fill(concentration1)
+        river2["dum"].values.fill(concentration2)
+
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        target = total_volume + DT * (flow1 + flow2)
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + DT * (flow1 * concentration1 + flow2 * concentration2)
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
+
+    def test_multiple_rivers(self):
+        n = 100
+        flow = np.random.uniform(0.0, 500.0, n)
+        concentrations = np.random.uniform(0.0, 500.0, n)
+
+        domain = self.create_domain()
+        i_all = np.random.randint(0, domain.nx, n)
+        j_all = np.random.randint(0, domain.ny, n)
+
+        rivers = []
+        for iriver, (i, j) in enumerate(zip(i_all, j_all)):
+            zu = np.random.uniform(-25.0, 75.0)
+            zl = zu + np.random.uniform(0.0, 50.0)
+            rivers.append(
+                domain.rivers.add_by_index("dummy%i" % iriver, i, j, zu=zu, zl=zl)
+            )
+        sim = self.create_simulation(domain)
+        for river, f, c in zip(rivers, flow, concentrations):
+            river.flow.set(f)
+            river["dum"].values.fill(c)
+            river["salt"].values.fill(35.0)
+
+        # sim.output_manager.add_restart("res.nc")
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        target = total_volume + DT * flow.sum()
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + DT * (flow * concentrations).sum()
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
 
 
