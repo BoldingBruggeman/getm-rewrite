@@ -449,7 +449,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def long_name(self) -> Optional[str]:
         """Long name"""
-        return self.attrs.get("long_name")
+        return self.attrs.get("long_name") or self.name
 
     @property
     def fill_value(self) -> Optional[Union[int, float]]:

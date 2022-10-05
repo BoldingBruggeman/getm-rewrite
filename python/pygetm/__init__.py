@@ -7,6 +7,7 @@ from . import radiation
 from . import mixing
 from . import density
 from . import operators
+from . import tracer
 from .simulation import *
 from .constants import *
 from .operators import AdvectionScheme

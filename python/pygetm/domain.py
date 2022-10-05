@@ -424,6 +424,8 @@ class RiverTracer(core.Array):
 
 
 class River:
+    flow: core.Array  #: flow rate in m3 s-1
+
     def __init__(
         self,
         name: str,
@@ -510,6 +512,9 @@ class Rivers(Mapping[str, River]):
             i: index in x-direction (0-based)
             j: index in y-direction (0-based)
             **kwargs: additional keyword arguments passed to :class:`River`
+
+        Returns:
+            river instance
         """
         assert not self._frozen, (
             "The river collection has already been initialized"
@@ -706,7 +711,7 @@ class ZeroGradient(BoundaryCondition):
         array.all_values[self.target_slice] = array.all_values[self.source_slice]
 
 
-class OpenBoundaries(Sequence):
+class OpenBoundaries(Sequence[OpenBoundary]):
     __slots__ = (
         "domain",
         "np",

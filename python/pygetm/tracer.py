@@ -196,13 +196,17 @@ class TracerCollection(Sequence[Tracer]):
     def __len__(self) -> int:
         return len(self._tracers)
 
-    def add(self, **kwargs) -> Tracer:
+    def add(self, name: str, **kwargs) -> Tracer:
         """Add a tracer that will be subject to advection and diffusion.
 
         Args:
+            name: short name for the tracer (letters, digits, underscores only)
             **kwargs: keyword arguments to be passed to :class:`Tracer`
+
+        Returns:
+            tracer instance
         """
-        tracer = Tracer(grid=self.grid, **kwargs)
+        tracer = Tracer(grid=self.grid, name=name, **kwargs)
         self._tracers.append(tracer)
         return tracer
 

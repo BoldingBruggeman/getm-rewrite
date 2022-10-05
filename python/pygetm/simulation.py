@@ -1,5 +1,5 @@
 import operator
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Tuple, Sequence
 import logging
 import datetime
 import timeit
@@ -803,9 +803,6 @@ class Simulation(_pygetm.Simulation):
                     self.idpdx.all_values.sum(axis=0, out=self.momentum.SxB.all_values)
                     self.idpdy.all_values.sum(axis=0, out=self.momentum.SyB.all_values)
 
-        if self.report_totals != 0 and self.istep % self.report_totals == 0:
-            self.report_domain_integrals()
-
         # Update all inputs and fluxes that will drive the next state update
         self.update_forcing(
             macro_active,
@@ -918,8 +915,10 @@ class Simulation(_pygetm.Simulation):
         # Update depth-integrated freshwater fluxes:
         # precipitation, evaporation, condensation, rivers
         self.fwf.all_values[...] = self.airsea.pe.all_values
-        self.fwf.all_values[self.domain.rivers.j, self.domain.rivers.i] += (
-            self.domain.rivers.flow * self.domain.rivers.iarea
+        np.add.at(
+            self.fwf.all_values,
+            (self.domain.rivers.j, self.domain.rivers.i),
+            self.domain.rivers.flow * self.domain.rivers.iarea,
         )
 
         # Update elevation at the open boundaries. This must be done before
@@ -957,6 +956,9 @@ class Simulation(_pygetm.Simulation):
             # variables computed before
             if self.fabm:
                 self.fabm.update_sources(self.time)
+
+        if self.report_totals != 0 and self.istep % self.report_totals == 0:
+            self.report_domain_integrals()
 
     @log_exceptions
     def finish(self):
@@ -1049,9 +1051,18 @@ class Simulation(_pygetm.Simulation):
 
         self._cum_river_height_increase.fill(0.0)
 
-    def report_domain_integrals(self):
-        """Write totals of selected variables over the global domain
-        (those in :attr:`tracer_totals`) to the log.
+    @property
+    def totals(
+        self,
+    ) -> Tuple[
+        Optional[float],
+        Optional[Sequence[Tuple[pygetm.tracer.TracerTotal, float, float]]],
+    ]:
+        """Global totals of volume and tracers.
+
+        Returns:
+            A tuple with total volume and a list with (tracer_total, total, mean)
+            tuples on the root subdomains. On non-root subdomains it returns None, None
         """
         unmasked = self.domain.T.mask != 0
         total_volume = (self.domain.T.D * self.domain.T.area).global_sum(where=unmasked)
@@ -1059,28 +1070,39 @@ class Simulation(_pygetm.Simulation):
             vol = self.domain.T.hn * self.domain.T.area
             vol.all_values *= self.rho.all_values
             total_mass = vol.global_sum(where=unmasked)
-        if total_volume is not None:
-            self.logger.info("Integrals over global domain:")
-            self.logger.info("  volume: %.15e m3" % total_volume)
+        tracer_totals = [] if total_volume is not None else None
         if self.fabm:
             self.fabm.update_totals()
         for tt in self.tracer_totals:
-            ar = tt.array
-            total = ar * ar.grid.area
+            grid = tt.array.grid
+            total = tt.array * grid.area
             if tt.scale_factor != 1.0:
                 total.all_values *= tt.scale_factor
             if tt.offset != 0.0:
-                total.all_values += tt.offset * ar.grid.area.all_values
+                total.all_values += tt.offset * grid.area.all_values
             if total.ndim == 3:
                 if tt.per_mass:
                     total.all_values *= self.rho.all_values
-                total.all_values *= ar.grid.hn.all_values
-            total = total.global_sum(where=ar.grid.mask != 0)
-            long_name = tt.long_name if tt.long_name is not None else ar.long_name
-            units = tt.units if tt.units is not None else f"{ar.units} m3"
+                total.all_values *= grid.hn.all_values
+            total = total.global_sum(where=grid.mask != 0)
             if total is not None:
                 ref = total_volume if not tt.per_mass else total_mass
                 mean = (total / ref - tt.offset) / tt.scale_factor
+                tracer_totals.append((tt, total, mean))
+        return total_volume, tracer_totals
+
+    def report_domain_integrals(self):
+        """Write totals of selected variables over the global domain
+        (those in :attr:`tracer_totals`) to the log.
+        """
+        total_volume, tracer_totals = self.totals
+        if total_volume is not None:
+            self.logger.info("Integrals over global domain:")
+            self.logger.info("  volume: %.15e m3" % total_volume)
+            for tt, total, mean in tracer_totals:
+                ar = tt.array
+                long_name = tt.long_name if tt.long_name is not None else ar.long_name
+                units = tt.units if tt.units is not None else f"{ar.units} m3"
                 self.logger.info(
                     "  %s: %.15e %s (mean %s: %s %s)"
                     % (long_name, total, units, ar.long_name, mean, ar.units,)
