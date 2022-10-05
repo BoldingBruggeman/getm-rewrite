@@ -996,8 +996,8 @@ class Simulation(_pygetm.Simulation):
         z_if -= z_if[:, -1:]
 
         # Determine the part of every layer over which inflow occurs
-        zl = np.minimum(z_if[:, 0], rivers.zl)
-        zu = np.minimum(zl - 1e-6, rivers.zu)
+        zl = np.clip(rivers.zl, 1e-6, z_if[:, 0])
+        zu = np.clip(rivers.zu, 0.0, zl - 1e-6)
         zbot = np.minimum(zl[:, np.newaxis], z_if[:, :-1])
         ztop = np.maximum(zu[:, np.newaxis], z_if[:, 1:])
         h_active = np.maximum(zbot - ztop, 0.0)
@@ -1029,7 +1029,7 @@ class Simulation(_pygetm.Simulation):
                 add = tracer_adds[itracer, iriver, :]
                 tracer_values[:] = (tracer_values * h_old + add) * h_new_inv
             h_old[:] = h_new
-            self.domain.T.zin.all_values[j, i] += z_increases[iriver]
+        np.add.at(self.domain.T.zin.all_values, (rivers.j, rivers.i), z_increases)
 
         # Precipitation and evaporation (surface layer only)
         # First update halos for the net freshwater flux, as we need to ensure that the
