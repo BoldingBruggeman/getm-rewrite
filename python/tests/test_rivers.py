@@ -58,9 +58,8 @@ class TestRiversNoTracer(Base):
         sim.finish()
         total_volume2, total_tracers2 = sim.totals
 
-        self.assertLess(
-            np.abs((total_volume2 - total_volume) / (DT * flow) - 1.0), TOLERANCE,
-        )
+        target = total_volume + DT * flow
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
         tt1, tot1, mean1 = total_tracers[-1]
         tt2, tot2, mean2 = total_tracers2[-1]
         self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
@@ -68,7 +67,6 @@ class TestRiversNoTracer(Base):
     def test_collocated_rivers(self):
         flow1 = 100.0
         flow2 = 200.0
-        flow = flow1 + flow2
 
         domain = self.create_domain()
         river1 = domain.rivers.add_by_index("dummy1", 25, 25)
@@ -84,9 +82,8 @@ class TestRiversNoTracer(Base):
         sim.finish()
         total_volume2, total_tracers2 = sim.totals
 
-        self.assertLess(
-            np.abs((total_volume2 - total_volume) / (DT * flow) - 1.0), TOLERANCE,
-        )
+        target = total_volume + DT * (flow1 + flow2)
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
         tt1, tot1, mean1 = total_tracers[-1]
         tt2, tot2, mean2 = total_tracers2[-1]
         self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
@@ -113,12 +110,63 @@ class TestRiversNoTracer(Base):
         sim.finish()
         total_volume2, total_tracers2 = sim.totals
 
-        self.assertLess(
-            np.abs((total_volume2 - total_volume) / (DT * flow.sum()) - 1.0), TOLERANCE,
-        )
+        target = total_volume + DT * flow.sum()
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
         tt1, tot1, mean1 = total_tracers[-1]
         tt2, tot2, mean2 = total_tracers2[-1]
         self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
+
+
+class TestRiversFollowingTracer(Base):
+    def test_single_river(self):
+        flow = 100.0
+
+        domain = self.create_domain()
+        river = domain.rivers.add_by_index("dummy", 25, 25)
+        sim = self.create_simulation(domain)
+        river.flow.set(flow)
+        river["dum"].follow_target_cell = True
+
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        target = total_volume + DT * flow
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + flow * DT * 1.0
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
+        self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
+
+
+class TestRiversTracer(Base):
+    def test_single_river(self):
+        flow = 100.0
+        concentration = 5.0
+
+        domain = self.create_domain()
+        river = domain.rivers.add_by_index("dummy", 25, 25)
+        sim = self.create_simulation(domain)
+        river.flow.set(flow)
+        river["dum"].values.fill(concentration)
+
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        target = total_volume + DT * flow
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + flow * DT * concentration
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
 
 
 if __name__ == "__main__":
