@@ -6,21 +6,22 @@ module mod_humidity
 
    public
 
-   contains
+contains
 
    ! Saturation vapor pressure (Pa) at given temperature (Celsius)
+   ! Lowe (1977), https://doi.org/10.1175/1520-0450(1977)016<0100:AAPFTC>2.0.CO;2
    elemental function saturation_vapor_pressure(t) result(qa)
       real(rk), intent(in) ::  t
       real(rk) :: qa
 
-      ! Note shift of indices for coefficients compared to Lowe (1977, J. Appl. Met.)
-      real(rk), parameter       :: a1=6.107799961_rk
-      real(rk), parameter       :: a2=4.436518521e-1_rk
-      real(rk), parameter       :: a3=1.428945805e-2_rk
-      real(rk), parameter       :: a4=2.650648471e-4_rk
-      real(rk), parameter       :: a5=3.031240396e-6_rk
-      real(rk), parameter       :: a6=2.034080948e-8_rk
-      real(rk), parameter       :: a7=6.136820929e-11_rk
+      ! Note shift of indices for coefficients compared to Lowe (1977)
+      real(rk), parameter :: a1=6.107799961_rk
+      real(rk), parameter :: a2=4.436518521e-1_rk
+      real(rk), parameter :: a3=1.428945805e-2_rk
+      real(rk), parameter :: a4=2.650648471e-4_rk
+      real(rk), parameter :: a5=3.031240396e-6_rk
+      real(rk), parameter :: a6=2.034080948e-8_rk
+      real(rk), parameter :: a7=6.136820929e-11_rk
 
       qa = a1 + t * (a2 + t * (a3 + t * (a4 + t * (a5 + t * (a6 + t * a7)))))
       qa = qa * 100.0_rk ! Conversion millibar --> Pascal

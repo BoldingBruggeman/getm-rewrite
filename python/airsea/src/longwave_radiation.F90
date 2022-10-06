@@ -50,7 +50,7 @@ module mod_longwave_radiation
       end if
    end function
 
-   ! Clark et al. (1974) formula, https://swfsc-publications.fisheries.noaa.gov/publications/CR/1974/7406.PDF
+   ! Clark et al. (1974), https://swfsc-publications.fisheries.noaa.gov/publications/CR/1974/7406.PDF
    elemental subroutine clark(dlat, tw, ta, cloud, ea, ql)
       real(rk), intent(in)  :: dlat, tw, ta, cloud, ea
       real(rk), intent(out) :: ql
@@ -68,7 +68,9 @@ module mod_longwave_radiation
       ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
-   ! Hastenrath and Lamb (1978) formula.
+   ! Hastenrath and Lamb (1978)
+   ! Heat Budget Atlas of the Tropical Atlantic and Eastern Pacific Oceans
+   ! 90 pp., University of Wisconsin Press, Madison
    elemental subroutine hastenrath(dlat, tw, ta, cloud, qa, ql)
       real(rk), intent(in)  :: dlat, tw, ta, cloud, qa
       real(rk), intent(out) :: ql
@@ -84,7 +86,7 @@ module mod_longwave_radiation
       ql = -emiss * bolz * (x1 * x2 + x3)
    end subroutine
 
-   ! Bignami et al. (1995) formula (Med Sea), https://doi.org/10.1029/94JC02496
+   ! Bignami et al. (1995) (Med Sea), https://doi.org/10.1029/94JC02496
    elemental subroutine bignami(dlat, tw, ta, cloud, ea, ql)
       real(rk), intent(in)  :: dlat, tw, ta, cloud, ea
       real(rk), intent(out) :: ql
@@ -98,12 +100,17 @@ module mod_longwave_radiation
       ql = -bolz * (-x1 * x2 + x3)
    end subroutine
 
-   ! Berliand & Berliand (1952) formula (ROMS).
+   ! Berliand & Berliand (1952) (ROMS)
+   ! Measurement of the effective radiation of the Earth with varying cloud amounts
+   ! Izv. Akad. Nauk. SSSR, Ser. Geofiz., 1, 1952.
    elemental subroutine berliand(tw, ta, cloud, ea, ql)
       real(rk), intent(in)  :: tw, ta, cloud, ea
       real(rk), intent(out) :: ql
       real(rk)              :: x1, x2, x3, ta3
 
+      ! Note: the B&B equation given in Table 3 of Bignami et al. (https://doi.org/10.1029/94JC02496)
+      ! has x1 linear in cloud cover instead of quadratic below
+      ! unit of vapor pressure ea is Pascal, must hPa (= mbar)
       ta3 = ta**3
       x1 = (1.0_rk - 0.6823_rk * cloud * cloud) * ta3 * ta
       x2 = 0.39_rk - 0.05_rk * sqrt(0.01_rk * ea)

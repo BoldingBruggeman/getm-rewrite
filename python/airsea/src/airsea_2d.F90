@@ -20,7 +20,11 @@ contains
       real(rk), intent(in), value                :: hh
       real(rk), intent(in),    dimension(nx, ny) :: dlon, dlat
       real(rk), intent(inout), dimension(nx, ny) :: zenith_angle
-      zenith_angle(istart:istop, jstart:jstop) = solar_zenith_angle(yday, hh, dlon(istart:istop, jstart:jstop), &
+
+      real(rk) :: sundec
+
+      sundec = solar_declination_angle(yday)
+      zenith_angle(istart:istop, jstart:jstop) = solar_zenith_angle(sundec, hh, dlon(istart:istop, jstart:jstop), &
          dlat(istart:istop, jstart:jstop))
    end subroutine
 

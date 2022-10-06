@@ -64,7 +64,7 @@ contains
 !BOC
 
 !  Calculate downwelling shortwave at sea surface, qtot (W m-2), before reflection [albedo]
-!  From Rosati & Miyakoda (1988), Eqs 3.3 - 3.7
+!  Rosati & Miyakoda (1988, https://doi.org/10.1175/1520-0485(1988)018<1601:AGCMFU>2.0.CO;2), Eqs 3.3 - 3.7
 
    coszen = cos(deg2rad * zenith_angle)
    if (coszen <= 0.0) then
@@ -88,7 +88,10 @@ contains
 !  solar noon altitude in degrees :
    sunbet = asin(sunbet) * rad2deg
 
-!  Cloud cover correction from Reed(1977), Simpson and Paulson(1979), Rosati & Miyakoda (1988), Eq 3.8
+!  Cloud cover correction from:
+!  Reed (1977), https://doi.org/10.1175/1520-0485(1977)007%3C0482:OEIOTO%3E2.0.CO;2
+!  Simpson and Paulson (1979), https://doi.org/10.1002/qj.49710544412
+!  Rosati & Miyakoda (1988), Eq 3.8
 #if 1
    shortwave_radiation  = qtot * min(1.0_rk, 1.0_rk - 0.62_rk * cloud + 0.0019_rk * sunbet)
 #else
