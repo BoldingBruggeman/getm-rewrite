@@ -42,8 +42,8 @@ class Base(unittest.TestCase):
         return sim
 
 
-class TestRiversDilutedTracer(Base):
-    def test_single_river(self):
+class Test(Base):
+    def test_single_river_with_diluted_tracer(self):
         flow = 100.0
 
         domain = self.create_domain()
@@ -64,7 +64,7 @@ class TestRiversDilutedTracer(Base):
         tt2, tot2, mean2 = total_tracers2[-1]
         self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
 
-    def test_collocated_rivers(self):
+    def test_collocated_rivers_with_diluted_tracer(self):
         flow1 = 100.0
         flow2 = 200.0
 
@@ -88,7 +88,7 @@ class TestRiversDilutedTracer(Base):
         tt2, tot2, mean2 = total_tracers2[-1]
         self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
 
-    def test_multiple_rivers(self):
+    def test_multiple_rivers_with_diluted_tracer(self):
         n = 100
         flow = np.random.uniform(0.0, 500.0, n)
 
@@ -116,9 +116,7 @@ class TestRiversDilutedTracer(Base):
         tt2, tot2, mean2 = total_tracers2[-1]
         self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
 
-
-class TestRiversFollowingTracer(Base):
-    def test_single_river(self):
+    def test_single_river_with_following_tracer(self):
         flow = 100.0
 
         domain = self.create_domain()
@@ -165,9 +163,7 @@ class TestRiversFollowingTracer(Base):
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
         self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
 
-
-class TestRiversPrescribedTracer(Base):
-    def test_single_river(self):
+    def test_single_river_with_prescribed_tracer(self):
         flow = 100.0
         concentration = 5.0
 
@@ -191,7 +187,7 @@ class TestRiversPrescribedTracer(Base):
         target = tot1 + flow * DT * concentration
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
 
-    def test_collocated_rivers(self):
+    def test_collocated_rivers_with_prescribed_tracer(self):
         flow1 = 100.0
         flow2 = 200.0
         concentration1 = 10.0
@@ -220,7 +216,7 @@ class TestRiversPrescribedTracer(Base):
         target = tot1 + DT * (flow1 * concentration1 + flow2 * concentration2)
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
 
-    def test_multiple_rivers(self):
+    def test_multiple_rivers_with_prescribed_tracer(self):
         n = 100
         flow = np.random.uniform(0.0, 500.0, n)
         concentrations = np.random.uniform(0.0, 500.0, n)
@@ -256,6 +252,45 @@ class TestRiversPrescribedTracer(Base):
         tt2, tot2, mean2 = total_tracers2[-1]
         target = tot1 + DT * (flow * concentrations).sum()
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
+
+    def test_precipitation_evaporation_dilution(self):
+        domain = self.create_domain()
+        sim = self.create_simulation(domain)
+        sim.airsea.pe[...] = np.random.uniform(0.0, 0.1 / 86400, sim.airsea.pe.shape)
+
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        target = total_volume + DT * (sim.airsea.pe.values * domain.T.area.values).sum()
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
+
+    def test_precipitation_evaporation_with_following_tracer(self):
+        domain = self.create_domain()
+        sim = self.create_simulation(domain)
+        sim.airsea.pe[...] = np.random.uniform(0.0, 0.1 / 86400, sim.airsea.pe.shape)
+        sim.tracers[-1].precipitation_follows_target_cell = True
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        flow = (sim.airsea.pe.values * domain.T.area.values).sum()
+        target = total_volume + DT * flow
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + flow * DT * 1.0
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
+        self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
 
 
 if __name__ == "__main__":
