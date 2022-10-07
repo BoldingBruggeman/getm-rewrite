@@ -280,14 +280,15 @@ cdef class VerticalDiffusion:
         self.ho = self.tgrid.ho
         self.hn = self.tgrid.hn
 
-    def __call__(self, Array nuh not None, double timestep, Array var not None, double molecular=0., Array ea2=None, Array ea4=None):
+    def __call__(self, Array nuh not None, double timestep, Array var not None, double molecular=0., Array ea2=None, Array ea4=None, bint use_ho=False):
         cdef double* pea2 = NULL
         cdef double* pea4 = NULL
+        cdef double* pho = <double *>(self.ho if use_ho else self.hn).p
         if ea2 is not None:
             pea2 = <double *>ea2.p
         if ea4 is not None:
             pea4 = <double *>ea4.p
-        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, <double *>self.hn.p, <double *>self.hn.p, <double *>var.p, pea2, pea4)
+        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, pho, <double *>self.hn.p, <double *>var.p, pea2, pea4)
 
 cdef class Simulation:
     cdef readonly Domain domain

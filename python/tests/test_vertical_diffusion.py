@@ -1,6 +1,7 @@
 import unittest
 import logging
 from functools import wraps
+from typing import Optional
 
 import numpy as np
 
@@ -61,7 +62,15 @@ class TestVerticalDiffusion(unittest.TestCase):
     DT = 600.0
     NSTEP = 100
 
-    def diffuse(self, tracer_in, nuh, cnpar, tolerance=1e-13, sources=None):
+    def diffuse(
+        self,
+        tracer_in: pygetm.core.Array,
+        nuh: pygetm.core.Array,
+        cnpar: float,
+        tolerance: float = 1e-13,
+        sources: Optional[pygetm.core.Array] = None,
+        change_ho: bool = False,
+    ):
         self.assertTrue(
             np.isfinite(tracer_in.ma).all(),
             "tracer contains non-finite values before diffusion",
@@ -79,8 +88,15 @@ class TestVerticalDiffusion(unittest.TestCase):
         nuh.all_values[0, ...] = np.nan
         nuh.all_values[-1, ...] = np.nan
 
+        expected_integral = (tracer_in.ma * tracer_in.grid.hn).sum(axis=0)
         for _ in range(self.NSTEP):
-            vdif(nuh, self.DT, tracer, ea4=sources)
+            if change_ho:
+                tracer.grid.ho.all_values[...] = tracer.grid.hn.all_values
+                hn_pert = np.random.lognormal(
+                    np.log(tracer.grid.hn.ma.mean(axis=(1, 2))), 0.1
+                )
+                tracer.grid.hn.fill(hn_pert[:, np.newaxis, np.newaxis])
+            vdif(nuh, self.DT, tracer, ea4=sources, use_ho=change_ho)
 
         self.assertTrue(
             np.isfinite(tracer.ma)[...].all(),
@@ -94,7 +110,7 @@ class TestVerticalDiffusion(unittest.TestCase):
         self.assertEqual(
             col_range.max(), 0.0, "horizontal variability in tracer after diffusion"
         )
-        if sources is None:
+        if sources is None and not change_ho:
             ini_min, ini_max = tracer_in.ma.min(), tracer_in.ma.max()
             global_min, global_max = col_min.min(), col_max.max()
             eps = tolerance * max(abs(global_min), abs(global_max))
@@ -109,7 +125,6 @@ class TestVerticalDiffusion(unittest.TestCase):
                 "final global minimum value below initial minimum",
             )
 
-        expected_integral = (tracer_in.ma * tracer_in.grid.hn).sum(axis=0)
         if sources is not None:
             expected_integral += sources.values.sum(axis=0) * self.NSTEP
         integral = (tracer.ma * tracer.grid.hn).sum(axis=0)
@@ -188,6 +203,14 @@ class TestVerticalDiffusion(unittest.TestCase):
     @repeat
     @for_each_grid
     @for_each_cnpar
+    def test_random_layer_height_change(self, cnpar: float, grid: pygetm.domain.Grid):
+        tracer = grid.array(z=pygetm.CENTERS, fill_value=1.0)
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=0.01)
+        self.diffuse(tracer, nuh, cnpar, change_ho=True)
+
+    @repeat
+    @for_each_grid
+    @for_each_cnpar
     def test_random_diffusivity(self, cnpar: float, grid: pygetm.domain.Grid):
         tracer = grid.array(z=pygetm.CENTERS, fill_value=np.nan)
         nuh = grid.array(z=pygetm.INTERFACES, fill_value=np.nan)
@@ -221,6 +244,27 @@ class TestVerticalDiffusion(unittest.TestCase):
         sources.fill(rng.uniform(0.0, 1.0, (sources.shape[0], 1, 1)))
         self.diffuse(
             tracer, nuh, cnpar, tolerance=1e-11, sources=sources * self.DT * grid.hn
+        )
+
+    @repeat
+    @for_each_grid
+    @for_each_cnpar
+    def test_random_diffusivity_random_tracer_with_sources_changing_h(
+        self, cnpar: float, grid: pygetm.domain.Grid
+    ):
+        tracer = grid.array(z=pygetm.CENTERS, fill_value=np.nan)
+        nuh = grid.array(z=pygetm.INTERFACES, fill_value=np.nan)
+        nuh.fill(10.0 ** rng.uniform(-6.0, 0.0, (nuh.shape[0], 1, 1)))
+        tracer.fill(rng.uniform(0.0, 1.0, (tracer.shape[0], 1, 1)))
+        sources = grid.array(fill=1.0, z=pygetm.CENTERS)
+        sources.fill(rng.uniform(0.0, 1.0, (sources.shape[0], 1, 1)))
+        self.diffuse(
+            tracer,
+            nuh,
+            cnpar,
+            tolerance=1e-11,
+            sources=sources * self.DT * grid.hn,
+            change_ho=True,
         )
 
 
