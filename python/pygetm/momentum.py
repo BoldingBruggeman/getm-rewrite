@@ -339,18 +339,19 @@ class Momentum(pygetm._pygetm.Momentum):
         self.vua = domain.VU.array(fill=np.nan)
         self.vva = domain.VV.array(fill=np.nan)
 
-        self.uua3d = domain.UU.array(fill=np.nan, z=CENTERS)
-        self.uva3d = domain.UV.array(fill=np.nan, z=CENTERS)
-        self.vua3d = domain.VU.array(fill=np.nan, z=CENTERS)
-        self.vva3d = domain.VV.array(fill=np.nan, z=CENTERS)
-
         self.u_V = domain.V.array()
         self.v_U = domain.U.array()
 
-        self.hU_bot = domain.U.hn.isel(z=0)
-        self.hV_bot = domain.V.hn.isel(z=0)
-        self.u_bot = self.uk.isel(z=0)
-        self.v_bot = self.vk.isel(z=0)
+        if self.runtype > BAROTROPIC_2D:
+            self.uua3d = domain.UU.array(fill=np.nan, z=CENTERS)
+            self.uva3d = domain.UV.array(fill=np.nan, z=CENTERS)
+            self.vua3d = domain.VU.array(fill=np.nan, z=CENTERS)
+            self.vva3d = domain.VV.array(fill=np.nan, z=CENTERS)
+
+            self.hU_bot = domain.U.hn.isel(z=0)
+            self.hV_bot = domain.V.hn.isel(z=0)
+            self.u_bot = self.uk.isel(z=0)
+            self.v_bot = self.vk.isel(z=0)
 
         self.An = domain.T.array(
             name="An",
