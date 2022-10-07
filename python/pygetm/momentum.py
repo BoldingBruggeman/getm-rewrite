@@ -98,6 +98,12 @@ class Momentum(pygetm._pygetm.Momentum):
         "An_uv",
         "An_vu",
         "An_vv",
+        "u_V",
+        "v_U",
+        "hU_bot",
+        "hV_bot",
+        "u_bot",
+        "v_bot",
     )
 
     _array_args = {
@@ -337,6 +343,14 @@ class Momentum(pygetm._pygetm.Momentum):
         self.uva3d = domain.UV.array(fill=np.nan, z=CENTERS)
         self.vua3d = domain.VU.array(fill=np.nan, z=CENTERS)
         self.vva3d = domain.VV.array(fill=np.nan, z=CENTERS)
+
+        self.u_V = domain.V.array()
+        self.v_U = domain.U.array()
+
+        self.hU_bot = domain.U.hn.isel(z=0)
+        self.hV_bot = domain.V.hn.isel(z=0)
+        self.u_bot = self.uk.isel(z=0)
+        self.v_bot = self.vk.isel(z=0)
 
         self.An = domain.T.array(
             name="An",
@@ -584,7 +598,9 @@ class Momentum(pygetm._pygetm.Momentum):
         # thicknesses hn). This needs to be done before derived quantities such as
         # bottom stress are calculated
         if self.apply_bottom_friction:
-            self.bottom_friction_3d()
+            self.bottom_friction(
+                self.u_bot, self.v_bot, self.hU_bot, self.hV_bot, self.rru, self.rrv
+            )
 
         # Interpolate 3D velocities to advection grids.
         # This needs to be done before uk/vk are changed by the advection operator.
@@ -731,7 +747,15 @@ class Momentum(pygetm._pygetm.Momentum):
         # u1 and v1. Warning: this uses velocities u1 and v1 at masked points, which
         # therefore need to be kept at 0
         if self.apply_bottom_friction:
-            self.bottom_friction_2d(update_z0b)
+            self.bottom_friction(
+                self.u1,
+                self.v1,
+                self.domain.U.D,
+                self.domain.V.D,
+                self.ru,
+                self.rv,
+                update_z0b,
+            )
 
         itimestep = 1.0 / timestep
 
@@ -762,6 +786,34 @@ class Momentum(pygetm._pygetm.Momentum):
         # Restore depth-averaged velocities as they need to be valid on exit
         np.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
         np.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
+
+    def bottom_friction(
+        self,
+        u: core.Array,
+        v: core.Array,
+        DU: core.Array,
+        DV: core.Array,
+        ru: core.Array,
+        rv: core.Array,
+        update_z0b: bool = False,
+    ):
+        """Calculate bottom friction
+        
+        Args:
+            u: velocity in x-direction (m s-1) in bottom layer [U grid]
+            v: velocity in y-direction (m s-1) in bottom layer [V grid]
+            DU: thickness (m) of bottom layer on the U grid
+            DV: thickness (m) of bottom layer on the V grid
+            ru: the square of friction velocity (= stress in Pa divided by density),
+                per actual velocity at the layer center on the U grid
+            rv: the square of friction velocity (= stress in Pa divided by density),
+                per actual velocity at the layer center on the V grid
+            update_z0b: whether to iteratively update the hydrodynamic bottom roughness
+        """
+        u.interp(self.u_V)
+        v.interp(self.v_U)
+        pygetm._pygetm.bottom_friction(u, self.v_U, DU, ru, update_z0b)
+        pygetm._pygetm.bottom_friction(self.u_V, v, DV, rv, update_z0b)
 
 
 # Expose all Fortran arrays that are a member of Momentum as read-only properties

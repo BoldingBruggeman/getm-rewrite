@@ -32,8 +32,6 @@ cdef extern void momentum_u_3d(int direction, void* momentum, double timestep, d
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
 cdef extern void momentum_uv_coriolis(int direction, void* momentum) nogil
 cdef extern void momentum_uv_coriolis_3d(int direction, void* momentum) nogil
-cdef extern void momentum_bottom_friction_2d(void* momentum, int runtype) nogil
-cdef extern void momentum_bottom_friction_3d(void* momentum) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
 cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* )
@@ -51,6 +49,7 @@ cdef extern void c_thickness2vertical_coordinates(int nx, int ny, int nz, int* m
 cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha)
 cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
 cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int halox,int haloy,int* umask,int* vmask,double* idxu,double* dyu,double* idyv,double* dxv,double* Ah_u,double* Ah_v,int* tmask,double* iA,double dt,double* f,double* out)
+cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double* ru, int iterate)
 
 cpdef enum:
     TGRID = 1
@@ -375,12 +374,6 @@ cdef class Momentum:
     def coriolis_fqk(self):
         momentum_uv_coriolis_3d(2, self.p)
 
-    def bottom_friction_2d(self, int update_z0b):
-        momentum_bottom_friction_2d(self.p, 1 if update_z0b else 4)
-
-    def bottom_friction_3d(self):
-        momentum_bottom_friction_3d(self.p)
-
     def w_3d(self, double timestep):
         momentum_w_3d(self.p, timestep)
 
@@ -477,6 +470,18 @@ def horizontal_diffusion(Array f not None, Array Ah_u not None, Array Ah_v not N
     c_horizontal_diffusion(1, nx, 1, ny, halox, haloy,
         <int*>umask.p, <int*>vmask.p, <double*>idx.p, <double*>dy.p, <double*>idy.p, <double*>dx.p,
         <double*>Ah_u.p, <double*>Ah_v.p, <int*>mask.p, <double*>iarea.p, dt, <double*>f.p, <double*>out.p)
+
+def bottom_friction(Array u not None, Array v not None, Array D not None, Array out not None, bint update_z0b):
+    cdef int nx = u.grid.nx_
+    cdef int ny = u.grid.ny_
+    cdef Array mask = u.grid.mask
+    cdef Array z0b = u.grid.z0b
+    cdef Array z0b_min = u.grid.z0b_min
+    assert not u.z
+    assert v.grid is u.grid and not v.z
+    assert D.grid is u.grid and not D.z
+    assert out.grid is u.grid and not out.z
+    c_bottom_friction(nx, ny, <int*>mask.p, <double*>u.p, <double*>v.p, <double*>D.p, <double*>z0b.p, <double*>z0b_min.p, <double*>out.p, update_z0b)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

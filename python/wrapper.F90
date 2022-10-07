@@ -583,25 +583,6 @@ contains
       end select
    end subroutine
 
-   subroutine momentum_bottom_friction_2d(pmomentum, runtype) bind(c)
-      type(c_ptr),    intent(in), value :: pmomentum
-      integer(c_int), intent(in), value :: runtype
-
-      type (type_getm_momentum), pointer :: momentum
-
-      call c_f_pointer(pmomentum, momentum)
-      call momentum%bottom_friction_2d(runtype)
-   end subroutine
-
-   subroutine momentum_bottom_friction_3d(pmomentum) bind(c)
-      type(c_ptr),    intent(in), value :: pmomentum
-
-      type (type_getm_momentum), pointer :: momentum
-
-      call c_f_pointer(pmomentum, momentum)
-      call momentum%bottom_friction_3d()
-   end subroutine
-
    subroutine momentum_shear_frequency(pmomentum, pviscosity) bind(c)
       type(c_ptr),    intent(in), value :: pmomentum
       type(c_ptr),    intent(in), value :: pviscosity
@@ -905,5 +886,30 @@ contains
       end do
    end do
    END SUBROUTINE c_horizontal_diffusion
+
+   SUBROUTINE c_bottom_friction(nx, ny, mask, u, v, D, z0b, z0b_min, ru, iterate) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: u(nx, ny)
+      real(c_double), intent(in) :: v(nx, ny)
+      real(c_double), intent(in) :: D(nx, ny)
+      real(c_double), intent(inout) :: z0b(nx, ny)
+      real(c_double), intent(in) :: z0b_min(nx, ny)
+      real(c_double), intent(out) :: ru(nx, ny)
+      integer(c_int), value, intent(in) :: iterate
+
+      real(real64), parameter :: kappa = 0.4_real64
+      real(real64), parameter :: avmmol = 0.001_real64 !KB
+      real(real64) :: sqrtcd(nx, ny)
+
+      where (mask /= 0) sqrtcd = kappa / log(1.0_real64 + 0.5_real64 * D / z0b)
+      if (iterate /= 0) then
+         where (mask /= 0)
+            z0b = min(D, z0b_min + 0.1_real64 * avmmol / max(avmmol,sqrtcd*sqrt(u*u + v*v)))
+            sqrtcd = kappa / log(1.0_real64 + 0.5_real64 * D / z0b)
+         end where
+      end if
+      where (mask /= 0) ru = sqrtcd * sqrtcd * sqrt(u*u + v*v)
+   END SUBROUTINE
 
 end module

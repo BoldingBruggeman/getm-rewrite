@@ -281,17 +281,29 @@ class Grid(_pygetm.Grid):
             return ip
         assert self.domain is target.domain
         if self.ioffset == target.ioffset + 1 and self.joffset == target.joffset:
+            # from U to T
             ip = functools.partial(_pygetm.interp_x, offset=1)
         elif self.ioffset == target.ioffset - 1 and self.joffset == target.joffset:
+            # from T to U
             ip = functools.partial(_pygetm.interp_x, offset=0)
         elif self.joffset == target.joffset + 1 and self.ioffset == target.ioffset:
+            # from V to T
             ip = functools.partial(_pygetm.interp_y, offset=1)
         elif self.joffset == target.joffset - 1 and self.ioffset == target.ioffset:
+            # from T to V
             ip = functools.partial(_pygetm.interp_y, offset=0)
         elif self.ioffset == target.ioffset - 1 and self.joffset == target.joffset - 1:
+            # from X to T
             ip = functools.partial(_pygetm.interp_xy, ioffset=0, joffset=0)
         elif self.ioffset == target.ioffset + 1 and self.joffset == target.joffset + 1:
+            # from T to X
             ip = functools.partial(_pygetm.interp_xy, ioffset=1, joffset=1)
+        elif self.ioffset == target.ioffset - 1 and self.joffset == target.joffset + 1:
+            # from V to U (i=-1 and j=0 undefined)
+            ip = functools.partial(_pygetm.interp_xy, ioffset=0, joffset=1)
+        elif self.ioffset == target.ioffset + 1 and self.joffset == target.joffset - 1:
+            # from U to V (i=0 and j=-1 undefined)
+            ip = functools.partial(_pygetm.interp_xy, ioffset=1, joffset=0)
         else:
             raise NotImplementedError(
                 "Cannot interpolate from grid type %s to grid type %s"
