@@ -4,8 +4,6 @@
 
 SUBMODULE (getm_momentum) momentum_3d_smod
 
-   real(real64) :: ip_fac=1._real64 !KB
-
 CONTAINS
 
 !---------------------------------------------------------------------------
@@ -164,29 +162,26 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 
 !  Local variables
    integer :: i,j,k
-   real(real64) :: rho0i
+   real(real64), parameter :: rho0i = 1._real64/rho0
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('pk_3d()',level=3)
    UGrid: associate( UG => self%domain%U )
-   rho0i=1._real64/rho0
    do k=UG%kmin,UG%kmax
       do j=UG%jmin,UG%jmax
          do i=UG%imin,UG%imax
-            self%ea2(i,j,k)=0._real64
-            self%ea4(i,j,k)=0._real64
-            if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+            if (UG%mask(i,j) == 1) then
                ! Coriolis, advection/diffusion and internal pressure
-!KB               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+ip_fac*idpdx(i,j,k))
+!KB               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+idpdx(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
                self%ea4(i,j,k)=dt*(-0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k))*g*dpdx(i,j) &
                                    +UG%alpha(i,j)*( self%fqk(i,j,k) &
                                                    +self%advpk(i,j,k) &
                                                    +self%diffpk(i,j,k) &
-                                                   +ip_fac*idpdx(i,j,k)) &
+                                                   +idpdx(i,j,k)) &
                                   )
 #else
-               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)+ip_fac*idpdx(i,j,k))
+               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)+idpdx(i,j,k))
 #endif
             end if
          end do
@@ -196,7 +191,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
    ! Additional matrix elements for surface and bottom layer
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+         if (UG%mask(i,j) == 1) then
             ! surface stress
             k=UG%kmax
             self%ea4(i,j,k)=self%ea4(i,j,k)+dt*UG%alpha(i,j)*tausx(i,j)*rho0i
@@ -212,7 +207,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
                                           ea2=self%ea2,ea4=self%ea4)
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+         if (UG%mask(i,j) == 1) then
             self%pk(i,j,:)=self%uk(i,j,:)*UG%hn(i,j,:)
          end if
       end do
@@ -222,7 +217,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
    ! be the same as the transport calculated by the external mode, Uint.
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+         if (UG%mask(i,j) == 1) then
             self%pk(i,j,1:) = self%pk(i,j,1:)+UG%hn(i,j,1:)*(self%Ui(i,j)-sum(self%pk(i,j,1:)))/UG%D(i,j)
          end if
       end do
@@ -262,30 +257,27 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 
 !  Local variables
    integer :: i,j,k
-   real(real64) :: rho0i
+   real(real64), parameter :: rho0i = 1._real64/rho0
 !---------------------------------------------------------------------------
    if (associated(self%logs)) call self%logs%info('qk_3d()',level=3)
    VGrid: associate( VG => self%domain%V )
-   rho0i=1._real64/rho0
    do k=VG%kmin,VG%kmax
       do j=VG%jmin,VG%jmax
          do i=VG%imin,VG%imax
-            self%ea2(i,j,k)=0._real64
-            self%ea4(i,j,k)=0._real64
-            if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+            if (VG%mask(i,j) == 1) then
                ! Coriolis, advection/diffusion and internal pressure
-!KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+ip_fac*idpdy(i,j,k))
+!KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+idpdy(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
                self%ea4(i,j,k)=dt*(-0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k))*g*dpdy(i,j) &
                                    +VG%alpha(i,j)*(-self%fpk(i,j,k) &
                                                    +self%advqk(i,j,k) &
                                                    +self%diffqk(i,j,k) &
-                                                   +ip_fac*idpdy(i,j,k)) &
+                                                   +idpdy(i,j,k)) &
                                   )
 
 #else
-               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)+ip_fac*idpdy(i,j,k))
+               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)+idpdy(i,j,k))
 #endif
             end if
          end do
@@ -295,7 +287,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
    ! Additional matrix elements for surface and bottom layer
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
-         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+         if (VG%mask(i,j) == 1) then
             ! surface stress
             k=VG%kmax
             self%ea4(i,j,k)=self%ea4(i,j,k)+dt*VG%alpha(i,j)*tausy(i,j)*rho0i
@@ -312,7 +304,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
                                           ea2=self%ea2,ea4=self%ea4)
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
-         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+         if (VG%mask(i,j) == 1) then
             self%qk(i,j,:)=self%vk(i,j,:)*VG%hn(i,j,:)
          end if
       end do
@@ -322,7 +314,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
    ! be the same as the transport calculated by the external mode, Vi
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
-         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+         if (VG%mask(i,j) == 1) then
             self%qk(i,j,1:) = self%qk(i,j,1:)+VG%hn(i,j,1:)*(self%Vi(i,j)-sum(self%qk(i,j,1:)))/VG%D(i,j)
          end if
       end do
