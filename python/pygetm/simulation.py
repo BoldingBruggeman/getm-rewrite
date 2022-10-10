@@ -633,7 +633,7 @@ class Simulation(_pygetm.Simulation):
             )  # to become T.zin when update_depth is called
             self.domain.T.zio.fill(np.nan)
             self.domain.T.ho.fill(np.nan)
-            self.domain.update_depth(_3d=True, timestep=self.macrotimestep)
+            self.domain.update_depth(_3d=True)
 
             # Second 3D depth/thickness update based on zin.
             # Override T.ho with user-provided value if available, since this may

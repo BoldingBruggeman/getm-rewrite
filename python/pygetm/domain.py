@@ -2481,7 +2481,7 @@ class Domain(_pygetm.Domain):
                 inside = not inside
         return inside
 
-    def update_depth(self, _3d: bool = False, timestep: float = 1.0):
+    def update_depth(self, _3d: bool = False, timestep: float = 0.0):
         """Use old and new surface elevation on T grid to update elevations on U, V, X grids
         and subsequently update total water depth ``D`` on all grids.
 
@@ -2493,6 +2493,7 @@ class Domain(_pygetm.Domain):
                 thicknesses ``hn``, layer center depths ``zc`` and interface depths
                 ``zf`` on all grids.
             timestep: time step (s) for layer thickness change
+                if 0, any layer height relaxation is disabled
 
         This routine will ensure values are up to date in the domain interior and in
         the halos, but that this requires that ``self.T.z`` (and old elevations

@@ -126,7 +126,7 @@ SUBROUTINE update(grid,beta,sigma,kk,Dmin,Dmax,Dgamma,dt)
       end do
    end do
 
-   if (relax > 0._real64) then
+   if (relax > 0._real64 .and. dt > 0._real64) then
       do j=grid%l(2),grid%u(2)
          do i=grid%l(1),grid%u(1)
             if (grid%mask(i,j) > 0) then
@@ -140,7 +140,7 @@ SUBROUTINE update(grid,beta,sigma,kk,Dmin,Dmax,Dgamma,dt)
       do j=grid%l(2),grid%u(2)
          do i=grid%l(1),grid%u(1)
             if (grid%mask(i,j) > 0) then
-#if 0
+#if 1
                grid%hn(i,j,:)=grid%D(i,j)*grid%gga(i,j,1:grid%kmax)
 #else
                HH=max(grid%zin(i,j)+grid%H(i,j),Dmin)

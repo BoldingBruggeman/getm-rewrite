@@ -123,8 +123,8 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    real(real64), intent(in) :: molecular
    real(real64), intent(in) :: nuh(_T3_)   ! Note: this is diffusivity defined at the interior interfaces, from kmin to kmax-1. surface/bottom are absent
    real(real64), intent(inout) :: var(_T3_)
-   real(real64), intent(in), optional :: ea2(_T3_)
-   real(real64), intent(in), optional :: ea4(_T3_)
+   real(real64), intent(in), optional :: ea2(_T3_)  ! timestep and layer-integrated relative source term (m)
+   real(real64), intent(in), optional :: ea4(_T3_)  ! timestep and layer-integrated absolute source term (var * m)
 #undef _T3_
 
 !  Local constants
@@ -134,7 +134,14 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
 !---------------------------------------------------------------------------
    if (.not. is_initialized) stop 'vertical_diffusion is not initialized'
    if (size(nuh,3) /= size(var,3)-1) stop 'diffusivity should exclude top and bottom interface'
-   if (self%kmax == 1) return
+   if (self%kmax == 1) then
+      self%a4(:,:,:)=dzo *var
+      self%a2(:,:,:)=dzn
+      if (present(ea4)) self%a4(:,:,:)=self%a4+ea4
+      if (present(ea2)) self%a2(:,:,:)=self%a2-ea2
+      var(:,:,:) = self%a4 / self%a2
+      return
+   end if
 
    ! Setting up the matrix
    matrix: block

@@ -415,10 +415,10 @@ SUBROUTINE domain_initialize(self,runtype)
    call self%mirror_bdys(self%U, self%U%H)
    call self%mirror_bdys(self%V, self%V%H)
 
-   if (self%T%kmax > 1) then
+   !if (self%T%kmax > 1) then
       call self%init_vertical()
-      call self%do_vertical(1._real64) ! KB
-   end if
+   !   call self%do_vertical(1._real64) ! KB
+   !end if
 
    self%domain_ready = .true.
 

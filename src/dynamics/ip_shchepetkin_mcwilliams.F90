@@ -85,9 +85,12 @@ CONTAINS
                self%dZ(i,j,k)=2._real64*self%dZ(i,j,k)*self%dZ(i,j,k-1)/(self%dZ(i,j,k)+self%dZ(i,j,k-1))
             end do
 
-            cff=0.5_real64*(buoy(i,j,TG%kmax)-buoy(i,j,TG%kmax-1))*0.5_real64*TG%hn(i,j,TG%kmax) &
-                /(TG%zc(i,j,TG%kmax)-TG%zc(i,j,TG%kmax-1))
-
+            if (TG%kmax > 1) then
+               cff=0.5_real64*(buoy(i,j,TG%kmax)-buoy(i,j,TG%kmax-1))*0.5_real64*TG%hn(i,j,TG%kmax) &
+                   /(TG%zc(i,j,TG%kmax)-TG%zc(i,j,TG%kmax-1))
+            else
+               cff=0.0_real64
+            end if
             self%P(i,j,TG%kmax)=(buoy(i,j,TG%kmax)+cff)*0.5_real64*TG%hn(i,j,TG%kmax)
             do k=TG%kmax-1,1,-1
                self%P(i,j,k)=self%P(i,j,k+1)+0.5_real64*((buoy(i,j,k+1)+buoy(i,j,k)) &
