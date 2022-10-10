@@ -10,7 +10,7 @@ import xarray
 
 from . import _pygetm
 from . import parallel
-from .constants import CENTERS, INTERFACES, SPONGE
+from .constants import CENTERS, INTERFACES
 
 if TYPE_CHECKING:
     from . import domain
@@ -238,7 +238,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         fill: Optional[ArrayLike] = None,
         z: Literal[None, True, False, CENTERS, INTERFACES] = None,
         dtype: DTypeLike = None,
-        copy: bool = True,
         on_boundary: bool = False,
         register: bool = True,
         **kwargs
@@ -253,7 +252,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 defined at the layer centers, ``INTERFACES`` for an array defined at
                 the layer interfaces. ``None`` to detect from ``fill``.
             dtype: data type
-            copy: whether to create a copy of ``fill``, if provided
             on_boundary: whether to describe data along the open boundaries (1D),
                 instead of the 2D x-y model domain
             register: whether to register the array as field available for output
@@ -277,15 +275,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             [grid.domain.open_boundaries.np] if on_boundary else [grid.ny_, grid.nx_]
         )
         if z:
-            shape.insert(
-                1 if on_boundary else 0, grid.nz_ + 1 if z == INTERFACES else grid.nz_,
-            )
-        if copy or fill is None:
-            data = np.empty(shape, dtype=dtype)
-            if fill is not None:
-                data[...] = fill
-        else:
-            data = np.broadcast_to(fill, shape)
+            nz = grid.nz_ + 1 if z == INTERFACES else grid.nz_
+            shape.insert(1 if on_boundary else 0, nz)
+        data = np.empty(shape, dtype=dtype)
+        if fill is not None:
+            data[...] = fill
         ar.wrap_ndarray(data, on_boundary=on_boundary, register=register)
         return ar
 
