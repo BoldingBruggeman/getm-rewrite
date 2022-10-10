@@ -314,12 +314,10 @@ class Momentum(pygetm._pygetm.Momentum):
             "dampV",
             "fU",
             "fV",
-            "fpk",
-            "fqk",
         )
         if runtype > BAROTROPIC_2D:
             ZERO_EVERYWHERE = ZERO_EVERYWHERE + MASK_ZERO_3D
-            ZERO_UNMASKED = ZERO_UNMASKED + ("SS",)
+            ZERO_UNMASKED = ZERO_UNMASKED + ("SS", "fpk", "fqk")
         for v in ZERO_EVERYWHERE:
             array = getattr(self, v)
             array.all_values[..., array.grid._water_contact] = 0.0
