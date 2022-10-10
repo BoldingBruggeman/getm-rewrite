@@ -224,6 +224,10 @@ class Momentum(pygetm._pygetm.Momentum):
         ),
         "dampU": dict(fill_value=FILL_VALUE,),
         "dampV": dict(fill_value=FILL_VALUE,),
+        "fU": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
+        "fV": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
+        "fpk": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
+        "fqk": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
     }
 
     def __init__(
