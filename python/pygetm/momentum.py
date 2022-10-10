@@ -312,6 +312,10 @@ class Momentum(pygetm._pygetm.Momentum):
             "SyF",
             "dampU",
             "dampV",
+            "fU",
+            "fV",
+            "fpk",
+            "fqk",
         )
         if runtype > BAROTROPIC_2D:
             ZERO_EVERYWHERE = ZERO_EVERYWHERE + MASK_ZERO_3D
