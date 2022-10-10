@@ -20,7 +20,7 @@ class Test(unittest.TestCase):
         for z in (False, pygetm.CENTERS, pygetm.INTERFACES):
             with self.subTest(z=z):
                 # Random initialization of T
-                t = domain.T.array(z=pygetm.CENTERS)
+                t = domain.T.array(z=z)
                 t.all_values[...] = np.random.random(t.all_values.shape)
 
                 # From T to U
@@ -78,6 +78,16 @@ class Test(unittest.TestCase):
                 t_control = 0.5 * (u.all_values[..., :, :-1] + u.all_values[..., :, 1:])
                 self.assertTrue((t.all_values[..., :, 1:] == t_control).all())
 
+                # From U to V
+                v = u.interp(domain.V)
+                v_control = 0.25 * (
+                    u.all_values[..., :-1, :-1]
+                    + u.all_values[..., :-1, 1:]
+                    + u.all_values[..., 1:, :-1]
+                    + u.all_values[..., 1:, 1:]
+                )
+                self.assertTrue((v.all_values[..., :-1, 1:] == v_control).all())
+
                 # Random initialization of V
                 v.all_values[...] = np.random.random(v.all_values.shape)
 
@@ -99,6 +109,16 @@ class Test(unittest.TestCase):
                 t = v.interp(domain.T)
                 t_control = 0.5 * (v.all_values[..., :-1, :] + v.all_values[..., 1:, :])
                 self.assertTrue((t.all_values[..., 1:, :] == t_control).all())
+
+                # From V to U
+                u = v.interp(domain.U)
+                u_control = 0.25 * (
+                    v.all_values[..., :-1, :-1]
+                    + v.all_values[..., :-1, 1:]
+                    + v.all_values[..., 1:, :-1]
+                    + v.all_values[..., 1:, 1:]
+                )
+                self.assertTrue((u.all_values[..., 1:, :-1] == u_control).all())
 
 
 if __name__ == "__main__":
