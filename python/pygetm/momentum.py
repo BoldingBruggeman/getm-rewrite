@@ -386,8 +386,8 @@ class Momentum(pygetm._pygetm.Momentum):
             self.logger.info("Disabling numerical damping because An is 0 everywhere")
         else:
             self.logger.info(
-                "Horizontal diffusivity An used for numerical damping ranges between %s and %s m2 s-1"
-                % (self.An.ma.min(), self.An.ma.max())
+                "Horizontal diffusivity An used for numerical damping ranges between"
+                " %s and %s m2 s-1" % (self.An.ma.min(), self.An.ma.max())
             )
             self.An_uu = self.domain.UU.array(fill=np.nan)
             self.An_uv = self.domain.UV.array(fill=np.nan)
@@ -425,17 +425,17 @@ class Momentum(pygetm._pygetm.Momentum):
         if self._ufirst:
             self.u_2d(timestep, tausx, dpdx)
             self.U.update_halos()
-            self.coriolis_fu()
+            self.coriolis(self.U, self.fU)
             self.v_2d(timestep, tausy, dpdy)
             self.V.update_halos()
-            self.coriolis_fv()
+            self.coriolis(self.V, self.fV)
         else:
             self.v_2d(timestep, tausy, dpdy)
             self.V.update_halos()
-            self.coriolis_fv()
+            self.coriolis(self.V, self.fV)
             self.u_2d(timestep, tausx, dpdx)
             self.U.update_halos()
-            self.coriolis_fu()
+            self.coriolis(self.U, self.fU)
         self._ufirst = not self._ufirst
 
         self.Ui_tmp += self.U.all_values
@@ -455,8 +455,8 @@ class Momentum(pygetm._pygetm.Momentum):
             update_z0b: whether to iteratively update hydrodynamic bottom roughness
         """
         if not skip_coriolis:
-            self.coriolis_fu()
-            self.coriolis_fv()
+            self.coriolis(self.U, self.fU)
+            self.coriolis(self.V, self.fV)
 
         # Calculate sources of transports U and V due to advection (advU, advV)
         # and diffusion (diffU, diffV)
@@ -540,17 +540,17 @@ class Momentum(pygetm._pygetm.Momentum):
         if self._u3dfirst:
             self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity_u)
             self.pk.update_halos()
-            self.coriolis_fpk()
+            self.coriolis(self.pk, self.fpk)
             self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity_v)
             self.qk.update_halos()
-            self.coriolis_fqk()
+            self.coriolis(self.qk, self.fqk)
         else:
             self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity_v)
             self.qk.update_halos()
-            self.coriolis_fqk()
+            self.coriolis(self.qk, self.fqk)
             self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity_u)
             self.pk.update_halos()
-            self.coriolis_fpk()
+            self.coriolis(self.pk, self.fpk)
         self._u3dfirst = not self._u3dfirst
 
         self.update_diagnostics(timestep, viscosity, skip_coriolis=True)
@@ -571,8 +571,8 @@ class Momentum(pygetm._pygetm.Momentum):
                 and do not need recomputing
         """
         if not skip_coriolis:
-            self.coriolis_fpk()
-            self.coriolis_fqk()
+            self.coriolis(self.pk, self.fpk)
+            self.coriolis(self.qk, self.fqk)
 
         # Infer vertical velocity from horizontal transports and desired layer height
         # change (ho -> hn). This is done at all points surrounding U and V points, so
@@ -815,6 +815,26 @@ class Momentum(pygetm._pygetm.Momentum):
         v.interp(self.v_U)
         pygetm._pygetm.bottom_friction(u, self.v_U, DU, ru, update_z0b)
         pygetm._pygetm.bottom_friction(self.u_V, v, DV, rv, update_z0b)
+
+    def coriolis(self, U: core.Array, out: core.Array):
+        """Calculate change in transport due to Coriolis force
+
+        Args:
+            U: 2d or 3d transport in x- or y-direction (m2 s-1)
+            out: array to store change in complementary transport (y or x-direction)
+                due to Coriolis force (m2 s-2)
+        """
+        if self.coriolis_scheme == CoriolisScheme.ESPELID:
+            Din = U.grid.D if U.ndim == 2 else U.grid.hn
+            Dout = out.grid.D if out.ndim == 2 else out.grid.hn
+            sqrtDin = np.sqrt(Din, where=U.grid._water)
+            sqrtDin.all_values[..., U.grid._land] = 1.0
+            (U / sqrtDin).interp(out)
+            out.all_values *= np.sqrt(Dout.all_values, where=out.grid._water)
+        else:
+            U.interp(out)
+        # todo: cord_curv
+        out.all_values *= out.grid.cor.all_values
 
 
 # Expose all Fortran arrays that are a member of Momentum as read-only properties

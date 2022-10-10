@@ -553,36 +553,6 @@ contains
       call momentum%w_momentum_3d(timestep)
    end subroutine
 
-   subroutine momentum_uv_coriolis(direction, pmomentum) bind(c)
-      integer(c_int), intent(in), value :: direction
-      type(c_ptr),    intent(in), value :: pmomentum
-
-      type (type_getm_momentum), pointer :: momentum
-
-      call c_f_pointer(pmomentum, momentum)
-      select case (direction)
-         case (1)
-            call momentum%coriolis_fu()
-         case (2)
-            call momentum%coriolis_fv()
-      end select
-   end subroutine
-
-   subroutine momentum_uv_coriolis_3d(direction, pmomentum) bind(c)
-      integer(c_int), intent(in), value :: direction
-      type(c_ptr),    intent(in), value :: pmomentum
-
-      type (type_getm_momentum), pointer :: momentum
-
-      call c_f_pointer(pmomentum, momentum)
-      select case (direction)
-         case (1)
-            call momentum%coriolis_fpk()
-         case (2)
-            call momentum%coriolis_fqk()
-      end select
-   end subroutine
-
    subroutine momentum_shear_frequency(pmomentum, pviscosity) bind(c)
       type(c_ptr),    intent(in), value :: pmomentum
       type(c_ptr),    intent(in), value :: pviscosity

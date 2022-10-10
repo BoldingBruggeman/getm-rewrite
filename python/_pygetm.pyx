@@ -30,8 +30,6 @@ cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double
 cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
 cdef extern void momentum_u_3d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx, double* pidpdx, double* pviscosity) nogil
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
-cdef extern void momentum_uv_coriolis(int direction, void* momentum) nogil
-cdef extern void momentum_uv_coriolis_3d(int direction, void* momentum) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
 cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* )
@@ -348,12 +346,6 @@ cdef class Momentum:
         assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
         momentum_u_2d(2, self.p, timestep, <double *>tausy.p, <double *>dpdy.p)
 
-    def coriolis_fu(self):
-        momentum_uv_coriolis(1, self.p)
-
-    def coriolis_fv(self):
-        momentum_uv_coriolis(2, self.p)
-
     def pk_3d(self, double timestep, Array tausx not None, Array dpdx not None, Array idpdx not None, Array viscosity_u not None):
         assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
         assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
@@ -367,12 +359,6 @@ cdef class Momentum:
         assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
         assert viscosity_v.grid is self.domain.V and viscosity_v.z == INTERFACES, 'grid mismatch for viscosity_v: expected %s, got %s' % (self.domain.V.postfix, viscosity_v.grid.postfix)
         momentum_u_3d(2, self.p, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
-
-    def coriolis_fpk(self):
-        momentum_uv_coriolis_3d(1, self.p)
-
-    def coriolis_fqk(self):
-        momentum_uv_coriolis_3d(2, self.p)
 
     def w_3d(self, double timestep):
         momentum_w_3d(self.p, timestep)
