@@ -174,7 +174,9 @@ class TracerCollection(Sequence[Tracer]):
         self.Ah_u = self.Ah_v = None
 
     def start(self):
-        if (self.Ah.ma == 0.0).all():
+        self.Ah.update_halos()
+        self.Ah.all_values[self.grid._land] = self.Ah.fill_value
+        if (self.Ah.all_values[self.grid._water] == 0.0).all():
             self.logger.info(
                 "Disabling horizontal diffusion because Ah is 0 everywhere"
             )

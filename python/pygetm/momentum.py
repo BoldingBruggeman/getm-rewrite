@@ -386,7 +386,10 @@ class Momentum(pygetm._pygetm.Momentum):
             array = getattr(self, v)
             edges = array.grid._land & array.grid._water_contact
             array.all_values[..., edges] = 0.0
-        if (self.An.ma == 0.0).all():
+
+        self.An.update_halos()
+        self.An.all_values[self.domain.T._land] = self.An.fill_value
+        if (self.An.all_values[self.domain.T._water] == 0.0).all():
             self.logger.info("Disabling numerical damping because An is 0 everywhere")
         else:
             self.logger.info(
