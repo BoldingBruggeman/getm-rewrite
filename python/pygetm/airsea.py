@@ -520,8 +520,8 @@ class FluxesFromMeteo(Fluxes):
 
         # Momentum flux in x and y-direction
         tmp = self.cd_mom.all_values * self.rhoa.all_values * self.w.all_values
-        self.taux.all_values[...] = tmp * u10
-        self.tauy.all_values[...] = tmp * v10
+        np.multiply(tmp, u10, out=self.taux.all_values)
+        np.multiply(tmp, v10, out=self.tauy.all_values)
 
         if calculate_heat_flux:
             # Latent heat of vaporization (J/kg) at sea surface
