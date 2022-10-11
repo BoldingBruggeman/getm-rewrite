@@ -110,128 +110,99 @@ class Momentum(pygetm._pygetm.Momentum):
         "U": dict(
             units="m2 s-1",
             long_name="depth-integrated transport in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "V": dict(
             units="m2 s-1",
             long_name="depth-integrated transport in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_part_of_state=True, _mask_output=True),
         ),
-        "Ui": dict(
-            units="m2 s-1",
-            fill_value=FILL_VALUE,
-            attrs=dict(_part_of_state=True, _mask_output=True),
-        ),
-        "Vi": dict(
-            units="m2 s-1",
-            fill_value=FILL_VALUE,
-            attrs=dict(_part_of_state=True, _mask_output=True),
-        ),
+        "Ui": dict(units="m2 s-1", attrs=dict(_part_of_state=True, _mask_output=True),),
+        "Vi": dict(units="m2 s-1", attrs=dict(_part_of_state=True, _mask_output=True),),
         "u1": dict(
             units="m s-1",
             long_name="depth-averaged velocity in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "v1": dict(
             units="m s-1",
             long_name="depth-averaged velocity in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "pk": dict(
             units="m2 s-1",
             long_name="layer-integrated transport in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "qk": dict(
             units="m2 s-1",
             long_name="layer-integrated transport in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_part_of_state=True, _mask_output=True),
         ),
         "uk": dict(
             units="m s-1",
             long_name="velocity in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True, standard_name="sea_water_x_velocity"),
         ),
         "vk": dict(
             units="m s-1",
             long_name="velocity in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True, standard_name="sea_water_y_velocity"),
         ),
         "ww": dict(
             units="m s-1",
             long_name="vertical velocity",
-            fill_value=FILL_VALUE,
             attrs=dict(standard_name="upward_sea_water_velocity"),
         ),
-        "SS": dict(
-            units="s-2", long_name="shear frequency squared", fill_value=FILL_VALUE
-        ),
+        "SS": dict(units="s-2", long_name="shear frequency squared"),
         "SxA": dict(
             units="m-2 s-2",
             long_name="slow advection in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "SyA": dict(
             units="m-2 s-2",
             long_name="slow advection in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "SxB": dict(
             units="m-2 s-2",
             long_name="depth-integrated internal pressure in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "SyB": dict(
             units="m-2 s-2",
             long_name="depth-integrated internal pressure in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "SxD": dict(
             units="m-2 s-2",
             long_name="slow diffusion in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "SyD": dict(
             units="m-2 s-2",
             long_name="slow diffusion in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "SxF": dict(
             units="m-2 s-2",
             long_name="slow bottom friction in x-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
         "SyF": dict(
             units="m-2 s-2",
             long_name="slow bottom friction in y-direction",
-            fill_value=FILL_VALUE,
             attrs=dict(_mask_output=True),
         ),
-        "dampU": dict(fill_value=FILL_VALUE,),
-        "dampV": dict(fill_value=FILL_VALUE,),
-        "fU": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
-        "fV": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
-        "fpk": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
-        "fqk": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
-        "ru": dict(fill_value=FILL_VALUE),
-        "rv": dict(fill_value=FILL_VALUE),
-        "rru": dict(fill_value=FILL_VALUE),
-        "rrv": dict(fill_value=FILL_VALUE),
+        "fU": dict(attrs=dict(_mask_output=True),),
+        "fV": dict(attrs=dict(_mask_output=True),),
+        "fpk": dict(attrs=dict(_mask_output=True),),
+        "fqk": dict(attrs=dict(_mask_output=True),),
+        "advU": dict(attrs=dict(_mask_output=True),),
+        "advV": dict(attrs=dict(_mask_output=True),),
+        "advpk": dict(attrs=dict(_mask_output=True),),
+        "advqk": dict(attrs=dict(_mask_output=True),),
     }
 
     def __init__(
@@ -277,13 +248,12 @@ class Momentum(pygetm._pygetm.Momentum):
         )
 
         for name in self._arrays:
+            kwargs = dict(fill_value=FILL_VALUE)
+            kwargs.update(self._array_args.get(name, {}))
             setattr(
                 self,
                 "_%s" % name,
-                self.wrap(
-                    core.Array(name=name, **self._array_args.get(name, {})),
-                    name.encode("ascii"),
-                ),
+                self.wrap(core.Array(name=name, **kwargs), name.encode("ascii"),),
             )
 
         self.logger = logger
@@ -316,10 +286,28 @@ class Momentum(pygetm._pygetm.Momentum):
             "SyF",
             "dampU",
             "dampV",
+            "advU",
+            "advV",
+            "diffU",
+            "diffV",
+            "ru",
+            "rv",
+            "rru",
+            "rrv",
+            "fU",
+            "fV",
         )
         if runtype > BAROTROPIC_2D:
             ZERO_EVERYWHERE = ZERO_EVERYWHERE + MASK_ZERO_3D
-            ZERO_UNMASKED = ZERO_UNMASKED + ("SS",)
+            ZERO_UNMASKED = ZERO_UNMASKED + (
+                "SS",
+                "advpk",
+                "advqk",
+                "diffpk",
+                "diffqk",
+                "fpk",
+                "fqk",
+            )
         for v in ZERO_EVERYWHERE:
             array = getattr(self, v)
             array.all_values[..., array.grid._water_contact] = 0.0

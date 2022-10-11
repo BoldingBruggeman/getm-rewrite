@@ -771,8 +771,16 @@ class Simulation(_pygetm.Simulation):
                 # macrotimestep), whereas bottom stress is at 1/2 of the macrotimestep,
                 # since it is computed from velocities that have just been updated.
                 self.momentum.update_stresses(self.airsea.taux, self.airsea.tauy)
-                np.sqrt(self.momentum.ustar2_s.all_values, out=self.ustar_s.all_values)
-                np.sqrt(self.momentum.ustar2_b.all_values, out=self.ustar_b.all_values)
+                np.sqrt(
+                    self.momentum.ustar2_s.all_values,
+                    out=self.ustar_s.all_values,
+                    where=self.domain.T._water,
+                )
+                np.sqrt(
+                    self.momentum.ustar2_b.all_values,
+                    out=self.ustar_b.all_values,
+                    where=self.domain.T._water,
+                )
                 self.taub.all_values[...] = self.momentum.ustar2_b.all_values * RHO0
 
                 # Update turbulent quantities (T grid - interfaces) from time=0 to
