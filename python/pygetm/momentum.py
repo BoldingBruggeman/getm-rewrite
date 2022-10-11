@@ -334,10 +334,11 @@ class Momentum(pygetm._pygetm.Momentum):
         self.fU.all_values[-1, :] = 0.0
         self.fV.all_values[:, -1] = 0.0
         self.fV.all_values[0, :] = 0.0
-        self.fpk.all_values[:, :, 0] = 0.0
-        self.fpk.all_values[:, -1, :] = 0.0
-        self.fqk.all_values[:, :, -1] = 0.0
-        self.fqk.all_values[:, 0, :] = 0.0
+        if runtype > BAROTROPIC_2D:
+            self.fpk.all_values[:, :, 0] = 0.0
+            self.fpk.all_values[:, -1, :] = 0.0
+            self.fqk.all_values[:, :, -1] = 0.0
+            self.fqk.all_values[:, 0, :] = 0.0
 
         self.Ui_tmp = np.zeros_like(self.Ui.all_values)
         self.Vi_tmp = np.zeros_like(self.Vi.all_values)
