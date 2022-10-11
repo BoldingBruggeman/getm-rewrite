@@ -33,7 +33,7 @@ module SUBROUTINE pressure_surface(self,z,sp)
    UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+         if (UG%mask(i,j) == 1) then
             zp = max(z(i+1,j),-TG%H(i  ,j)+min(self%domain%Dmin,TG%D(i+1,j)))
             zm = max(z(i  ,j),-TG%H(i+1,j)+min(self%domain%Dmin,TG%D(i  ,j)))
             self%dpdx(i,j) = (zp-zm+(sp(i+1,j)-sp(i,j))*gammai)/UG%dx(i,j)
@@ -45,7 +45,7 @@ module SUBROUTINE pressure_surface(self,z,sp)
    VGrid: associate( VG => self%domain%V )
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
-         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+         if (VG%mask(i,j) == 1) then
             zp = max(z(i,j+1),-TG%H(i  ,j)+min(self%domain%Dmin,TG%D(i,j+1)))
             zm = max(z(i,j  ),-TG%H(i,j+1)+min(self%domain%Dmin,TG%D(i,j  )))
             self%dpdy(i,j) = (zp-zm+(sp(i,j+1)-sp(i,j))*gammai)/VG%dy(i,j)

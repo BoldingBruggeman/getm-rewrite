@@ -228,6 +228,10 @@ class Momentum(pygetm._pygetm.Momentum):
         "fV": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
         "fpk": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
         "fqk": dict(fill_value=FILL_VALUE, attrs=dict(_mask_output=True),),
+        "ru": dict(fill_value=FILL_VALUE),
+        "rv": dict(fill_value=FILL_VALUE),
+        "rru": dict(fill_value=FILL_VALUE),
+        "rrv": dict(fill_value=FILL_VALUE),
     }
 
     def __init__(
@@ -312,17 +316,28 @@ class Momentum(pygetm._pygetm.Momentum):
             "SyF",
             "dampU",
             "dampV",
-            "fU",
-            "fV",
         )
         if runtype > BAROTROPIC_2D:
             ZERO_EVERYWHERE = ZERO_EVERYWHERE + MASK_ZERO_3D
-            ZERO_UNMASKED = ZERO_UNMASKED + ("SS", "fpk", "fqk")
+            ZERO_UNMASKED = ZERO_UNMASKED + ("SS",)
         for v in ZERO_EVERYWHERE:
             array = getattr(self, v)
             array.all_values[..., array.grid._water_contact] = 0.0
         for v in ZERO_UNMASKED:
             getattr(self, v).fill(0.0)
+
+        # Zero elements of Coriolis terms that wil never be set, but still
+        # multiplied by f. This prevents overflow warnings
+        # We could zero the whole arrays, but by doing this selectively, we
+        # can verify in tests that values on other masked points are not used
+        self.fU.all_values[:, 0] = 0.0
+        self.fU.all_values[-1, :] = 0.0
+        self.fV.all_values[:, -1] = 0.0
+        self.fV.all_values[0, :] = 0.0
+        self.fpk.all_values[:, :, 0] = 0.0
+        self.fpk.all_values[:, -1, :] = 0.0
+        self.fqk.all_values[:, :, -1] = 0.0
+        self.fqk.all_values[:, 0, :] = 0.0
 
         self.Ui_tmp = np.zeros_like(self.Ui.all_values)
         self.Vi_tmp = np.zeros_like(self.Vi.all_values)
@@ -433,16 +448,20 @@ class Momentum(pygetm._pygetm.Momentum):
         # to update_2d_momentum_diagnostics
         if self._ufirst:
             self.u_2d(timestep, tausx, dpdx)
+            self.U.mirror()
             self.U.update_halos()
             self.coriolis(self.U, self.fU)
             self.v_2d(timestep, tausy, dpdy)
+            self.V.mirror()
             self.V.update_halos()
             self.coriolis(self.V, self.fV)
         else:
             self.v_2d(timestep, tausy, dpdy)
+            self.V.mirror()
             self.V.update_halos()
             self.coriolis(self.V, self.fV)
             self.u_2d(timestep, tausx, dpdx)
+            self.U.mirror()
             self.U.update_halos()
             self.coriolis(self.U, self.fU)
         self._ufirst = not self._ufirst
@@ -548,16 +567,20 @@ class Momentum(pygetm._pygetm.Momentum):
         #   the four interfaces around every T point
         if self._u3dfirst:
             self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity_u)
+            self.pk.mirror()
             self.pk.update_halos()
             self.coriolis(self.pk, self.fpk)
             self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity_v)
+            self.qk.mirror()
             self.qk.update_halos()
             self.coriolis(self.qk, self.fqk)
         else:
             self.qk_3d(timestep, tausy, dpdy, idpdy, viscosity_v)
+            self.qk.mirror()
             self.qk.update_halos()
             self.coriolis(self.qk, self.fqk)
             self.pk_3d(timestep, tausx, dpdx, idpdx, viscosity_u)
+            self.pk.mirror()
             self.pk.update_halos()
             self.coriolis(self.pk, self.fpk)
         self._u3dfirst = not self._u3dfirst

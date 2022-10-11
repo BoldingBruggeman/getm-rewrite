@@ -149,7 +149,7 @@ CONTAINS
 
       do j=UG%jmin,UG%jmax
          do i=UG%imin,UG%imax
-            if (UG%mask(i,j) > 0) then
+            if (UG%mask(i,j) == 1) then
                FC=0.5_real64*((buoy(i+1,j,k)+buoy(i,j,k))*(TG%zc(i+1,j,k)-TG%zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
                  -0.2_real64*((self%dRx(i+1,j)-self%dRx(i,j)) &
@@ -213,7 +213,7 @@ CONTAINS
 
       do j=VG%jmin,VG%jmax
          do i=VG%imin,VG%imax
-            if (VG%mask(i,j) > 0) then
+            if (VG%mask(i,j) == 1) then
                FC=0.5_real64*((buoy(i,j+1,k)+buoy(i,j,k))*(TG%zc(i,j+1,k)-TG%zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
                  -0.2_real64*((self%dRx(i,j+1)-self%dRx(i,j)) &

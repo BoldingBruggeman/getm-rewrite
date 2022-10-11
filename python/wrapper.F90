@@ -830,20 +830,20 @@ contains
 
    do j=jmin,jmax
       do i=imin-1,imax
-         if (umask(i,j) == 1 .or. umask(i,j) == 2) then
+         if (umask(i,j) == 1) then
             uflux(i,j) = Ah_u(i,j) * (f(i+1,j)-f(i,j)) * idxu(i,j) * dyu(i,j)
          else
-            uflux(i,j) = 0
+            uflux(i,j) = 0.0_real64
          end if
       end do
    end do
 
    do j=jmin-1,jmax
       do i=imin,imax
-         if (vmask(i,j) == 1 .or. vmask(i,j) == 2) then
+         if (vmask(i,j) == 1) then
             vflux(i,j) = Ah_v(i,j) * (f(i,j+1)-f(i,j)) * idyv(i,j) * dxv(i,j)
          else
-            vflux(i,j) = 0
+            vflux(i,j) = 0.0_real64
          end if
       end do
    end do
@@ -872,14 +872,14 @@ contains
       real(real64), parameter :: avmmol = 0.001_real64 !KB
       real(real64) :: sqrtcd(nx, ny)
 
-      where (mask /= 0) sqrtcd = kappa / log(1.0_real64 + 0.5_real64 * D / z0b)
+      where (mask == 1) sqrtcd = kappa / log(1.0_real64 + 0.5_real64 * D / z0b)
       if (iterate /= 0) then
-         where (mask /= 0)
+         where (mask == 1)
             z0b = min(D, z0b_min + 0.1_real64 * avmmol / max(avmmol,sqrtcd*sqrt(u*u + v*v)))
             sqrtcd = kappa / log(1.0_real64 + 0.5_real64 * D / z0b)
          end where
       end if
-      where (mask /= 0) ru = sqrtcd * sqrtcd * sqrt(u*u + v*v)
+      where (mask == 1) ru = sqrtcd * sqrtcd * sqrt(u*u + v*v)
    END SUBROUTINE
 
 end module

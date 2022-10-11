@@ -1141,7 +1141,9 @@ class Simulation(_pygetm.Simulation):
             if field.ndim == 0 or (field.z and not _3d):
                 continue
             finite = np.isfinite(field.values)
-            unmasked = True if field.on_boundary else field.grid.mask.values > 0
+            unmasked = True
+            if not field.on_boundary:
+                unmasked = np.isin(field.grid.mask.values, (1, 2))
             unmasked = np.broadcast_to(unmasked, field.shape)
             if not finite.all(where=unmasked):
                 nbad += 1

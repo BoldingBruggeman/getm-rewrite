@@ -197,7 +197,7 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
    UGrid: associate( UG => self%domain%U )
    do j=UG%jmin,UG%jmax
       do i=UG%imin,UG%imax
-         if (UG%mask(i,j) == 1 .or. UG%mask(i,j) == 2) then
+         if (UG%mask(i,j) == 1) then
             if (self%U(i,j) .gt. 0._real64) then
                Slr = min( self%SxF(i,j) , 0._real64 )
             else
@@ -215,7 +215,7 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
          end if
       end do
    end do
-   call self%domain%mirror_bdys(UG,self%U)
+   !call self%domain%mirror_bdys(UG,self%U)
    end associate UGrid
 END SUBROUTINE u_2d
 
@@ -250,7 +250,7 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
    VGrid: associate( VG => self%domain%V )
    do j=VG%jmin,VG%jmax
       do i=VG%imin,VG%imax
-         if (VG%mask(i,j) == 1 .or. VG%mask(i,j) == 2) then
+         if (VG%mask(i,j) == 1) then
             if (self%V(i,j) .gt. 0._real64) then
                Slr = min( self%SyF(i,j) , 0._real64 )
             else
@@ -268,7 +268,7 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
          end if
       end do
    end do
-   call self%domain%mirror_bdys(VG,self%V)
+   !call self%domain%mirror_bdys(VG,self%V)
    end associate VGrid
 END SUBROUTINE v_2d
 

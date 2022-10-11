@@ -745,6 +745,10 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         "sponge",
         "zero_gradient",
         "active",
+        "mirror_U",
+        "mirror_V",
+        "mirror_TU",
+        "mirror_TV",
     )
 
     def __init__(self, domain: "Domain"):
@@ -868,10 +872,14 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
                     if side in (Side.WEST, Side.EAST):
                         bdy_mask = tmask[boundary.mstart : boundary.mstop, boundary.l]
+                        lvel = boundary.l - 1 if side == Side.WEST else boundary.l
+                        vel_mask = umask[boundary.mstart : boundary.mstop, lvel]
                         boundary.i = np.repeat(boundary.l, len_bdy)
                         boundary.j = np.arange(boundary.mstart, boundary.mstop)
                     else:
                         bdy_mask = tmask[boundary.l, boundary.mstart : boundary.mstop]
+                        lvel = boundary.l - 1 if side == Side.SOUTH else boundary.l
+                        vel_mask = vmask[lvel, boundary.mstart : boundary.mstop]
                         boundary.i = np.arange(boundary.mstart, boundary.mstop)
                         boundary.j = np.repeat(boundary.l, len_bdy)
 
@@ -889,6 +897,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                         raise Exception()
 
                     bdy_mask[:] = 2
+                    vel_mask[:] = 4
                     bdy_i.append(boundary.i)
                     bdy_j.append(boundary.j)
 
@@ -909,6 +918,67 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
         umask[:, :-1][(tmask[:, :-1] == 2) & (tmask[:, 1:] == 2)] = 3
         vmask[:-1, :][(tmask[:-1, :] == 2) & (tmask[1:, :] == 2)] = 3
+
+        self.mirror_U = []
+        self.mirror_V = []
+        self.mirror_TU = []
+        self.mirror_TV = []
+        for boundary in self._boundaries:
+            if boundary.l is None:
+                continue
+
+            # Identify velocity points that lie within the open boundary in between
+            # tracer points with mask=2. Their indices will be (i_velout, j_velout)
+            # on the corresponding velocity grid (U or V). Values at these points
+            # will be mirrored from the interior velocity point (i_velin, j_velin)
+            if boundary.side in (Side.WEST, Side.EAST):
+                i_velout = np.repeat(boundary.i[0], boundary.i.size + 1)
+                j_velout = np.arange(boundary.j[0] - 1, boundary.j[-1] + 1)
+                mirror_mask = self.domain.mask_[2 + j_velout * 2, 1 + i_velout * 2]
+            else:
+                i_velout = np.arange(boundary.i[0] - 1, boundary.i[-1] + 1)
+                j_velout = np.repeat(boundary.j[0], boundary.j.size + 1)
+                mirror_mask = self.domain.mask_[1 + j_velout * 2, 2 + i_velout * 2]
+            select = mirror_mask == 3
+            i_velout = i_velout[select]
+            j_velout = j_velout[select]
+            i_velin = i_velout + {Side.EAST: -1, Side.WEST: 1}.get(boundary.side, 0)
+            j_velin = j_velout + {Side.NORTH: -1, Side.SOUTH: 1}.get(boundary.side, 0)
+
+            # Identify velocity points along an open boundary
+            # The indices of inner points will be (i_in, j_in);
+            # those indices of outer points will be (i_out, j_out).
+            # Values at outer points will be mirrored from either the neighboring
+            # inner T point (boundary.i, boundary.j) [e.g., elevations at mask=2]
+            # or the neighboring inner velocity point.
+            i_in = boundary.i + {Side.EAST: -1}.get(boundary.side, 0)
+            j_in = boundary.j + {Side.NORTH: -1}.get(boundary.side, 0)
+            i_out = boundary.i + {Side.WEST: -1}.get(boundary.side, 0)
+            j_out = boundary.j + {Side.SOUTH: -1}.get(boundary.side, 0)
+            select = (i_in >= 0) & (j_in >= 0) & (i_out >= 0) & (j_out >= 0)
+            i_in, i_out, j_in, j_out = (a[select] for a in (i_in, i_out, j_in, j_out))
+
+            if boundary.side in (Side.WEST, Side.EAST):
+                self.mirror_U.append([i_in, j_in, i_out, j_out])
+                self.mirror_V.append([i_velin, j_velin, i_velout, j_velout])
+                self.mirror_TU.append([boundary.i, boundary.j, i_out, j_out])
+            else:
+                self.mirror_V.append([i_in, j_in, i_out, j_out])
+                self.mirror_U.append([i_velin, j_velin, i_velout, j_velout])
+                self.mirror_TV.append([boundary.i, boundary.j, i_out, j_out])
+
+        def pack_mirror(indices):
+            if indices:
+                i_in = np.concatenate([i[0] for i in indices], dtype=np.intp)
+                j_in = np.concatenate([i[1] for i in indices], dtype=np.intp)
+                i_out = np.concatenate([i[2] for i in indices], dtype=np.intp)
+                j_out = np.concatenate([i[3] for i in indices], dtype=np.intp)
+                return ((Ellipsis, j_in, i_in), (Ellipsis, j_out, i_out))
+
+        self.mirror_U = pack_mirror(self.mirror_U)
+        self.mirror_V = pack_mirror(self.mirror_V)
+        self.mirror_TU = pack_mirror(self.mirror_TU)
+        self.mirror_TV = pack_mirror(self.mirror_TV)
 
         self.np = nbdyp
         self.np_glob = nbdyp_glob
@@ -1970,8 +2040,12 @@ class Domain(_pygetm.Domain):
         # plotting, since it does not hide U, V, X points at the edges of valid T cells.
         # Now mask U,V,X points unless all their T neighbors are valid - this mask will
         # be sent to Fortran and determine which points are computed
-        umask[:, :-1][(tmask[:, 1:] == 0) | (tmask[:, :-1] == 0)] = 0
-        vmask[:-1, :][(tmask[1:, :] == 0) | (tmask[:-1, :] == 0)] = 0
+        umask[:, :-1][
+            ((tmask[:, 1:] == 0) | (tmask[:, :-1] == 0)) & umask[:, :-1] == 1
+        ] = 0
+        vmask[:-1, :][
+            ((tmask[1:, :] == 0) | (tmask[:-1, :] == 0)) & vmask[:-1, :] == 1
+        ] = 0
         xmask[1:-1, 1:-1][
             (tmask[1:, 1:] == 0)
             | (tmask[:-1, 1:] == 0)
@@ -1988,6 +2062,12 @@ class Domain(_pygetm.Domain):
         uvmask[:-1, :][(umask[:-1, :] > 0) & (umask[1:, :] > 0)] = 1
         vumask[:, :-1][(vmask[:, :-1] > 0) & (vmask[:, 1:] > 0)] = 1
         vvmask[:-1, :][(vmask[:-1, :] > 0) & (vmask[1:, :] > 0)] = 1
+
+        # No transport between velocity points along an open boundary (just outside)
+        # This is done to state that no valid values (in e.g. h and D) are required
+        # in these points.
+        uvmask[:-1, :][(umask[:-1, :] == 4) & (umask[1:, :] == 4)] = 0
+        vumask[:, :-1][(vmask[:, :-1] == 4) & (vmask[:, 1:] == 4)] = 0
 
         for grid in self.grids.values():
             grid.initialize(self.open_boundaries.np)
@@ -2293,6 +2373,11 @@ class Domain(_pygetm.Domain):
             cb.set_label("undisturbed water depth (m)")
 
         if show_rivers:
+            if not self._initialized:
+                raise Exception(
+                    "Cannot plot rivers until after the domain has initialized."
+                    " Either initialize the domain first or call plot with show_rivers=False"
+                )
             for river in self.rivers.values():
                 iloc, jloc = 1 + river.i * 2, 1 + river.j * 2
                 lon = self.lon_[jloc, iloc]
@@ -2525,11 +2610,16 @@ class Domain(_pygetm.Domain):
         # They are therefore calculated from the average of old and new elevations on
         # the T grid.
         z_T_half = 0.5 * (zo_T + z_T)
+
         z_T_half.interp(z_U)
-        z_T_half.interp(z_V)
-        z_T_half.interp(z_X)
+        z_T_half.mirror(z_U)
         _pygetm.clip_z(z_U, self.Dmin)
+
+        z_T_half.interp(z_V)
+        z_T_half.mirror(z_V)
         _pygetm.clip_z(z_V, self.Dmin)
+
+        z_T_half.interp(z_X)
         _pygetm.clip_z(z_X, self.Dmin)
 
         # Halo exchange for elevation on U, V grids, needed because the very last

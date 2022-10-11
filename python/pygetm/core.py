@@ -47,7 +47,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         units: Optional[str] = None,
         long_name: Optional[str] = None,
         fill_value: Optional[Union[float, int]] = None,
-        shape: Optional[Tuple[int]] = None,
+        shape: Optional[Tuple[int, ...]] = None,
         dtype: Optional[DTypeLike] = None,
         grid: "domain.Grid" = None,
         fabm_standard_name: Optional[str] = None,
@@ -85,6 +85,22 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.attrs.setdefault("_fabm_standard_names", set()).add(fabm_standard_name)
 
     fabm_standard_name = property(fset=set_fabm_standard_name)
+
+    def mirror(self, target: Optional["Array"] = None):
+        domain = self.grid.domain
+        target = target or self
+        if self.grid is domain.U:
+            m = domain.open_boundaries.mirror_U
+        elif self.grid is domain.V:
+            m = domain.open_boundaries.mirror_V
+        elif self.grid is domain.T:
+            if target.grid is domain.U:
+                m = domain.open_boundaries.mirror_TU
+            elif target.grid is domain.V:
+                m = domain.open_boundaries.mirror_TV
+        if m is not None:
+            source_slice, target_slice = m
+            target.all_values[target_slice] = self.all_values[source_slice]
 
     def finish_initialization(self):
         """This is called by the underlying cython implementation after the array
@@ -401,7 +417,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.values[key] = values
 
     @property
-    def shape(self) -> Tuple[int]:
+    def shape(self) -> Tuple[int, ...]:
         """Shape excluding halos"""
         return self._shape
 
