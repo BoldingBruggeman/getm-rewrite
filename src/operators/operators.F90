@@ -17,7 +17,6 @@ MODULE getm_operators
    !!   Solves the - vertical - diffusion equation.
 
    USE, INTRINSIC :: ISO_FORTRAN_ENV
-   use iso_c_binding, only: c_int, c_double
    USE getm_domain
    use advection_base
 
@@ -134,7 +133,6 @@ MODULE getm_operators
          real(real64), intent(in), optional :: ea4(_T3_)
 #undef _T3_
    end subroutine vertical_diffusion_calculate
-
    END INTERFACE
 
 !---------------------------------------------------------------------------
