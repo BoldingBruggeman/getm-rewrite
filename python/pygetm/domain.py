@@ -367,9 +367,14 @@ class Grid(_pygetm.Grid):
         y: float,
         mask: Optional[Tuple[int]] = None,
         include_halos: bool = False,
+        spherical: Optional[bool] = None,
     ) -> Optional[Tuple[int, int]]:
         """Return index (i,j) of point nearest to specified coordinate."""
-        if not self.domain.contains(x, y, include_halos=include_halos):
+        if spherical is None:
+            spherical = self.domain.spherical
+        if not self.domain.contains(
+            x, y, include_halos=include_halos, spherical=spherical
+        ):
             return None
         local_slice, _, _, _ = self.domain.tiling.subdomain2slices(
             halo_sub=self.halo,
@@ -378,7 +383,7 @@ class Grid(_pygetm.Grid):
             exclude_halos=not include_halos,
             exclude_global_halos=True,
         )
-        allx, ally = (self.lon, self.lat) if self.domain.spherical else (self.x, self.y)
+        allx, ally = (self.lon, self.lat) if spherical else (self.x, self.y)
         actx, acty = allx.all_values[local_slice], ally.all_values[local_slice]
         dist = (actx - x) ** 2 + (acty - y) ** 2
         if mask is not None:
@@ -447,12 +452,14 @@ class River:
         zu: Optional[float] = 0.0,
         x: Optional[float] = None,
         y: Optional[float] = None,
+        spherical: Optional[bool] = None,
     ):
         self.name = name
         self.i_glob = i
         self.j_glob = j
         self.x = x
         self.y = y
+        self.spherical = spherical
         self.zl = zl
         self.zu = zu
         self.i = None
@@ -463,7 +470,9 @@ class River:
         if self.x is not None:
             # Location is specified by x, y coordinate.
             # Look up nearest unmasked grid cell.
-            ind = grid.nearest_point(self.x, self.y, mask=1, include_halos=True)
+            ind = grid.nearest_point(
+                self.x, self.y, mask=1, include_halos=True, spherical=self.spherical
+            )
             if ind is None:
                 grid.domain.logger.info(
                     "River %s at x=%s, y=%s not present in this subdomain"
@@ -2343,6 +2352,7 @@ class Domain(_pygetm.Domain):
         if spherical is None:
             spherical = self.spherical
         x, y = (self.lon, self.lat) if spherical else (self.x, self.y)
+        x_, y_ = (self.lon_, self.lat_) if spherical else (self.x_, self.y_)
 
         local_slice, _, _, _ = self.tiling.subdomain2slices(
             halo_sub=0, halo_glob=4, scale=2, share=1, exclude_global_halos=True
@@ -2380,10 +2390,9 @@ class Domain(_pygetm.Domain):
                 )
             for river in self.rivers.values():
                 iloc, jloc = 1 + river.i * 2, 1 + river.j * 2
-                lon = self.lon_[jloc, iloc]
-                lat = self.lat_[jloc, iloc]
-                ax.plot([lon], [lat], ".r")
-                ax.text(lon, lat, river.name, color="r")
+                riverx, rivery = x_[jloc, iloc], y_[jloc, iloc]
+                ax.plot([riverx], [rivery], ".r")
+                ax.text(riverx, rivery, river.name, color="r")
 
         def plot_mesh(ax, x, y, **kwargs):
             segs1 = np.stack((x, y), axis=2)
@@ -2511,7 +2520,13 @@ class Domain(_pygetm.Domain):
             self.V.add_to_netcdf(nc, postfix="v")
             self.X.add_to_netcdf(nc, postfix="x")
 
-    def contains(self, x: float, y: float, include_halos: bool = False) -> bool:
+    def contains(
+        self,
+        x: float,
+        y: float,
+        include_halos: bool = False,
+        spherical: Optional[bool] = None,
+    ) -> bool:
         """Determine whether the domain contains the specified point.
 
         Args:
@@ -2524,6 +2539,8 @@ class Domain(_pygetm.Domain):
         Returns:
             True if the point falls within the domain, False otherwise
         """
+        if spherical is None:
+            spherical = self.spherical
         local_slice, _, _, _ = self.tiling.subdomain2slices(
             halo_sub=4,
             halo_glob=4,
@@ -2532,7 +2549,7 @@ class Domain(_pygetm.Domain):
             exclude_halos=not include_halos,
             exclude_global_halos=True,
         )
-        allx, ally = (self.lon_, self.lat_) if self.spherical else (self.x_, self.y_)
+        allx, ally = (self.lon_, self.lat_) if spherical else (self.x_, self.y_)
         allx, ally = allx[local_slice], ally[local_slice]
         ny, nx = allx.shape
 
