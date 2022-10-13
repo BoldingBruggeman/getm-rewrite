@@ -1836,7 +1836,7 @@ class Domain(_pygetm.Domain):
         self.z0b_min, self.z0b_min_ = setup_metric(z0)
         self.mask, self.mask_ = setup_metric(mask, dtype=np.intc, fill_value=0)
 
-        cor = f if f is not None else coriolis(lat)
+        cor = f if f is not None else coriolis(self.lat_)
         self.cor, self.cor_ = setup_metric(cor, writeable=False)
 
         # Compute dx, dy from Cartesian or spherical coordinates
