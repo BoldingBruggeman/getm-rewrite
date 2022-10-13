@@ -1359,12 +1359,12 @@ def create(
 
     if tiling is None:
         # No tiling provided - autodetect
-        mask = np.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))
+        try:
+            tmask = np.broadcast_to(mask, (ny, nx))
+        except ValueError:
+            tmask = np.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))[1::2, 1::2]
         tiling = parallel.Tiling.autodetect(
-            mask=mask[1::2, 1::2],
-            logger=parlogger,
-            periodic_x=periodic_x,
-            periodic_y=periodic_y,
+            mask=tmask, logger=parlogger, periodic_x=periodic_x, periodic_y=periodic_y,
         )
     elif isinstance(tiling, str):
         # Path to dumped Tiling object provided
@@ -2372,7 +2372,7 @@ class Domain(_pygetm.Domain):
             cb = fig.colorbar(c)
             cb.set_label("undisturbed water depth (m)")
 
-        if show_rivers:
+        if show_rivers and self.rivers:
             if not self._initialized:
                 raise Exception(
                     "Cannot plot rivers until after the domain has initialized."
