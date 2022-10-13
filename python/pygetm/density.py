@@ -29,7 +29,7 @@ class Density:
         absolute salinity, conservative temperature and pressure at the layer centers.
 
         Args:
-            SA: absolute salinity
+            SA: absolute salinity (g kg-1)
             ct: conservative temperature (degrees Celsius)
             p: pressure (dbar). If not provided, the water depth in m will be used as
                 approximate pressure.
@@ -69,7 +69,7 @@ class Density:
         temperature. Inputs can be 2D or 3D.
 
         Args:
-            SA: absolute salinity
+            SA: absolute salinity (g kg-1)
             ct: conservative temperature (degrees Celsius)
             p: pressure (dbar). If not provided, the water depth in m will be used as
                 approximate pressure.
@@ -102,7 +102,7 @@ class Density:
         temperature. Inputs can be 2D or 3D.
 
         Args:
-            SA: absolute salinity
+            SA: absolute salinity (g kg-1)
             ct: conservative temperature (degrees Celsius)
             out: array to store potential temperature result in. If not provided, a new
                 array will be created.
@@ -127,9 +127,9 @@ class Density:
         in_situ: bool = False,
     ) -> None:
         """Convert practical salinity and potential temperature to absolute salinity
-        and conservative temperature. The conversion happens in-place: absolute salinity
-        will replace practical salinity, conservative temperature (degrees Celsius)
-        will replace potential temperature.
+        and conservative temperature. The conversion happens in-place: absolute
+        salinity (g kg-1) will replace practical salinity, conservative temperature
+        (degrees Celsius) will replace potential temperature.
 
         Args:
             salt: practical salinity (PSU)
@@ -200,7 +200,8 @@ class Density:
             in_situ: input is in-situ temperature rather than potential temperature
 
         Returns:
-            a tuple with lazy arrays for absolute salinity and conservative temperature
+            a tuple with lazy arrays for absolute salinity (g kg-1) and conservative
+            temperature (degrees Celsius)
         """
         gridsrc = salt if isinstance(salt, xarray.DataArray) else temp
         if lon is None:
