@@ -22,6 +22,7 @@ class AdvectionScheme(enum.IntEnum):
 class AdvectionSplit(enum.Enum):
     FULL = 1  #: full splitting (first order in time): u-v in 2D, u-v-w in 3D
     HALF = 2  #: Strang splitting (second order in time): u/2-v-u/2 in 2D, u/2-v/2-w-v/2-u/2 in 3D
+    HALF_ALWAYS = 3  #: Strang splitting (second order in time): u/2-v/2-v/2-u/2 in 2D, u/2-v/2-w-v/2-u/2 in 3D
 
 
 class Advection(_pygetm.Advection):
@@ -73,16 +74,24 @@ class Advection(_pygetm.Advection):
         self.D[...] = self.grid.D.all_values
         if not skip_initial_halo_exchange:
             var.update_halos(self.halo1)
-        if self.split_2d == AdvectionSplit.HALF:
+        if self.split_2d == AdvectionSplit.FULL:
+            adv1(timestep, var)
+            var.update_halos(self.halo2)
+            adv2(timestep, var)
+        elif self.split_2d == AdvectionSplit.HALF:
             adv1(0.5 * timestep, var)
             var.update_halos(self.halo2)
             adv2(timestep, var)
             var.update_halos(self.halo1)
             adv1(0.5 * timestep, var)
         else:
-            adv1(timestep, var)
+            adv1(0.5 * timestep, var)
             var.update_halos(self.halo2)
-            adv2(timestep, var)
+            adv2(0.5 * timestep, var)
+            var.update_halos(self.halo2)
+            adv2(0.5 * timestep, var)
+            var.update_halos(self.halo1)
+            adv1(0.5 * timestep, var)
 
     def apply_3d(
         self,
