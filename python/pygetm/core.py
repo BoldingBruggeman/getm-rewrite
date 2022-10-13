@@ -320,7 +320,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             if self.size == 0 or self.on_boundary:
                 mask = False
             else:
-                mask = self.grid.mask.values == 0
+                mask = np.isin(self.grid.mask.values, (1, 2), invert=True)
             self._ma = np.ma.array(self.values, mask=np.broadcast_to(mask, self._shape))
         return self._ma
 
