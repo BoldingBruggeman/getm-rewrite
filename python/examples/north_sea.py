@@ -52,7 +52,7 @@ def create_simulation(
     if meteo_dir:
         humidity_measure = pygetm.HumidityMeasure.DEW_POINT_TEMPERATURE
     airsea = pygetm.airsea.FluxesFromMeteo(
-        humidity_measure=humidity_measure, calculate_evaporation=True
+        humidity_measure=humidity_measure,  # calculate_evaporation=True
     )
 
     if domain.open_boundaries and tpxo9_dir:
@@ -128,7 +128,7 @@ def create_simulation(
         sim.airsea.d2m.set(pygetm.input.from_nc(ERA_path, "d2m") - 273.15)
         sim.airsea.sp.set(pygetm.input.from_nc(ERA_path, "sp"))
         sim.airsea.tcc.set(pygetm.input.from_nc(ERA_path, "tcc"))
-        sim.airsea.tp.set(pygetm.input.from_nc(ERA_path, "tp") / 3600.0)
+        # sim.airsea.tp.set(pygetm.input.from_nc(ERA_path, "tp") / 3600.0)
     else:
         sim.logger.info("Setting up NS original meteorological forcing")
         met_path = os.path.join(setup_dir, "Forcing/Meteo/CFSR.daymean.2006.nc")
@@ -138,7 +138,7 @@ def create_simulation(
         sim.airsea.sp.set(pygetm.input.from_nc(met_path, "slp"))
         sim.airsea.u10.set(pygetm.input.from_nc(met_path, "u10"))
         sim.airsea.v10.set(pygetm.input.from_nc(met_path, "v10"))
-        sim.airsea.tp.set(pygetm.input.from_nc(met_path, "precip"))
+        # sim.airsea.tp.set(pygetm.input.from_nc(met_path, "precip"))
 
     if sim.fabm:
         sim.logger.info("Setting up FABM dependencies that GETM does not provide")

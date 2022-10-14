@@ -793,11 +793,16 @@ class Momentum(pygetm._pygetm.Momentum):
 
         itimestep = 1.0 / timestep
 
+        self.u1.interp(self.uua)
+        self.u1.interp(self.vua)
+        self.v1.interp(self.uva)
+        self.v1.interp(self.vva)
+
         # Advection of u velocity (u1)
-        U.interp(self.uua)
-        V.interp(self.uva)
-        self.uua.all_values /= self.domain.UU.D.all_values
-        self.uva.all_values /= self.domain.UV.D.all_values
+        # U.interp(self.uua)
+        # V.interp(self.uva)
+        # self.uua.all_values /= self.domain.UU.D.all_values
+        # self.uva.all_values /= self.domain.UV.D.all_values
         self.uadv(
             self.uua, self.uva, timestep, self.u1, skip_initial_halo_exchange=True,
         )
@@ -806,10 +811,10 @@ class Momentum(pygetm._pygetm.Momentum):
         ) * itimestep
 
         # Advection of v velocity (v1)
-        U.interp(self.vua)
-        V.interp(self.vva)
-        self.vua.all_values /= self.domain.VU.D.all_values
-        self.vva.all_values /= self.domain.VV.D.all_values
+        # U.interp(self.vua)
+        # V.interp(self.vva)
+        # self.vua.all_values /= self.domain.VU.D.all_values
+        # self.vva.all_values /= self.domain.VV.D.all_values
         self.vadv(
             self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True,
         )

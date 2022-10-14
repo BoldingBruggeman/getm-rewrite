@@ -174,7 +174,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 !KB               self%ea4(i,j,k)=dt*UG%alpha(i,j)*(self%fqk(i,j,k)-self%uuEx(i,j,k)+idpdx(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
-               self%ea4(i,j,k)=dt*(-0.5_real64*(UG%ho(i,j,k)+UG%hn(i,j,k))*g*dpdx(i,j) &
+               self%ea4(i,j,k)=dt*(-0.5_real64*(UG%ho(i,j,k)+UG%ho(i,j,k))*g*dpdx(i,j) &
                                    +UG%alpha(i,j)*( self%fqk(i,j,k) &
                                                    +self%advpk(i,j,k) &
                                                    +self%diffpk(i,j,k) &
@@ -198,7 +198,7 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 
             ! bottom friction
             k=UG%kmin
-            self%ea2(i,j,k)=-dt*self%rru(i,j)
+            self%ea2(i,j,k)=-dt*self%rru(i,j)/UG%ho(i,j,k)*UG%hn(i,j,k)
          end if
       end do
    end do
@@ -269,7 +269,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 !KB               self%ea4(i,j,k)=dt*VG%alpha(i,j)*(-self%fpk(i,j,k)-self%vvEx(i,j,k)+idpdy(i,j,k))
                ! check signs for components
 #ifndef _UPDATE_ADV_DIFF_
-               self%ea4(i,j,k)=dt*(-0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k))*g*dpdy(i,j) &
+               self%ea4(i,j,k)=dt*(-0.5_real64*(VG%ho(i,j,k)+VG%ho(i,j,k))*g*dpdy(i,j) &
                                    +VG%alpha(i,j)*(-self%fpk(i,j,k) &
                                                    +self%advqk(i,j,k) &
                                                    +self%diffqk(i,j,k) &
@@ -295,7 +295,7 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
             ! bottom friction
             k=VG%kmin
 !KB            self%ea2(i,j,k)=dt*self%rrv(i,j)/(0.5_real64*(VG%ho(i,j,k)+VG%hn(i,j,k)))
-            self%ea2(i,j,k)=-dt*self%rrv(i,j)
+            self%ea2(i,j,k)=-dt*self%rrv(i,j)/VG%ho(i,j,k)*VG%hn(i,j,k)
          end if
       end do
    end do

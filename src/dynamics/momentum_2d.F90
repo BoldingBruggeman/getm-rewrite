@@ -203,6 +203,7 @@ MODULE SUBROUTINE u_2d(self,dt,tausx,dpdx)
             else
                Slr = max( self%SxF(i,j) , 0._real64 )
             end if
+            Slr = self%SxF(i,j)
             ! [GETM Scientific Report: eqs. 2.14, 2.16]
             self%U(i,j) = (self%U(i,j) + dt * (-g * UG%D(i,j) * dpdx(i,j) & ! note SxF is multiplied by alpha
                            + UG%alpha(i,j) * (tausx(i,j) * rho0i + self%fV(i,j) &
@@ -256,6 +257,7 @@ MODULE SUBROUTINE v_2d(self,dt,tausy,dpdy)
             else
                Slr = max( self%SyF(i,j) , 0._real64 )
             end if
+            Slr = self%SyF(i,j)
             ! [GETM Scientific Report: eqs. 2.15, 2.17]
             self%V(i,j) = (self%V(i,j) + dt * (-g * VG%D(i,j) * dpdy(i,j) & ! note SyF is multiplied by alpha
                            + VG%alpha(i,j) * (tausy(i,j) * rho0i - self%fU(i,j) &
