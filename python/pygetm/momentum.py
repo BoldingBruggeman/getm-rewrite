@@ -407,7 +407,7 @@ class Momentum(pygetm._pygetm.Momentum):
         for v in ZERO:
             array = getattr(self, v)
             edges = array.grid._land & array.grid._water_contact
-            array.all_values[array.grid._land] = 0.0
+            array.all_values[..., array.grid._land] = 0.0
 
         self.An.update_halos()
         self.An.all_values[self.domain.T._land] = self.An.fill_value
