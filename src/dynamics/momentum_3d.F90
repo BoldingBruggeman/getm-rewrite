@@ -215,13 +215,13 @@ MODULE SUBROUTINE pk_3d(self,dt,tausx,dpdx,idpdx,viscosity)
 
    ! Transport correction: the integral of the new velocities has to
    ! be the same as the transport calculated by the external mode, Uint.
-   do j=UG%jmin,UG%jmax
-      do i=UG%imin,UG%imax
-         if (UG%mask(i,j) == 1) then
-            self%pk(i,j,1:) = self%pk(i,j,1:)+UG%hn(i,j,1:)*(self%Ui(i,j)-sum(self%pk(i,j,1:)))/UG%D(i,j)
-         end if
-      end do
-   end do
+   !do j=UG%jmin,UG%jmax
+   !   do i=UG%imin,UG%imax
+   !      if (UG%mask(i,j) == 1) then
+   !         self%pk(i,j,1:) = self%pk(i,j,1:)+UG%hn(i,j,1:)*(self%Ui(i,j)-sum(self%pk(i,j,1:)))/UG%D(i,j)
+   !      end if
+   !   end do
+   !end do
    !call self%domain%mirror_bdys(UG,self%pk)
    end associate UGrid
 END SUBROUTINE pk_3d
@@ -312,13 +312,13 @@ MODULE SUBROUTINE qk_3d(self,dt,tausy,dpdy,idpdy,viscosity)
 
    ! Transport correction: the integral of the new velocities has to
    ! be the same as the transport calculated by the external mode, Vi
-   do j=VG%jmin,VG%jmax
-      do i=VG%imin,VG%imax
-         if (VG%mask(i,j) == 1) then
-            self%qk(i,j,1:) = self%qk(i,j,1:)+VG%hn(i,j,1:)*(self%Vi(i,j)-sum(self%qk(i,j,1:)))/VG%D(i,j)
-         end if
-      end do
-   end do
+   !do j=VG%jmin,VG%jmax
+   !   do i=VG%imin,VG%imax
+   !      if (VG%mask(i,j) == 1) then
+   !         self%qk(i,j,1:) = self%qk(i,j,1:)+VG%hn(i,j,1:)*(self%Vi(i,j)-sum(self%qk(i,j,1:)))/VG%D(i,j)
+   !      end if
+   !   end do
+   !end do
    !call self%domain%mirror_bdys(VG,self%qk)
    end associate VGrid
 END SUBROUTINE qk_3d
