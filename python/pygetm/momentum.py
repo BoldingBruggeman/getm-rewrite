@@ -20,7 +20,7 @@ class CoriolisScheme(enum.IntEnum):
 
 
 MASK_ZERO_2D = ("U", "V", "u1", "v1")
-MASK_ZERO_3D = ("pk", "qk", "uk", "vk", "ww", "Ui", "Vi")
+MASK_ZERO_3D = ("pk", "qk", "uk", "vk", "Ui", "Vi")
 
 
 class Momentum(pygetm._pygetm.Momentum):
@@ -309,6 +309,7 @@ class Momentum(pygetm._pygetm.Momentum):
                 "diffqk",
                 "fpk",
                 "fqk",
+                "ww",
             )
         for v in ZERO_EVERYWHERE:
             array = getattr(self, v)
