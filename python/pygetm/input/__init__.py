@@ -1328,7 +1328,7 @@ class InputManager:
             # arbitrary lon, lat grid. In the latter case, we interpolate in space.
             assert array.all_values.shape[-2:] == local_shape
             target_slice = local_slice
-            if source_lon is None and source_lat is None:
+            if source_lon is None and source_lat is None and on_grid == OnGrid.NONE:
                 # time series for single location
                 value = value.expand_dims(("y", "x"), (value.ndim, value.ndim + 1))
             elif on_grid == OnGrid.NONE:
