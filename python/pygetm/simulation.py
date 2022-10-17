@@ -4,6 +4,7 @@ import logging
 import datetime
 import timeit
 import functools
+import pstats
 
 import numpy as np
 import cftime
@@ -974,8 +975,6 @@ class Simulation(_pygetm.Simulation):
         where appropriate (restarts), and close output files
         """
         if self._profile:
-            import pstats
-
             name, pr = self._profile
             pr.disable()
             profile_path = "%s-%03i.prof" % (name, self.domain.tiling.rank)
@@ -983,11 +982,37 @@ class Simulation(_pygetm.Simulation):
             with open(profile_path, "w") as f:
                 ps = pstats.Stats(pr, stream=f).sort_stats(pstats.SortKey.TIME)
                 ps.print_stats()
+                self.summary_profiling_result(ps)
         self.logger.info(
             "Time spent in main loop: %.3f s"
             % (timeit.default_timer() - self._start_time,)
         )
         self.output_manager.close(self.timestep * self.istep, self.time)
+
+    def summary_profiling_result(self, ps: pstats.Stats):
+        if not hasattr(ps, "get_stats_profile"):
+            # python < 3.9
+            return
+
+        sp = ps.get_stats_profile()
+        if "<built-in method Waitall>" not in sp.func_profiles:
+            # not a parallel simulation, or advance was never called
+            return
+        stat = [
+            sp.total_tt,
+            sp.func_profiles["<built-in method Waitall>"].tottime,
+            self.domain.T._water.sum(),
+        ]
+        all_stat = self.domain.tiling.comm.gather(stat)
+        if all_stat is not None:
+            self.logger.info("Time spent on compute per subdomain (excludes halo exchange):")
+            for rank, (tottime, halotime, nwet) in enumerate(all_stat):
+                self.logger.info("%i (%i water points): %.3f s" % (rank, nwet, tottime - halotime))
+            rank = np.argmin([s[1] for s in all_stat])
+            self.logger.info(
+                "Most expensive subdomain: %i (see %s-%03i.prof)"
+                % (rank, self._profile[0], rank)
+            )
 
     def add_freshwater_inputs(self, timestep: float):
         """Update layer thicknesses and tracer concentrations to account for
