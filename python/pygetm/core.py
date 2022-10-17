@@ -358,7 +358,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # Target must be a grid; we need to create the array
             target_z = z if z is not None else self.z
             target = Array.create(target, dtype=self._dtype, z=target_z)
-        source_array, target_array = self.all_values, target.all_values
+        source_array = self.all_values
+        target_array = target.all_values
         if self.grid is target.grid:
             if self.z == INTERFACES and target.z == CENTERS:
                 # vertical interpolation from layer interfaces to layer centers

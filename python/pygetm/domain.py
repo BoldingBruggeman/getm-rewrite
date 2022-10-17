@@ -2124,6 +2124,7 @@ class Domain(_pygetm.Domain):
 
         # Water depth and thicknesses on T grid that lag 1/2 time step behind tracer
         # (i.e., they are in sync with U, V, X grids)
+        self.z_T_half = self.T.array(fill=np.nan)
         self.D_T_half = self.T.array(fill=np.nan)
         self.h_T_half = self.T.array(fill=np.nan, z=CENTERS)
         self.depth = self.T.array(
@@ -2626,17 +2627,18 @@ class Domain(_pygetm.Domain):
         # These must lag 1/2 a timestep behind the T grid.
         # They are therefore calculated from the average of old and new elevations on
         # the T grid.
-        z_T_half = 0.5 * (zo_T + z_T)
+        np.add(zo_T.all_values, z_T.all_values, out=self.z_T_half.all_values)
+        self.z_T_half.all_values *= 0.5
 
-        z_T_half.interp(z_U)
-        z_T_half.mirror(z_U)
+        self.z_T_half.interp(z_U)
+        self.z_T_half.mirror(z_U)
         _pygetm.clip_z(z_U, self.Dmin)
 
-        z_T_half.interp(z_V)
-        z_T_half.mirror(z_V)
+        self.z_T_half.interp(z_V)
+        self.z_T_half.mirror(z_V)
         _pygetm.clip_z(z_V, self.Dmin)
 
-        z_T_half.interp(z_X)
+        self.z_T_half.interp(z_X)
         _pygetm.clip_z(z_X, self.Dmin)
 
         # Halo exchange for elevation on U, V grids, needed because the very last
@@ -2685,7 +2687,9 @@ class Domain(_pygetm.Domain):
         # Update total water depth on advection grids. These must be 1/2 timestep
         # behind the T grid. That's already the case for the X grid, but for the T grid
         # we explicitly compute and use the average of old and new D.
-        np.add(self.T.H.all_values, z_T_half.all_values, out=self.D_T_half.all_values)
+        np.add(
+            self.T.H.all_values, self.z_T_half.all_values, out=self.D_T_half.all_values
+        )
         self.UU.D.all_values[:, :-1] = self.D_T_half.all_values[:, 1:]
         self.VV.D.all_values[:-1, :] = self.D_T_half.all_values[1:, :]
         self.UV.D.all_values[:, :] = self.VU.D.all_values[:, :] = self.X.D.all_values[
