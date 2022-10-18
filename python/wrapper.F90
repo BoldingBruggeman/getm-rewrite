@@ -347,7 +347,8 @@ contains
       pdiffusion = c_loc(diffusion)
    end function
 
-   subroutine vertical_diffusion_calculate(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, ho, hn, var, pea2, pea4) bind(c)
+   subroutine vertical_diffusion_calculate(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, &
+      ho, hn, var, pea2, pea4) bind(c)
       type(c_ptr),    intent(in), value :: pdiffusion
       integer(c_int), intent(in), value :: nx, ny, nz
       real(c_double), intent(in), value :: molecular, timestep, cnpar
