@@ -25,7 +25,7 @@ cdef extern void* advection_create(int scheme, void* tgrid) nogil
 cdef extern void advection_uv_calculate(int direction, int nk, void* advection, void* tgrid, void* ugrid, double* pu, double* Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
-cdef extern void vertical_diffusion_calculate(void* diffusion, void* tgrid, double molecular, double* pnuh, double timestep, double cnpar, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
+cdef extern void vertical_diffusion_calculate(void* diffusion, int nx, int ny, int nz, double molecular, double* pnuh, double timestep, double cnpar, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double cnpar, int coriolis_scheme) nogil
 cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
 cdef extern void momentum_u_3d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx, double* pidpdx, double* pviscosity) nogil
@@ -266,26 +266,23 @@ cdef class Advection:
 
 cdef class VerticalDiffusion:
     cdef void* p
-    cdef Grid tgrid
     cdef double cnpar
-    cdef Array ho, hn
 
     def __init__(self, Grid grid, double cnpar=1.):
-        self.tgrid = grid
-        self.p = vertical_diffusion_create(self.tgrid.p)
+        self.p = vertical_diffusion_create(grid.p)
         self.cnpar = cnpar
-        self.ho = self.tgrid.ho
-        self.hn = self.tgrid.hn
 
     def __call__(self, Array nuh not None, double timestep, Array var not None, double molecular=0., Array ea2=None, Array ea4=None, bint use_ho=False):
         cdef double* pea2 = NULL
         cdef double* pea4 = NULL
-        cdef double* pho = <double *>(self.ho if use_ho else self.hn).p
         if ea2 is not None:
             pea2 = <double *>ea2.p
         if ea4 is not None:
             pea4 = <double *>ea4.p
-        vertical_diffusion_calculate(self.p, self.tgrid.p, molecular, <double *>nuh.p, timestep, self.cnpar, pho, <double *>self.hn.p, <double *>var.p, pea2, pea4)
+        cdef Array mask = var.grid.mask
+        cdef Array hn = var.grid.hn
+        cdef Array ho = var.grid.ho if use_ho else hn
+        vertical_diffusion_calculate(self.p, var.grid.nx_, var.grid.ny_, var.grid.nz_, molecular, <double *>nuh.p, timestep, self.cnpar, <int *>mask.p, <double *>ho.p, <double *>hn.p, <double *>var.p, pea2, pea4)
 
 cdef class Simulation:
     cdef readonly Domain domain

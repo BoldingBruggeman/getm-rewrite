@@ -347,33 +347,32 @@ contains
       pdiffusion = c_loc(diffusion)
    end function
 
-   subroutine vertical_diffusion_calculate(pdiffusion, ptgrid, molecular, pnuh, timestep, cnpar, pho, phn, pvar, pea2, pea4) bind(c)
-      real(c_double), intent(in), value :: timestep, cnpar, molecular
-      type(c_ptr),    intent(in), value :: pdiffusion, ptgrid, pnuh, pho, phn, pvar, pea2, pea4
+   subroutine vertical_diffusion_calculate(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, ho, hn, var, pea2, pea4) bind(c)
+      type(c_ptr),    intent(in), value :: pdiffusion
+      integer(c_int), intent(in), value :: nx, ny, nz
+      real(c_double), intent(in), value :: molecular, timestep, cnpar
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: nuh(nx, ny, 0:nz), ho(nx, ny, nz), hn(nx, ny, nz)
+      real(c_double), intent(inout) :: var(nx, ny, nz)
+      type(c_ptr),    intent(in), value :: pea2, pea4
 
-      type (type_getm_grid),          pointer :: tgrid
       type (type_vertical_diffusion), pointer :: diffusion
-      real(real64), contiguous, pointer, dimension(:,:,:) :: nuh, ho, hn, var, ea2, ea4
+      real(real64), contiguous, pointer, dimension(:,:,:) :: ea2, ea4
 
       call c_f_pointer(pdiffusion, diffusion)
-      call c_f_pointer(ptgrid, tgrid)
-      call c_f_pointer(pnuh, nuh, (/tgrid%u(1) - tgrid%l(1) + 1, tgrid%u(2) - tgrid%l(2) + 1, tgrid%u(3) - tgrid%l(3) + 2/))
-      call c_f_pointer(pho, ho, tgrid%u - tgrid%l + 1)
-      call c_f_pointer(phn, hn, tgrid%u - tgrid%l + 1)
-      call c_f_pointer(pvar, var, tgrid%u - tgrid%l + 1)
-      if (c_associated(pea2)) call c_f_pointer(pea2, ea2, tgrid%u - tgrid%l + 1)
-      if (c_associated(pea4)) call c_f_pointer(pea4, ea4, tgrid%u - tgrid%l + 1)
+      if (c_associated(pea2)) call c_f_pointer(pea2, ea2, (/nx, ny, nz/))
+      if (c_associated(pea4)) call c_f_pointer(pea4, ea4, (/nx, ny, nz/))
       if (c_associated(pea2) .and. c_associated(pea4)) then
-         call diffusion%calculate(timestep, cnpar, tgrid%mask, ho, hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var, &
             ea2=ea2, ea4=ea4)
       elseif (c_associated(pea2)) then
-         call diffusion%calculate(timestep, cnpar, tgrid%mask, ho, hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var, &
             ea2=ea2)
       elseif (c_associated(pea4)) then
-         call diffusion%calculate(timestep, cnpar, tgrid%mask, ho, hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var, &
+         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var, &
             ea4=ea4)
       else
-         call diffusion%calculate(timestep, cnpar, tgrid%mask, ho, hn, molecular, nuh(:, :, 2:size(nuh,3)-1), var)
+         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var)
       end if
    end subroutine
 
