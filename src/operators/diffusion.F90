@@ -37,7 +37,8 @@ MODULE SUBROUTINE vertical_diffusion_initialize_grid(self,grid)
 !  Local variables
 !---------------------------------------------------------------------------
 #ifndef _STATIC_
-   self%halo=grid%halo
+   self%l(:) = grid%l
+   self%u(:) = grid%u
    self%imin = grid%imin; self%imax = grid%imax
    self%jmin = grid%jmin; self%jmax = grid%jmax
    self%kmin = grid%kmin; self%kmax = grid%kmax
@@ -78,11 +79,12 @@ MODULE SUBROUTINE vertical_diffusion_initialize_field(self,f,halo)
 
 !  Local variables
 !---------------------------------------------------------------------------
-   if (present(halo)) self%halo=halo
 #ifndef _STATIC_
    self%imin = lbound(f,1); self%imax = ubound(f,1)
    self%jmin = lbound(f,2); self%jmax = ubound(f,2)
    self%kmin = lbound(f,3); self%kmax = ubound(f,3)
+   self%l(:) = lbound(f)
+   self%u(:) = ubound(f)
    allocate(self%auxo(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
    allocate(self%auxn(self%imin:self%imax,self%jmin:self%jmax,self%kmin:self%kmax))
 #ifdef _NORMAL_ORDER_
@@ -114,10 +116,10 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    class(type_vertical_diffusion), intent(inout) :: self
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+#define _T2_ self%l(1):self%u(1),self%l(2):self%u(2)
    integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+#define _T3_ self%l(1):self%u(1),self%l(2):self%u(2),self%l(3):self%u(3)
    real(real64), intent(in) :: dzo(_T3_)
    real(real64), intent(in) :: dzn(_T3_)
    real(real64), intent(in) :: molecular
@@ -134,10 +136,10 @@ MODULE SUBROUTINE vertical_diffusion_prepare(self,dt,cnpar,mask,dzo,dzn,molecula
    class(type_vertical_diffusion), intent(inout) :: self
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+#define _T2_ self%l(1):self%u(1),self%l(2):self%u(2)
    integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+#define _T3_ self%l(1):self%u(1),self%l(2):self%u(2),self%l(3):self%u(3)
    real(real64), intent(in) :: dzo(_T3_)
    real(real64), intent(in) :: dzn(_T3_)
    real(real64), intent(in) :: molecular
@@ -211,10 +213,10 @@ END SUBROUTINE vertical_diffusion_prepare
 
 MODULE SUBROUTINE vertical_diffusion_apply(self,mask,dzo,dzn,var,ea2,ea4)
    class(type_vertical_diffusion), intent(inout) :: self
-#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+#define _T2_ self%l(1):self%u(1),self%l(2):self%u(2)
    integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+#define _T3_ self%l(1):self%u(1),self%l(2):self%u(2),self%l(3):self%u(3)
    real(real64), intent(in) :: dzo(_T3_)
    real(real64), intent(in) :: dzn(_T3_)
    real(real64), intent(inout) :: var(_T3_)

@@ -88,7 +88,7 @@ MODULE getm_operators
       real(real64), private, dimension(:,:,:), allocatable :: auxo, auxn
       real(real64), private, dimension(:,:,:), allocatable :: a1,a2,a3,a4
 
-      integer, private :: imin,imax,jmin,jmax,kmin,kmax,halo(3)=(/2,2,0/)
+      integer, private :: imin,imax,jmin,jmax,kmin,kmax,l(3),u(3)
 
       real(real64) :: matrix_time
       real(real64) :: tridiag_time
@@ -122,10 +122,10 @@ MODULE getm_operators
          class(type_vertical_diffusion), intent(inout) :: self
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+#define _T2_ self%l(1):self%u(1),self%l(2):self%u(2)
          integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+#define _T3_ self%l(1):self%u(1),self%l(2):self%u(2),self%l(3):self%u(3)
          real(real64), intent(in) :: dzo(_T3_)
          real(real64), intent(in) :: dzn(_T3_)
          real(real64), intent(in) :: molecular
@@ -140,10 +140,10 @@ MODULE getm_operators
          class(type_vertical_diffusion), intent(inout) :: self
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+#define _T2_ self%l(1):self%u(1),self%l(2):self%u(2)
          integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+#define _T3_ self%l(1):self%u(1),self%l(2):self%u(2),self%l(3):self%u(3)
          real(real64), intent(in) :: dzo(_T3_)
          real(real64), intent(in) :: dzn(_T3_)
          real(real64), intent(in) :: molecular
@@ -153,10 +153,10 @@ MODULE getm_operators
 
       module subroutine vertical_diffusion_apply(self,mask,dzo,dzn,var,ea2,ea4)
          class(type_vertical_diffusion), intent(inout) :: self
-#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+#define _T2_ self%l(1):self%u(1),self%l(2):self%u(2)
          integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+#define _T3_ self%l(1):self%u(1),self%l(2):self%u(2),self%l(3):self%u(3)
          real(real64), intent(in) :: dzo(_T3_)
          real(real64), intent(in) :: dzn(_T3_)
          real(real64), intent(inout) :: var(_T3_)
