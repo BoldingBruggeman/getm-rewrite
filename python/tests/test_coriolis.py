@@ -46,9 +46,9 @@ class Test(unittest.TestCase):
         fu = sim.momentum.fU / domain.V.H
         fv = sim.momentum.fV / domain.U.H
 
-        self.assertTrue((fu.values[:-1, 1:-1] == f * u).all())
-        self.assertTrue((fu.values[:-1, 0] == 0.5 * f * u).all())
-        self.assertTrue((fu.values[:-1, -1] == 0.5 * f * u).all())
+        self.assertTrue((fu.values[:-1, 1:-1] == -f * u).all())
+        self.assertTrue((fu.values[:-1, 0] == -0.5 * f * u).all())
+        self.assertTrue((fu.values[:-1, -1] == -0.5 * f * u).all())
         # self.assertTrue((fu.values[-1, :] == 0.0).all())
 
         self.assertTrue((fv.values[1:-1, :-1] == f * v).all())
@@ -57,7 +57,7 @@ class Test(unittest.TestCase):
         # self.assertTrue((fv.values[:, -1] == 0.0).all())
 
         if u == v:
-            self.assertTrue((fu.values == fv.values.T).all())
+            self.assertTrue((fu.values == -fv.values.T).all())
 
         h = H / nz
         sim.momentum.pk.all_values[...] = np.where(
@@ -76,9 +76,9 @@ class Test(unittest.TestCase):
         fu = sim.momentum.fpk / domain.V.hn
         fv = sim.momentum.fqk / domain.U.hn
 
-        self.assertTrue((fu.values[:, :-1, 1:-1] == f * u).all())
-        self.assertTrue((fu.values[:, :-1, 0] == 0.5 * f * u).all())
-        self.assertTrue((fu.values[:, :-1, -1] == 0.5 * f * u).all())
+        self.assertTrue((fu.values[:, :-1, 1:-1] == -f * u).all())
+        self.assertTrue((fu.values[:, :-1, 0] == 0.5 * -f * u).all())
+        self.assertTrue((fu.values[:, :-1, -1] == 0.5 * -f * u).all())
         # self.assertTrue((fu.values[:, -1, :] == 0.0).all())
 
         self.assertTrue((fv.values[:, 1:-1, :-1] == f * v).all())
