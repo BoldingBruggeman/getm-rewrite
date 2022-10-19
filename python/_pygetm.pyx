@@ -46,7 +46,7 @@ cdef extern void c_thickness2vertical_coordinates(int nx, int ny, int nz, int* m
 cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha)
 cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
 cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int halox,int haloy,int* umask,int* vmask,double* idxu,double* dyu,double* idyv,double* dxv,double* Ah_u,double* Ah_v,int* tmask,double* iA,double dt,double* f,double* out)
-cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double* ru, int iterate)
+cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double avmmol, double* ru, int iterate)
 cdef extern void c_collect_3d_momentum_sources(int imin, int imax, int jmin, int jmax, int kmax, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4)
 cdef extern void c_advance_2d_transport(int imin, int imax, int jmin, int jmax, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U)
 
@@ -437,7 +437,7 @@ def horizontal_diffusion(Array f not None, Array Ah_u not None, Array Ah_v not N
         <int*>umask.p, <int*>vmask.p, <double*>idx.p, <double*>dy.p, <double*>idy.p, <double*>dx.p,
         <double*>Ah_u.p, <double*>Ah_v.p, <int*>mask.p, <double*>iarea.p, dt, <double*>f.p, <double*>out.p)
 
-def bottom_friction(Array u not None, Array v not None, Array D not None, Array out not None, bint update_z0b):
+def bottom_friction(Array u not None, Array v not None, Array D not None, double avmmol, Array out not None, bint update_z0b):
     cdef int nx = u.grid.nx_
     cdef int ny = u.grid.ny_
     cdef Array mask = u.grid.mask
@@ -447,7 +447,7 @@ def bottom_friction(Array u not None, Array v not None, Array D not None, Array 
     assert v.grid is u.grid and not v.z
     assert D.grid is u.grid and not D.z
     assert out.grid is u.grid and not out.z
-    c_bottom_friction(nx, ny, <int*>mask.p, <double*>u.p, <double*>v.p, <double*>D.p, <double*>z0b.p, <double*>z0b_min.p, <double*>out.p, update_z0b)
+    c_bottom_friction(nx, ny, <int*>mask.p, <double*>u.p, <double*>v.p, <double*>D.p, <double*>z0b.p, <double*>z0b_min.p, avmmol, <double*>out.p, update_z0b)
 
 def collect_3d_momentum_sources(Array dp, Array cor, Array adv, Array diff, Array idp, Array taus, Array rr, double dt, Array ea2, Array ea4):
     cdef Grid grid = dp.grid

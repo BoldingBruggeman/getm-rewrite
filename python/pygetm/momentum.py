@@ -915,8 +915,8 @@ class Momentum(pygetm._pygetm.Momentum):
         """
         u.interp(self.u_V)
         v.interp(self.v_U)
-        pygetm._pygetm.bottom_friction(u, self.v_U, DU, ru, update_z0b)
-        pygetm._pygetm.bottom_friction(self.u_V, v, DV, rv, update_z0b)
+        pygetm._pygetm.bottom_friction(u, self.v_U, DU, self.avmmol, ru, update_z0b)
+        pygetm._pygetm.bottom_friction(self.u_V, v, DV, self.avmmol, rv, update_z0b)
 
     def coriolis(self, U: core.Array, out: core.Array):
         """Calculate change in transport due to Coriolis force

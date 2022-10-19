@@ -35,9 +35,9 @@ MODULE getm_momentum
    PRIVATE  ! Private scope by default
 
 !  Module constants
-   real(real64), parameter :: rho0 = 1025._real64
+   real(real64), parameter, public :: rho0 = 1025._real64
       !! Reference density
-   real(real64), parameter :: kappa = 0.4_real64
+   real(real64), parameter, public :: kappa = 0.4_real64
       !! constant
    real(real64), parameter :: avmmol = 0.001_real64 !KB
       !! constant

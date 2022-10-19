@@ -7,12 +7,12 @@ module pygetm
    use getm_operators, only: type_advection, type_vertical_diffusion
    use getm_sealevel, only: type_getm_sealevel
    use getm_pressure, only: type_getm_pressure
-   use getm_momentum, only: type_getm_momentum
+   use getm_momentum, only: type_getm_momentum, kappa, rho0
    use memory_manager
 
    implicit none
 
-   real(c_double), parameter :: rho0i = 1.0_c_double / 1025._c_double
+   real(c_double), parameter :: rho0i = 1.0_c_double / rho0
 
 contains
 
@@ -824,7 +824,7 @@ contains
    end do
    END SUBROUTINE c_horizontal_diffusion
 
-   SUBROUTINE c_bottom_friction(nx, ny, mask, u, v, D, z0b, z0b_min, ru, iterate) bind(c)
+   SUBROUTINE c_bottom_friction(nx, ny, mask, u, v, D, z0b, z0b_min, avmmol, ru, iterate) bind(c)
       integer(c_int), value, intent(in) :: nx, ny
       integer(c_int), intent(in) :: mask(nx, ny)
       real(c_double), intent(in) :: u(nx, ny)
@@ -832,11 +832,10 @@ contains
       real(c_double), intent(in) :: D(nx, ny)
       real(c_double), intent(inout) :: z0b(nx, ny)
       real(c_double), intent(in) :: z0b_min(nx, ny)
+      real(c_double), intent(in), value :: avmmol
       real(c_double), intent(out) :: ru(nx, ny)
       integer(c_int), value, intent(in) :: iterate
 
-      real(real64), parameter :: kappa = 0.4_real64
-      real(real64), parameter :: avmmol = 0.001_real64 !KB
       real(real64) :: sqrtcd(nx, ny)
 
       where (mask == 1) sqrtcd = kappa / log(1.0_real64 + 0.5_real64 * D / z0b)
