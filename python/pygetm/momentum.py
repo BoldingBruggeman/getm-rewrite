@@ -106,6 +106,10 @@ class Momentum(pygetm._pygetm.Momentum):
         "v_bot",
         "udev",
         "vdev",
+        "_vertical_diffusion",
+        "ea2",
+        "ea4",
+        "avmmol",
     )
 
     _array_args = {
@@ -215,6 +219,7 @@ class Momentum(pygetm._pygetm.Momentum):
         advection_scheme: Optional[operators.AdvectionScheme] = None,
         advection_split_2d: operators.AdvectionSplit = operators.AdvectionSplit.FULL,
         coriolis_scheme: CoriolisScheme = CoriolisScheme.DEFAULT,
+        avmmol: float = 1.8e-6,
     ):
         """Create momentum handler
 
@@ -230,6 +235,7 @@ class Momentum(pygetm._pygetm.Momentum):
             advection_split_2d: directional splitting for advection solver
             coriolis_scheme: interpolation method to use to recontruct velocities for
                 Coriolis terms
+            avmmol: molecular viscosity (m2 s-1)
         """
         self._Am_const = Am
         self._An_const = An
@@ -237,6 +243,7 @@ class Momentum(pygetm._pygetm.Momentum):
         self.advection_scheme = advection_scheme
         self.advection_split_2d = advection_split_2d
         self.coriolis_scheme = coriolis_scheme
+        self.avmmol = avmmol
 
     def initialize(
         self,
@@ -366,6 +373,12 @@ class Momentum(pygetm._pygetm.Momentum):
             self.u_bot = self.uk.isel(z=0)
             self.v_bot = self.vk.isel(z=0)
 
+        self._vertical_diffusion = operators.VerticalDiffusion(
+            domain.T, cnpar=self.cnpar
+        )
+        self.ea2 = domain.T.array(fill=0.0, z=CENTERS)
+        self.ea4 = domain.T.array(fill=0.0, z=CENTERS)
+
         self.An = domain.T.array(
             name="An",
             units="m2 s-1",
@@ -447,28 +460,58 @@ class Momentum(pygetm._pygetm.Momentum):
             dpdx: surface pressure gradient (dimensionless) in x-direction
             dpdx: surface pressure gradient (dimensionless) in y-direction
         """
+
+        def u():
+            pygetm._pygetm.advance_2d_transport(
+                self.U,
+                dpdx,
+                tausx,
+                self.fV,
+                self.advU,
+                self.diffU,
+                self.dampU,
+                self.SxA,
+                self.SxB,
+                self.SxD,
+                self.SxF,
+                self.ru,
+                timestep,
+            )
+            self.U.mirror()
+            self.U.update_halos()
+            self.coriolis(self.U, self.fU)
+
+        def v():
+            pygetm._pygetm.advance_2d_transport(
+                self.V,
+                dpdy,
+                tausy,
+                self.fU,
+                self.advV,
+                self.diffV,
+                self.dampV,
+                self.SyA,
+                self.SyB,
+                self.SyD,
+                self.SyF,
+                self.rv,
+                timestep,
+            )
+            self.V.mirror()
+            self.V.update_halos()
+            self.coriolis(self.V, self.fV)
+
         # Update 2D transports from t-1/2 to t+1/2.
-        # This uses advection, diffusion and bottom friction terms
-        # (advU, advV, diffU, diffV, ru, rv) that were calculated by the call
-        # to update_2d_momentum_diagnostics
+        # This uses advection, diffusion, damping and bottom friction terms
+        # (advU, advV, diffU, diffV, dampU, dampV, ru, rv) that were calculated
+        # in update_depth_integrated_diagnostics, and slow terms (SxA, SyA, SxB,
+        # SyB, SxD, SyD, SxF, SyF) that were calculated in update_diagnostics
         if self._ufirst:
-            self.u_2d(timestep, tausx, dpdx)
-            self.U.mirror()
-            self.U.update_halos()
-            self.coriolis(self.U, self.fU)
-            self.v_2d(timestep, tausy, dpdy)
-            self.V.mirror()
-            self.V.update_halos()
-            self.coriolis(self.V, self.fV)
+            u()
+            v()
         else:
-            self.v_2d(timestep, tausy, dpdy)
-            self.V.mirror()
-            self.V.update_halos()
-            self.coriolis(self.V, self.fV)
-            self.u_2d(timestep, tausx, dpdx)
-            self.U.mirror()
-            self.U.update_halos()
-            self.coriolis(self.U, self.fU)
+            v()
+            u()
         self._ufirst = not self._ufirst
 
         self.Ui_tmp += self.U.all_values
@@ -553,16 +596,41 @@ class Momentum(pygetm._pygetm.Momentum):
         # to the U and V grids. For that, information from the halos is used.
         viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
 
-        def adv(advancer, taus, dp, idp, tp3d, tp2d, cor, dev):
-            grid = tp3d.grid
-            advancer(timestep, taus, dp, idp, viscosity.interp(grid))
-            tp3d.all_values.sum(axis=0, out=dev.all_values)
-            dev.all_values -= tp2d.all_values
-            dev.all_values /= grid.D.all_values
-            tp3d.all_values -= dev.all_values * grid.hn.all_values
-            tp3d.mirror()
-            tp3d.update_halos()
-            self.coriolis(tp3d, cor)
+        def u():
+            self.advance_3d_transport(
+                self.pk,
+                self.Ui,
+                self.uk,
+                dpdx,
+                self.fqk,
+                self.advpk,
+                self.diffpk,
+                idpdx,
+                tausx,
+                self.rru,
+                viscosity,
+                self.udev,
+                timestep,
+            )
+            self.coriolis(self.pk, self.fpk)
+
+        def v():
+            self.advance_3d_transport(
+                self.qk,
+                self.Vi,
+                self.vk,
+                dpdy,
+                self.fpk,
+                self.advqk,
+                self.diffqk,
+                idpdy,
+                tausy,
+                self.rrv,
+                viscosity,
+                self.vdev,
+                timestep,
+            )
+            self.coriolis(self.qk, self.fqk)
 
         # Update horizontal transports. Also update the halos so that transports
         # (and more importantly, the velocities derived subsequently) are valid there.
@@ -580,11 +648,11 @@ class Momentum(pygetm._pygetm.Momentum):
         # - to calculate vertical velocities, which requires horizontal transports at
         #   the four interfaces around every T point
         if self._u3dfirst:
-            adv(self.pk_3d, tausx, dpdx, idpdx, self.pk, self.Ui, self.fpk, self.udev)
-            adv(self.qk_3d, tausy, dpdy, idpdy, self.qk, self.Vi, self.fqk, self.vdev)
+            u()
+            v()
         else:
-            adv(self.qk_3d, tausy, dpdy, idpdy, self.qk, self.Vi, self.fqk, self.vdev)
-            adv(self.pk_3d, tausx, dpdx, idpdx, self.pk, self.Ui, self.fpk, self.udev)
+            v()
+            u()
         self._u3dfirst = not self._u3dfirst
 
         self.update_diagnostics(timestep, viscosity, skip_coriolis=True)
@@ -858,6 +926,7 @@ class Momentum(pygetm._pygetm.Momentum):
             out: array to store change in complementary transport (y or x-direction)
                 due to Coriolis force (m2 s-2)
         """
+        assert U.grid is not out.grid
         if self.coriolis_scheme == CoriolisScheme.ESPELID:
             Din = U.grid.D if U.ndim == 2 else U.grid.hn
             Dout = out.grid.D if out.ndim == 2 else out.grid.hn
@@ -869,6 +938,48 @@ class Momentum(pygetm._pygetm.Momentum):
             U.interp(out)
         # todo: cord_curv
         out.all_values *= out.grid.cor.all_values
+        if U.grid is self.domain.U:
+            np.negative(out.all_values, out=out.all_values)
+
+    def advance_3d_transport(
+        self,
+        tp3d: core.Array,
+        tp2d: core.Array,
+        vel3d: core.Array,
+        dp: core.Array,
+        cor: core.Array,
+        adv: core.Array,
+        diff: core.Array,
+        idp: core.Array,
+        taus: core.Array,
+        rr: core.Array,
+        viscosity: core.Array,
+        dev: core.Array,
+        timestep: float,
+    ):
+        grid = tp3d.grid
+        pygetm._pygetm.collect_3d_momentum_sources(
+            dp, cor, adv, diff, idp, taus, rr, timestep, self.ea2, self.ea4
+        )
+        self._vertical_diffusion(
+            viscosity.interp(grid),
+            timestep,
+            vel3d,
+            molecular=self.avmmol,
+            ea2=self.ea2,
+            ea4=self.ea4,
+            use_ho=True,
+        )
+        np.multiply(vel3d.all_values, grid.hn.all_values, out=tp3d.all_values)
+
+        tp3d.all_values.sum(axis=0, out=dev.all_values)
+        dev.all_values -= tp2d.all_values
+        dev.all_values /= grid.D.all_values
+        tp3d.all_values -= dev.all_values * grid.hn.all_values
+
+        tp3d.mirror()
+
+        tp3d.update_halos()
 
 
 # Expose all Fortran arrays that are a member of Momentum as read-only properties

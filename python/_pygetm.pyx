@@ -25,10 +25,9 @@ cdef extern void* advection_create(int scheme, void* tgrid) nogil
 cdef extern void advection_uv_calculate(int direction, int nk, void* advection, void* tgrid, void* ugrid, double* pu, double* Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
-cdef extern void vertical_diffusion_calculate(void* diffusion, int nx, int ny, int nz, double molecular, double* pnuh, double timestep, double cnpar, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
+cdef extern void vertical_diffusion_prepare(void* diffusion, int nx, int ny, int nz, double molecular, double* pnuh, double timestep, double cnpar, int* pmask, double* pho, double* phn) nogil
+cdef extern void vertical_diffusion_apply(void* diffusion, int nx, int ny, int nz, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double cnpar, int coriolis_scheme) nogil
-cdef extern void momentum_u_2d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx) nogil
-cdef extern void momentum_u_3d(int direction, void* momentum, double timestep, double* ptausx, double* pdpdx, double* pidpdx, double* pviscosity) nogil
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
@@ -48,6 +47,8 @@ cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask,
 cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
 cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int halox,int haloy,int* umask,int* vmask,double* idxu,double* dyu,double* idyv,double* dxv,double* Ah_u,double* Ah_v,int* tmask,double* iA,double dt,double* f,double* out)
 cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double* ru, int iterate)
+cdef extern void c_collect_3d_momentum_sources(int imin, int imax, int jmin, int jmax, int kmax, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4)
+cdef extern void c_advance_2d_transport(int imin, int imax, int jmin, int jmax, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U)
 
 cpdef enum:
     TGRID = 1
@@ -272,7 +273,13 @@ cdef class VerticalDiffusion:
         self.p = vertical_diffusion_create(grid.p)
         self.cnpar = cnpar
 
-    def __call__(self, Array nuh not None, double timestep, Array var not None, double molecular=0., Array ea2=None, Array ea4=None, bint use_ho=False):
+    def prepare(self, Array nuh not None, double timestep, double molecular=0., bint use_ho=False):
+        cdef Array mask = nuh.grid.mask
+        cdef Array hn = nuh.grid.hn
+        cdef Array ho = nuh.grid.ho if use_ho else hn
+        vertical_diffusion_prepare(self.p, nuh.grid.nx_, nuh.grid.ny_, nuh.grid.nz_, molecular, <double *>nuh.p, timestep, self.cnpar, <int *>mask.p, <double *>ho.p, <double *>hn.p)
+
+    def apply(self, Array var not None, Array ea2=None, Array ea4=None, bint use_ho=False):
         cdef double* pea2 = NULL
         cdef double* pea4 = NULL
         if ea2 is not None:
@@ -282,7 +289,7 @@ cdef class VerticalDiffusion:
         cdef Array mask = var.grid.mask
         cdef Array hn = var.grid.hn
         cdef Array ho = var.grid.ho if use_ho else hn
-        vertical_diffusion_calculate(self.p, var.grid.nx_, var.grid.ny_, var.grid.nz_, molecular, <double *>nuh.p, timestep, self.cnpar, <int *>mask.p, <double *>ho.p, <double *>hn.p, <double *>var.p, pea2, pea4)
+        vertical_diffusion_apply(self.p, var.grid.nx_, var.grid.ny_, var.grid.nz_, <int *>mask.p, <double *>ho.p, <double *>hn.p, <double *>var.p, pea2, pea4)
 
 cdef class Simulation:
     cdef readonly Domain domain
@@ -332,30 +339,6 @@ cdef class Momentum:
     def __init__(self, Domain domain, int runtype, double Am0, double cnpar, int coriolis_scheme):
         self.domain = domain
         self.p = momentum_create(runtype, domain.p, Am0, cnpar, coriolis_scheme)
-
-    def u_2d(self, double timestep, Array tausx not None, Array dpdx not None):
-        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
-        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
-        momentum_u_2d(1, self.p, timestep, <double *>tausx.p, <double *>dpdx.p)
-
-    def v_2d(self, double timestep, Array tausy not None, Array dpdy not None):
-        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
-        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
-        momentum_u_2d(2, self.p, timestep, <double *>tausy.p, <double *>dpdy.p)
-
-    def pk_3d(self, double timestep, Array tausx not None, Array dpdx not None, Array idpdx not None, Array viscosity_u not None):
-        assert tausx.grid is self.domain.U, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.U.postfix, tausx.grid.postfix)
-        assert dpdx.grid is self.domain.U, 'grid mismatch for dpdx: expected %s, got %s' % (self.domain.U.postfix, dpdx.grid.postfix)
-        assert idpdx.grid is self.domain.U, 'grid mismatch for idpdx: expected %s, got %s' % (self.domain.U.postfix, idpdx.grid.postfix)
-        assert viscosity_u.grid is self.domain.U and viscosity_u.z == INTERFACES, 'grid mismatch for viscosity_u: expected %s, got %s' % (self.domain.U.postfix, viscosity_u.grid.postfix)
-        momentum_u_3d(1, self.p, timestep, <double *>tausx.p, <double *>dpdx.p, <double *>idpdx.p, <double *>viscosity_u.p)
-
-    def qk_3d(self, double timestep, Array tausy not None, Array dpdy not None, Array idpdy not None, Array viscosity_v not None):
-        assert tausy.grid is self.domain.V, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.V.postfix, tausy.grid.postfix)
-        assert dpdy.grid is self.domain.V, 'grid mismatch for dpdy: expected %s, got %s' % (self.domain.V.postfix, dpdy.grid.postfix)
-        assert idpdy.grid is self.domain.V, 'grid mismatch for idpdy: expected %s, got %s' % (self.domain.V.postfix, idpdy.grid.postfix)
-        assert viscosity_v.grid is self.domain.V and viscosity_v.z == INTERFACES, 'grid mismatch for viscosity_v: expected %s, got %s' % (self.domain.V.postfix, viscosity_v.grid.postfix)
-        momentum_u_3d(2, self.p, timestep, <double *>tausy.p, <double *>dpdy.p, <double *>idpdy.p, <double *>viscosity_v.p)
 
     def w_3d(self, double timestep):
         momentum_w_3d(self.p, timestep)
@@ -465,6 +448,45 @@ def bottom_friction(Array u not None, Array v not None, Array D not None, Array 
     assert D.grid is u.grid and not D.z
     assert out.grid is u.grid and not out.z
     c_bottom_friction(nx, ny, <int*>mask.p, <double*>u.p, <double*>v.p, <double*>D.p, <double*>z0b.p, <double*>z0b_min.p, <double*>out.p, update_z0b)
+
+def collect_3d_momentum_sources(Array dp, Array cor, Array adv, Array diff, Array idp, Array taus, Array rr, double dt, Array ea2, Array ea4):
+    cdef Grid grid = dp.grid
+    cdef Array mask = grid.mask
+    cdef Array alpha = grid.alpha
+    cdef Array ho = grid.ho
+    cdef Array hn = grid.hn
+    assert dp.grid is grid and not dp.z, 'dp'
+    assert cor.grid is grid and cor.z == CENTERS, 'cor'
+    assert adv.grid is grid and adv.z == CENTERS, 'adv'
+    assert diff.grid is grid and diff.z == CENTERS, 'diff'
+    assert idp.grid is grid and idp.z == CENTERS, 'idp'
+    assert taus.grid is grid and not taus.z, 'taus'
+    assert rr.grid is grid and not rr.z, 'rr'
+    assert ea2.z == CENTERS
+    assert ea4.z == CENTERS
+    c_collect_3d_momentum_sources(1, grid.nx, 1, grid.ny, grid.nz, grid.domain.halox, grid.domain.haloy,
+        <int*>mask.p, <double*>alpha.p, <double*>ho.p, <double*>hn.p,
+        <double*>dp.p, <double*>cor.p, <double*>adv.p, <double*>diff.p, <double*>idp.p, <double*>taus.p, <double*>rr.p, dt, <double*>ea2.p, <double*>ea4.p)
+
+def advance_2d_transport(Array U, Array dp, Array taus, Array cor, Array adv, Array diff, Array damp, Array SA, Array SB, Array SD, Array SF, Array r, double dt):
+    cdef Grid grid = U.grid
+    cdef Array mask = grid.mask
+    cdef Array alpha = grid.alpha
+    cdef Array D = grid.D
+    assert dp.grid is grid and not dp.z, 'dp'
+    assert taus.grid is grid and not taus.z, 'taus'
+    assert cor.grid is grid and not cor.z, 'cor'
+    assert adv.grid is grid and not adv.z, 'adv'
+    assert diff.grid is grid and not diff.z, 'diff'
+    assert damp.grid is grid and not damp.z, 'damp'
+    assert SA.grid is grid and not SA.z, 'SA'
+    assert SB.grid is grid and not SB.z, 'SB'
+    assert SD.grid is grid and not SD.z, 'SD'
+    assert SF.grid is grid and not SF.z, 'SF'
+    assert r.grid is grid and not r.z, 'rr'
+    c_advance_2d_transport(1, grid.nx, 1, grid.ny, grid.domain.halox, grid.domain.haloy, <int*>mask.p, <double*>alpha.p, <double*>D.p,
+       <double*>dp.p, <double*>taus.p, <double*>cor.p, <double*>adv.p, <double*>diff.p, <double*>damp.p,
+       <double*>SA.p, <double*>SB.p, <double*>SD.p, <double*>SF.p, <double*>r.p, dt, <double*>U.p)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

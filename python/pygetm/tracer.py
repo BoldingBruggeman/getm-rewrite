@@ -61,6 +61,7 @@ class Tracer(core.Array):
         "river_follow",
         "rivers",
         "precipitation_follows_target_cell",
+        "molecular_diffusivity",
     )
 
     def __init__(
@@ -73,6 +74,7 @@ class Tracer(core.Array):
         vertical_velocity: Optional[core.Array] = None,
         rivers_follow_target_cell: bool = False,
         precipitation_follows_target_cell: bool = False,
+        molecular_diffusivity: float = 0.0,
         **kwargs
     ):
         """A tracer transported by advection and diffusion, with optional source term,
@@ -102,6 +104,7 @@ class Tracer(core.Array):
                 precipitation falls. If not set, tracer values in precipitation are
                 assumed to be 0. This can be adjusted afterwards with
                 :attr:`precipitation_follows_target_cell`
+            molecular_diffusivity: molecular diffusivity (m2 s-1)
             **kwargs: keyword arguments to be passed to :class:`pygetm.core.Array`
         """
         kwargs.setdefault("attrs", {}).update(
@@ -125,6 +128,7 @@ class Tracer(core.Array):
         self.surface_flux: Optional[core.Array] = surface_flux
         self.source_scale: float = source_scale
         self.vertical_velocity: Optional[core.Array] = vertical_velocity
+        self.molecular_diffusivity: float = molecular_diffusivity
         self.open_boundaries: OpenBoundaries = OpenBoundaries(self)
         self.river_values: np.ndarray = np.zeros((len(grid.domain.rivers),))
         self.river_follow: np.ndarray = np.full(
@@ -162,6 +166,7 @@ class TracerCollection(Sequence[Tracer]):
         self._source = grid.array(z=CENTERS)
         self._advection = operators.Advection(grid, scheme=advection_scheme)
         self._vertical_diffusion = operators.VerticalDiffusion(grid, cnpar=cnpar)
+        self._w = grid.array(fill=0.0, z=INTERFACES)
 
         self.Ah = grid.array(
             name="Ah",
@@ -242,24 +247,23 @@ class TracerCollection(Sequence[Tracer]):
 
         # Advection of passive tracers (including biogeochemical ones) from time=0 to
         # time=1 (macrotimestep), using velocities defined at time=1/2
-        w_tracers = []
-        for tracer in self._tracers:
-            w_tracer = w
+        def combined_w(tracer):
             if (
-                tracer.vertical_velocity is not None
-                and tracer.vertical_velocity.all_values.any()
+                tracer.vertical_velocity is None
+                or not tracer.vertical_velocity.all_values.any()
             ):
-                w_tracer = self.grid.array(fill=0.0, z=INTERFACES)
-                tracer.vertical_velocity.interp(w_tracer)
-                w_tracer.all_values += w.all_values
-            w_tracers.append(w_tracer)
+                return w
+            tracer.vertical_velocity.interp(self._w)
+            self._w.all_values += w.all_values
+            return self._w
+
         self._advection.apply_3d_batch(
             u,
             v,
             w,
             timestep,
             self._tracers,
-            w_vars=w_tracers,
+            w_vars=combined_w,
             Ah_u=self.Ah_u,
             Ah_v=self.Ah_v,
         )
@@ -269,6 +273,7 @@ class TracerCollection(Sequence[Tracer]):
         # specified. However, sources of biogeochemical tracers (FABM) are typically
         # dealt with elsewhere; these will not have their source attribute set for
         # use here.
+        avmol = -1.0
         for tracer in self._tracers:
             source = None
             if tracer.source is not None or tracer.surface_flux is not None:
@@ -280,5 +285,8 @@ class TracerCollection(Sequence[Tracer]):
                 if tracer.surface_flux is not None:
                     source.all_values[-1, ...] += tracer.surface_flux.all_values
                 source.all_values *= timestep * tracer.source_scale
-            self._vertical_diffusion(diffusivity, timestep, tracer, ea4=source)
+            if tracer.molecular_diffusivity != avmol:
+                avmol = tracer.molecular_diffusivity
+                self._vertical_diffusion.prepare(diffusivity, timestep, avmol)
+            self._vertical_diffusion.apply(tracer, ea4=source)
 

@@ -408,6 +408,7 @@ class Simulation(_pygetm.Simulation):
                 source_scale=1.0 / (RHO0 * self.density.CP),
                 rivers_follow_target_cell=True,
                 precipitation_follows_target_cell=True,
+                molecular_diffusivity=1.4e-7,
                 attrs=dict(standard_name="sea_water_conservative_temperature"),
             )
             self.salt = self.tracers.add(
@@ -416,6 +417,7 @@ class Simulation(_pygetm.Simulation):
                 long_name="absolute salinity",
                 fabm_standard_name="practical_salinity",
                 fill_value=FILL_VALUE,
+                molecular_diffusivity=1.1e-9,
                 attrs=dict(standard_name="sea_water_absolute_salinity"),
             )
             self.pres.saved = True
@@ -1005,9 +1007,13 @@ class Simulation(_pygetm.Simulation):
         ]
         all_stat = self.domain.tiling.comm.gather(stat)
         if all_stat is not None:
-            self.logger.info("Time spent on compute per subdomain (excludes halo exchange):")
+            self.logger.info(
+                "Time spent on compute per subdomain (excludes halo exchange):"
+            )
             for rank, (tottime, halotime, nwet) in enumerate(all_stat):
-                self.logger.info("%i (%i water points): %.3f s" % (rank, nwet, tottime - halotime))
+                self.logger.info(
+                    "%i (%i water points): %.3f s" % (rank, nwet, tottime - halotime)
+                )
             rank = np.argmin([s[1] for s in all_stat])
             self.logger.info(
                 "Most expensive subdomain: %i (see %s-%03i.prof)"

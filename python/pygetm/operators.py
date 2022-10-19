@@ -153,8 +153,6 @@ class Advection(_pygetm.Advection):
         assert w.grid is self.grid and w.z == INTERFACES
         for var in vars:
             assert var.grid is self.grid and var.z == CENTERS
-        for w_var in w_vars:
-            assert w_var.grid is self.grid and w_var.z == INTERFACES
 
         adv1 = functools.partial(self.u_3d, u, 0.5 * timestep, Ah=Ah_u)
         adv2 = functools.partial(self.v_3d, v, 0.5 * timestep, Ah=Ah_v)
@@ -174,7 +172,9 @@ class Advection(_pygetm.Advection):
             var.update_halos_finish(self.halo2)
             adv2(var)
         current_h[...] = self.h
-        for var, w_var in zip(vars, w_vars):
+        for var in vars:
+            w_var = w_vars(var)
+            assert w_var.grid is self.grid and w_var.z == INTERFACES
             self.h[...] = current_h
             self.w_3d(w, w_var, timestep, var)
             var.update_halos_start(self.halo2)
@@ -191,4 +191,16 @@ class Advection(_pygetm.Advection):
             adv1(var)
 
 
-VerticalDiffusion = _pygetm.VerticalDiffusion
+class VerticalDiffusion(_pygetm.VerticalDiffusion):
+    def __call__(
+        self,
+        nuh: core.Array,
+        timestep: float,
+        var: core.Array,
+        molecular: float = 0.0,
+        ea2: Optional[core.Array] = None,
+        ea4: Optional[core.Array] = None,
+        use_ho: bool = False,
+    ):
+        self.prepare(nuh, timestep, molecular, use_ho)
+        self.apply(var, ea2, ea4, use_ho)

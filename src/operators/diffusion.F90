@@ -114,17 +114,34 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    class(type_vertical_diffusion), intent(inout) :: self
    real(real64), intent(in) :: dt
    real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo(1):,self%jmin-self%halo(2):
+#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
    integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):,self%jmin-self%halo(2):,self%kmin:
+#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
    real(real64), intent(in) :: dzo(_T3_)
    real(real64), intent(in) :: dzn(_T3_)
    real(real64), intent(in) :: molecular
-   real(real64), intent(in) :: nuh(_T3_)   ! Note: this is diffusivity defined at the interior interfaces, from kmin to kmax-1. surface/bottom are absent
+   real(real64), intent(in) :: nuh(_T3_-1)   ! Note: this is diffusivity defined at the interior interfaces, from kmin to kmax-1. surface/bottom are absent
    real(real64), intent(inout) :: var(_T3_)
    real(real64), intent(in), optional :: ea2(_T3_)  ! timestep and layer-integrated relative source term (m)
    real(real64), intent(in), optional :: ea4(_T3_)  ! timestep and layer-integrated absolute source term (var * m)
+#undef _T3_
+   call vertical_diffusion_prepare(self, dt, cnpar, mask, dzo, dzn, molecular, nuh)
+   call vertical_diffusion_apply(self, mask, dzo, dzn, var, ea2, ea4)
+END SUBROUTINE vertical_diffusion_calculate
+
+MODULE SUBROUTINE vertical_diffusion_prepare(self,dt,cnpar,mask,dzo,dzn,molecular,nuh)
+   class(type_vertical_diffusion), intent(inout) :: self
+   real(real64), intent(in) :: dt
+   real(real64), intent(in) :: cnpar
+#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+   integer, intent(in) :: mask(_T2_)
+#undef _T2_
+#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+   real(real64), intent(in) :: dzo(_T3_)
+   real(real64), intent(in) :: dzn(_T3_)
+   real(real64), intent(in) :: molecular
+   real(real64), intent(in) :: nuh(_T3_-1)   ! Note: this is diffusivity defined at the interior interfaces, from kmin to kmax-1. surface/bottom are absent
 #undef _T3_
 
 !  Local constants
@@ -133,15 +150,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    integer :: i,j,k
 !---------------------------------------------------------------------------
    if (.not. is_initialized) stop 'vertical_diffusion is not initialized'
-   if (size(nuh,3) /= size(var,3)-1) stop 'diffusivity should exclude top and bottom interface'
-   if (self%kmax == 1) then
-      self%a4(:,:,:)=dzo *var
-      self%a2(:,:,:)=dzn
-      if (present(ea4)) self%a4(:,:,:)=self%a4+ea4
-      if (present(ea2)) self%a2(:,:,:)=self%a2-ea2
-      var(:,:,:) = self%a4 / self%a2
-      return
-   end if
+   if (self%kmax == 1) return
 
    ! Setting up the matrix
    matrix: block
@@ -167,8 +176,6 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
       do i=self%imin,self%imax
          if (mask(i,j) ==  1) then
             self%a1(ORDER)=-self%auxn(i,j,k-1)
-            self%a2(ORDER)=dzn(i,j,k)+self%auxn(i,j,k-1)
-            self%a4(ORDER)=var(i,j,k)*(dzo(i,j,k)-self%auxo(i,j,k-1))+var(i,j,k-1)*self%auxo(i,j,k-1)
          end if
       end do
    end do
@@ -181,6 +188,76 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
             if (mask(i,j) ==  1) then
                self%a3(ORDER)=-self%auxn(i,j,k  )
                self%a1(ORDER)=-self%auxn(i,j,k-1)
+            end if
+         end do
+      end do
+   end do
+
+   ! Matrix elements for bottom layer
+   k=self%kmin
+   do j=self%jmin,self%jmax
+      do i=self%imin,self%imax
+         if (mask(i,j) ==  1) then
+            self%a3(ORDER)=-self%auxn(i,j,k)
+         end if
+      end do
+   end do
+
+   call cpu_time(matrix_end)
+   self%matrix_time = self%matrix_time + matrix_end - matrix_start
+   end block matrix
+
+END SUBROUTINE vertical_diffusion_prepare
+
+MODULE SUBROUTINE vertical_diffusion_apply(self,mask,dzo,dzn,var,ea2,ea4)
+   class(type_vertical_diffusion), intent(inout) :: self
+#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+   integer, intent(in) :: mask(_T2_)
+#undef _T2_
+#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+   real(real64), intent(in) :: dzo(_T3_)
+   real(real64), intent(in) :: dzn(_T3_)
+   real(real64), intent(inout) :: var(_T3_)
+   real(real64), intent(in), optional :: ea2(_T3_)  ! timestep and layer-integrated relative source term (m)
+   real(real64), intent(in), optional :: ea4(_T3_)  ! timestep and layer-integrated absolute source term (var * m)
+#undef _T3_
+
+!  Local constants
+
+!  Local variables
+   integer :: i,j,k
+!---------------------------------------------------------------------------
+   if (self%kmax == 1) then
+      self%a4(:,:,:)=dzo *var
+      self%a2(:,:,:)=dzn
+      if (present(ea4)) self%a4(:,:,:)=self%a4+ea4
+      if (present(ea2)) self%a2(:,:,:)=self%a2-ea2
+      var(:,:,:) = self%a4 / self%a2
+      return
+   end if
+
+   matrix: block
+   real(real64) :: x
+   real(real64) :: matrix_start, matrix_end
+   call cpu_time(matrix_start)
+
+   ! Matrix elements for surface layer
+   k=self%kmax
+   do j=self%jmin,self%jmax
+      do i=self%imin,self%imax
+         if (mask(i,j) ==  1) then
+            self%a2(ORDER)=dzn(i,j,k)+self%auxn(i,j,k-1)
+            self%a4(ORDER)=var(i,j,k)*(dzo(i,j,k)-self%auxo(i,j,k-1))+var(i,j,k-1)*self%auxo(i,j,k-1)
+         end if
+      end do
+   end do
+
+   ! Matrix elements for inner layers
+   ! do k=kmin,kmax-1
+   do k=self%kmin+1,self%kmax-1
+      do j=self%jmin,self%jmax
+         do i=self%imin,self%imax
+            if (mask(i,j) ==  1) then
                self%a2(ORDER)=dzn(i,j,k)+self%auxn(i,j,k)+self%auxn(i,j,k-1)
                self%a4(ORDER)=var(i,j,k+1)*self%auxo(i,j,k) &
                              +var(i,j,k  )*(dzo(i,j,k)-self%auxo(i,j,k)-self%auxo(i,j,k-1)) &
@@ -195,14 +272,15 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    do j=self%jmin,self%jmax
       do i=self%imin,self%imax
          if (mask(i,j) ==  1) then
-            self%a3(ORDER)=-self%auxn(i,j,k)
             self%a2(ORDER)=dzn(i,j,k)+self%auxn(i,j,k)
             self%a4(ORDER)=var(i,j,k+1)*self%auxo(i,j,k)+var(i,j,k)*(dzo(i,j,k)-self%auxo(i,j,k))
          end if
       end do
    end do
-   if (present(ea2)) self%a2=self%a2-ea2
-   if (present(ea4)) self%a4=self%a4+ea4
+
+   if (present(ea2)) self%a2=self%a2 - ea2
+   if (present(ea4)) self%a4=self%a4 + ea4
+
    call cpu_time(matrix_end)
    self%matrix_time = self%matrix_time + matrix_end - matrix_start
    end block matrix
@@ -245,7 +323,7 @@ MODULE SUBROUTINE vertical_diffusion_calculate(self,dt,cnpar,mask,dzo,dzn,molecu
    call cpu_time(tridiag_end)
    self%tridiag_time = self%tridiag_time + tridiag_end - tridiag_start
    end block tridiagonal
-END SUBROUTINE vertical_diffusion_calculate
+END SUBROUTINE vertical_diffusion_apply
 
 #undef _NORMAL_ORDER_
 

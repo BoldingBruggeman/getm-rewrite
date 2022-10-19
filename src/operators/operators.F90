@@ -99,6 +99,8 @@ MODULE getm_operators
       procedure :: initialize_grid => vertical_diffusion_initialize_grid
       generic   :: initialize => initialize_field, initialize_grid
       procedure :: calculate => vertical_diffusion_calculate
+      procedure :: prepare => vertical_diffusion_prepare
+      procedure :: apply => vertical_diffusion_apply
 
    end type type_vertical_diffusion
 
@@ -120,19 +122,48 @@ MODULE getm_operators
          class(type_vertical_diffusion), intent(inout) :: self
          real(real64), intent(in) :: dt
          real(real64), intent(in) :: cnpar
-#define _T2_ self%imin-self%halo(1):,self%jmin-self%halo(2):
+#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
          integer, intent(in) :: mask(_T2_)
 #undef _T2_
-#define _T3_ self%imin-self%halo(1):,self%jmin-self%halo(2):,self%kmin:
+#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
          real(real64), intent(in) :: dzo(_T3_)
          real(real64), intent(in) :: dzn(_T3_)
          real(real64), intent(in) :: molecular
-         real(real64), intent(in) :: nuh(_T3_)
+         real(real64), intent(in) :: nuh(_T3_-1)
          real(real64), intent(inout) :: var(_T3_)
          real(real64), intent(in), optional :: ea2(_T3_)
          real(real64), intent(in), optional :: ea4(_T3_)
 #undef _T3_
-   end subroutine vertical_diffusion_calculate
+      end subroutine vertical_diffusion_calculate
+
+      module subroutine vertical_diffusion_prepare(self,dt,cnpar,mask,dzo,dzn,molecular,nuh)
+         class(type_vertical_diffusion), intent(inout) :: self
+         real(real64), intent(in) :: dt
+         real(real64), intent(in) :: cnpar
+#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+         integer, intent(in) :: mask(_T2_)
+#undef _T2_
+#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+         real(real64), intent(in) :: dzo(_T3_)
+         real(real64), intent(in) :: dzn(_T3_)
+         real(real64), intent(in) :: molecular
+         real(real64), intent(in) :: nuh(_T3_-1)
+#undef _T3_
+      end subroutine vertical_diffusion_prepare
+
+      module subroutine vertical_diffusion_apply(self,mask,dzo,dzn,var,ea2,ea4)
+         class(type_vertical_diffusion), intent(inout) :: self
+#define _T2_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2)
+         integer, intent(in) :: mask(_T2_)
+#undef _T2_
+#define _T3_ self%imin-self%halo(1):self%imax+self%halo(1),self%jmin-self%halo(2):self%jmax+self%halo(2),self%kmin:self%kmax
+         real(real64), intent(in) :: dzo(_T3_)
+         real(real64), intent(in) :: dzn(_T3_)
+         real(real64), intent(inout) :: var(_T3_)
+         real(real64), intent(in), optional :: ea2(_T3_)
+         real(real64), intent(in), optional :: ea4(_T3_)
+#undef _T3_
+      end subroutine vertical_diffusion_apply
    END INTERFACE
 
 !---------------------------------------------------------------------------

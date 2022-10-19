@@ -3,7 +3,7 @@ module pygetm
    use iso_c_binding, only: c_ptr, c_int, c_double, c_char, c_loc, c_f_pointer, c_associated, C_NULL_CHAR, C_NULL_PTR
    use iso_fortran_env, only: real64
 
-   use getm_domain, only: type_getm_domain, type_getm_grid
+   use getm_domain, only: type_getm_domain, type_getm_grid, g
    use getm_operators, only: type_advection, type_vertical_diffusion
    use getm_sealevel, only: type_getm_sealevel
    use getm_pressure, only: type_getm_pressure
@@ -11,6 +11,8 @@ module pygetm
    use memory_manager
 
    implicit none
+
+   real(c_double), parameter :: rho0i = 1.0_c_double / 1025._c_double
 
 contains
 
@@ -347,13 +349,25 @@ contains
       pdiffusion = c_loc(diffusion)
    end function
 
-   subroutine vertical_diffusion_calculate(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, &
-      ho, hn, var, pea2, pea4) bind(c)
+   subroutine vertical_diffusion_prepare(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, ho, hn) bind(c)
       type(c_ptr),    intent(in), value :: pdiffusion
       integer(c_int), intent(in), value :: nx, ny, nz
       real(c_double), intent(in), value :: molecular, timestep, cnpar
       integer(c_int), intent(in) :: mask(nx, ny)
       real(c_double), intent(in) :: nuh(nx, ny, 0:nz), ho(nx, ny, nz), hn(nx, ny, nz)
+
+      type (type_vertical_diffusion), pointer :: diffusion
+      real(real64), contiguous, pointer, dimension(:,:,:) :: ea2, ea4
+
+      call c_f_pointer(pdiffusion, diffusion)
+      call diffusion%prepare(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1))
+   end subroutine
+
+   subroutine vertical_diffusion_apply(pdiffusion, nx, ny, nz, mask, ho, hn, var, pea2, pea4) bind(c)
+      type(c_ptr),    intent(in), value :: pdiffusion
+      integer(c_int), intent(in), value :: nx, ny, nz
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: ho(nx, ny, nz), hn(nx, ny, nz)
       real(c_double), intent(inout) :: var(nx, ny, nz)
       type(c_ptr),    intent(in), value :: pea2, pea4
 
@@ -364,16 +378,13 @@ contains
       if (c_associated(pea2)) call c_f_pointer(pea2, ea2, (/nx, ny, nz/))
       if (c_associated(pea4)) call c_f_pointer(pea4, ea4, (/nx, ny, nz/))
       if (c_associated(pea2) .and. c_associated(pea4)) then
-         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var, &
-            ea2=ea2, ea4=ea4)
+         call diffusion%apply(mask, ho, hn, var, ea2=ea2, ea4=ea4)
       elseif (c_associated(pea2)) then
-         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var, &
-            ea2=ea2)
+         call diffusion%apply(mask, ho, hn, var, ea2=ea2)
       elseif (c_associated(pea4)) then
-         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var, &
-            ea4=ea4)
+         call diffusion%apply(mask, ho, hn, var, ea4=ea4)
       else
-         call diffusion%calculate(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1), var)
+         call diffusion%apply(mask, ho, hn, var)
       end if
    end subroutine
 
@@ -497,50 +508,6 @@ contains
       do k = 1, nk
          call momentum%diffusion_driver(h(:,:,k), hx(:,:,k), u(:,:,k), v(:,:,k), diffu(:,:,k), diffv(:,:,k))
       end do
-   end subroutine
-
-   subroutine momentum_u_2d(direction, pmomentum, timestep, ptausx, pdpdx) bind(c)
-      integer(c_int), intent(in), value :: direction
-      type(c_ptr),    intent(in), value :: pmomentum
-      real(c_double), intent(in), value :: timestep
-      type(c_ptr),    intent(in), value :: ptausx, pdpdx
-
-      type (type_getm_momentum), pointer :: momentum
-      real(real64), contiguous, pointer, dimension(:,:) :: tausx, dpdx
-
-      call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(ptausx, tausx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
-      call c_f_pointer(pdpdx, dpdx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
-      select case (direction)
-         case (1)
-            call momentum%u_2d(timestep,tausx,dpdx)
-         case (2)
-            call momentum%v_2d(timestep,tausx,dpdx)
-      end select
-   end subroutine
-
-   subroutine momentum_u_3d(direction, pmomentum, timestep, ptausx, pdpdx, pidpdx, pviscosity) bind(c)
-      integer(c_int), intent(in), value :: direction
-      type(c_ptr),    intent(in), value :: pmomentum
-      real(c_double), intent(in), value :: timestep
-      type(c_ptr),    intent(in), value :: ptausx, pdpdx, pidpdx, pviscosity
-
-      type (type_getm_momentum), pointer :: momentum
-      real(real64), contiguous, pointer, dimension(:,:) :: tausx, dpdx
-      real(real64), contiguous, pointer, dimension(:,:,:) :: idpdx, viscosity
-
-      call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(ptausx, tausx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
-      call c_f_pointer(pdpdx, dpdx, momentum%domain%U%u(1:2) - momentum%domain%U%l(1:2) + 1)
-      call c_f_pointer(pidpdx, idpdx, momentum%domain%U%u - momentum%domain%U%l + 1)
-      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%U%u(1) - momentum%domain%U%l(1) + 1, &
-         momentum%domain%U%u(2) - momentum%domain%U%l(2) + 1, momentum%domain%U%u(3) - momentum%domain%U%l(3) + 2/))
-      select case (direction)
-         case (1)
-            call momentum%pk_3d(timestep,tausx,dpdx,idpdx,viscosity(:, :, 2:size(viscosity,3) - 1))
-         case (2)
-            call momentum%qk_3d(timestep,tausx,dpdx,idpdx,viscosity(:, :, 2:size(viscosity,3) - 1))
-      end select
    end subroutine
 
    subroutine momentum_w_3d(pmomentum, timestep) bind(c)
@@ -880,6 +847,104 @@ contains
          end where
       end if
       where (mask == 1) ru = sqrtcd * sqrtcd * sqrt(u*u + v*v)
+   END SUBROUTINE
+
+   SUBROUTINE c_collect_3d_momentum_sources(imin, imax, jmin, jmax, kmax, halox, haloy, mask, alpha, ho, hn, &
+      dp, cor, adv, diff, idp, taus, rr, dt, ea2, ea4) bind(c)
+      integer(c_int), value, intent(in) :: imin, imax, jmin, jmax, kmax
+      integer(c_int), value, intent(in) :: halox
+      integer(c_int), value, intent(in) :: haloy
+#define _A2D_  imin-halox:imax+halox,jmin-haloy:jmax+haloy
+#define _A3D_  imin-halox:imax+halox,jmin-haloy:jmax+haloy,kmax
+      integer(c_int), intent(in) :: mask(_A2D_)
+      real(c_double), intent(in) :: alpha(_A2D_)
+      real(c_double), intent(in) :: ho(_A3D_)
+      real(c_double), intent(in) :: hn(_A3D_)
+      real(c_double), intent(in) :: dp(_A2D_)
+      real(c_double), intent(in) :: cor(_A3D_)
+      real(c_double), intent(in) :: adv(_A3D_)
+      real(c_double), intent(in) :: diff(_A3D_)
+      real(c_double), intent(in) :: idp(_A3D_)
+      real(c_double), intent(in) :: taus(_A2D_)
+      real(c_double), intent(in) :: rr(_A2D_)
+      real(c_double), value, intent(in) :: dt
+      real(c_double), intent(inout) :: ea2(_A3D_)
+      real(c_double), intent(inout) :: ea4(_A3D_)
+#undef _A2D_
+#undef _A3D_
+
+      integer :: i, j, k
+
+      do k=1,kmax
+         do j=jmin,jmax
+            do i=imin,imax
+               if (mask(i,j) == 1) then
+                  ea4(i,j,k)=dt*(-0.5_c_double * (ho(i,j,k)+hn(i,j,k)) * g * dp(i,j) &
+                                 +alpha(i,j)*(cor(i,j,k) + adv(i,j,k) + diff(i,j,k) + idp(i,j,k)) &
+                                )
+               end if
+            end do
+         end do
+      end do
+
+      ! Additional matrix elements for surface and bottom layer
+      do j=jmin,jmax
+         do i=imin,imax
+            if (mask(i,j) == 1) then
+               ! surface stress
+               ea4(i,j,kmax) = ea4(i,j,kmax) + dt * alpha(i,j) * taus(i,j) * rho0i
+
+               ! bottom friction
+               ea2(i,j,1) = -dt * rr(i,j)
+            end if
+         end do
+      end do
+   END SUBROUTINE
+
+   SUBROUTINE c_advance_2d_transport(imin, imax, jmin, jmax, halox, haloy, mask, alpha, D, &
+      dp, taus, cor, adv, diff, damp, SA, SB, SD, SF, r, dt, U) bind(c)
+      integer(c_int), value, intent(in) :: imin, imax, jmin, jmax
+      integer(c_int), value, intent(in) :: halox
+      integer(c_int), value, intent(in) :: haloy
+#define _A2D_  imin-halox:imax+halox,jmin-haloy:jmax+haloy
+      integer(c_int), intent(in) :: mask(_A2D_)
+      real(c_double), intent(in) :: alpha(_A2D_)
+      real(c_double), intent(in) :: D(_A2D_)
+      real(c_double), intent(in) :: dp(_A2D_)
+      real(c_double), intent(in) :: taus(_A2D_)
+      real(c_double), intent(in) :: cor(_A2D_)
+      real(c_double), intent(in) :: adv(_A2D_)
+      real(c_double), intent(in) :: diff(_A2D_)
+      real(c_double), intent(in) :: damp(_A2D_)
+      real(c_double), intent(in) :: SA(_A2D_)
+      real(c_double), intent(in) :: SB(_A2D_)
+      real(c_double), intent(in) :: SD(_A2D_)
+      real(c_double), intent(in) :: SF(_A2D_)
+      real(c_double), intent(in) :: r(_A2D_)
+      real(c_double), value, intent(in) :: dt
+      real(c_double), intent(inout) :: U(_A2D_)
+#undef _A2D_
+
+      integer :: i, j
+      real(c_double) :: Slr
+
+      do j=jmin,jmax
+         do i=imin,imax
+            if (mask(i,j) == 1) then
+               if (U(i,j) > 0._real64) then
+                  Slr = min(SF(i,j), 0._real64)
+               else
+                  Slr = max(SF(i,j), 0._real64)
+               end if
+               ! [GETM Scientific Report: eqs. 2.14, 2.16]
+               U(i,j) = (U(i,j) + dt * (-g * D(i,j) * dp(i,j) & ! note SxF is multiplied by alpha
+                              + alpha(i,j) * (taus(i,j) * rho0i + cor(i,j) &
+                              + adv(i,j) + diff(i,j) + damp(i,j) &
+                              + SA(i,j) + SB(i,j) + SD(i,j) + Slr))) &
+                             / (1.0_c_double + dt * r(i,j) / D(i,j))
+            end if
+         end do
+      end do
    END SUBROUTINE
 
 end module
