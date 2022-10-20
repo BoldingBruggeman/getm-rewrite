@@ -946,4 +946,11 @@ contains
       end do
    END SUBROUTINE
 
+   SUBROUTINE c_multiply_add(n, tgt, add, scale_factor) bind(c)
+      integer(c_int), value, intent(in) :: n
+      real(c_double), intent(inout) :: tgt(n)
+      real(c_double), intent(in) :: add(n)
+      real(c_double), value, intent(in) :: scale_factor
+      tgt = tgt + scale_factor * add
+   END SUBROUTINE
 end module

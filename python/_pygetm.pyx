@@ -49,6 +49,7 @@ cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int 
 cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double avmmol, double* ru, int iterate)
 cdef extern void c_collect_3d_momentum_sources(int imin, int imax, int jmin, int jmax, int kmax, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4)
 cdef extern void c_advance_2d_transport(int imin, int imax, int jmin, int jmax, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U)
+cdef extern void c_multiply_add(int n, double* tgt, double* add, double scale_factor)
 
 cpdef enum:
     TGRID = 1
@@ -487,6 +488,10 @@ def advance_2d_transport(Array U, Array dp, Array taus, Array cor, Array adv, Ar
     c_advance_2d_transport(1, grid.nx, 1, grid.ny, grid.domain.halox, grid.domain.haloy, <int*>mask.p, <double*>alpha.p, <double*>D.p,
        <double*>dp.p, <double*>taus.p, <double*>cor.p, <double*>adv.p, <double*>diff.p, <double*>damp.p,
        <double*>SA.p, <double*>SB.p, <double*>SD.p, <double*>SF.p, <double*>r.p, dt, <double*>U.p)
+
+def multiply_add(double[::1] tgt, double[::1] add, double scale_factor):
+    if tgt.shape[0] != 0:
+        c_multiply_add(tgt.shape[0], &tgt[0], &add[0], scale_factor)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

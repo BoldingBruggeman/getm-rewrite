@@ -8,6 +8,7 @@ from . import domain
 from . import pyfabm
 from . import core
 from . import tracer
+from . import _pygetm
 from .constants import TimeVarying
 
 
@@ -208,10 +209,13 @@ class FABM:
         Args:
             timestep: time step (s)
         """
-        self.sources_interior *= timestep
-        self.model.interior_state += self.sources_interior
-        self.sources_surface *= timestep
-        self.model.surface_state += self.sources_surface
-        self.sources_bottom *= timestep
-        self.model.bottom_state += self.sources_bottom
-        self.model.check_state(repair=self.repair)
+        _pygetm.multiply_add(
+            self.model.interior_state.ravel(), self.sources_interior.ravel(), timestep
+        )
+        _pygetm.multiply_add(
+            self.model.surface_state.ravel(), self.sources_surface.ravel(), timestep
+        )
+        _pygetm.multiply_add(
+            self.model.bottom_state.ravel(), self.sources_bottom.ravel(), timestep
+        )
+
