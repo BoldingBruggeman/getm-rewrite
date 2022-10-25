@@ -1,4 +1,5 @@
 import unittest
+from typing import Tuple
 
 import numpy as np
 import cftime
@@ -15,7 +16,9 @@ SPLIT_FACTOR = 30
 
 
 class TestFABM(unittest.TestCase):
-    def simulate(self, fabm_yaml) -> pygetm.Simulation:
+    def simulate(
+        self, fabm_yaml, bioshade_feedback: bool = False
+    ) -> Tuple[pygetm.domain.Domain, pygetm.Simulation]:
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),
             np.linspace(0, 100e3, 51),
@@ -31,9 +34,11 @@ class TestFABM(unittest.TestCase):
             pygetm.BAROCLINIC,
             airsea=pygetm.airsea.Fluxes(),
             radiation=pygetm.radiation.Radiation(),
-            fabm=pygetm.fabm.FABM(fabm_yaml),
+            fabm=pygetm.fabm.FABM(fabm_yaml, bioshade_feedback=bioshade_feedback),
         )
         sim.start(START, TIMESTEP, SPLIT_FACTOR)
+        if not bioshade_feedback:
+            self.assertIsNone(sim.fabm.kc)
         while sim.time < STOP:
             sim.advance()
         sim.finish()
@@ -108,6 +113,24 @@ class TestFABM(unittest.TestCase):
         ).sum()
         total = (domain.T.area.ma * domain.T.hn.ma * sim["tracer_c"].ma).sum()
         self.assertLess(np.abs(total / expected_total - 1).max(), TOLERANCE)
+
+    def test_bioshade_feedback(self):
+        initial = 2.0
+        specific_light_attenuation = 0.05
+        fabm_yaml = {
+            "instances": {
+                "tracer": {
+                    "model": "bb/passive",
+                    "initialization": {"c": initial},
+                    "parameters": {
+                        "specific_light_attenuation": specific_light_attenuation
+                    },
+                },
+            }
+        }
+        domain, sim = self.simulate(fabm_yaml, bioshade_feedback=True)
+        expected = initial * specific_light_attenuation
+        self.assertLess(np.abs(sim.fabm.kc.ma / expected - 1).max(), TOLERANCE)
 
 
 if __name__ == "__main__":
