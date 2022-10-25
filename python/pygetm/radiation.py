@@ -33,7 +33,7 @@ class Radiation:
         )
         self.swr_abs.fill(0.0)
 
-    def __call__(self, swr: core.Array):
+    def __call__(self, swr: core.Array, kc2_add: Optional[core.Array] = None):
         """Compute heating due to shortwave radiation throughout the water column"""
         pass
 
