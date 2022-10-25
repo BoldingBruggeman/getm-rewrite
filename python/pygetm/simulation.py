@@ -960,7 +960,7 @@ class Simulation(_pygetm.Simulation):
         if baroclinic_active:
             # Update radiation. This must come after the airsea update, which is
             # responsible for calculating swr
-            self.radiation(self.airsea.swr)
+            self.radiation(self.airsea.swr, self.fabm.kc)
 
             # Update source terms of biogeochemistry, using the new tracer
             # concentrations. Do this last because FABM could depend on any of the

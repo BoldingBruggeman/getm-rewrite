@@ -13,9 +13,15 @@ from .constants import TimeVarying
 
 
 class FABM:
-    def __init__(self, path: str = "fabm.yaml", repair: bool = True):
+    def __init__(
+        self,
+        path: str = "fabm.yaml",
+        repair: bool = True,
+        bioshade_feedback: bool = False,
+    ):
         self.path = path
         self.repair = repair
+        self.bioshade_feedback: bool = bioshade_feedback
 
     def initialize(
         self,
@@ -111,6 +117,26 @@ class FABM:
             ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
             tracer_totals.append(tracer.TracerTotal(ar))
 
+        # Optionally request PAR attenuation coefficient from FABM for feedbacks to physics
+        self.kc = None
+        self.kc_variable = None
+        if self.bioshade_feedback:
+            self.kc_variable = self.model.find_standard_variable(
+                "attenuation_coefficient_of_photosynthetic_radiative_flux"
+            )
+            if self.kc_variable is not None:
+                model.require_data(self.kc_variable)
+                self.kc = core.Array(
+                    name="kc_fabm",
+                    units="m-1",
+                    long_name="attenuation of visible radiation by FABM",
+                    shape=grid.hn.shape,
+                    dtype=self.model.fabm.dtype,
+                    grid=self.grid,
+                    attrs=dict(_time_varying=TimeVarying.MACRO),
+                )
+                self.kc.register()
+
     def start(self, time: Optional[cftime.datetime] = None):
         """Prepare FABM. This includes flagging which diagnostics need saving based on
         the output manager configuration, offering fields registered with the field
@@ -163,6 +189,9 @@ class FABM:
         # Apply mask to all state variables (interior, bottom, surface)
         for variable in self.model.state_variables:
             variable.value[..., self.grid._land] = variable.missing_value
+
+        if self.kc_variable is not None:
+            self.kc.wrap_ndarray(self.kc_variable.value, register=False)
 
     def get_dependency(self, name: str) -> core.Array:
         """Retrieve the array that will hold values for the specified FABM dependency.

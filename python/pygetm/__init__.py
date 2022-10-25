@@ -8,6 +8,7 @@ from . import mixing
 from . import density
 from . import operators
 from . import tracer
+from . import fabm
 from .simulation import *
 from .constants import *
 from .operators import AdvectionScheme
