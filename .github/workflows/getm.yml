@@ -40,6 +40,7 @@ jobs:
           python test_coriolis.py -v
           python test_internal_pressure.py -v
           python test_freshwater_fluxes.py -v
+          python test_radiation.py -v
           python test_fabm.py -v
           python test_rotation.py -v
           python test_land.py -v
