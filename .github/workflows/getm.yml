@@ -45,14 +45,7 @@ jobs:
           python test_rotation.py -v
           python test_land.py -v
           python test_2d_flow_symmetry.py -v
-          python test_3d_barotropic.py --tau_x=0.1
-          python test_3d_barotropic.py --tau_x=-0.1
-          python test_3d_barotropic.py --tau_y=0.1
-          python test_3d_barotropic.py --tau_y=-0.1
-          python test_3d_barotropic.py --tau_x=0.1 --tau_y=0.1
-          python test_3d_barotropic.py --tau_x=0.1 --tau_y=-0.1
-          python test_3d_barotropic.py --tau_x=-0.1 --tau_y=-0.1
-          python test_3d_barotropic.py --tau_x=-0.1 --tau_y=-0.1
+          python test_3d_barotropic.py -v
           python test_parallel_advection.py --nrow 1 --ncol 1 --noplot -n 1 -o par_adv_1x1.nc
           mpiexec -n 2 python test_parallel_advection.py --nrow 2 --ncol 1 --noplot -n 1 -o par_adv_2x1.nc
           mpiexec -n 2 python test_parallel_advection.py --nrow 1 --ncol 2 --noplot -n 1 -o par_adv_1x2.nc
