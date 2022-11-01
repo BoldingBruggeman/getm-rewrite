@@ -28,7 +28,7 @@ def get_logger(level=logging.INFO, comm=MPI.COMM_WORLD) -> logging.Logger:
         file_handler = logging.FileHandler("getm-%04i.log" % comm.rank, mode="w")
         file_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
         handlers.append(file_handler)
-    logging.basicConfig(level=level, handlers=handlers)
+    logging.basicConfig(level=level, handlers=handlers, force=True)
 
     return logging.getLogger()
 
