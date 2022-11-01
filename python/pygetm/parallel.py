@@ -810,7 +810,7 @@ def find_optimal_divison(
     comm: MPI.Comm = MPI.COMM_WORLD,
 ) -> Optional[Mapping[str, Any]]:
     if ncpus is None:
-        ncpus = MPI.COMM_WORLD.size
+        ncpus = comm.size
 
     # If we only have 1 CPU, just use the full domain
     if ncpus == 1:
