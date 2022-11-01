@@ -2299,6 +2299,7 @@ class Domain(_pygetm.Domain):
             ddu=self.ddu,
             Dgamma=self.Dgamma,
             gamma_surf=self.gamma_surf,
+            logger=self.logger,
         )
 
     def plot(
