@@ -64,7 +64,7 @@ class Test(Base):
         tt2, tot2, mean2 = total_tracers2[-1]
         self.assertLess(np.abs(tot2 / tot1 - 1.0), TOLERANCE)
 
-    def test_collocated_rivers_with_diluted_tracer(self):
+    def test_colocated_rivers_with_diluted_tracer(self):
         flow1 = 100.0
         flow2 = 200.0
 
@@ -187,7 +187,7 @@ class Test(Base):
         target = tot1 + flow * DT * concentration
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
 
-    def test_collocated_rivers_with_prescribed_tracer(self):
+    def test_colocated_rivers_with_prescribed_tracer(self):
         flow1 = 100.0
         flow2 = 200.0
         concentration1 = 10.0

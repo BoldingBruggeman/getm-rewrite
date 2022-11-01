@@ -27,30 +27,13 @@ jobs:
           source ${CONDA}/etc/profile.d/conda.sh
           conda activate pygetm
           source ./install
-      - name: Run all test cases
+      - name: Run test suite
         run: |
           source ${CONDA}/etc/profile.d/conda.sh
           conda activate pygetm
           cd python/tests
-          python test_interpolate.py -v
-          python test_vertical_diffusion.py -v
-          python test_grid.py -v
-          python test_output.py -v
-          python test_2d_transport.py -v
-          python test_coriolis.py -v
-          python test_internal_pressure.py -v
-          python test_freshwater_fluxes.py -v
-          python test_radiation.py -v
-          python test_fabm.py -v
-          python test_rotation.py -v
-          python test_land.py -v
-          python test_2d_flow_symmetry.py -v
-          python test_3d_barotropic.py -v
-          python test_parallel_advection.py --nrow 1 --ncol 1 --noplot -n 1 -o par_adv_1x1.nc
-          mpiexec -n 2 python test_parallel_advection.py --nrow 2 --ncol 1 --noplot -n 1 -o par_adv_2x1.nc
-          mpiexec -n 2 python test_parallel_advection.py --nrow 1 --ncol 2 --noplot -n 1 -o par_adv_1x2.nc
-          diff -s par_adv_1x1.nc par_adv_2x1.nc
-          diff -s par_adv_1x1.nc par_adv_1x2.nc
+          python python -m unittest -v
+          mpiexec -n 2 python test_parallel_advection.py -v
         env:
           GETM_SETUPS_DIR: ../../getm-setups
       - name: Test box with spherical coordinates

@@ -27,6 +27,7 @@ def for_each_grid(test_func):
                     25,
                     f=0,
                     H=50.0,
+                    logger=pygetm.parallel.get_logger(level="ERROR"),
                     **grid_args
                 )
                 # randomly mask half of the domain

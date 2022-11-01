@@ -35,7 +35,7 @@
 #   could be calculated. *Workaround* (in code): change the 3D external pressure
 #   gradient term in momentum_3d.F90 to use ho instead of 0.5(ho+hn). This allows
 #   convergence but likely reduces the accuracy of the baroclinic update.
-# * For advection of velcoity, both 2D and 3D should use the same method to
+# * For advection of velocity, both 2D and 3D should use the same method to
 #   interpolate velocities to the T and X points [advection grids]. Currently that
 #   is not the case: 2D interpolates transports and then divides by thickness, 3D
 #   interpolates velcoities directly
@@ -61,6 +61,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../examples"))
 import north_sea
 
 
+@unittest.skip("only supported if changes listed at top of module are implemented")
 class TestConvergence(unittest.TestCase):
     def setUp(self) -> None:
         setups_dir = "../../../getm-setups"
