@@ -125,7 +125,7 @@ class Test(unittest.TestCase):
             target = values[inds]
             self.assertTrue((values == target).all())
             diff = target.reshape((-1,)) - np.arange(1, 13)
-            self.assertTrue((np.abs(diff) < tol).all())
+            self.assertLess(np.abs(diff).max(), tol)
 
         check(ds["month_micro_2d"])
         check(ds["month_macro_2d"])

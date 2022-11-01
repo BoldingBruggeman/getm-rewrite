@@ -32,7 +32,7 @@ jobs:
           source ${CONDA}/etc/profile.d/conda.sh
           conda activate pygetm
           cd python/tests
-          python python -m unittest -v
+          python -m unittest -v
           mpiexec -n 2 python test_parallel_advection.py -v
         env:
           GETM_SETUPS_DIR: ../../getm-setups

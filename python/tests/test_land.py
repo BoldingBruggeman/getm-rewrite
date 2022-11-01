@@ -47,7 +47,7 @@ class TestLandMask(unittest.TestCase):
             if readonly:
                 if grid in (U, V) and array in (grid.dx, grid.dy):
                     # dx and dy at land-water interface need to be finite
-                    # for u,v advection and vertical velcoity calculation
+                    # for u,v advection and vertical velocity calculation
                     # The simulation is already protected against that as dx, dy
                     # were readonly. Quietly restore finite values at these locations
                     edges = grid._water_contact & grid._land
