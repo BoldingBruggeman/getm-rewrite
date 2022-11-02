@@ -22,20 +22,25 @@ cdef extern void grid_interp_z(int nx, int ny, int nz1, int nz2, double* source,
 cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, double* source, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
+cdef extern void advection_finalize(void* advection) nogil
 cdef extern void advection_uv_calculate(int direction, int nk, void* advection, void* tgrid, void* ugrid, double* pu, double* Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
+cdef extern void vertical_diffusion_finalize(void* diffusion) nogil
 cdef extern void vertical_diffusion_prepare(void* diffusion, int nx, int ny, int nz, double molecular, double* pnuh, double timestep, double cnpar, int* pmask, double* pho, double* phn) nogil
 cdef extern void vertical_diffusion_apply(void* diffusion, int nx, int ny, int nz, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double cnpar, int coriolis_scheme) nogil
+cdef extern void momentum_finalize(void* momentum) nogil
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
 cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* )
 cdef extern void* pressure_create(int runtype, void* pdomain, int method_internal_pressure) nogil
+cdef extern void pressure_finalize(void* pressure) nogil
 cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void pressure_internal(void* pressure, double* buoy) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
+cdef extern void sealevel_finalize(void* sealevel) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
 cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* initial, int up, double* out) nogil
@@ -237,6 +242,10 @@ cdef class Advection:
         self.phv = <double*>(<Array>self.vgrid.hn).p
         self.ph = <double*>self.h.data
 
+    def __dealloc__(self):
+        if self.p != NULL:
+            advection_finalize(self.p)
+
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
     def u_2d(self, Array u not None, double timestep, Array var not None, Array Ah=None):
@@ -274,6 +283,10 @@ cdef class VerticalDiffusion:
         self.p = vertical_diffusion_create(grid.p)
         self.cnpar = cnpar
 
+    def __dealloc__(self):
+        if self.p != NULL:
+            vertical_diffusion_finalize(self.p)
+
     def prepare(self, Array nuh not None, double timestep, double molecular=0., bint use_ho=False):
         cdef Array mask = nuh.grid.mask
         cdef Array hn = nuh.grid.hn
@@ -306,6 +319,12 @@ cdef class Simulation:
         self.ppressure = pressure_create(runtype, domain.p, internal_pressure_method)
         self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
+
+    def __dealloc__(self):
+        if self.ppressure != NULL:
+            pressure_finalize(self.ppressure)
+        if self.psealevel != NULL:
+            sealevel_finalize(self.psealevel)
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T
@@ -340,6 +359,10 @@ cdef class Momentum:
     def __init__(self, Domain domain, int runtype, double Am0, double cnpar, int coriolis_scheme):
         self.domain = domain
         self.p = momentum_create(runtype, domain.p, Am0, cnpar, coriolis_scheme)
+
+    def __dealloc__(self):
+        if self.p != NULL:
+            momentum_finalize(self.p)
 
     def w_3d(self, double timestep):
         momentum_w_3d(self.p, timestep)

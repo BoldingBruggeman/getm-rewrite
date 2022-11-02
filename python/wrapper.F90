@@ -349,6 +349,15 @@ contains
       pdiffusion = c_loc(diffusion)
    end function
 
+   subroutine vertical_diffusion_finalize(pdiffusion) bind(c)
+      type(c_ptr), intent(in), value :: pdiffusion
+
+      type (type_vertical_diffusion), pointer :: diffusion
+
+      call c_f_pointer(pdiffusion, diffusion)
+      deallocate(diffusion)
+   end subroutine
+
    subroutine vertical_diffusion_prepare(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, ho, hn) bind(c)
       type(c_ptr),    intent(in), value :: pdiffusion
       integer(c_int), intent(in), value :: nx, ny, nz
@@ -403,6 +412,15 @@ contains
       !pD = c_loc(advection%D)
       !phn = c_loc(advection%hn)
    end function
+
+   subroutine advection_finalize(padvection) bind(c)
+      type(c_ptr), intent(in), value :: padvection
+
+      type (type_vertical_diffusion), pointer :: advection
+
+      call c_f_pointer(padvection, advection)
+      deallocate(advection)
+   end subroutine
 
    subroutine advection_uv_calculate(direction, nk, padvection, ptgrid, pugrid, pu, pAh, timestep, ph, phu, pvar) bind(c)
       integer(c_int), intent(in), value :: direction, nk
@@ -488,6 +506,15 @@ contains
       pmomentum = c_loc(momentum)
    end function
 
+   subroutine momentum_finalize(pmomentum) bind(c)
+      type(c_ptr), intent(in), value :: pmomentum
+
+      type (type_getm_momentum), pointer :: momentum
+
+      call c_f_pointer(pmomentum, momentum)
+      deallocate(momentum)
+   end subroutine
+
    subroutine momentum_diffusion_driver(pmomentum, nk, ph, phx, pu, pv, pdiffu, pdiffv) bind(c)
       integer(c_int), intent(in), value :: nk
       type(c_ptr),    intent(in), value :: pmomentum, ph, phx, pu, pv, pdiffu, pdiffv
@@ -563,6 +590,15 @@ contains
       ppressure = c_loc(pressure)
    end function
 
+   subroutine pressure_finalize(ppressure) bind(c)
+      type(c_ptr), intent(in), value :: ppressure
+
+      type (type_getm_pressure), pointer :: pressure
+
+      call c_f_pointer(ppressure, pressure)
+      deallocate(pressure)
+   end subroutine
+
    subroutine pressure_surface(ppressure, pz, psp) bind(c)
       type(c_ptr), intent(in), value :: ppressure
       type(c_ptr), intent(in), value :: pz, psp
@@ -601,6 +637,15 @@ contains
       call sealevel%initialize(domain)
       psealevel = c_loc(sealevel)
    end function
+
+   subroutine sealevel_finalize(psealevel) bind(c)
+      type(c_ptr), intent(in), value :: psealevel
+
+      type (type_getm_sealevel), pointer :: sealevel
+
+      call c_f_pointer(psealevel, sealevel)
+      deallocate(sealevel)
+   end subroutine
 
    subroutine sealevel_update(psealevel, timestep, pU, pV, pfwf) bind(c)
       type(c_ptr), intent(in),    value :: psealevel
