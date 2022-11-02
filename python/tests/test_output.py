@@ -8,7 +8,7 @@ import netCDF4
 import pygetm
 
 
-class Test(unittest.TestCase):
+class TestOutput(unittest.TestCase):
     def create(self) -> None:
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),

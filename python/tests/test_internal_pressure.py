@@ -7,7 +7,7 @@ GRAVITY = 9.81
 RHO0 = 1025.0
 
 
-class Test(unittest.TestCase):
+class TestInternalPressure(unittest.TestCase):
     def test_blumberg_mellor(self):
         for ddu in (0.0, 1.0, 2.0):
             with self.subTest(ddu=ddu):

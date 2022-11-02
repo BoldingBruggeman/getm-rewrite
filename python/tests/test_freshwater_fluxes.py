@@ -15,7 +15,7 @@ TIMESTEP = 30
 SPLIT_FACTOR = 15
 
 
-class Base(unittest.TestCase):
+class TestFreshwaterFluxes(unittest.TestCase):
     def create_domain(self) -> pygetm.domain.Domain:
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),
@@ -41,8 +41,6 @@ class Base(unittest.TestCase):
         tracer.fill(1.0)
         return sim
 
-
-class Test(Base):
     def test_single_river_with_diluted_tracer(self):
         flow = 100.0
 

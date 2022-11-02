@@ -4,7 +4,7 @@ import numpy as np
 import pygetm
 
 
-class Test(unittest.TestCase):
+class TestCoriolis(unittest.TestCase):
     def test(self):
         for lat in (-50, -20.0, 0.0, 20.0, 50.0):
             for u in (-5, -0.0, 5.0):

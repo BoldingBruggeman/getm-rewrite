@@ -18,7 +18,7 @@ def calculate_md5(path: str) -> str:
     return hash.hexdigest()
 
 
-class TestAdvection(unittest.TestCase):
+class TestParallelAdvection(unittest.TestCase):
     args = None
 
     def test(self):

@@ -19,7 +19,7 @@ def generate_random_horizontal_grid(nx=99, ny=100):
     return xp, yp, fp
 
 
-class Test(unittest.TestCase):
+class TestInterpolate(unittest.TestCase):
     # Maximum acceptable error
     EPS = 5 * np.finfo(float).eps
 

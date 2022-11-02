@@ -5,7 +5,7 @@ import numpy as np
 import pygetm
 
 
-class Test(unittest.TestCase):
+class TestGrid(unittest.TestCase):
     def test_interpolation(self):
         domain = pygetm.domain.create_cartesian(
             np.linspace(0.0, 10000.0, 101),
