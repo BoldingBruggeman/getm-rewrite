@@ -416,7 +416,7 @@ contains
    subroutine advection_finalize(padvection) bind(c)
       type(c_ptr), intent(in), value :: padvection
 
-      type (type_vertical_diffusion), pointer :: advection
+      type (type_advection), pointer :: advection
 
       call c_f_pointer(padvection, advection)
       deallocate(advection)
