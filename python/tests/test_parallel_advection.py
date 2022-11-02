@@ -253,7 +253,7 @@ if __name__ == "__main__":
         "--profile", action="store_true", help="use profiler to time function calls"
     )
     parser.add_argument("-o", "--output", help="NetCDF file to save result to")
-    TestAdvection.args, remaining = parser.parse_known_args()
+    TestParallelAdvection.args, remaining = parser.parse_known_args()
 
     unittest.main(argv=sys.argv[:1] + remaining)
 
