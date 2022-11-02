@@ -7,7 +7,7 @@ module pygotm
 
    implicit none
 
-   logical, save :: initialized = .false.
+   type (type_settings), pointer, save :: store => null()
 
 contains
 
@@ -30,7 +30,6 @@ contains
       character(kind=c_char), target, intent(in)  :: pnml_file(*), pyaml_file(*)
       type(c_ptr),                    intent(out) :: ptke, peps, pL, pnum, pnuh
 
-      type (type_settings), target :: store
       class (type_settings), pointer :: branch
       integer, parameter :: iunit = 60
       integer :: pathlen
@@ -39,10 +38,8 @@ contains
       call c_f_pointer(c_loc(pnml_file), nml_file)
       call c_f_pointer(c_loc(pyaml_file), yaml_file)
 
-      if (initialized) then
-         call clean_turbulence()
-         call clean_tridiagonal()
-      end if
+      call finalize()
+      allocate(store)
       pathlen = index(yaml_file, C_NULL_CHAR) - 1
       if (pathlen > 0) then
          call store%load(yaml_file(:pathlen), iunit)
@@ -62,9 +59,17 @@ contains
       pnum = c_loc(num)
       pnuh = c_loc(nuh)
 
-      initialized = .true.
       flush(unit=0)
       flush(unit=6)
+   end subroutine
+
+   subroutine finalize() bind(c)
+      if (associated(store)) then
+         call clean_turbulence()
+         call clean_tridiagonal()
+         call store%finalize()
+         deallocate(store)
+      end if
    end subroutine
 
    subroutine calculate(nlev, dt, h, D, u_taus, u_taub, z0s, z0b, NN, SS) bind(c)
