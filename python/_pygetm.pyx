@@ -14,6 +14,7 @@ cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin
 cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int nwb, int nnb, int neb, int nsb, int* bdy_info, int* bdy_i, int* bdy_j) nogil
 cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
 cdef extern void domain_initialize(void* domain, int runtype, double Dmin, int method_vertical_coordinates, double ddl, double ddu, double Dgamma, int gamma_surf, double* maxdt) nogil
+cdef extern void grid_finalize(void* grid) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain, double timestep) nogil
 cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
@@ -156,6 +157,7 @@ cdef class Grid:
     cdef readonly int nx, ny, nz
     cdef readonly int nx_, ny_, nz_
     cdef readonly Domain domain
+    cdef bint owned
 
     def __init__(self, Domain domain, int grid_type):
         self.domain = domain
@@ -164,8 +166,13 @@ cdef class Grid:
             self.nx += 1
             self.ny += 1
         self.p = domain_get_grid(domain.p, grid_type, 1, self.nx, 1, self.ny, 1, self.nz, domain.halox, domain.haloy, domain.haloz)
+        self.owned = grid_type < 1 or grid_type > 4
         self.nx_, self.ny_, self.nz_ = self.nx + 2 * domain.halox, self.ny + 2 * domain.haloy, self.nz + 2 * domain.haloz
         domain.grids[grid_type] = self
+
+    def __dealloc__(self):
+        if self.owned and self.p != NULL:
+            grid_finalize(self.p)
 
     def wrap(self, Array ar, bytes name, register=True):
         return ar.wrap_c_array(self.domain, 0, self.p, name, register)

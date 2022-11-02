@@ -115,6 +115,15 @@ contains
       pgrid = c_loc(grid)
    end function
 
+   subroutine grid_finalize(pgrid) bind(c)
+      type(c_ptr), intent(in), value :: pgrid
+
+      type (type_getm_grid), pointer :: grid
+
+      call c_f_pointer(pgrid, grid)
+      deallocate(grid)
+   end subroutine
+
    subroutine domain_do_vertical(pdomain, timestep) bind(c)
       type(c_ptr),    intent(in), value :: pdomain
       real(c_double), intent(in), value :: timestep
