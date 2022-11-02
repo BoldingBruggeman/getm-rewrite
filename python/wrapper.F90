@@ -501,8 +501,6 @@ contains
       momentum%cnpar = cnpar
       momentum%coriolis_scheme = coriolis_scheme
       call momentum%initialize(runtype, domain)
-      allocate(momentum%vertical_diffusion)
-      call momentum%vertical_diffusion%initialize(domain%T)
       pmomentum = c_loc(momentum)
    end function
 
