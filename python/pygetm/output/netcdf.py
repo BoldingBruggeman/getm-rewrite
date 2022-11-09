@@ -7,6 +7,7 @@ import netCDF4
 
 from . import File
 import pygetm.core
+import pygetm._pygetm
 
 
 class NetCDFFile(File):
@@ -66,6 +67,7 @@ class NetCDFFile(File):
         if self.is_root or self.sub:
             # Create the NetCDF file
             self.nc = netCDF4.Dataset(self.path, "w", format=self.format)
+            self.nc.history = "created by pygetm %s" % pygetm._pygetm.get_version()
             for field in self.fields.values():
                 for dim, length in zip(field.dims, field.shape):
                     if dim not in self.nc.dimensions:

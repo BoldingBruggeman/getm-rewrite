@@ -37,6 +37,14 @@ set(FABM_FORCED_REAL_KIND c_double)
 add_compile_definitions(_FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_MASKED_VALUE_=0 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
 add_subdirectory(../extern/fabm/src/drivers/python fabm EXCLUDE_FROM_ALL)
 
+set(GET_GIT_INFO_SCRIPT "../extern/fabm/src/cmake/Modules/GetGitInfo.cmake")
+add_custom_target(pygetm_version
+   ${CMAKE_COMMAND} -DINFILE=version.pxi.in -DOUTFILE=version.pxi -P ${GET_GIT_INFO_SCRIPT}
+   WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+   COMMENT "Retrieving description of last pygetm commit..."
+   SOURCES version.pxi.in ${GET_GIT_INFO_SCRIPT}
+   VERBATIM
+)
 add_compile_definitions(USE_TRANSPORTS=1)
 
 add_library( flom 
@@ -63,6 +71,7 @@ target_link_libraries(cgotm turbulence util yaml)
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
   COMMAND cython _pygetm.pyx
   MAIN_DEPENDENCY _pygetm.pyx
+  DEPENDS pygetm_version
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

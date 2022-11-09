@@ -2,6 +2,7 @@
 # cython: profile=True
 
 cimport cython
+include "version.pxi"
 
 from libc.math cimport ceil
 

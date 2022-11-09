@@ -1,0 +1,3 @@
+def get_version():
+    return "@GIT_COMMIT_ID@"
+# "@GIT_BRANCH_NAME@"
