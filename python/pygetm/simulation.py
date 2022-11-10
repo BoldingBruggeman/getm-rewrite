@@ -147,6 +147,8 @@ class Simulation(_pygetm.Simulation):
             "radiation",
             "_initialized_variables",
             "delay_slow_ip",
+            "total_volume_ref",
+            "total_area",
         )
         + _time_arrays
     )
@@ -223,6 +225,12 @@ class Simulation(_pygetm.Simulation):
         if self.runtype == BAROTROPIC_2D:
             domain.U.z0b.attrs["_part_of_state"] = True
             domain.V.z0b.attrs["_part_of_state"] = True
+
+        unmasked = self.domain.T.mask != 0
+        self.total_volume_ref = (self.domain.T.H * self.domain.T.area).global_sum(
+            where=unmasked
+        )
+        self.total_area = self.domain.T.area.global_sum(where=unmasked)
 
         # Configure momentum provider
         if momentum is None:
@@ -1137,7 +1145,10 @@ class Simulation(_pygetm.Simulation):
         total_volume, tracer_totals = self.totals
         if total_volume is not None:
             self.logger.info("Integrals over global domain:")
-            self.logger.info("  volume: %.15e m3" % total_volume)
+            mean_z = (total_volume - self.total_volume_ref) / self.total_area
+            self.logger.info(
+                "  volume: %.15e m3 (mean elevation: %s m)" % (total_volume, mean_z)
+            )
             for tt, total, mean in tracer_totals:
                 ar = tt.array
                 long_name = tt.long_name if tt.long_name is not None else ar.long_name
