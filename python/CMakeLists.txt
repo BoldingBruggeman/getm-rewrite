@@ -39,7 +39,7 @@ add_subdirectory(../extern/fabm/src/drivers/python fabm EXCLUDE_FROM_ALL)
 
 set(GET_GIT_INFO_SCRIPT "../extern/fabm/src/cmake/Modules/GetGitInfo.cmake")
 add_custom_target(pygetm_version
-   ${CMAKE_COMMAND} -DINFILE=version.pxi.in -DOUTFILE=version.pxi -P ${GET_GIT_INFO_SCRIPT}
+   ${CMAKE_COMMAND} -DINFILE=version.pxi.in -DOUTFILE=${CMAKE_CURRENT_BINARY_DIR}/version.pxi -P ${GET_GIT_INFO_SCRIPT}
    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
    COMMENT "Retrieving description of last pygetm commit..."
    SOURCES version.pxi.in ${GET_GIT_INFO_SCRIPT}
@@ -69,9 +69,9 @@ add_library(cgotm
 target_link_libraries(cgotm turbulence util yaml)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/_pygetm.c
-  COMMAND cython _pygetm.pyx
+  COMMAND cython -I ${CMAKE_CURRENT_BINARY_DIR} _pygetm.pyx
   MAIN_DEPENDENCY _pygetm.pyx
-  DEPENDS pygetm_version
+  DEPENDS pygetm_version ${CMAKE_CURRENT_BINARY_DIR}/version.pxi
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
