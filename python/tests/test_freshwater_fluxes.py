@@ -161,6 +161,34 @@ class TestFreshwaterFluxes(unittest.TestCase):
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
         self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
 
+    def test_collocated_river_and_withdrawal(self):
+        flow1 = -100.0
+        flow2 = 200.0
+
+        domain = self.create_domain()
+        river1 = domain.rivers.add_by_index("dummy1", 25, 25)
+        river2 = domain.rivers.add_by_index("dummy2", 25, 25)
+        sim = self.create_simulation(domain)
+        river1.flow.set(flow1)
+        river2.flow.set(flow2)
+        river2["dum"].follow_target_cell = True
+
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        flow = flow1 + flow2
+        target = total_volume + DT * flow
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + flow * DT * 1.0
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
+        self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
+
     def test_single_river_with_prescribed_tracer(self):
         flow = 100.0
         concentration = 5.0
