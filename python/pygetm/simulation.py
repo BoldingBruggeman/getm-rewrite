@@ -548,15 +548,19 @@ class Simulation(_pygetm.Simulation):
                 ds = ds.isel({timevar.dims[0]: itime})
 
             # Load all fields that are part of the model state
+            missing = []
             for name, field in self.output_manager.fields.items():
                 if field.attrs.get("_part_of_state", False):
                     if name not in ds:
-                        raise Exception(
-                            "Field %s is part of state but not found in %s"
-                            % (name, path)
-                        )
-                    field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
-                    self._initialized_variables.add(name)
+                        missing.append(name)
+                    else:
+                        field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
+                        self._initialized_variables.add(name)
+            if missing:
+                raise Exception(
+                    "The following field(s) are part of the model state but not found "
+                    "in %s: %s" % (path, ", ".join(missing))
+                )
 
         if self.runtype > BAROTROPIC_2D:
             # Restore elevation from before open boundary condition was applied
