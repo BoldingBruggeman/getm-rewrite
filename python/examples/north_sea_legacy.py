@@ -43,6 +43,7 @@ domain.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
 domain.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
 
 bdy_3d_path = os.path.join(args.setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc")
+domain.open_boundaries.sponge.tmrlx = True
 sim.temp.open_boundaries.type = pygetm.SPONGE
 sim.temp.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "temp"))
 sim.salt.open_boundaries.type = pygetm.SPONGE
