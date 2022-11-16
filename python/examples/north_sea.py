@@ -106,9 +106,7 @@ def create_simulation(
                 pygetm.input.from_nc(river_path, river.original_name) / river.split
             )
             if sim.runtype == pygetm.BAROCLINIC:
-                river["salt"].set(
-                    pygetm.input.from_nc(river_path, "%s_salt" % river.original_name,)
-                )
+                river["salt"].set(0.5)
 
     if sim.runtype < pygetm.BAROCLINIC:
         sim.sst = sim.airsea.t2m
