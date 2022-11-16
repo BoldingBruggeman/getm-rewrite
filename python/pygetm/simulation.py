@@ -552,7 +552,8 @@ class Simulation(_pygetm.Simulation):
                 if field.attrs.get("_part_of_state", False):
                     if name not in ds:
                         raise Exception(
-                            "Field %s is part of state but not found in %s" % path
+                            "Field %s is part of state but not found in %s"
+                            % (name, path)
                         )
                     field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
                     self._initialized_variables.add(name)
