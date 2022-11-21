@@ -4,6 +4,10 @@ import functools
 import pickle
 import enum
 
+import mpi4py
+
+mpi4py.rc.threads = False
+
 from mpi4py import MPI
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike
