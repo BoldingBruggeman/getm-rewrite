@@ -45,7 +45,6 @@ add_custom_target(pygetm_version
    SOURCES version.pxi.in ${GET_GIT_INFO_SCRIPT}
    VERBATIM
 )
-add_compile_definitions(USE_TRANSPORTS=1)
 
 add_library( flom 
   ../extern/flom/src/grid.F90
@@ -60,7 +59,11 @@ add_subdirectory(../src/operators operators)
 add_subdirectory(../src/dynamics dynamics)
 
 add_library(cgetm
-  wrapper.F90)
+  src/wrapper.F90
+  src/momentum.F90
+  src/radiation.F90
+  src/interpolation.F90
+)
 
 target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics)
 
