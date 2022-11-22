@@ -130,13 +130,9 @@ contains
       do k=1,kmax
          do j=jmin,jmax
             do i=imin-halox,imax+halox
-               if (mask(i,j) == 1) then
-                  ea4(i,j,k)=dt*(-0.5_c_double * (ho(i,j,k)+hn(i,j,k)) * g * dp(i,j) &
-                                 +alpha(i,j)*(cor(i,j,k) + adv(i,j,k) + diff(i,j,k) + idp(i,j,k)) &
-                                )
-               else
-                  ea4(i,j,k) = 0.0_c_double
-               end if
+               ea4(i,j,k)=dt*(-0.5_c_double * (ho(i,j,k)+hn(i,j,k)) * g * dp(i,j) &
+                              +alpha(i,j)*(cor(i,j,k) + adv(i,j,k) + diff(i,j,k) + idp(i,j,k)) &
+                              )
             end do
          end do
       end do
@@ -144,13 +140,11 @@ contains
       ! Additional matrix elements for surface and bottom layer
       do j=jmin,jmax
          do i=imin-halox,imax+halox
-            if (mask(i,j) == 1) then
-               ! surface stress
-               ea4(i,j,kmax) = ea4(i,j,kmax) + dt * alpha(i,j) * taus(i,j) * rho0i
+            ! surface stress
+            ea4(i,j,kmax) = ea4(i,j,kmax) + dt * alpha(i,j) * taus(i,j) * rho0i
 
-               ! bottom friction
-               ea2(i,j,1) = -dt * rr(i,j)
-            end if
+            ! bottom friction
+            ea2(i,j,1) = -dt * rr(i,j)
          end do
       end do
    END SUBROUTINE
