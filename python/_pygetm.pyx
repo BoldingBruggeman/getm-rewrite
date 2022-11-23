@@ -29,8 +29,8 @@ cdef extern void advection_uv_calculate(int direction, int nk, void* advection, 
 cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_finalize(void* diffusion) nogil
-cdef extern void vertical_diffusion_prepare(void* diffusion, int nx, int ny, int nz, double molecular, double* pnuh, double timestep, double cnpar, int* pmask, double* pho, double* phn) nogil
-cdef extern void vertical_diffusion_apply(void* diffusion, int nx, int ny, int nz, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
+cdef extern void c_vertical_diffusion_prepare(void* diffusion, int nx, int ny, int nz, double molecular, double* pnuh, double timestep, double cnpar, int* pmask, double* pho, double* phn) nogil
+cdef extern void c_vertical_diffusion_apply(void* diffusion, int nx, int ny, int nz, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double cnpar, int coriolis_scheme) nogil
 cdef extern void momentum_finalize(void* momentum) nogil
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
@@ -39,8 +39,8 @@ cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy)
 cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* )
 cdef extern void* pressure_create(int runtype, void* pdomain, int method_internal_pressure) nogil
 cdef extern void pressure_finalize(void* pressure) nogil
-cdef extern void pressure_surface(void* pressure, double* pz, double* psp) nogil
-cdef extern void pressure_internal(void* pressure, double* buoy) nogil
+cdef extern void c_pressure_surface(void* pressure, double* pz, double* psp) nogil
+cdef extern void c_pressure_internal(void* pressure, double* buoy) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_finalize(void* sealevel) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
@@ -299,7 +299,7 @@ cdef class VerticalDiffusion:
         cdef Array mask = nuh.grid.mask
         cdef Array hn = nuh.grid.hn
         cdef Array ho = nuh.grid.ho if use_ho else hn
-        vertical_diffusion_prepare(self.p, nuh.grid.nx_, nuh.grid.ny_, nuh.grid.nz_, molecular, <double *>nuh.p, timestep, self.cnpar, <int *>mask.p, <double *>ho.p, <double *>hn.p)
+        c_vertical_diffusion_prepare(self.p, nuh.grid.nx_, nuh.grid.ny_, nuh.grid.nz_, molecular, <double *>nuh.p, timestep, self.cnpar, <int *>mask.p, <double *>ho.p, <double *>hn.p)
 
     def apply(self, Array var not None, Array ea2=None, Array ea4=None, bint use_ho=False):
         cdef double* pea2 = NULL
@@ -311,7 +311,7 @@ cdef class VerticalDiffusion:
         cdef Array mask = var.grid.mask
         cdef Array hn = var.grid.hn
         cdef Array ho = var.grid.ho if use_ho else hn
-        vertical_diffusion_apply(self.p, var.grid.nx_, var.grid.ny_, var.grid.nz_, <int *>mask.p, <double *>ho.p, <double *>hn.p, <double *>var.p, pea2, pea4)
+        c_vertical_diffusion_apply(self.p, var.grid.nx_, var.grid.ny_, var.grid.nz_, <int *>mask.p, <double *>ho.p, <double *>hn.p, <double *>var.p, pea2, pea4)
 
 cdef class Simulation:
     cdef readonly Domain domain
@@ -337,11 +337,11 @@ cdef class Simulation:
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T
         assert sp.grid is self.domain.T
-        pressure_surface(self.ppressure, <double *>z.p, <double *>sp.p)
+        c_pressure_surface(self.ppressure, <double *>z.p, <double *>sp.p)
 
     def update_internal_pressure_gradient(self, Array buoy not None):
         assert buoy.grid is self.domain.T and buoy.z == CENTERS
-        pressure_internal(self.ppressure, <double *>buoy.p)
+        c_pressure_internal(self.ppressure, <double *>buoy.p)
 
     def advance_surface_elevation(self, double timestep, Array U not None, Array V not None, Array fwf not None):
         assert U.grid is self.domain.U

@@ -300,7 +300,7 @@ contains
       deallocate(diffusion)
    end subroutine
 
-   subroutine vertical_diffusion_prepare(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, ho, hn) bind(c)
+   subroutine c_vertical_diffusion_prepare(pdiffusion, nx, ny, nz, molecular, nuh, timestep, cnpar, mask, ho, hn) bind(c)
       type(c_ptr),    intent(in), value :: pdiffusion
       integer(c_int), intent(in), value :: nx, ny, nz
       real(c_double), intent(in), value :: molecular, timestep, cnpar
@@ -314,7 +314,7 @@ contains
       call diffusion%prepare(timestep, cnpar, mask, ho, hn, molecular, nuh(:, :, 1:nz-1))
    end subroutine
 
-   subroutine vertical_diffusion_apply(pdiffusion, nx, ny, nz, mask, ho, hn, var, pea2, pea4) bind(c)
+   subroutine c_vertical_diffusion_apply(pdiffusion, nx, ny, nz, mask, ho, hn, var, pea2, pea4) bind(c)
       type(c_ptr),    intent(in), value :: pdiffusion
       integer(c_int), intent(in), value :: nx, ny, nz
       integer(c_int), intent(in) :: mask(nx, ny)
@@ -539,7 +539,7 @@ contains
       deallocate(pressure)
    end subroutine
 
-   subroutine pressure_surface(ppressure, pz, psp) bind(c)
+   subroutine c_pressure_surface(ppressure, pz, psp) bind(c)
       type(c_ptr), intent(in), value :: ppressure
       type(c_ptr), intent(in), value :: pz, psp
 
@@ -552,7 +552,7 @@ contains
       call pressure%surface(z, sp)
    end subroutine
 
-   subroutine pressure_internal(ppressure, pbuoy) bind(c)
+   subroutine c_pressure_internal(ppressure, pbuoy) bind(c)
       type(c_ptr), intent(in), value :: ppressure
       type(c_ptr), intent(in), value :: pbuoy
 
