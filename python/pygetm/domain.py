@@ -642,11 +642,11 @@ class OpenBoundary:
         self.type_2d = type_2d
         self.type_3d = type_3d
         self.inflow_sign = 1.0 if side in (Side.WEST, Side.SOUTH) else -1.0
-        self.np = mstop - mstart
 
         if l is None:
             return
 
+        self.np = mstop - mstart
         mslice = slice(self.mstart, self.mstop)
         if side in (Side.WEST, Side.EAST):
             self.i = np.repeat(l, mstop - mstart)
@@ -908,7 +908,7 @@ class ArrayOpenBoundaries:
         if type is not None:
             type = make_bc(array.grid.domain.open_boundaries, type)
         self._bdy = []
-        for bdy in array.grid.domain.open_boundaries:
+        for bdy in array.grid.domain.open_boundaries.active:
             self._bdy.append(
                 ArrayOpenBoundary(
                     array.grid.domain,
