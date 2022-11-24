@@ -763,7 +763,8 @@ class Sponge(BoundaryCondition):
         w: Optional[np.ndarray],
     ):
         if w is not None:
-            sponge_mean = (w * sponge_values).sum(axis=-1).T
+            # note: where=w != 0.0 is used to avoid mixing in NaNs from areas where w=0
+            sponge_mean = (w * sponge_values).sum(axis=-1, where=w != 0.0).T
             bdy_values = rlxcoef * bdy_values + (1.0 - rlxcoef) * sponge_mean
         bdy_values = bdy_values.T
         blend = sp * bdy_values[..., np.newaxis] + (1.0 - sp) * sponge_values
@@ -891,14 +892,13 @@ class ArrayOpenBoundaries:
 
     def __init__(self, array: core.Array, type=None):
         self._array = array
-        self.values = self._array.grid.array(
-            name="%s_bdy" % self._array.name,
-            z=self._array.z,
+        self.values = array.grid.array(
+            name="%s_bdy" % array.name,
+            z=array.z,
             on_boundary=True,
+            fill_value=array.fill_value,
             attrs={
-                "_time_varying": self._array.attrs.get(
-                    "_time_varying", TimeVarying.MICRO
-                )
+                "_time_varying": array.attrs.get("_time_varying", TimeVarying.MICRO)
             },
         )
         if type is not None:
