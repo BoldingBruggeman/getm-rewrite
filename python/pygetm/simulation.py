@@ -996,7 +996,6 @@ class Simulation(_pygetm.Simulation):
             "Time spent in main loop: %.3f s"
             % (timeit.default_timer() - self._start_time,)
         )
-        self.domain.timers.log(self.logger)
         self.output_manager.close(self.timestep * self.istep, self.time)
 
     def summary_profiling_result(self, ps: pstats.Stats):
