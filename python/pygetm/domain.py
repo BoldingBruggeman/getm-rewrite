@@ -681,6 +681,10 @@ class OpenBoundary:
                 return np.swapaxes(values[Ellipsis, lslice, mslice], -1, -2)
             return values[Ellipsis, lslice, mslice]
 
+    def extract_uv_in(self, u: np.ndarray, v: np.ndarray):
+        uv = u if self.side in (Side.WEST, Side.EAST) else v
+        return uv[self.slice_uv_in]
+
 
 class BoundaryCondition:
     def initialize(self, open_boundaries: "OpenBoundaries"):
@@ -814,7 +818,7 @@ class Flather(BoundaryCondition):
                 bdy,
                 boundary.tp,
                 boundary.flow_ext,
-                boundary.D,
+                array.grid.D.all_values[boundary.slice_t],
                 boundary.inflow_sign,
             ),
         )
@@ -1272,15 +1276,13 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
     def start(self, U: core.Array, V: core.Array, uk: core.Array, vk: core.Array):
         for boundary in self.active:
-            boundary.D = self.domain.T.D.all_values[boundary.slice_t]
+            boundary.tp = boundary.extract_uv_in(U.all_values, V.all_values)
+            if uk is not None:
+                boundary.vel = boundary.extract_uv_in(uk.all_values, vk.all_values)
             if boundary.side in (Side.EAST, Side.WEST):
                 boundary.flow_ext = self.u[boundary.slice_bdy]
-                boundary.tp = U.all_values[boundary.slice_uv_in]
-                boundary.vel = uk.all_values[boundary.slice_uv_in]
             else:
                 boundary.flow_ext = self.v[boundary.slice_bdy]
-                boundary.tp = V.all_values[boundary.slice_uv_in]
-                boundary.vel = vk.all_values[boundary.slice_uv_in]
             boundary.velocity_3d_in = self.velocity_3d_in.all_values[boundary.slice_bdy]
         for field in self.domain.fields.values():
             if hasattr(field, "open_boundaries"):
