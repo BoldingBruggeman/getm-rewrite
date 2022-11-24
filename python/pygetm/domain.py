@@ -14,7 +14,18 @@ from . import _pygetm
 from . import core
 from . import parallel
 from . import input
-from .constants import FILL_VALUE, CENTERS, GRAVITY, INTERFACES
+from .constants import (
+    FILL_VALUE,
+    CENTERS,
+    GRAVITY,
+    INTERFACES,
+    ZERO_GRADIENT,
+    SPONGE,
+    FLATHER_ELEV,
+    FLATHER_TRANSPORT,
+    CLAMPED,
+    TimeVarying,
+)
 
 
 class VerticalCoordinates(enum.IntEnum):
@@ -420,13 +431,13 @@ class RiverTracer(core.Array):
         tracer_name: str,
         value: np.ndarray,
         follow: np.ndarray,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             grid=grid,
             name=tracer_name + "_in_river_" + river_name,
             long_name="%s in river %s" % (tracer_name, river_name),
-            **kwargs
+            **kwargs,
         )
         self.wrap_ndarray(value)
         self._follow = follow
@@ -619,8 +630,10 @@ class OpenBoundary:
         type_2d: int,
         type_3d: int,
     ):
+        side = Side(side)
+
         self.name = name
-        self.side = Side(side)
+        self.side = side
         self.l = l
         self.mstart = mstart
         self.mstop = mstop
@@ -628,14 +641,62 @@ class OpenBoundary:
         self.mstop_ = mstop_
         self.type_2d = type_2d
         self.type_3d = type_3d
+        self.inflow_sign = 1.0 if side in (Side.WEST, Side.SOUTH) else -1.0
+        self.np = mstop - mstart
+
+        if l is None:
+            return
+
+        mslice = slice(self.mstart, self.mstop)
+        if side in (Side.WEST, Side.EAST):
+            self.i = np.repeat(l, mstop - mstart)
+            self.j = np.arange(mstart, mstop)
+            self.slice_t = (Ellipsis, mslice, l)
+            self.slice_uv_in = (Ellipsis, mslice, l if side == Side.WEST else l - 1)
+            self.slice_uv_out = (Ellipsis, mslice, l - 1 if side == Side.WEST else l)
+        else:
+            self.i = np.arange(mstart, mstop)
+            self.j = np.repeat(l, mstop - mstart)
+            self.slice_t = (Ellipsis, l, mslice)
+            self.slice_uv_in = (Ellipsis, l if side == Side.SOUTH else l - 1, mslice)
+            self.slice_uv_out = (Ellipsis, l - 1 if side == Side.SOUTH else l, mslice)
+
+    def extract_inward(
+        self, values: np.ndarray, start: int, stop: Optional[int] = None
+    ):
+        l_inward = {Side.WEST: 1, Side.EAST: -1, Side.SOUTH: 1, Side.NORTH: -1}[
+            self.side
+        ]
+        mslice = slice(self.mstart, self.mstop)
+        if stop is None:
+            lslice = self.l + l_inward * start
+        else:
+            lslice = slice(
+                self.l + l_inward * start, self.l + l_inward * stop, l_inward
+            )
+        if self.side in (Side.WEST, Side.EAST):
+            return values[Ellipsis, mslice, lslice]
+        else:
+            if stop is not None:
+                return np.swapaxes(values[Ellipsis, lslice, mslice], -1, -2)
+            return values[Ellipsis, lslice, mslice]
 
 
 class BoundaryCondition:
     def initialize(self, open_boundaries: "OpenBoundaries"):
         pass
 
-    def __call__(self, array: core.Array, bdy: Optional[core.Array] = None):
+    def get_updater(
+        self,
+        domain: "Domain",
+        boundary: "OpenBoundary",
+        array: core.Array,
+        bdy: np.ndarray,
+    ):
         raise NotImplementedError
+
+    def prepare_depth_explicit(self):
+        pass
 
 
 class Sponge(BoundaryCondition):
@@ -646,90 +707,237 @@ class Sponge(BoundaryCondition):
         self.tmrlx_min = 0.0
         self.tmrlx_ucut = 0.02
         self.tmrlx_umin = -0.25 * self.tmrlx_ucut
+        self.rlxcoef = None
 
     def initialize(self, open_boundaries: "OpenBoundaries"):
-        tmask = open_boundaries.domain.mask_[1::2, 1::2]
-        self.i = np.empty((open_boundaries.np, self.n), dtype=np.intp)
-        self.j = np.empty((open_boundaries.np, self.n), dtype=np.intp)
-        for boundary in open_boundaries.active:
-            i_inward = {Side.WEST: 1, Side.EAST: -1}.get(boundary.side, 0)
-            j_inward = {Side.SOUTH: 1, Side.NORTH: -1}.get(boundary.side, 0)
-            for n in range(self.n):
-                self.i[boundary.start : boundary.stop, n] = (
-                    boundary.i + (n + 1) * i_inward
-                )
-                self.j[boundary.start : boundary.stop, n] = (
-                    boundary.j + (n + 1) * j_inward
-                )
-        i_valid = (self.i >= 0) & (self.i < tmask.shape[1])
-        j_valid = (self.j >= 0) & (self.j < tmask.shape[0])
-        water = tmask[self.j, self.i] != 0  # can include other bdy points
-        sponge_valid = i_valid & j_valid & water
-        self.sp = np.empty(self.i.shape, dtype=float)
-        self.sp[...] = ((self.n - np.arange(self.n)) / (self.n + 1.0)) ** 2
-        self.sp[~sponge_valid] = 0.0
-        self.w = self.sp / self.sp.sum(axis=1, keepdims=True)
-        self.sp[tmask[self.j, self.i] != 1] = 0.0  # only relax water points
-        self.open_boundaries = open_boundaries
+        if self.tmrlx and self.rlxcoef is None:
+            self.rlxcoef = open_boundaries.domain.T.array(z=CENTERS, on_boundary=True)
+            open_boundaries.velocity_3d_in.saved = True
+            self.inflow = open_boundaries.velocity_3d_in.all_values
 
-        self.i = np.where(sponge_valid, self.i, open_boundaries.i[:, np.newaxis])
-        self.j = np.where(sponge_valid, self.j, open_boundaries.j[:, np.newaxis])
-
-        self.inflow = open_boundaries.domain.T.array(z=CENTERS, on_boundary=True)
-        self.rlxcoef = open_boundaries.domain.T.array(z=CENTERS, on_boundary=True)
-
-    def update(self, u: core.Array, v: core.Array):
-        if not self.tmrlx:
-            return
-
-        for boundary in self.open_boundaries.active:
-            if boundary.side == Side.EAST:
-                inflow = -u.all_values[:, boundary.j, boundary.i - 1]
-            elif boundary.side == Side.WEST:
-                inflow = u.all_values[:, boundary.j, boundary.i]
-            elif boundary.side == Side.NORTH:
-                inflow = -v.all_values[:, boundary.j - 1, boundary.i]
-            elif boundary.side == Side.SOUTH:
-                inflow = v.all_values[:, boundary.j, boundary.i]
-            self.inflow.all_values[boundary.start : boundary.stop, :] = inflow.T
-
-        self.rlxcoef.all_values[...] = (self.tmrlx_max - self.tmrlx_min) * np.clip(
-            (self.inflow.all_values - self.tmrlx_umin)
-            / (self.tmrlx_ucut - self.tmrlx_umin),
-            0.0,
-            1.0,
-        ) + self.tmrlx_min
-
-    def __call__(self, array: core.Array, bdy: core.Array):
-        bdy_values = bdy.all_values
-        values = array.all_values
-        sponge_values = values[..., self.j, self.i]
+    def prepare_depth_explicit(self):
         if self.tmrlx:
-            r = self.rlxcoef.all_values
-            sponge_mean = (self.w * sponge_values).sum(axis=-1).T
-            bdy_values = r * bdy_values + (1.0 - r) * sponge_mean
+            self.rlxcoef.all_values[...] = (self.tmrlx_max - self.tmrlx_min) * np.clip(
+                (self.inflow - self.tmrlx_umin) / (self.tmrlx_ucut - self.tmrlx_umin),
+                0.0,
+                1.0,
+            ) + self.tmrlx_min
+
+    def get_updater(
+        self, boundary: "OpenBoundary", array: core.Array, bdy: np.ndarray,
+    ):
+        mask = boundary.extract_inward(
+            array.grid.mask.all_values, start=1, stop=self.n + 1
+        )
+        n = mask.shape[-1]
+        sp = np.empty((boundary.np, n), dtype=float)
+        sp[...] = ((self.n - np.arange(n)) / (self.n + 1.0)) ** 2
+        if self.tmrlx:
+            sp[mask == 0] = 0.0  # only include water points
+            w = sp / sp.sum(axis=1, keepdims=True)
+            rlxcoef = self.rlxcoef.all_values[boundary.slice_bdy]
+        else:
+            w = None
+            rlxcoef = None
+        sp[mask != 1] = 0.0  # only include updatable water points (exclude bdy)
+
+        return (
+            self.update_boundary,
+            (
+                array.all_values[boundary.slice_t],
+                boundary.extract_inward(array.all_values, start=1, stop=n + 1),
+                bdy,
+                sp,
+                rlxcoef,
+                w,
+            ),
+        )
+
+    @staticmethod
+    def update_boundary(
+        values: np.ndarray,
+        sponge_values: np.ndarray,
+        bdy_values: np.ndarray,
+        sp: np.ndarray,
+        rlxcoef: np.ndarray,
+        w: Optional[np.ndarray],
+    ):
+        if w is not None:
+            sponge_mean = (w * sponge_values).sum(axis=-1).T
+            bdy_values = rlxcoef * bdy_values + (1.0 - rlxcoef) * sponge_mean
         bdy_values = bdy_values.T
-        blend = self.sp * bdy_values[..., np.newaxis] + (1.0 - self.sp) * sponge_values
-        values[..., self.j, self.i] = blend
-        values[..., self.open_boundaries.j, self.open_boundaries.i] = bdy_values
+        blend = sp * bdy_values[..., np.newaxis] + (1.0 - sp) * sponge_values
+        sponge_values[...] = blend
+        values[...] = bdy_values
 
 
 class ZeroGradient(BoundaryCondition):
-    def initialize(self, open_boundaries: "OpenBoundaries"):
-        tmask = open_boundaries.domain.mask_[1::2, 1::2]
-        i = np.empty_like(open_boundaries.i)
-        j = np.empty_like(open_boundaries.j)
-        for boundary in open_boundaries.active:
-            i_inward = {Side.WEST: 1, Side.EAST: -1}.get(boundary.side, 0)
-            j_inward = {Side.SOUTH: 1, Side.NORTH: -1}.get(boundary.side, 0)
-            i[boundary.start : boundary.stop] = boundary.i + i_inward
-            j[boundary.start : boundary.stop] = boundary.j + j_inward
-        assert (tmask[j, i] != 0).all(), "Land at boundary interior"
-        self.source_slice = (Ellipsis, j, i)
-        self.target_slice = (Ellipsis, open_boundaries.j, open_boundaries.i)
+    def get_updater(
+        self, boundary: "OpenBoundary", array: core.Array, bdy: np.ndarray,
+    ):
+        return (
+            self.update,
+            (
+                array.all_values[boundary.slice_t],
+                boundary.extract_inward(array.all_values, start=1),
+            ),
+        )
 
-    def __call__(self, array: core.Array, bdy: Optional[core.Array] = None):
-        array.all_values[self.target_slice] = array.all_values[self.source_slice]
+    @staticmethod
+    def update(values: np.ndarray, inward_values: np.ndarray):
+        values[:] = inward_values
+
+
+class Clamped(BoundaryCondition):
+    def get_updater(
+        self, boundary: "OpenBoundary", array: core.Array, bdy: np.ndarray,
+    ):
+        return self.update, (array.all_values[boundary.slice_t], bdy.T)
+
+    @staticmethod
+    def update(values: np.ndarray, prescribed_values: np.ndarray):
+        values[:] = prescribed_values
+
+
+class Flather(BoundaryCondition):
+    def __init__(self, transport: bool = False):
+        self.update = self.update_transport if transport else self.update_velocity
+
+    def get_updater(
+        self, boundary: "OpenBoundary", array: core.Array, bdy: np.ndarray,
+    ):
+        return (
+            self.update,
+            (
+                array.all_values[boundary.slice_t],
+                bdy,
+                boundary.tp,
+                boundary.flow_ext,
+                boundary.D,
+                boundary.inflow_sign,
+            ),
+        )
+
+    @staticmethod
+    def update_velocity(
+        z: np.ndarray,
+        z_ext: np.ndarray,
+        tp: np.ndarray,
+        vel_ext: np.ndarray,
+        D: np.ndarray,
+        inflow_sign: float,
+    ):
+        z[:] = z_ext - inflow_sign * (tp - vel_ext * D) / np.sqrt(D * GRAVITY)
+
+    @staticmethod
+    def update_transport(
+        z: np.ndarray,
+        z_ext: np.ndarray,
+        tp: np.ndarray,
+        tp_ext: np.ndarray,
+        D: np.ndarray,
+        inflow_sign: float,
+    ):
+        z[:] = z_ext - inflow_sign * (tp - tp_ext) / np.sqrt(D * GRAVITY)
+
+
+def make_bc(open_boundaries: "OpenBoundaries", value) -> BoundaryCondition:
+    if isinstance(value, BoundaryCondition):
+        return value
+    if value == ZERO_GRADIENT:
+        return open_boundaries.zero_gradient
+    elif value == SPONGE:
+        return open_boundaries.sponge
+    elif value == CLAMPED:
+        return Clamped()
+    elif value == FLATHER_ELEV:
+        return Flather()
+    elif value == FLATHER_TRANSPORT:
+        return Flather(transport=True)
+    else:
+        raise Exception(f"Unknown boundary type {value} specified")
+
+
+class ArrayOpenBoundary:
+    def __init__(
+        self,
+        domain: "Domain",
+        boundary: OpenBoundary,
+        prescribed_values: np.ndarray,
+        model_values: np.ndarray,
+        type: BoundaryCondition,
+    ):
+        self.domain = domain
+        self._boundary = boundary
+        self._prescribed_values = prescribed_values
+        self._model_values = model_values
+        self._type = type
+
+    @property
+    def type(self) -> BoundaryCondition:
+        return self._type
+
+    @type.setter
+    def type(self, value: int):
+        self._type = make_bc(self.domain.open_boundaries, value)
+
+    @property
+    def values(self) -> int:
+        return self._prescribed_values
+
+
+class ArrayOpenBoundaries:
+    __slots__ = "_array", "values", "_bdy", "updaters"
+
+    def __init__(self, array: core.Array, type=None):
+        self._array = array
+        self.values = self._array.grid.array(
+            name="%s_bdy" % self._array.name,
+            z=self._array.z,
+            on_boundary=True,
+            attrs={
+                "_time_varying": self._array.attrs.get(
+                    "_time_varying", TimeVarying.MICRO
+                )
+            },
+        )
+        if type is not None:
+            type = make_bc(array.grid.domain.open_boundaries, type)
+        self._bdy = []
+        for bdy in array.grid.domain.open_boundaries:
+            self._bdy.append(
+                ArrayOpenBoundary(
+                    array.grid.domain,
+                    bdy,
+                    self.values.all_values[bdy.slice_bdy],
+                    array.all_values[bdy.slice_t],
+                    type or (bdy.type_2d if array.ndim == 2 else bdy.type_3d),
+                )
+            )
+        self.updaters = []
+
+    def _set_type(self, value: int):
+        value = make_bc(self._array.grid.domain.open_boundaries, value)
+        for bdy in self._bdy:
+            bdy.type = value
+
+    type = property(fset=_set_type)
+
+    def initialize(self):
+        bcs = set()
+        for bdy in self._bdy:
+            bdy._type.initialize(self._array.grid.domain.open_boundaries)
+            fn, args = bdy._type.get_updater(
+                bdy._boundary, self._array, bdy._prescribed_values
+            )
+            self.updaters.append(functools.partial(fn, *args))
+            bcs.add(bdy._type)
+        return bcs
+
+    def update(self):
+        """Update the tracer at the open boundaries"""
+        for updater in self.updaters:
+            updater()
 
 
 class OpenBoundaries(Sequence[OpenBoundary]):
@@ -758,6 +966,8 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         "mirror_V",
         "mirror_TU",
         "mirror_TV",
+        "velocity_3d_in",
+        "bcs",
     )
 
     def __init__(self, domain: "Domain"):
@@ -765,8 +975,9 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         self._boundaries: List[OpenBoundary] = []
         self.sponge = Sponge()
         self.zero_gradient = ZeroGradient()
-        self.active = []
+        self.active: List[OpenBoundary] = []
         self._frozen = False
+        self.bcs = set()
 
     def add_by_index(
         self,
@@ -854,6 +1065,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         umask = self.domain.mask_[1::2, 2::2]
         vmask = self.domain.mask_[2::2, 1::2]
         tmask = self.domain.mask_[1::2, 1::2]
+        bdy_types_2d = {}
         for side in (Side.WEST, Side.NORTH, Side.EAST, Side.SOUTH):
             n = 0
             for boundary in [b for b in self._boundaries if b.side == side]:
@@ -874,24 +1086,18 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                             dtype=np.intc,
                         )
                     )
-                    len_bdy = boundary.mstop - boundary.mstart
                     boundary.start = nbdyp
-                    boundary.stop = nbdyp + len_bdy
-                    nbdyp += len_bdy
+                    boundary.stop = nbdyp + boundary.np
+                    boundary.slice_bdy = (
+                        slice(boundary.start, boundary.stop),
+                        Ellipsis,
+                    )
+                    if boundary.type_2d not in bdy_types_2d:
+                        bdy_types_2d[boundary.type_2d] = make_bc(self, boundary.type_2d)
+                    boundary.type_2d = bdy_types_2d[boundary.type_2d]
+                    nbdyp += boundary.np
 
-                    if side in (Side.WEST, Side.EAST):
-                        bdy_mask = tmask[boundary.mstart : boundary.mstop, boundary.l]
-                        lvel = boundary.l - 1 if side == Side.WEST else boundary.l
-                        vel_mask = umask[boundary.mstart : boundary.mstop, lvel]
-                        boundary.i = np.repeat(boundary.l, len_bdy)
-                        boundary.j = np.arange(boundary.mstart, boundary.mstop)
-                    else:
-                        bdy_mask = tmask[boundary.l, boundary.mstart : boundary.mstop]
-                        lvel = boundary.l - 1 if side == Side.SOUTH else boundary.l
-                        vel_mask = vmask[lvel, boundary.mstart : boundary.mstop]
-                        boundary.i = np.arange(boundary.mstart, boundary.mstop)
-                        boundary.j = np.repeat(boundary.l, len_bdy)
-
+                    bdy_mask = tmask[boundary.slice_t]
                     if (bdy_mask == 0).any():
                         self.domain.logger.error(
                             "Open boundary %s: %i of %i points of this %sern boundary"
@@ -899,14 +1105,17 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                             % (
                                 boundary.name,
                                 (bdy_mask == 0).sum(),
-                                len_bdy,
+                                boundary.np,
                                 side.name.capitalize(),
                             )
                         )
                         raise Exception()
 
                     bdy_mask[:] = 2
-                    vel_mask[:] = 4
+                    if side in (Side.WEST, Side.EAST):
+                        umask[boundary.slice_uv_out] = 4
+                    else:
+                        vmask[boundary.slice_uv_out] = 4
                     bdy_i.append(boundary.i)
                     bdy_j.append(boundary.j)
 
@@ -916,10 +1125,12 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                         and self.local_to_global[-1][1] == start_glob
                     ):
                         # attach to previous boundary
-                        self.local_to_global[-1][1] += len_bdy
+                        self.local_to_global[-1][1] += boundary.np
                     else:
                         # gap; add new slice
-                        self.local_to_global.append([start_glob, start_glob + len_bdy])
+                        self.local_to_global.append(
+                            [start_glob, start_glob + boundary.np]
+                        )
                     n += 1
                     self.active.append(boundary)
                 nbdyp_glob += boundary.mstop_ - boundary.mstart_
@@ -1052,14 +1263,28 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
         # The arrays below are placeholders that will be assigned data
         # (from momentum/sealevel Fortran modules) when linked to the Simulation
-        self.z = self.domain.T.array(name="z_bdy", on_boundary=True, register=False)
-        self.u = self.domain.T.array(name="u_bdy", on_boundary=True, register=False)
-        self.v = self.domain.T.array(name="v_bdy", on_boundary=True, register=False)
+        self.u = self.domain.T.array(name="u_bdy", on_boundary=True)
+        self.v = self.domain.T.array(name="v_bdy", on_boundary=True)
 
-        self.sponge.initialize(self)
-        self.zero_gradient.initialize(self)
+        self.velocity_3d_in = self.domain.T.array(z=CENTERS, on_boundary=True)
 
         self._frozen = True
+
+    def start(self, U: core.Array, V: core.Array, uk: core.Array, vk: core.Array):
+        for boundary in self.active:
+            boundary.D = self.domain.T.D.all_values[boundary.slice_t]
+            if boundary.side in (Side.EAST, Side.WEST):
+                boundary.flow_ext = self.u[boundary.slice_bdy]
+                boundary.tp = U.all_values[boundary.slice_uv_in]
+                boundary.vel = uk.all_values[boundary.slice_uv_in]
+            else:
+                boundary.flow_ext = self.v[boundary.slice_bdy]
+                boundary.tp = V.all_values[boundary.slice_uv_in]
+                boundary.vel = vk.all_values[boundary.slice_uv_in]
+            boundary.velocity_3d_in = self.velocity_3d_in.all_values[boundary.slice_bdy]
+        for field in self.domain.fields.values():
+            if hasattr(field, "open_boundaries"):
+                self.bcs.update(field.open_boundaries.initialize())
 
     def __getitem__(self, key: int) -> OpenBoundary:
         return self._boundaries[key]
@@ -1080,6 +1305,13 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                 i += stop - start
             assert i == self.np
         return indices
+
+    def prepare_depth_explicit(self):
+        if self.velocity_3d_in.saved:
+            for boundary in self.active:
+                boundary.velocity_3d_in[:] = boundary.inflow_sign * boundary.vel.T
+        for bc in self.bcs:
+            bc.prepare_depth_explicit()
 
 
 def find_interfaces(c: ArrayLike) -> np.ndarray:
@@ -1265,7 +1497,7 @@ def create_spherical_at_resolution(
     maxlat: float,
     resolution: float,
     nz: int,
-    **kwargs
+    **kwargs,
 ) -> "Domain":
     """Create spherical domain encompassing the specified longitude range and latitude
     range and desired resolution in m.
@@ -1299,7 +1531,7 @@ def create_spherical_at_resolution(
         np.linspace(minlat, maxlat, ny),
         nz=nz,
         interfaces=True,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -1321,7 +1553,7 @@ def create(
     periodic_y: bool = False,
     logger: Optional[logging.Logger] = None,
     glob: bool = False,
-    **kwargs
+    **kwargs,
 ) -> "Domain":
     """Create new domain. By default, the local subdomain is returned if
     multiple processing cores are active (and `glob` is `False`)
@@ -1422,7 +1654,7 @@ def create(
             z0=z0,
             f=f,
             logger=logger,
-            **kwargs
+            **kwargs,
         )
 
     # If there is only one node, return the global domain immediately
@@ -1440,7 +1672,7 @@ def create(
         has_lonlat=lon is not None,
         spherical=spherical,
         logger=logger,
-        **kwargs
+        **kwargs,
     )
     subdomain.glob = global_domain
 
@@ -1478,7 +1710,7 @@ class Domain(_pygetm.Domain):
         has_xy: bool = True,
         has_lonlat: bool = True,
         logger: Optional[logging.Logger] = None,
-        **kwargs
+        **kwargs,
     ):
         assert nx == tiling.nx_glob and ny == tiling.ny_glob, (
             "Extent of global domain (%i, %i) does not match that of tiling (%i, %i)."
@@ -1720,7 +1952,7 @@ class Domain(_pygetm.Domain):
         ddu: float = 0.0,
         Dgamma: float = 0.0,
         gamma_surf: bool = True,
-        **kwargs
+        **kwargs,
     ):
         """Create domain with coordinates, bathymetry, mask defined on the supergrid.
 
@@ -2109,6 +2341,9 @@ class Domain(_pygetm.Domain):
         self.H_.flags.writeable = self.H.flags.writeable = False
         self.z0b_min_.flags.writeable = self.z0b_min.flags.writeable = False
         self.mask_.flags.writeable = self.mask.flags.writeable = False
+
+        self.T.z.open_boundaries = ArrayOpenBoundaries(self.T.z)
+        self.open_boundaries.z = self.T.z.open_boundaries.values
 
         super().initialize(
             runtype,

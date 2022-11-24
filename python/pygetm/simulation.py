@@ -240,12 +240,6 @@ class Simulation(_pygetm.Simulation):
             self.logger.getChild("momentum"), domain, runtype, advection_scheme
         )
 
-        # Make open boundary conditions for elevation and transport/velocity
-        # available as part of domain.open_boundaries
-        self.wrap(self.domain.open_boundaries.z, b"zbdy", source=3)
-        self.momentum.wrap(self.domain.open_boundaries.u, b"bdyu")
-        self.momentum.wrap(self.domain.open_boundaries.v, b"bdyv")
-
         for name in Simulation._pressure_arrays:
             kwargs = dict(fill_value=FILL_VALUE)
             kwargs.update(Simulation._array_args.get(name, {}))
@@ -615,7 +609,9 @@ class Simulation(_pygetm.Simulation):
 
         self.momentum.start()
         self.tracers.start()
-
+        self.domain.open_boundaries.start(
+            self.momentum.U, self.momentum.V, self.momentum.uk, self.momentum.vk
+        )
         # Ensure U and V points at the land-water interface have non-zero water depth
         # and layer thickness, as (zero) transports at these points will be divided by
         # these quantities
@@ -862,9 +858,7 @@ class Simulation(_pygetm.Simulation):
 
         baroclinic_active = self.runtype == BAROCLINIC and macro_active
         if baroclinic_active:
-            self.domain.open_boundaries.sponge.update(
-                self.momentum.uk, self.momentum.vk
-            )
+            self.domain.open_boundaries.prepare_depth_explicit()
 
             # Update tracer values at open boundaries. This must be done after
             # input_manager.update, but before diagnostics/forcing variables derived
@@ -947,7 +941,7 @@ class Simulation(_pygetm.Simulation):
 
         # Update elevation at the open boundaries. This must be done before
         # update_surface_pressure_gradient
-        self.update_surface_elevation_boundaries(self.timestep, self.momentum)
+        self.domain.T.z.open_boundaries.update()
 
         # Calculate the surface pressure gradient in the U and V points.
         # Note: this requires elevation and surface air pressure (both on T grid) to be
@@ -1002,6 +996,7 @@ class Simulation(_pygetm.Simulation):
             "Time spent in main loop: %.3f s"
             % (timeit.default_timer() - self._start_time,)
         )
+        self.domain.timers.log(self.logger)
         self.output_manager.close(self.timestep * self.istep, self.time)
 
     def summary_profiling_result(self, ps: pstats.Stats):

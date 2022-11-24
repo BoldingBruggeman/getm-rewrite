@@ -110,6 +110,8 @@ class GOTM(Turbulence):
         self.nuh.fill(self.mix.nuh[:, np.newaxis, np.newaxis])
         self._log()
 
+        self.num.open_boundaries = domain.ArrayOpenBoundaries(self.num, type=ZERO_GRADIENT)
+
     def _log(self):
         """Copy lines written by GOTM to stdout/stderr to the log
         """
@@ -177,6 +179,6 @@ class GOTM(Turbulence):
         # Viscosity (at T points) needs to be valid at open boundary points to so it
         # can be interpolated to inward-adjacent U/V points. However, it cannot be
         # computed as the shear frequency SS is not available at the boundary.
-        self.grid.domain.open_boundaries.zero_gradient(self.num)
+        self.num.open_boundaries.update()
 
         self._log()

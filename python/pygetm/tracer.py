@@ -17,39 +17,6 @@ class TracerTotal(NamedTuple):
     per_mass: bool = False
 
 
-class OpenBoundaries:
-    __slots__ = "_tracer", "_type", "values", "_bdy"
-
-    def __init__(self, tracer: "Tracer"):
-        self._tracer = tracer
-        self.values: Optional[core.Array] = None
-        self.type = ZERO_GRADIENT
-
-    @property
-    def type(self) -> int:
-        """Type of open boundary condition"""
-        return self._type
-
-    @type.setter
-    def type(self, value: int):
-        self._type = value
-        if self._type == ZERO_GRADIENT:
-            self.values = None
-            self._bdy = self._tracer.grid.domain.open_boundaries.zero_gradient
-        elif self.values is None:
-            self.values = self._tracer.grid.array(
-                name="%s_bdy" % self._tracer.name,
-                z=CENTERS,
-                on_boundary=True,
-                attrs={"_time_varying": TimeVarying.MACRO},
-            )
-            self._bdy = self._tracer.grid.domain.open_boundaries.sponge
-
-    def update(self):
-        """Update the tracer at the open boundaries"""
-        self._bdy(self._tracer, self.values)
-
-
 class Tracer(core.Array):
     __slots__ = (
         "source",
@@ -75,7 +42,7 @@ class Tracer(core.Array):
         rivers_follow_target_cell: bool = False,
         precipitation_follows_target_cell: bool = False,
         molecular_diffusivity: float = 0.0,
-        **kwargs
+        **kwargs,
     ):
         """A tracer transported by advection and diffusion, with optional source term,
         surface flux and vertical velocity (e.g., sinking, floating)
@@ -129,7 +96,9 @@ class Tracer(core.Array):
         self.source_scale: float = source_scale
         self.vertical_velocity: Optional[core.Array] = vertical_velocity
         self.molecular_diffusivity: float = molecular_diffusivity
-        self.open_boundaries: OpenBoundaries = OpenBoundaries(self)
+        self.open_boundaries: domain.ArrayOpenBoundaries = domain.ArrayOpenBoundaries(
+            self, ZERO_GRADIENT
+        )
         self.river_values: np.ndarray = np.zeros((len(grid.domain.rivers),))
         self.river_follow: np.ndarray = np.full(
             (len(grid.domain.rivers),), rivers_follow_target_cell, dtype=bool
