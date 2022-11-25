@@ -101,35 +101,31 @@ contains
       where (mask == 1) ru = sqrtcd * sqrtcd * sqrt(u*u + v*v)
    END SUBROUTINE
 
-   SUBROUTINE c_collect_3d_momentum_sources(imin, imax, jmin, jmax, kmax, halox, haloy, mask, alpha, ho, hn, &
+   SUBROUTINE c_collect_3d_momentum_sources(nx, ny, nz, halox, haloy, mask, alpha, ho, hn, &
       dp, cor, adv, diff, idp, taus, rr, dt, ea2, ea4) bind(c)
-      integer(c_int), value, intent(in) :: imin, imax, jmin, jmax, kmax
+      integer(c_int), value, intent(in) :: nx, ny, nz
       integer(c_int), value, intent(in) :: halox
       integer(c_int), value, intent(in) :: haloy
-#define _A2D_  imin-halox:imax+halox,jmin-haloy:jmax+haloy
-#define _A3D_  imin-halox:imax+halox,jmin-haloy:jmax+haloy,kmax
-      integer(c_int), intent(in) :: mask(_A2D_)
-      real(c_double), intent(in) :: alpha(_A2D_)
-      real(c_double), intent(in) :: ho(_A3D_)
-      real(c_double), intent(in) :: hn(_A3D_)
-      real(c_double), intent(in) :: dp(_A2D_)
-      real(c_double), intent(in) :: cor(_A3D_)
-      real(c_double), intent(in) :: adv(_A3D_)
-      real(c_double), intent(in) :: diff(_A3D_)
-      real(c_double), intent(in) :: idp(_A3D_)
-      real(c_double), intent(in) :: taus(_A2D_)
-      real(c_double), intent(in) :: rr(_A2D_)
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: alpha(nx, ny)
+      real(c_double), intent(in) :: ho(nx, ny, nz)
+      real(c_double), intent(in) :: hn(nx, ny, nz)
+      real(c_double), intent(in) :: dp(nx, ny)
+      real(c_double), intent(in) :: cor(nx, ny, nz)
+      real(c_double), intent(in) :: adv(nx, ny, nz)
+      real(c_double), intent(in) :: diff(nx, ny, nz)
+      real(c_double), intent(in) :: idp(nx, ny, nz)
+      real(c_double), intent(in) :: taus(nx, ny)
+      real(c_double), intent(in) :: rr(nx, ny)
       real(c_double), value, intent(in) :: dt
-      real(c_double), intent(inout) :: ea2(_A3D_)
-      real(c_double), intent(inout) :: ea4(_A3D_)
-#undef _A2D_
-#undef _A3D_
+      real(c_double), intent(inout) :: ea2(nx, ny, nz)
+      real(c_double), intent(inout) :: ea4(nx, ny, nz)
 
       integer :: i, j, k
 
-      do k=1,kmax
-         do j=jmin,jmax
-            do i=imin-halox,imax+halox
+      do k = 1, nz
+         do j = 1+haloy, ny-haloy
+            do i = 1, nx
                ea4(i,j,k)=dt*(-0.5_c_double * (ho(i,j,k)+hn(i,j,k)) * g * dp(i,j) &
                               +alpha(i,j)*(cor(i,j,k) + adv(i,j,k) + diff(i,j,k) + idp(i,j,k)) &
                               )
@@ -138,10 +134,10 @@ contains
       end do
 
       ! Additional matrix elements for surface and bottom layer
-      do j=jmin,jmax
-         do i=imin-halox,imax+halox
+      do j = 1+haloy, ny-haloy
+         do i = 1, nx
             ! surface stress
-            ea4(i,j,kmax) = ea4(i,j,kmax) + dt * alpha(i,j) * taus(i,j) * rho0i
+            ea4(i,j,nz) = ea4(i,j,nz) + dt * alpha(i,j) * taus(i,j) * rho0i
 
             ! bottom friction
             ea2(i,j,1) = -dt * rr(i,j)
@@ -149,35 +145,33 @@ contains
       end do
    END SUBROUTINE
 
-   SUBROUTINE c_advance_2d_transport(imin, imax, jmin, jmax, halox, haloy, mask, alpha, D, &
+   SUBROUTINE c_advance_2d_transport(nx, ny, halox, haloy, mask, alpha, D, &
       dp, taus, cor, adv, diff, damp, SA, SB, SD, SF, r, dt, U) bind(c)
-      integer(c_int), value, intent(in) :: imin, imax, jmin, jmax
+      integer(c_int), value, intent(in) :: nx, ny
       integer(c_int), value, intent(in) :: halox
       integer(c_int), value, intent(in) :: haloy
-#define _A2D_  imin-halox:imax+halox,jmin-haloy:jmax+haloy
-      integer(c_int), intent(in) :: mask(_A2D_)
-      real(c_double), intent(in) :: alpha(_A2D_)
-      real(c_double), intent(in) :: D(_A2D_)
-      real(c_double), intent(in) :: dp(_A2D_)
-      real(c_double), intent(in) :: taus(_A2D_)
-      real(c_double), intent(in) :: cor(_A2D_)
-      real(c_double), intent(in) :: adv(_A2D_)
-      real(c_double), intent(in) :: diff(_A2D_)
-      real(c_double), intent(in) :: damp(_A2D_)
-      real(c_double), intent(in) :: SA(_A2D_)
-      real(c_double), intent(in) :: SB(_A2D_)
-      real(c_double), intent(in) :: SD(_A2D_)
-      real(c_double), intent(in) :: SF(_A2D_)
-      real(c_double), intent(in) :: r(_A2D_)
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: alpha(nx, ny)
+      real(c_double), intent(in) :: D(nx, ny)
+      real(c_double), intent(in) :: dp(nx, ny)
+      real(c_double), intent(in) :: taus(nx, ny)
+      real(c_double), intent(in) :: cor(nx, ny)
+      real(c_double), intent(in) :: adv(nx, ny)
+      real(c_double), intent(in) :: diff(nx, ny)
+      real(c_double), intent(in) :: damp(nx, ny)
+      real(c_double), intent(in) :: SA(nx, ny)
+      real(c_double), intent(in) :: SB(nx, ny)
+      real(c_double), intent(in) :: SD(nx, ny)
+      real(c_double), intent(in) :: SF(nx, ny)
+      real(c_double), intent(in) :: r(nx, ny)
       real(c_double), value, intent(in) :: dt
-      real(c_double), intent(inout) :: U(_A2D_)
-#undef _A2D_
+      real(c_double), intent(inout) :: U(nx, ny)
 
       integer :: i, j
       real(c_double) :: Slr
 
-      do j=jmin,jmax
-         do i=imin,imax
+      do j = 1+haloy, ny-haloy
+         do i = 1+halox, nx-halox
             if (mask(i,j) == 1) then
                if (U(i,j) > 0._c_double) then
                   Slr = min(SF(i,j), 0._c_double)

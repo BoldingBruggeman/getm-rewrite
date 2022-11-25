@@ -510,44 +510,6 @@ contains
       call pressure%internal(buoy)
    end subroutine
 
-   function sealevel_create(pdomain) result(psealevel) bind(c)
-      type(c_ptr), intent(in), value :: pdomain
-      type(c_ptr) :: psealevel
-
-      type (type_getm_domain),   pointer :: domain
-      type (type_getm_sealevel), pointer :: sealevel
-
-      call c_f_pointer(pdomain, domain)
-      allocate(sealevel)
-      call sealevel%configure()
-      call sealevel%initialize(domain)
-      psealevel = c_loc(sealevel)
-   end function
-
-   subroutine sealevel_finalize(psealevel) bind(c)
-      type(c_ptr), intent(in), value :: psealevel
-
-      type (type_getm_sealevel), pointer :: sealevel
-
-      call c_f_pointer(psealevel, sealevel)
-      deallocate(sealevel)
-   end subroutine
-
-   subroutine sealevel_update(psealevel, timestep, pU, pV, pfwf) bind(c)
-      type(c_ptr), intent(in),    value :: psealevel
-      real(c_double), intent(in), value :: timestep
-      type(c_ptr), intent(in),    value :: pU, pV, pfwf
-
-      type (type_getm_sealevel), pointer :: sealevel
-      real(real64), contiguous, pointer, dimension(:,:) :: U, V, fwf
-
-      call c_f_pointer(psealevel, sealevel)
-      call c_f_pointer(pU, U, sealevel%domain%U%u(1:2) - sealevel%domain%U%l(1:2) + 1)
-      call c_f_pointer(pV, V, sealevel%domain%V%u(1:2) - sealevel%domain%V%l(1:2) + 1)
-      call c_f_pointer(pfwf, fwf, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
-      call sealevel%t(timestep, U, V, fwf)
-   end subroutine
-
    subroutine c_thickness2center_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)
       integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
       integer(c_int), intent(in)        :: mask(nx, ny)
@@ -606,4 +568,34 @@ contains
       real(c_double), value, intent(in) :: scale_factor
       tgt = tgt + scale_factor * add
    END SUBROUTINE
+
+   SUBROUTINE c_advance_surface_elevation(nx, ny, halox, haloy, mask, dyu, dxv, iarea, z, U, V, fwf, dt) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny
+      integer(c_int), value, intent(in) :: halox
+      integer(c_int), value, intent(in) :: haloy
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(inout) :: z(nx, ny)
+      real(c_double), intent(in) :: dyu(nx, ny)
+      real(c_double), intent(in) :: dxv(nx, ny)
+      real(c_double), intent(in) :: iarea(nx, ny)
+      real(c_double), intent(in) :: U(nx, ny)
+      real(c_double), intent(in) :: V(nx, ny)
+      real(c_double), intent(in) :: fwf(nx, ny)
+      real(c_double), value, intent(in) :: dt
+
+      integer :: i, j
+
+      do j=1+haloy,ny-haloy
+         do i=1+halox,nx-halox
+            if (mask(i,j) == 1) then
+               z(i,j) = z(i,j) & ! [GETM Scientific Report: eq. 4.28]
+                           + dt * ((  U(i-1,j  ) * dyu(i-1,j) - U(i,j) * dyu(i,j)  &
+                                    + V(i  ,j-1) * dxv(i,j-1) - V(i,j) * dxv(i,j)) &
+                                   * iarea(i,j) &
+                                   + fwf(i,j))
+            end if
+         end do
+      end do
+   END SUBROUTINE
+
 end module

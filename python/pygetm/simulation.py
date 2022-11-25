@@ -725,8 +725,9 @@ class Simulation(_pygetm.Simulation):
         # U and V at time=1/2 and freshwater fluxes at time=0. This also updates halos
         # so that depths and thicknesses can be computed everywhere without further
         # halo exchange
-        self.advance_surface_elevation(
-            self.timestep, self.momentum.U, self.momentum.V, self.fwf
+        self.domain.T.zo.all_values[:, :] = self.domain.T.z.all_values
+        _pygetm.advance_surface_elevation(
+            self.timestep, self.domain.T.z, self.momentum.U, self.momentum.V, self.fwf
         )
 
         # Track cumulative increase in elevation due to river inflow over the current

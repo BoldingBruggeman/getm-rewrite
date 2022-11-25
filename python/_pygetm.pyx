@@ -40,9 +40,6 @@ cdef extern void* pressure_create(int runtype, void* pdomain, int method_interna
 cdef extern void pressure_finalize(void* pressure) nogil
 cdef extern void c_pressure_surface(void* pressure, double* pz, double* psp) nogil
 cdef extern void c_pressure_internal(void* pressure, double* buoy) nogil
-cdef extern void* sealevel_create(void* pdomain) nogil
-cdef extern void sealevel_finalize(void* sealevel) nogil
-cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* initial, int up, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* initial, int up, double* out) nogil
@@ -52,9 +49,10 @@ cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask,
 cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
 cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int halox,int haloy,int* umask,int* vmask,double* idxu,double* dyu,double* idyv,double* dxv,double* Ah_u,double* Ah_v,int* tmask,double* iA,double dt,double* f,double* out)
 cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double avmmol, double* ru, int iterate)
-cdef extern void c_collect_3d_momentum_sources(int imin, int imax, int jmin, int jmax, int kmax, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4)
-cdef extern void c_advance_2d_transport(int imin, int imax, int jmin, int jmax, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U)
+cdef extern void c_collect_3d_momentum_sources(int nx, int ny, int nz, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4)
+cdef extern void c_advance_2d_transport(int ny, int ny, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U)
 cdef extern void c_multiply_add(int n, double* tgt, double* add, double scale_factor)
+cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt)
 
 cpdef enum:
     TGRID = 1
@@ -294,7 +292,6 @@ cdef class Simulation:
     cdef readonly Domain domain
     cdef readonly int runtype
     cdef void* ppressure
-    cdef void* psealevel
     cdef readonly int nx, ny
 
     def __init__(self, Domain domain, int runtype, int internal_pressure_method=1):
@@ -302,14 +299,11 @@ cdef class Simulation:
         domain.initialize(runtype)
         self.runtype = runtype
         self.ppressure = pressure_create(runtype, domain.p, internal_pressure_method)
-        self.psealevel = sealevel_create(domain.p)
         self.nx, self.ny = domain.nx, domain.ny
 
     def __dealloc__(self):
         if self.ppressure != NULL:
             pressure_finalize(self.ppressure)
-        if self.psealevel != NULL:
-            sealevel_finalize(self.psealevel)
 
     def update_surface_pressure_gradient(self, Array z not None, Array sp not None):
         assert z.grid is self.domain.T
@@ -320,19 +314,9 @@ cdef class Simulation:
         assert buoy.grid is self.domain.T and buoy.z == CENTERS
         c_pressure_internal(self.ppressure, <double *>buoy.p)
 
-    def advance_surface_elevation(self, double timestep, Array U not None, Array V not None, Array fwf not None):
-        assert U.grid is self.domain.U
-        assert V.grid is self.domain.V
-        sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p, <double *>fwf.p)
-
     def wrap(self, Array ar not None, bytes name, int source):
-        assert source in (2, 3)
-        cdef void* obj = NULL
-        if (source == 2):
-            obj = self.ppressure
-        elif (source == 3):
-            obj = self.psealevel
-        return ar.wrap_c_array(self.domain, source, obj, name)
+        assert source == 2
+        return ar.wrap_c_array(self.domain, source, self.ppressure, name)
 
 cdef class Momentum:
     cdef void* p
@@ -470,7 +454,7 @@ def collect_3d_momentum_sources(Array dp, Array cor, Array adv, Array diff, Arra
     assert rr.grid is grid and not rr.z, 'rr'
     assert ea2.z == CENTERS
     assert ea4.z == CENTERS
-    c_collect_3d_momentum_sources(1, grid.nx, 1, grid.ny, grid.nz, grid.domain.halox, grid.domain.haloy,
+    c_collect_3d_momentum_sources(grid.nx_, grid.ny_, grid.nz, grid.domain.halox, grid.domain.haloy,
         <int*>mask.p, <double*>alpha.p, <double*>ho.p, <double*>hn.p,
         <double*>dp.p, <double*>cor.p, <double*>adv.p, <double*>diff.p, <double*>idp.p, <double*>taus.p, <double*>rr.p, dt, <double*>ea2.p, <double*>ea4.p)
 
@@ -490,9 +474,22 @@ def advance_2d_transport(Array U, Array dp, Array taus, Array cor, Array adv, Ar
     assert SD.grid is grid and not SD.z, 'SD'
     assert SF.grid is grid and not SF.z, 'SF'
     assert r.grid is grid and not r.z, 'rr'
-    c_advance_2d_transport(1, grid.nx, 1, grid.ny, grid.domain.halox, grid.domain.haloy, <int*>mask.p, <double*>alpha.p, <double*>D.p,
+    c_advance_2d_transport(grid.nx_, grid.ny_, grid.domain.halox, grid.domain.haloy, <int*>mask.p, <double*>alpha.p, <double*>D.p,
        <double*>dp.p, <double*>taus.p, <double*>cor.p, <double*>adv.p, <double*>diff.p, <double*>damp.p,
        <double*>SA.p, <double*>SB.p, <double*>SD.p, <double*>SF.p, <double*>r.p, dt, <double*>U.p)
+
+def advance_surface_elevation(double timestep, Array z, Array U, Array V, Array fwf):
+    cdef Grid grid = z.grid
+    cdef Array mask = grid.mask
+    cdef Array dyu = U.grid.dy
+    cdef Array dxv = V.grid.dx
+    cdef Array iarea = grid.iarea
+    assert not z.z, 'z'
+    assert U.grid is grid.ugrid and not U.z, 'U'
+    assert V.grid is grid.vgrid and not V.z, 'V'
+    assert fwf.grid is grid and not fwf.z, 'fwf'
+    c_advance_surface_elevation(grid.nx_, grid.ny_, grid.domain.halox, grid.domain.haloy, <int*>mask.p, <double*>dyu.p, <double*>dxv.p, <double*>iarea.p,
+        <double*>z.p, <double*>U.p, <double*>V.p, <double*>fwf.p, timestep)
 
 def multiply_add(double[::1] tgt, double[::1] add, double scale_factor):
     if tgt.shape[0] != 0:
