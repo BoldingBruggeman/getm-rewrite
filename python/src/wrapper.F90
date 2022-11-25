@@ -42,51 +42,6 @@ contains
       deallocate(domain)
    end subroutine
 
-   subroutine domain_initialize_open_boundaries(pdomain, nbdyp, nwb, nnb, neb, nsb, bdy_info, bdy_i, bdy_j) bind(c)
-      type(c_ptr),    intent(in), value :: pdomain
-      integer(c_int), intent(in), value :: nwb, nnb, neb, nsb, nbdyp
-      integer(c_int), intent(in)        :: bdy_info(nwb + nnb + neb + nsb, 6), bdy_i(nbdyp), bdy_j(nbdyp)
-
-      type (type_getm_domain), pointer :: domain
-      integer :: nbdy
-
-      call c_f_pointer(pdomain, domain)
-      call domain%initialize_open_boundaries(nbdyp=nbdyp, nwb=nwb, nnb=nnb, neb=neb, nsb=nsb)
-
-      nbdy = 0
-      if (nwb > 0) then
-         domain%wi(:)  = bdy_info(nbdy + 1:nbdy + nwb, 1) + 1
-         domain%wfj(:) = bdy_info(nbdy + 1:nbdy + nwb, 2) + 1
-         domain%wlj(:) = bdy_info(nbdy + 1:nbdy + nwb, 3)
-         nbdy = nbdy + nwb
-      end if
-      if (nnb > 0) then
-         domain%nj(:) = bdy_info(nbdy + 1:nbdy + nnb, 1) + 1
-         domain%nfi(:) = bdy_info(nbdy + 1:nbdy + nnb, 2) + 1
-         domain%nli(:) = bdy_info(nbdy + 1:nbdy + nnb, 3)
-         nbdy = nbdy + nnb
-      end if
-      if (neb > 0) then
-         domain%ei(:) = bdy_info(nbdy + 1:nbdy + neb, 1) + 1
-         domain%efj(:) = bdy_info(nbdy + 1:nbdy + neb, 2) + 1
-         domain%elj(:) = bdy_info(nbdy + 1:nbdy + neb, 3)
-         nbdy = nbdy + neb
-      end if
-      if (nsb > 0) then
-         domain%sj(:) = bdy_info(nbdy + 1:nbdy + nsb, 1) + 1
-         domain%sfi(:) = bdy_info(nbdy + 1:nbdy + nsb, 2) + 1
-         domain%sli(:) = bdy_info(nbdy + 1:nbdy + nsb, 3)
-         nbdy = nbdy + nsb
-      end if
-      if (nbdy > 0) then
-         domain%bdy_2d_type(:) = bdy_info(:, 4)
-         domain%bdy_3d_type(:) = bdy_info(:, 5)
-         domain%bdy_index(:) = bdy_info(:, 6) + 1
-         domain%bdy_map(:, 1) = bdy_i + 1
-         domain%bdy_map(:, 2) = bdy_j + 1
-      end if
-   end subroutine
-
    function domain_get_grid(pdomain, grid_type, imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz) result(pgrid) bind(c)
       type(c_ptr),         intent(in), value :: pdomain
       integer(kind=c_int), intent(in), value :: grid_type
@@ -145,7 +100,6 @@ contains
       type (type_getm_sealevel), pointer :: sealevel
       character(len=10),         pointer :: pname
 
-      integer, parameter :: subtype_boundary = 1
       integer, parameter :: subtype_depth_explicit = 2
       integer, parameter :: subtype_depth_explicit_interfaces = 3
 
@@ -207,8 +161,6 @@ contains
          case ('dampV');  p = c_loc(momentum%dampV); grid_type = 3
          case ('u1');   p = c_loc(momentum%u1); grid_type = 2
          case ('v1');   p = c_loc(momentum%v1); grid_type = 3
-         case ('bdyu');   if (allocated(momentum%bdyu)) p = c_loc(momentum%bdyu); grid_type = 2; sub_type = subtype_boundary
-         case ('bdyv');   if (allocated(momentum%bdyv)) p = c_loc(momentum%bdyv); grid_type = 3; sub_type = subtype_boundary
          case ('uk');   if (allocated(momentum%uk)) p = c_loc(momentum%uk); grid_type = 2; sub_type = subtype_depth_explicit
          case ('vk');   if (allocated(momentum%vk)) p = c_loc(momentum%vk); grid_type = 3; sub_type = subtype_depth_explicit
          case ('ru');   p = c_loc(momentum%ru); grid_type = 2
@@ -245,12 +197,6 @@ contains
          case ('dpdy'); p = c_loc(pressure%dpdy); grid_type = 3
          case ('idpdx'); if (allocated(pressure%idpdx)) p = c_loc(pressure%idpdx); grid_type = 2; sub_type = subtype_depth_explicit
          case ('idpdy'); if (allocated(pressure%idpdy)) p = c_loc(pressure%idpdy); grid_type = 3; sub_type = subtype_depth_explicit
-         case default; p = C_NULL_PTR
-         end select
-      case (3)
-         call c_f_pointer(obj, sealevel)
-         select case (pname(:index(pname, C_NULL_CHAR) - 1))
-         case ('zbdy'); if (allocated(sealevel%zbdy)) p = c_loc(sealevel%zbdy); sub_type = subtype_boundary
          case default; p = C_NULL_PTR
          end select
       end select
@@ -600,18 +546,6 @@ contains
       call c_f_pointer(pV, V, sealevel%domain%V%u(1:2) - sealevel%domain%V%l(1:2) + 1)
       call c_f_pointer(pfwf, fwf, sealevel%domain%T%u(1:2) - sealevel%domain%T%l(1:2) + 1)
       call sealevel%t(timestep, U, V, fwf)
-   end subroutine
-
-   subroutine sealevel_boundaries(psealevel, pmomentum, timestep) bind(c)
-      type(c_ptr), intent(in), value :: psealevel, pmomentum
-      real(c_double), intent(in), value :: timestep
-
-      type (type_getm_sealevel), pointer :: sealevel
-      type (type_getm_momentum), pointer :: momentum
-
-      call c_f_pointer(psealevel, sealevel)
-      call c_f_pointer(pmomentum, momentum)
-      call sealevel%boundaries(timestep, momentum%U, momentum%V, momentum%bdyu, momentum%bdyv)
    end subroutine
 
    subroutine c_thickness2center_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)

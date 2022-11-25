@@ -12,7 +12,6 @@ import numpy
 from pygetm.constants import *
 
 cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin, int kmax, int* halox, int* haloy, int* haloz) nogil
-cdef extern void domain_initialize_open_boundaries(void* domain, int nbdyp, int nwb, int nnb, int neb, int nsb, int* bdy_info, int* bdy_i, int* bdy_j) nogil
 cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
 cdef extern void domain_initialize(void* domain, int runtype, double Dmin, int method_vertical_coordinates, double ddl, double ddu, double Dgamma, int gamma_surf, double* maxdt) nogil
 cdef extern void grid_finalize(void* grid) nogil
@@ -44,7 +43,6 @@ cdef extern void c_pressure_internal(void* pressure, double* buoy) nogil
 cdef extern void* sealevel_create(void* pdomain) nogil
 cdef extern void sealevel_finalize(void* sealevel) nogil
 cdef extern void sealevel_update(void* sealevel, double timestep, double* pU, double* pV, double* pfwf) nogil
-cdef extern void sealevel_boundaries(void* sealevel, void* momentum, double timestep) nogil
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* initial, int up, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* initial, int up, double* out) nogil
@@ -101,33 +99,19 @@ cdef class Array:
                 self._array = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
                 self._array = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
-        elif sub_type == 1:
-            # Horizontal-only array on open boundaries
-            if data_type == 0:
-                self._array = numpy.asarray(<double[:self.grid.nbdyp:1]> self.p)
-            else:
-                self._array = numpy.asarray(<int[:self.grid.nbdyp:1]> self.p)
-            self.on_boundary = True
         elif sub_type == 2:
             # Depth-explicit array on normal grid, layer centers
             if data_type == 0:
                 self._array = numpy.asarray(<double[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
                 self._array = numpy.asarray(<int[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
-        elif sub_type == 3:
+        else:
             # Depth-explicit array on normal grid, layer interfaces
+            assert sub_type == 3, 'Subtypes other than 0,2,3 not yet implemented'
             if data_type == 0:
                 self._array = numpy.asarray(<double[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
                 self._array = numpy.asarray(<int[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
-        else:
-            # Depth-explicit array on open boundaries, layer centers
-            assert sub_type == 4, 'Subtypes other than 0,1,2,3,4 not yet implemented'
-            if data_type == 0:
-                self._array = numpy.asarray(<double[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
-            else:
-                self._array = numpy.asarray(<int[:self.grid.nbdyp, :self.grid.nz_:1]> self.p)
-            self.on_boundary = True
         if self._fill_value is None:
             self._fill_value = self._array.flat[0]
         else:
@@ -212,13 +196,6 @@ cdef class Domain:
 
     def initialize(self, int runtype, double Dmin, int method_vertical_coordinates, double ddl=0., double ddu=0., double Dgamma=0., gamma_surf=True):
         domain_initialize(self.p, runtype, Dmin, method_vertical_coordinates, ddl, ddu, Dgamma, 1 if gamma_surf else 0, &self.maxdt)
-
-    def initialize_open_boundaries(self, int nwb, int nnb, int neb, int nsb, int nbdyp, int[:,::1] bdy_info, int[::1] bdy_i, int[::1] bdy_j):
-        assert bdy_info.shape[0] == 6, 'bdy_info should have 6 rows'
-        assert bdy_info.shape[1] == nwb + nnb + neb + nsb, 'bdy_info should have as many columns as the number of boundaries'
-        assert bdy_i.shape[0] == nbdyp, 'bdy_i should have a length equal to the number of boundary points'
-        assert bdy_j.shape[0] == nbdyp, 'bdy_j should have a length equal to the number of boundary points'
-        domain_initialize_open_boundaries(self.p, nbdyp, nwb, nnb, neb, nsb, &bdy_info[0,0], &bdy_i[0], &bdy_j[0])
 
 cdef class Advection:
     cdef void* p
@@ -347,9 +324,6 @@ cdef class Simulation:
         assert U.grid is self.domain.U
         assert V.grid is self.domain.V
         sealevel_update(self.psealevel, timestep, <double *>U.p, <double *>V.p, <double *>fwf.p)
-
-    def update_surface_elevation_boundaries(self, double timestep, Momentum momentum):
-        sealevel_boundaries(self.psealevel, momentum.p, timestep)
 
     def wrap(self, Array ar not None, bytes name, int source):
         assert source in (2, 3)

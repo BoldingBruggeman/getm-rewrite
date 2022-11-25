@@ -734,8 +734,12 @@ class Sponge(BoundaryCondition):
             array.grid.mask.all_values, start=1, stop=self.n + 1
         )
         n = mask.shape[-1]
+
+        # relaxation coeffiicent as per Martinsen & Engedahl (1987), Eq 3
+        # https://doi.org/10.1016/0378-3839(87)90028-7
         sp = np.empty((boundary.np, n), dtype=float)
         sp[...] = ((self.n - np.arange(n)) / (self.n + 1.0)) ** 2
+
         if self.tmrlx:
             sp[mask == 0] = 0.0  # only include water points
             w = sp / sp.sum(axis=1, keepdims=True)
@@ -1063,7 +1067,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         HALO = 2
         nbdyp = 0
         nbdyp_glob = 0
-        bdyinfo, bdy_i, bdy_j = [], [], []
+        bdy_i, bdy_j = [], []
         side2count = {}
         self.local_to_global = []
         umask = self.domain.mask_[1::2, 2::2]
@@ -1076,20 +1080,6 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                 if boundary.l is not None:
                     mskip = boundary.mstart - boundary.mstart_
                     assert mskip >= 0
-                    # Note that bdyinfo needs indices into the T grid EXCLUDING halos
-                    bdyinfo.append(
-                        np.array(
-                            (
-                                boundary.l - HALO,
-                                boundary.mstart - HALO,
-                                boundary.mstop - HALO,
-                                boundary.type_2d,
-                                boundary.type_3d,
-                                nbdyp,
-                            ),
-                            dtype=np.intc,
-                        )
-                    )
                     boundary.start = nbdyp
                     boundary.stop = nbdyp + boundary.np
                     boundary.slice_bdy = (
@@ -1222,7 +1212,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         self.domain.logger.info(
             "%i open boundaries (%i West, %i North, %i East, %i South)"
             % (
-                len(bdyinfo),
+                sum(side2count.values()),
                 side2count[Side.WEST],
                 side2count[Side.NORTH],
                 side2count[Side.EAST],
@@ -1241,17 +1231,6 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                 self.domain.logger.info(
                     "global-to-local open boundary map: %s" % (self.local_to_global,)
                 )
-            bdyinfo = np.stack(bdyinfo, axis=-1)
-            self.domain.initialize_open_boundaries(
-                nwb=side2count[Side.WEST],
-                nnb=side2count[Side.NORTH],
-                neb=side2count[Side.EAST],
-                nsb=side2count[Side.SOUTH],
-                nbdyp=self.np,
-                bdy_i=self.i - HALO,
-                bdy_j=self.j - HALO,
-                bdy_info=bdyinfo,
-            )
 
         # Coordinates of open boundary points
         self.zc = self.domain.T.array(z=CENTERS, on_boundary=True)
