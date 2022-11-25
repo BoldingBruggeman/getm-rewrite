@@ -725,9 +725,8 @@ class Simulation(_pygetm.Simulation):
         # U and V at time=1/2 and freshwater fluxes at time=0. This also updates halos
         # so that depths and thicknesses can be computed everywhere without further
         # halo exchange
-        self.domain.T.zo.all_values[:, :] = self.domain.T.z.all_values
-        _pygetm.advance_surface_elevation(
-            self.timestep, self.domain.T.z, self.momentum.U, self.momentum.V, self.fwf
+        self.advance_surface_elevation(
+            self.timestep, self.momentum.U, self.momentum.V, self.fwf
         )
 
         # Track cumulative increase in elevation due to river inflow over the current
@@ -1174,7 +1173,8 @@ class Simulation(_pygetm.Simulation):
         layer thicknesses or vertical coordinates.
         This is done by :meth:`~pygetm.domain.Domain.update_depth` instead.
         """
-        super().advance_surface_elevation(timestep, U, V, fwf)
+        self.domain.T.zo.all_values[:, :] = self.domain.T.z.all_values
+        _pygetm.advance_surface_elevation(timestep, self.domain.T.z, U, V, fwf)
         self.domain.T.z.update_halos()
 
     def check_finite(self, _3d: bool = True):
