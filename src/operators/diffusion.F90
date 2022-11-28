@@ -163,11 +163,9 @@ MODULE SUBROUTINE vertical_diffusion_prepare(self,dt,cnpar,mask,dzo,dzn,molecula
    do k=self%kmin,self%kmax-1
       do j=self%jmin,self%jmax
          do i=self%imin,self%imax
-            if (mask(i,j) ==  1) then
-               x = 2._real64*dt*(nuh(i,j,k)+molecular)
-               self%auxo(i,j,k)=(1._real64-cnpar)*x/(dzo(i,j,k+1)+dzo(i,j,k))
-               self%auxn(i,j,k)=           cnpar *x/(dzn(i,j,k+1)+dzn(i,j,k))
-            end if
+            x = 2._real64*dt*(nuh(i,j,k)+molecular)
+            self%auxo(i,j,k)=(1._real64-cnpar)*x/(dzo(i,j,k+1)+dzo(i,j,k))
+            self%auxn(i,j,k)=           cnpar *x/(dzn(i,j,k+1)+dzn(i,j,k))
          end do
       end do
    end do
@@ -176,9 +174,7 @@ MODULE SUBROUTINE vertical_diffusion_prepare(self,dt,cnpar,mask,dzo,dzn,molecula
    k=self%kmax
    do j=self%jmin,self%jmax
       do i=self%imin,self%imax
-         if (mask(i,j) ==  1) then
-            self%a1(ORDER)=-self%auxn(i,j,k-1)
-         end if
+         self%a1(ORDER)=-self%auxn(i,j,k-1)
       end do
    end do
 
@@ -187,10 +183,8 @@ MODULE SUBROUTINE vertical_diffusion_prepare(self,dt,cnpar,mask,dzo,dzn,molecula
    do k=self%kmin+1,self%kmax-1
       do j=self%jmin,self%jmax
          do i=self%imin,self%imax
-            if (mask(i,j) ==  1) then
-               self%a3(ORDER)=-self%auxn(i,j,k  )
-               self%a1(ORDER)=-self%auxn(i,j,k-1)
-            end if
+            self%a3(ORDER)=-self%auxn(i,j,k  )
+            self%a1(ORDER)=-self%auxn(i,j,k-1)
          end do
       end do
    end do
@@ -199,9 +193,7 @@ MODULE SUBROUTINE vertical_diffusion_prepare(self,dt,cnpar,mask,dzo,dzn,molecula
    k=self%kmin
    do j=self%jmin,self%jmax
       do i=self%imin,self%imax
-         if (mask(i,j) ==  1) then
-            self%a3(ORDER)=-self%auxn(i,j,k)
-         end if
+         self%a3(ORDER)=-self%auxn(i,j,k)
       end do
    end do
 
@@ -247,10 +239,8 @@ MODULE SUBROUTINE vertical_diffusion_apply(self,mask,dzo,dzn,var,ea2,ea4)
    k=self%kmax
    do j=self%jmin,self%jmax
       do i=self%imin,self%imax
-         if (mask(i,j) ==  1) then
-            self%a2(ORDER)=dzn(i,j,k) + self%auxn(i,j,k-1)
-            self%a4(ORDER)=var(i,j,k)*dzo(i,j,k) + (var(i,j,k-1)-var(i,j,k))*self%auxo(i,j,k-1)
-         end if
+         self%a2(ORDER)=dzn(i,j,k) + self%auxn(i,j,k-1)
+         self%a4(ORDER)=var(i,j,k)*dzo(i,j,k) + (var(i,j,k-1)-var(i,j,k))*self%auxo(i,j,k-1)
       end do
    end do
 
@@ -258,13 +248,11 @@ MODULE SUBROUTINE vertical_diffusion_apply(self,mask,dzo,dzn,var,ea2,ea4)
    ! do k=kmin,kmax-1
    do k=self%kmin+1,self%kmax-1
       do j=self%jmin,self%jmax
-         do i=self%imin,self%imax
-            if (mask(i,j) ==  1) then
-               self%a2(ORDER)=dzn(i,j,k) + self%auxn(i,j,k) + self%auxn(i,j,k-1)
-               self%a4(ORDER)=var(i,j,k  )*dzo(i,j,k) &
-                           + (var(i,j,k+1)-var(i,j,k  )) * self%auxo(i,j,k) &
-                           + (var(i,j,k-1)-var(i,j,k  )) * self%auxo(i,j,k-1)
-            end if
+         do concurrent (i=self%imin:self%imax)
+            self%a2(ORDER)=dzn(i,j,k) + self%auxn(i,j,k) + self%auxn(i,j,k-1)
+            self%a4(ORDER)=var(i,j,k  )*dzo(i,j,k) &
+                        + (var(i,j,k+1)-var(i,j,k  )) * self%auxo(i,j,k) &
+                        + (var(i,j,k-1)-var(i,j,k  )) * self%auxo(i,j,k-1)
          end do
       end do
    end do
@@ -273,10 +261,8 @@ MODULE SUBROUTINE vertical_diffusion_apply(self,mask,dzo,dzn,var,ea2,ea4)
    k=self%kmin
    do j=self%jmin,self%jmax
       do i=self%imin,self%imax
-         if (mask(i,j) ==  1) then
-            self%a2(ORDER)=dzn(i,j,k) + self%auxn(i,j,k)
-            self%a4(ORDER)=var(i,j,k)*dzo(i,j,k) + (var(i,j,k+1)-var(i,j,k))*self%auxo(i,j,k)
-         end if
+         self%a2(ORDER)=dzn(i,j,k) + self%auxn(i,j,k)
+         self%a4(ORDER)=var(i,j,k)*dzo(i,j,k) + (var(i,j,k+1)-var(i,j,k))*self%auxo(i,j,k)
       end do
    end do
 
