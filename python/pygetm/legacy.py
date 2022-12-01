@@ -137,7 +137,7 @@ class DatFile:
 
 
 def load_bdyinfo(
-    dom: pygetm.domain.Domain,
+    domain: pygetm.domain.Domain,
     path: str,
     type_2d: Optional[int] = None,
     type_3d: Optional[int] = None,
@@ -145,6 +145,7 @@ def load_bdyinfo(
     """Add open boundaries from bdyinfo.dat to domain.
 
     Args:
+        domain: domain to add open boundaries to
         path: data file with open boundary information
         type_2d: type of 2D open boundary condition to use.
             If provided, this overrides the type configured in the file.
@@ -167,7 +168,7 @@ def load_bdyinfo(
                 # convention: 0-based indices, with the upper bound being the first
                 # index that is EXcluded.
                 l, mstart, mstop, type_2d_, type_3d_ = map(int, f.get_line().split())
-                dom.open_boundaries.add_by_index(
+                domain.open_boundaries.add_by_index(
                     side,
                     l - 1,
                     mstart - 1,
@@ -177,12 +178,16 @@ def load_bdyinfo(
                 )
 
 
-def load_riverinfo(dom: pygetm.domain.Domain, path: str):
+def load_riverinfo(domain: pygetm.domain.Domain, path: str):
     """Add rivers from riverinfo.dat to domain
 
     Args:
+        domain: domain to add rivers to
         path: data file with river information
     """
+    # First count how many times each river appears.
+    # Rivers that appear multiple times are split over multiple cells
+    # and will have an index appended to their name in the final list of rivers.
     name2split = {}
     with DatFile(path) as f:
         n = int(f.get_line())
@@ -212,12 +217,13 @@ def load_riverinfo(dom: pygetm.domain.Domain, path: str):
                     zl = np.inf
 
             if name2split[name] > 1:
+                # This river is split over multiple cells; append an index to its name
                 imouth = name2count.get(name, 0)
                 mouth_name = "%s[%i]" % (name, imouth)
                 name2count[name] = imouth + 1
 
             # Note: we convert from 1-based indices to 0-based indices!
-            river = dom.rivers.add_by_index(mouth_name, i - 1, j - 1, zl=zl, zu=zu)
+            river = domain.rivers.add_by_index(mouth_name, i - 1, j - 1, zl=zl, zu=zu)
 
-            river.split = name2split[name]
-            river.original_name = name
+            river.split = name2split[name]  # number of cells this river is split over
+            river.original_name = name  # the original river name (without index)
