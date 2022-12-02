@@ -940,7 +940,7 @@ class Simulation(_pygetm.Simulation):
         )
 
         # Update elevation at the open boundaries. This must be done before
-        # update_surface_pressure_gradient
+        # calculating the surface pressure gradient
         self.domain.T.z.open_boundaries.update()
 
         # Calculate the surface pressure gradient in the U and V points.
@@ -1176,6 +1176,9 @@ class Simulation(_pygetm.Simulation):
         self.domain.T.zo.all_values[:, :] = self.domain.T.z.all_values
         _pygetm.advance_surface_elevation(timestep, self.domain.T.z, U, V, fwf)
         self.domain.T.z.update_halos()
+
+    def update_surface_pressure_gradient(self, z: core.Array, sp: core.Array):
+        _pygetm.surface_pressure_gradient(z, sp, self.dpdx, self.dpdy)
 
     def check_finite(self, _3d: bool = True):
         """Verify that all fields available for output contain finite values.

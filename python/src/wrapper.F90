@@ -485,19 +485,6 @@ contains
       deallocate(pressure)
    end subroutine
 
-   subroutine c_pressure_surface(ppressure, pz, psp) bind(c)
-      type(c_ptr), intent(in), value :: ppressure
-      type(c_ptr), intent(in), value :: pz, psp
-
-      type (type_getm_pressure), pointer :: pressure
-      real(real64), contiguous, pointer, dimension(:,:) :: z, sp
-
-      call c_f_pointer(ppressure, pressure)
-      call c_f_pointer(pz, z, pressure%domain%T%u(1:2) - pressure%domain%T%l(1:2) + 1)
-      call c_f_pointer(psp, sp, pressure%domain%T%u(1:2) - pressure%domain%T%l(1:2) + 1)
-      call pressure%surface(z, sp)
-   end subroutine
-
    subroutine c_pressure_internal(ppressure, pbuoy) bind(c)
       type(c_ptr), intent(in), value :: ppressure
       type(c_ptr), intent(in), value :: pbuoy
@@ -597,5 +584,46 @@ contains
          end do
       end do
    END SUBROUTINE
+
+   SUBROUTINE c_surface_pressure_gradient(nx, ny, imin, imax, jmin, jmax, umask, vmask, idxu, idyv, z, sp, H, D, Dmin, dpdx, dpdy) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny
+      integer(c_int), value, intent(in) :: imin, imax, jmin, jmax
+      integer(c_int), intent(in) :: umask(nx, ny)
+      integer(c_int), intent(in) :: vmask(nx, ny)
+      real(c_double), intent(in) :: idxu(nx, ny)
+      real(c_double), intent(in) :: idyv(nx, ny)
+      real(c_double), intent(in) :: z(nx, ny)
+      real(c_double), intent(in) :: sp(nx, ny)
+      real(c_double), intent(in) :: H(nx, ny)
+      real(c_double), intent(in) :: D(nx, ny)
+      real(c_double), value, intent(in) :: Dmin
+      real(c_double), intent(inout) :: dpdx(nx, ny)
+      real(c_double), intent(inout) :: dpdy(nx, ny)
+
+      integer :: i, j
+      real(real64) :: zp, zm
+   
+      real(real64), parameter :: gammai = 1._real64/(g * rho0)
+
+      do j = jmin, jmax
+         do i = imin, imax
+            if (umask(i,j) == 1) then
+               zp = max(z(i+1,j), -H(i  ,j)+min(Dmin,D(i+1,j)))
+               zm = max(z(i  ,j), -H(i+1,j)+min(Dmin,D(i  ,j)))
+               dpdx(i,j) = (zp - zm + (sp(i+1,j)-sp(i,j))*gammai) * idxu(i,j)
+            end if
+         end do
+      end do
+
+      do j = jmin, jmax
+         do i = imin, imax
+            if (vmask(i,j) == 1) then
+               zp = max(z(i,j+1), -H(i  ,j)+min(Dmin,D(i,j+1)))
+               zm = max(z(i,j  ), -H(i,j+1)+min(Dmin,D(i,j  )))
+               dpdy(i,j) = (zp - zm + (sp(i,j+1)-sp(i,j))*gammai) * idyv(i,j)
+            end if
+         end do
+      end do
+   END SUBROUTINE c_surface_pressure_gradient
 
 end module
