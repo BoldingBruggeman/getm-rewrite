@@ -54,7 +54,7 @@ cdef class Mixing:
     def turbulence(self, double dt, const double[::1] h not None, double D, double u_taus, double u_taub, double z0s, double z0b, const double[::1] SS not None, const double[::1] NN not None):
         assert SS.shape[0] == NN.shape[0], 'Length of NN (%i) and SS (%i) should be identical.' % (NN.shape[0], SS.shape[0])
         assert h.shape[0] == NN.shape[0], 'Length of h (%i) should match that of NN and SS (%i).' % (h.shape[0], SS.shape[0])
-        calculate(h.shape[0] - 1, dt, &h[0], D, u_taus, u_taub, z0s, z0b, &SS[0], &NN[0])
+        calculate(<int>h.shape[0] - 1, dt, &h[0], D, u_taus, u_taub, z0s, z0b, &SS[0], &NN[0])
 
     def turbulence_3d(self, int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, double dt, const int[:, ::1] mask not None,
                       const double[:, :, ::1] h not None, const double[:, ::1] D not None, const double[:, ::1] u_taus not None, const double[:, ::1] u_taub not None,
@@ -87,4 +87,4 @@ cdef class Mixing:
         Lsour = numpy.zeros_like(h)
         Qsour = numpy.zeros_like(h)
         Taur = numpy.full_like(h, 1e15)
-        diff(h.shape[0] - 1, dt, 1., 0, &h[0], 1, 1, 0., 0., self.pnuh, &Lsour[0], &Qsour[0], &Taur[0], &Y[0], &Y[0])
+        diff(<int>h.shape[0] - 1, dt, 1., 0, &h[0], 1, 1, 0., 0., self.pnuh, &Lsour[0], &Qsour[0], &Taur[0], &Y[0], &Y[0])

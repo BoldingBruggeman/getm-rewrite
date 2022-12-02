@@ -161,16 +161,16 @@ cdef class Grid:
         return ar.wrap_c_array(self.domain, 0, self.p, name, register)
 
 def interp_x(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
-    grid_interp_x(source.shape[2], source.shape[1], source.shape[0], &source[0,0,0], &target[0,0,0], offset)
+    grid_interp_x(<int>source.shape[2], <int>source.shape[1], <int>source.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
 def interp_y(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
-    grid_interp_y(source.shape[2], source.shape[1], source.shape[0], &source[0,0,0], &target[0,0,0], offset)
+    grid_interp_y(<int>source.shape[2], <int>source.shape[1], <int>source.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
 def interp_z(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
-    grid_interp_z(source.shape[2], source.shape[1], source.shape[0], target.shape[0], &source[0,0,0], &target[0,0,0], offset)
+    grid_interp_z(<int>source.shape[2], <int>source.shape[1], <int>source.shape[0], <int>target.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
 def interp_xy(double[:,:,::1] source not None, double[:,:,::1] target not None, int ioffset, int joffset):
-    grid_interp_xy(source.shape[2], source.shape[1], target.shape[2], target.shape[1], source.shape[0], &source[0,0,0], &target[0,0,0], ioffset, joffset)
+    grid_interp_xy(<int>source.shape[2], <int>source.shape[1], <int>target.shape[2], <int>target.shape[1], <int>source.shape[0], &source[0,0,0], &target[0,0,0], ioffset, joffset)
 
 cdef class Domain:
     cdef void* p
@@ -245,13 +245,13 @@ cdef class Advection:
     @cython.boundscheck(False) # turn off bounds-checking for entire function
     def u_3d(self, Array u not None, double timestep, Array var not None, Array Ah=None):
         cdef double * pAh = <double *>Ah.p if Ah is not None else NULL
-        advection_uv_calculate(1, var._array.shape[0], self.p, self.grid.p, self.ugrid.p, <double *>u.p, pAh, timestep, self.ph, self.phu, <double *>var.p)
+        advection_uv_calculate(1, <int>var._array.shape[0], self.p, self.grid.p, self.ugrid.p, <double *>u.p, pAh, timestep, self.ph, self.phu, <double *>var.p)
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
     def v_3d(self, Array v not None, double timestep, Array var not None, Array Ah=None):
         cdef double * pAh = <double *>Ah.p if Ah is not None else NULL
-        advection_uv_calculate(2, var._array.shape[0], self.p, self.grid.p, self.vgrid.p, <double *>v.p, pAh, timestep, self.ph, self.phv, <double *>var.p)
+        advection_uv_calculate(2, <int>var._array.shape[0], self.p, self.grid.p, self.vgrid.p, <double *>v.p, pAh, timestep, self.ph, self.phv, <double *>var.p)
 
     @cython.initializedcheck(False)
     @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -335,7 +335,7 @@ cdef class Momentum:
         assert v.grid is self.domain.V
         assert diffu.grid is self.domain.U
         assert diffv.grid is self.domain.V
-        cdef int nk = h._array.shape[0] if h.z else 1
+        cdef int nk = <int>h._array.shape[0] if h.z else 1
         momentum_diffusion_driver(self.p, nk, <double*> h.p, <double*> hx.p, <double*> u.p, <double*> v.p, <double*> diffu.p, <double*> diffv.p)
 
     def update_stresses(self, Array tausx not None, Array tausy not None):
@@ -505,7 +505,7 @@ def surface_pressure_gradient(Array z, Array sp, Array dpdx, Array dpdy):
 
 def multiply_add(double[::1] tgt, double[::1] add, double scale_factor):
     if tgt.shape[0] != 0:
-        c_multiply_add(tgt.shape[0], &tgt[0], &add[0], scale_factor)
+        c_multiply_add(<int>tgt.shape[0], &tgt[0], &add[0], scale_factor)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -546,7 +546,7 @@ cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoff
         return False
     for row in range(nrow):
         for col in range(ncol):
-            if subdomain_used(mask, max(0, xoffset + col * nx), min(mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(mask.shape[0], yoffset + (row + 1) * ny)):
+            if subdomain_used(mask, max(0, xoffset + col * nx), min(<int>mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(<int>mask.shape[0], yoffset + (row + 1) * ny)):
                 if free_cpus == 0: return False
                 free_cpus -= 1
     return free_cpus == 0
@@ -562,7 +562,7 @@ cdef void get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffs
     i = 0
     for row in range(nrow[0]):
         for col in range(ncol[0]):
-            map[i] = subdomain_count_cells(mask, max(0, xoffset + col * nx), min(mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(mask.shape[0], yoffset + (row + 1) * ny))
+            map[i] = subdomain_count_cells(mask, max(0, xoffset + col * nx), min(<int>mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(<int>mask.shape[0], yoffset + (row + 1) * ny))
             i += 1
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
