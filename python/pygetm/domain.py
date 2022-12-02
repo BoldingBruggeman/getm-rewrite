@@ -78,6 +78,7 @@ class Grid(_pygetm.Grid):
         "_water_contact",
         "_land",
         "_water",
+        "_water_nohalo",
     )
 
     _array_args = {
@@ -212,6 +213,10 @@ class Grid(_pygetm.Grid):
 
         self._land = self.mask.all_values == 0
         self._water = ~self._land
+        self._water_nohalo = np.full_like(self._water, False)
+        halox, haloy = self.domain.halox, self.domain.haloy
+        interior = (slice(haloy, -haloy), slice(halox, -halox))
+        self._water_nohalo[interior] = self._water[interior]
         self.zc.all_values[...] = -self.H.all_values
         self.zf.all_values[...] = -self.H.all_values
 

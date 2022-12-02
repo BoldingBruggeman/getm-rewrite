@@ -786,12 +786,12 @@ class Simulation(_pygetm.Simulation):
                 np.sqrt(
                     self.momentum.ustar2_s.all_values,
                     out=self.ustar_s.all_values,
-                    where=self.domain.T._water,
+                    where=self.domain.T._water_nohalo,
                 )
                 np.sqrt(
                     self.momentum.ustar2_b.all_values,
                     out=self.ustar_b.all_values,
-                    where=self.domain.T._water,
+                    where=self.domain.T._water_nohalo,
                 )
                 self.taub.all_values[...] = self.momentum.ustar2_b.all_values * RHO0
 
@@ -1010,7 +1010,7 @@ class Simulation(_pygetm.Simulation):
         stat = [
             sp.total_tt,
             sp.func_profiles["<built-in method Waitall>"].tottime,
-            self.domain.T._water.sum(),
+            self.domain.T._water_nohalo.sum(),
         ]
         all_stat = self.domain.tiling.comm.gather(stat)
         if all_stat is not None:
