@@ -11,9 +11,9 @@ import numpy
 
 cdef extern void initialize(int nlev, const char* nml_file, const char* yaml_file, double** ptke, double** peps, double** pL, double** pnum, double** pnuh) nogil
 cdef extern void finalize() nogil
-cdef extern void calculate(int nlev, double dt, double* h, double D, double taus, double taub, double z0s, double z0b, double* SS, double* NN) nogil
-cdef extern void calculate_3d(int nx, int nz, int nz, int istart, int istop, int jstart, int jstop, double dt, int* mask, double* h3d, double* D, double* u_taus, double* u_taub, double* z0s, double* z0b, double* NN, double* SS, double* tke, double* eps, double* L, double* num, double* nuh)
-cdef extern void diff(int nlev, double dt, double cnpar, int posconc, double* h, int Bcup, int Bcdw, double Yup, double Ydw, double* nuY, double* Lsour, double* Qsour, double* Taur, double* Yobs, double* Y)
+cdef extern void calculate(int nlev, double dt, const double* h, double D, double taus, double taub, double z0s, double z0b, const double* SS, const double* NN) nogil
+cdef extern void calculate_3d(int nx, int nz, int nz, int istart, int istop, int jstart, int jstop, double dt, const int* mask, const double* h3d, const double* D, const double* u_taus, const double* u_taub, const double* z0s, const double* z0b, const double* NN, const double* SS, double* tke, double* eps, double* L, double* num, double* nuh)
+cdef extern void diff(int nlev, double dt, double cnpar, int posconc, const double* h, int Bcup, int Bcdw, double Yup, double Ydw, const double* nuY, const double* Lsour, const double* Qsour, const double* Taur, const double* Yobs, double* Y)
 cdef extern void redirect_output(const char* stdout_file, const char* stderr_file) nogil
 cdef extern void close_redirected_output() nogil
 
