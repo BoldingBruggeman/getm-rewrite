@@ -978,10 +978,11 @@ def load(path: str, nz: int, **kwargs) -> "Domain":
         nz: number of vertical layers
         **kwargs: additional keyword arguments to pass to :class:`Domain`
     """
+    name2kwarg = dict(z0b_min="z0", cor="f")
     with netCDF4.Dataset(path) as nc:
-        for name in ("lon", "lat", "x", "y", "H", "mask", "z0b_min", "cor"):
+        for name in ("lon", "lat", "x", "y", "H", "mask", "z0b_min", "cor", "z0", "f"):
             if name in nc.variables and name not in kwargs:
-                kwargs[name] = nc.variables[name][...]
+                kwargs[name2kwarg.get(name, name)] = nc.variables[name][...]
     spherical = kwargs.get("spherical", "lon" in kwargs)
     ny, nx = kwargs["lon" if spherical else "x"].shape
     nx = (nx - 1) // 2
@@ -2042,8 +2043,8 @@ class Domain(_pygetm.Domain):
             create_var("y", "m", "y", self.y, self.y_)
             create_var("H", "m", "undisturbed water depth", self.H, self.H_)
             create_var("mask", "", "mask", self.mask, self.mask_)
-            create_var("z0b_min", "m", "bottom roughness", self.z0b_min, self.z0b_min_)
-            create_var("cor", "", "Coriolis parameter", self.cor, self.cor_)
+            create_var("z0", "m", "bottom roughness", self.z0b_min, self.z0b_min_)
+            create_var("f", "", "Coriolis parameter", self.cor, self.cor_)
 
     def save_grids(self, path: str):
         with netCDF4.Dataset(path, "w") as nc:
