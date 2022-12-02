@@ -585,7 +585,8 @@ contains
       end do
    END SUBROUTINE
 
-   SUBROUTINE c_surface_pressure_gradient(nx, ny, imin, imax, jmin, jmax, umask, vmask, idxu, idyv, z, sp, H, D, Dmin, dpdx, dpdy) bind(c)
+   SUBROUTINE c_surface_pressure_gradient(nx, ny, imin, imax, jmin, jmax, umask, vmask, idxu, idyv, &
+         z, sp, H, D, Dmin, dpdx, dpdy) bind(c)
       integer(c_int), value, intent(in) :: nx, ny
       integer(c_int), value, intent(in) :: imin, imax, jmin, jmax
       integer(c_int), intent(in) :: umask(nx, ny)
