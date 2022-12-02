@@ -5,6 +5,7 @@ import numpy as np
 from .constants import ZERO_GRADIENT, CENTERS, INTERFACES, TimeVarying, FILL_VALUE
 from . import core
 from . import domain
+from .open_boundaries import ArrayOpenBoundaries
 from . import operators
 
 
@@ -96,7 +97,7 @@ class Tracer(core.Array):
         self.source_scale: float = source_scale
         self.vertical_velocity: Optional[core.Array] = vertical_velocity
         self.molecular_diffusivity: float = molecular_diffusivity
-        self.open_boundaries: domain.ArrayOpenBoundaries = domain.ArrayOpenBoundaries(
+        self.open_boundaries: ArrayOpenBoundaries = ArrayOpenBoundaries(
             self, ZERO_GRADIENT
         )
         self.river_values: np.ndarray = np.zeros((len(grid.domain.rivers),))

@@ -4,6 +4,7 @@ import numpy as np
 import netCDF4
 
 import pygetm.domain
+import pygetm.open_boundaries
 
 
 def domain_from_topo(
@@ -154,10 +155,10 @@ def load_bdyinfo(
     """
     with DatFile(path) as f:
         for side in (
-            pygetm.domain.Side.WEST,
-            pygetm.domain.Side.NORTH,
-            pygetm.domain.Side.EAST,
-            pygetm.domain.Side.SOUTH,
+            pygetm.open_boundaries.Side.WEST,
+            pygetm.open_boundaries.Side.NORTH,
+            pygetm.open_boundaries.Side.EAST,
+            pygetm.open_boundaries.Side.SOUTH,
         ):
             n = int(f.get_line())
             for _ in range(n):

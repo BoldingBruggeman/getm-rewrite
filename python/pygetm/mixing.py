@@ -6,6 +6,7 @@ import numpy as np
 
 from . import core
 from . import domain
+from .open_boundaries import ArrayOpenBoundaries
 from . import _pygotm
 from .constants import INTERFACES, FILL_VALUE, ZERO_GRADIENT
 
@@ -110,7 +111,7 @@ class GOTM(Turbulence):
         self.nuh.fill(self.mix.nuh[:, np.newaxis, np.newaxis])
         self._log()
 
-        self.num.open_boundaries = domain.ArrayOpenBoundaries(self.num, type=ZERO_GRADIENT)
+        self.num.open_boundaries = ArrayOpenBoundaries(self.num, type=ZERO_GRADIENT)
 
     def _log(self):
         """Copy lines written by GOTM to stdout/stderr to the log
