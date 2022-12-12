@@ -1,5 +1,3 @@
-import sys
-import argparse
 from typing import Optional
 import unittest
 
@@ -80,8 +78,8 @@ class TestFlowSymmetry(unittest.TestCase):
         )
 
         # Add an island in the center of the domain
-        distance_from_center = np.sqrt(
-            (domain.x - 0.5 * extent) ** 2 + (domain.y - 0.5 * extent) ** 2
+        distance_from_center = np.hypot(
+            domain.x - 0.5 * extent, domain.y - 0.5 * extent
         )
         domain.mask[distance_from_center < extent * (1.0 / 6.0 + 1e-12)] = 0
 
