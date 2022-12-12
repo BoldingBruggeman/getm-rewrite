@@ -83,7 +83,6 @@ def log_exceptions(method):
 
 class Simulation(_pygetm.Simulation):
     _pressure_arrays = "dpdx", "dpdy", "idpdx", "idpdy"
-    _sealevel_arrays = ()
     _time_arrays = (
         "timestep",
         "macrotimestep",
@@ -95,9 +94,7 @@ class Simulation(_pygetm.Simulation):
         "report_totals",
         "default_time_reference",
     )
-    _all_fortran_arrays = tuple(
-        ["_%s" % name for name in _pressure_arrays + _sealevel_arrays]
-    )
+    _all_fortran_arrays = tuple(["_%s" % name for name in _pressure_arrays])
     __slots__ = (
         _all_fortran_arrays
         + (
@@ -248,16 +245,6 @@ class Simulation(_pygetm.Simulation):
                 "_%s" % name,
                 self.wrap(
                     core.Array(name=name, **kwargs), name.encode("ascii"), source=2,
-                ),
-            )
-        for name in Simulation._sealevel_arrays:
-            setattr(
-                self,
-                "_%s" % name,
-                self.wrap(
-                    core.Array(name=name, **Simulation._array_args.get(name, {})),
-                    name.encode("ascii"),
-                    source=3,
                 ),
             )
 
