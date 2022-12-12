@@ -282,7 +282,7 @@ class TestFreshwaterFluxes(unittest.TestCase):
     def test_precipitation_evaporation_dilution(self):
         domain = self.create_domain()
         sim = self.create_simulation(domain)
-        sim.airsea.pe[...] = np.random.uniform(0.0, 0.1 / 86400, sim.airsea.pe.shape)
+        sim.airsea.pe[...] = np.random.uniform(-0.1, 0.1, sim.airsea.pe.shape) / 86400
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -300,7 +300,7 @@ class TestFreshwaterFluxes(unittest.TestCase):
     def test_precipitation_evaporation_with_following_tracer(self):
         domain = self.create_domain()
         sim = self.create_simulation(domain)
-        sim.airsea.pe[...] = np.random.uniform(0.0, 0.1 / 86400, sim.airsea.pe.shape)
+        sim.airsea.pe[...] = np.random.uniform(-0.1, 0.1, sim.airsea.pe.shape) / 86400
         sim.tracers[-1].precipitation_follows_target_cell = True
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -317,6 +317,47 @@ class TestFreshwaterFluxes(unittest.TestCase):
         target = tot1 + flow * DT * 1.0
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
         self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
+
+    def test_multiple_rivers_with_prescribed_tracer_and_pe(self):
+        n = 100
+        flow = np.random.uniform(0.0, 500.0, n)
+        concentrations = np.random.uniform(0.0, 500.0, n)
+
+        domain = self.create_domain()
+        i_all = np.random.randint(0, domain.nx, n)
+        j_all = np.random.randint(0, domain.ny, n)
+
+        rivers = []
+        for iriver, (i, j) in enumerate(zip(i_all, j_all)):
+            zu = np.random.uniform(-25.0, 75.0)
+            zl = zu + np.random.uniform(0.0, 50.0)
+            rivers.append(
+                domain.rivers.add_by_index("dummy%i" % iriver, i, j, zu=zu, zl=zl)
+            )
+        sim = self.create_simulation(domain)
+        for river, f, c in zip(rivers, flow, concentrations):
+            river.flow.set(f)
+            river["dum"].values.fill(c)
+            river["salt"].values.fill(35.0)
+
+        sim.airsea.pe[...] = np.random.uniform(-0.1, 0.1, sim.airsea.pe.shape) / 86400
+        sim.tracers[-1].precipitation_follows_target_cell = False
+
+        # sim.output_manager.add_restart("res.nc")
+        sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
+        total_volume, total_tracers = sim.totals
+        while sim.time < STOP:
+            sim.advance()
+        sim.finish()
+        total_volume2, total_tracers2 = sim.totals
+
+        pe_flow = (sim.airsea.pe.values * domain.T.area.values).sum()
+        target = total_volume + DT * (flow.sum() + pe_flow)
+        self.assertLess(np.abs(total_volume2 / target - 1.0), TOLERANCE)
+        tt1, tot1, mean1 = total_tracers[-1]
+        tt2, tot2, mean2 = total_tracers2[-1]
+        target = tot1 + DT * (flow * concentrations).sum()
+        self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
 
 
 if __name__ == "__main__":

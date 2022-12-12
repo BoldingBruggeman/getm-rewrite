@@ -1049,7 +1049,7 @@ class Simulation(_pygetm.Simulation):
         h_active = np.maximum(zbot - ztop, 0.0)
 
         # Change in thickness per layer
-        h_increases = h_active * (z_increases / h_active.sum(axis=1))[:, np.newaxis]
+        h_increase_riv = h_active * (z_increases / h_active.sum(axis=1))[:, np.newaxis]
 
         # Calculate the depth-integrated change in tracer, per layer.
         tracer_adds = np.empty((len(self.tracers),) + h.shape)
@@ -1061,35 +1061,38 @@ class Simulation(_pygetm.Simulation):
                 river_values[...] = np.where(follow[:, np.newaxis], int, ext)
             else:
                 river_values[...] = ext
-        tracer_adds *= h_increases
-
-        # Update thicknesses and tracer values. This must be done iteratively
-        # because different rivers can target the same cell (i, j)
-        all_tracer_values = [tracer.all_values for tracer in self.tracers]
-        for iriver, (i, j) in enumerate(zip(rivers.i, rivers.j)):
-            h_old = self.domain.T.hn.all_values[:, j, i]
-            h_new = h_old + h_increases[iriver, :]
-            h_new_inv = 1.0 / h_new
-            for itracer, all_values in enumerate(all_tracer_values):
-                tracer_values = all_values[:, j, i]
-                add = tracer_adds[itracer, iriver, :]
-                tracer_values[:] = (tracer_values * h_old + add) * h_new_inv
-            h_old[:] = h_new
-        np.add.at(self.domain.T.zin.all_values, (rivers.j, rivers.i), z_increases)
+        tracer_adds *= h_increase_riv
 
         # Precipitation and evaporation (surface layer only)
         # First update halos for the net freshwater flux, as we need to ensure that the
         # layer heights updated as a result remain valid in the halos.
         self.airsea.pe.update_halos()
         unmasked = self.domain.T._water
-        h_increase_pe = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
+        z_increase_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
         h = self.domain.T.hn.all_values[-1, :, :]
-        h_new = h + h_increase_pe
+        h_new = h + z_increase_fwf
+        dilution = h / h_new
         for tracer in self.tracers:
             if not tracer.precipitation_follows_target_cell:
-                tracer.all_values[-1, :, :] *= h / h_new
+                tracer.all_values[-1, :, :] *= dilution
         h[:, :] = h_new
-        self.domain.T.zin.all_values += h_increase_pe
+
+        # Update thicknesses and tracer values with river inflow. This must be done
+        # iteratively because different rivers can target the same cell (i, j)
+        all_tracer_values = [tracer.all_values for tracer in self.tracers]
+        for iriver, (i, j) in enumerate(zip(rivers.i, rivers.j)):
+            h = self.domain.T.hn.all_values[:, j, i]
+            h_new = h + h_increase_riv[iriver, :]
+            h_new_inv = 1.0 / h_new
+            for itracer, all_values in enumerate(all_tracer_values):
+                tracer_values = all_values[:, j, i]
+                add = tracer_adds[itracer, iriver, :]
+                tracer_values[:] = (tracer_values * h + add) * h_new_inv
+            h[:] = h_new
+
+        # Update elevation
+        np.add.at(z_increase_fwf, (rivers.j, rivers.i), z_increases)
+        self.domain.T.zin.all_values += z_increase_fwf
 
         # Start tracer halo exchange (to prepare for advection)
         for tracer in self.tracers:
