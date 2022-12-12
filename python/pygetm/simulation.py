@@ -1,14 +1,13 @@
-import operator
 from typing import Union, Optional, List, Tuple, Sequence
 import logging
 import datetime
 import timeit
 import functools
 import pstats
+import enum
 
 import numpy as np
 import cftime
-import enum
 
 import xarray
 
@@ -36,6 +35,7 @@ import pygetm.mixing
 import pygetm.momentum
 import pygetm.radiation
 import pygetm.tracer
+import pygetm.internal_pressure
 
 
 class InternalPressure(enum.IntEnum):
@@ -81,8 +81,7 @@ def log_exceptions(method):
     return wrapper
 
 
-class Simulation(_pygetm.Simulation):
-    _pressure_arrays = "dpdx", "dpdy", "idpdx", "idpdy"
+class Simulation:
     _time_arrays = (
         "timestep",
         "macrotimestep",
@@ -94,72 +93,61 @@ class Simulation(_pygetm.Simulation):
         "report_totals",
         "default_time_reference",
     )
-    _all_fortran_arrays = tuple(["_%s" % name for name in _pressure_arrays])
     __slots__ = (
-        _all_fortran_arrays
-        + (
-            "output_manager",
-            "input_manager",
-            "fabm",
-            "_yearday",
-            "tracers",
-            "tracer_totals",
-            "logger",
-            "momentum",
-            "airsea",
-            "ice",
-            "turbulence",
-            "density",
-            "buoy",
-            "temp",
-            "salt",
-            "pres",
-            "rad",
-            "par",
-            "par0",
-            "rho",
-            "sst",
-            "temp_sf",
-            "salt_sf",
-            "ssu_U",
-            "ssv_V",
-            "ssu",
-            "ssv",
-            "NN",
-            "ustar_s",
-            "ustar_b",
-            "taub",
-            "z0s",
-            "z0b",
-            "fwf",
-            "tausx",
-            "tausy",
-            "tausxo",
-            "tausyo",
-            "dpdxo",
-            "dpdyo",
-            "_cum_river_height_increase",
-            "_start_time",
-            "_profile",
-            "radiation",
-            "_initialized_variables",
-            "delay_slow_ip",
-            "total_volume_ref",
-            "total_area",
-        )
-        + _time_arrays
-    )
-
-    _array_args = {
-        "dpdx": dict(units="-", long_name="surface pressure gradient in x-direction"),
-        "dpdy": dict(units="-", long_name="surface pressure gradient in y-direction"),
-        "idpdx": dict(
-            units="m2 s-2", long_name="internal pressure gradient in x-direction"
-        ),
-        "idpdy": dict(
-            units="m2 s-2", long_name="internal pressure gradient in y-direction"
-        ),
-    }
+        "domain",
+        "runtype",
+        "output_manager",
+        "input_manager",
+        "fabm",
+        "_yearday",
+        "tracers",
+        "tracer_totals",
+        "logger",
+        "momentum",
+        "airsea",
+        "ice",
+        "turbulence",
+        "density",
+        "internal_pressure",
+        "buoy",
+        "temp",
+        "salt",
+        "pres",
+        "rad",
+        "par",
+        "par0",
+        "rho",
+        "sst",
+        "temp_sf",
+        "salt_sf",
+        "ssu_U",
+        "ssv_V",
+        "ssu",
+        "ssv",
+        "NN",
+        "ustar_s",
+        "ustar_b",
+        "taub",
+        "z0s",
+        "z0b",
+        "fwf",
+        "tausx",
+        "tausy",
+        "tausxo",
+        "tausyo",
+        "dpdx",
+        "dpdy",
+        "dpdxo",
+        "dpdyo",
+        "_cum_river_height_increase",
+        "_start_time",
+        "_profile",
+        "radiation",
+        "_initialized_variables",
+        "delay_slow_ip",
+        "total_volume_ref",
+        "total_area",
+    ) + _time_arrays
 
     domain: pygetm.domain.Domain
     runtype: int
@@ -177,6 +165,7 @@ class Simulation(_pygetm.Simulation):
         airsea: Optional[pygetm.airsea.Fluxes] = None,
         density: Optional[pygetm.density.Density] = None,
         radiation: Optional[pygetm.radiation.Radiation] = None,
+        internal_pressure: Optional[pygetm.internal_pressure.Base] = None,
         logger: Optional[logging.Logger] = None,
         log_level: Optional[int] = None,
         internal_pressure_method: InternalPressure = InternalPressure.SHCHEPETKIN_MCWILLIAMS,
@@ -204,9 +193,9 @@ class Simulation(_pygetm.Simulation):
         self.input_manager.set_logger(self.logger.getChild("input_manager"))
 
         assert not domain._initialized
-        super().__init__(
-            domain, runtype, internal_pressure_method=internal_pressure_method
-        )
+        domain.initialize(runtype)
+        self.domain = domain
+        self.runtype = runtype
 
         # Flag selected domain/grid fields (elevations, thicknesses, bottom roughness)
         # as part of model state (saved in/loaded from restarts)
@@ -237,17 +226,6 @@ class Simulation(_pygetm.Simulation):
             self.logger.getChild("momentum"), domain, runtype, advection_scheme
         )
 
-        for name in Simulation._pressure_arrays:
-            kwargs = dict(fill_value=FILL_VALUE)
-            kwargs.update(Simulation._array_args.get(name, {}))
-            setattr(
-                self,
-                "_%s" % name,
-                self.wrap(
-                    core.Array(name=name, **kwargs), name.encode("ascii"), source=2,
-                ),
-            )
-
         self._cum_river_height_increase = np.zeros((len(self.domain.rivers),))
 
         #: Provider of air-water fluxes of heat and momentum.
@@ -262,6 +240,19 @@ class Simulation(_pygetm.Simulation):
 
         self.ice = pygetm.ice.Ice()
         self.ice.initialize(self.domain.T)
+
+        self.dpdx = domain.U.array(
+            name="dpdx",
+            units="-",
+            long_name="surface pressure gradient in x-direction",
+            fill_value=FILL_VALUE,
+        )
+        self.dpdy = domain.V.array(
+            name="dpdy",
+            units="-",
+            long_name="surface pressure gradient in y-direction",
+            fill_value=FILL_VALUE,
+        )
 
         # Surface stresses interpolated to U and V grids
         self.tausx = domain.U.array(
@@ -378,9 +369,6 @@ class Simulation(_pygetm.Simulation):
         self.ssv = domain.T.array(fill=0.0)
 
         if runtype == BAROCLINIC:
-            self.logger.info(
-                "Internal pressure method: %s" % internal_pressure_method.name
-            )
             self.density = density or pygetm.density.Density()
 
             self.radiation = radiation or pygetm.radiation.TwoBand()
@@ -445,10 +433,18 @@ class Simulation(_pygetm.Simulation):
             self.salt_sf = self.salt.isel(z=-1)
             self.ssu_U = self.momentum.uk.isel(z=-1)
             self.ssv_V = self.momentum.vk.isel(z=-1)
+
+            if internal_pressure is None:
+                if internal_pressure_method == InternalPressure.OFF:
+                    internal_pressure = pygetm.internal_pressure.Constant()
+                elif internal_pressure_method == InternalPressure.BLUMBERG_MELLOR:
+                    internal_pressure = pygetm.internal_pressure.BlumbergMellor()
+                else:
+                    internal_pressure = pygetm.internal_pressure.ShchepetkinMcwilliams()
+            internal_pressure.initialize(self.domain)
+            self.logger.info("Internal pressure method: %r" % internal_pressure)
+            self.internal_pressure = internal_pressure
             self.delay_slow_ip = delay_slow_ip
-            if internal_pressure_method == InternalPressure.OFF or delay_slow_ip:
-                self.idpdx.fill(0.0)
-                self.idpdy.fill(0.0)
             if delay_slow_ip:
                 self.momentum.SxB.attrs["_part_of_state"] = True
                 self.momentum.SyB.attrs["_part_of_state"] = True
@@ -757,8 +753,8 @@ class Simulation(_pygetm.Simulation):
                 self.tausyo,
                 self.dpdxo,
                 self.dpdyo,
-                self.idpdx,
-                self.idpdy,
+                self.internal_pressure.idpdx,
+                self.internal_pressure.idpdy,
                 self.turbulence.num,
             )
 
@@ -807,8 +803,12 @@ class Simulation(_pygetm.Simulation):
                 )
 
                 if self.delay_slow_ip:
-                    self.idpdx.all_values.sum(axis=0, out=self.momentum.SxB.all_values)
-                    self.idpdy.all_values.sum(axis=0, out=self.momentum.SyB.all_values)
+                    self.internal_pressure.idpdx.all_values.sum(
+                        axis=0, out=self.momentum.SxB.all_values
+                    )
+                    self.internal_pressure.idpdy.all_values.sum(
+                        axis=0, out=self.momentum.SyB.all_values
+                    )
 
         # Update all inputs and fluxes that will drive the next state update
         self.update_forcing(
@@ -863,10 +863,14 @@ class Simulation(_pygetm.Simulation):
             # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
             self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)
             self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-            self.update_internal_pressure_gradient(self.buoy)
+            self.internal_pressure(self.buoy)
             if not self.delay_slow_ip:
-                self.idpdx.all_values.sum(axis=0, out=self.momentum.SxB.all_values)
-                self.idpdy.all_values.sum(axis=0, out=self.momentum.SyB.all_values)
+                self.internal_pressure.idpdx.all_values.sum(
+                    axis=0, out=self.momentum.SxB.all_values
+                )
+                self.internal_pressure.idpdy.all_values.sum(
+                    axis=0, out=self.momentum.SyB.all_values
+                )
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
@@ -1205,20 +1209,3 @@ class Simulation(_pygetm.Simulation):
         V = self.momentum.V.interp(self.domain.T)
         vel2_D2 = U ** 2 + V ** 2
         return 0.5 * rho0 * self.domain.T.area * vel2_D2 / self.domain.T.D
-
-
-# Expose all Fortran arrays that are a member of Simulation as read-only properties
-# The originals are members with and underscore as prefix, ad therefore not visible to
-# the user. This ensures the user will not accidentally disconnect the Python variable
-# from the underlying Fortran libraries/data
-for membername in Simulation._all_fortran_arrays:
-    attrs = Simulation._array_args.get(membername[1:], {})
-    long_name = attrs.get("long_name")
-    units = attrs.get("units")
-    doc = ""
-    if long_name is not None:
-        doc = long_name
-        if units:
-            doc += " (%s)" % units
-    prop = property(operator.attrgetter(membername), doc=doc)
-    setattr(Simulation, membername[1:], prop)

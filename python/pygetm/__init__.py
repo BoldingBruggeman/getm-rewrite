@@ -10,6 +10,7 @@ from . import operators
 from . import tracer
 from . import fabm
 from . import open_boundaries
+from . import internal_pressure
 from .simulation import *
 from .constants import *
 from .operators import AdvectionScheme

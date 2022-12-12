@@ -63,6 +63,7 @@ add_library(cgetm
   src/momentum.F90
   src/radiation.F90
   src/interpolation.F90
+  src/internal_pressure.F90
 )
 
 target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics)

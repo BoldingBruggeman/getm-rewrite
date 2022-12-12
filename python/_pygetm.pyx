@@ -35,24 +35,24 @@ cdef extern void momentum_finalize(void* momentum) nogil
 cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
-cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* )
-cdef extern void* pressure_create(int runtype, void* pdomain, int method_internal_pressure) nogil
-cdef extern void pressure_finalize(void* pressure) nogil
-cdef extern void c_pressure_internal(void* pressure, double* buoy) nogil
+cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* diffv) nogil
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* initial, int up, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_exponential_profile_2band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* f, double* k1, double* k2, double* initial, int up, double* out) nogil
 cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
 cdef extern void c_thickness2vertical_coordinates(int nx, int ny, int nz, int* mask, double* bottom_depth, double* h, double* zc, double* zf) nogil
-cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha)
-cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask)
-cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int halox,int haloy,int* umask,int* vmask,double* idxu,double* dyu,double* idyv,double* dxv,double* Ah_u,double* Ah_v,int* tmask,double* iA,double dt,double* f,double* out)
-cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double avmmol, double* ru, int iterate)
-cdef extern void c_collect_3d_momentum_sources(int nx, int ny, int nz, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4)
-cdef extern void c_advance_2d_transport(int ny, int ny, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U)
-cdef extern void c_multiply_add(int n, double* tgt, double* add, double scale_factor)
-cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt)
-cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy)
+cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha) nogil
+cdef extern void c_clip_z(int n, double* z, double* H, double Dmin, int* mask) nogil
+cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int halox,int haloy,int* umask,int* vmask,double* idxu,double* dyu,double* idyv,double* dxv,double* Ah_u,double* Ah_v,int* tmask,double* iA,double dt,double* f,double* out) nogil
+cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double avmmol, double* ru, int iterate) nogil
+cdef extern void c_collect_3d_momentum_sources(int nx, int ny, int nz, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4) nogil
+cdef extern void c_advance_2d_transport(int ny, int ny, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U) nogil
+cdef extern void c_multiply_add(int n, double* tgt, double* add, double scale_factor) nogil
+cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt) nogil
+cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy) nogil
+cdef extern void c_blumberg_mellor(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* umask, const int* vmask, const double* idxu, const double* idyv, const double* hu, const double* hv, const double* zf, const double* buoy, double* idpdx, double* idpdy) nogil
+cdef extern void c_shchepetkin_mcwilliams(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const int* umask, const int* vmask, const double* idxu, const double* idyv, const double* h, const double* z, const double* zc, const double* buoy, double* idpdx, double* idpdy) nogil
+
 
 cpdef enum:
     TGRID = 1
@@ -288,31 +288,6 @@ cdef class VerticalDiffusion:
         cdef Array ho = var.grid.ho if use_ho else hn
         c_vertical_diffusion_apply(self.p, var.grid.nx_, var.grid.ny_, var.grid.nz_, <int *>mask.p, <double *>ho.p, <double *>hn.p, <double *>var.p, pea2, pea4)
 
-cdef class Simulation:
-    cdef readonly Domain domain
-    cdef readonly int runtype
-    cdef void* ppressure
-    cdef readonly int nx, ny
-
-    def __init__(self, Domain domain, int runtype, int internal_pressure_method=1):
-        self.domain = domain
-        domain.initialize(runtype)
-        self.runtype = runtype
-        self.ppressure = pressure_create(runtype, domain.p, internal_pressure_method)
-        self.nx, self.ny = domain.nx, domain.ny
-
-    def __dealloc__(self):
-        if self.ppressure != NULL:
-            pressure_finalize(self.ppressure)
-
-    def update_internal_pressure_gradient(self, Array buoy not None):
-        assert buoy.grid is self.domain.T and buoy.z == CENTERS
-        c_pressure_internal(self.ppressure, <double *>buoy.p)
-
-    def wrap(self, Array ar not None, bytes name, int source):
-        assert source == 2
-        return ar.wrap_c_array(self.domain, source, self.ppressure, name)
-
 cdef class Momentum:
     cdef void* p
     cdef readonly Domain domain
@@ -502,6 +477,35 @@ def surface_pressure_gradient(Array z, Array sp, Array dpdx, Array dpdy):
     c_surface_pressure_gradient(grid.nx_, grid.ny_, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny,
         <int*>umask.p, <int*>vmask.p, <double*>idxu.p, <double*>idyv.p,
         <double*>z.p, <double*>sp.p, <double*>H.p, <double*>D.p, Dmin, <double*>dpdx.p, <double*>dpdy.p)
+
+def blumberg_mellor(Array buoy, Array idpdx, Array idpdy):
+    cdef Grid grid = buoy.grid
+    assert buoy.z == CENTERS, 'buoy'
+    assert idpdx.grid is grid.ugrid and idpdx.z == CENTERS, 'idpdx'
+    assert idpdy.grid is grid.vgrid and idpdy.z == CENTERS, 'idpdy'
+    cdef Array umask = idpdx.grid.mask
+    cdef Array vmask = idpdy.grid.mask
+    cdef Array idxu = idpdx.grid.idx
+    cdef Array idyv = idpdy.grid.idy
+    cdef Array hu = idpdx.grid.hn
+    cdef Array hv = idpdy.grid.hn
+    cdef Array zf = grid.zf
+    c_blumberg_mellor(grid.nx_, grid.ny_, grid.nz_, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny, <int*>umask.p, <int*>vmask.p, <double*>idxu.p, <double*>idyv.p, <double*>hu.p, <double*>hv.p, <double*>zf.p, <double*>buoy.p, <double*>idpdx.p, <double*>idpdy.p)
+
+def shchepetkin_mcwilliams(Array buoy, Array idpdx, Array idpdy):
+    cdef Grid grid = buoy.grid
+    assert buoy.z == CENTERS, 'buoy'
+    assert idpdx.grid is grid.ugrid and idpdx.z == CENTERS, 'idpdx'
+    assert idpdy.grid is grid.vgrid and idpdy.z == CENTERS, 'idpdy'
+    cdef Array mask = grid.mask
+    cdef Array umask = idpdx.grid.mask
+    cdef Array vmask = idpdy.grid.mask
+    cdef Array idxu = idpdx.grid.idx
+    cdef Array idyv = idpdy.grid.idy
+    cdef Array h = grid.hn
+    cdef Array z = grid.zin
+    cdef Array zc = grid.zc
+    c_shchepetkin_mcwilliams(grid.nx_, grid.ny_, grid.nz_, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny, <int*>mask.p, <int*>umask.p, <int*>vmask.p, <double*>idxu.p, <double*>idyv.p, <double*>h.p, <double*>z.p, <double*>zc.p, <double*>buoy.p, <double*>idpdx.p, <double*>idpdy.p)
 
 def multiply_add(double[::1] tgt, double[::1] add, double scale_factor):
     if tgt.shape[0] != 0:

@@ -11,14 +11,14 @@ class TestInternalPressure(unittest.TestCase):
     def test_blumberg_mellor(self):
         for ddu in (0.0, 1.0, 2.0):
             with self.subTest(ddu=ddu):
-                self._test(pygetm.InternalPressure.BLUMBERG_MELLOR, ddu=ddu)
+                self._test(pygetm.internal_pressure.BlumbergMellor(), ddu=ddu)
 
     def test_shchepetkin_mcwilliams(self):
         for ddu in (0.0, 1.0, 2.0):
             with self.subTest(ddu=ddu):
-                self._test(pygetm.InternalPressure.SHCHEPETKIN_MCWILLIAMS, ddu=ddu)
+                self._test(pygetm.internal_pressure.ShchepetkinMcwilliams(), ddu=ddu)
 
-    def _test(self, method: pygetm.InternalPressure, H=100.0, nz=30, ddu=0.0):
+    def _test(self, ip: pygetm.internal_pressure.Base, H=100.0, nz=30, ddu=0.0):
         rho_min = 1020.0
         rho_max = 1025.0
 
@@ -35,16 +35,19 @@ class TestInternalPressure(unittest.TestCase):
             logger=pygetm.parallel.get_logger(level="ERROR"),
         )
 
-        sim = pygetm.Simulation(
-            domain, pygetm.BAROCLINIC, internal_pressure_method=method,
-        )
+        domain.initialize(pygetm.BAROCLINIC)
+        domain.update_depth(_3d=True)
+        domain.update_depth(_3d=True)
+        ip.initialize(domain)
+        rho = domain.T.array(z=pygetm.CENTERS)
+        buoy = domain.T.array(z=pygetm.CENTERS)
 
         # lock exchange density in x-direction
-        sim.rho.values[:, :, :50] = rho_min
-        sim.rho.values[:, :, 50:] = rho_max
-        sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(sim.buoy)
-        self.assertTrue((sim.idpdy.ma == 0.0).all())
+        rho.values[:, :, :50] = rho_min
+        rho.values[:, :, 50:] = rho_max
+        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        ip(buoy)
+        self.assertTrue((ip.idpdy.ma == 0.0).all())
         dP_dx = (
             -domain.U.zc.values[:, 0, 0]
             * GRAVITY
@@ -54,23 +57,23 @@ class TestInternalPressure(unittest.TestCase):
         acceleration = -dP_dx / RHO0
         dU = acceleration * domain.U.hn.values[:, 0, 0]
         tol = 1e-14
-        diff = dU - sim.idpdx.values[:, 0, 49]
-        self.assertLess(np.abs(diff).max(),  tol)
+        diff = dU - ip.idpdx.values[:, 0, 49]
+        self.assertLess(np.abs(diff).max(), tol)
 
         # linearly increasing density in x-direction
-        sim.rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.x / 100000
-        sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(sim.buoy)
-        self.assertTrue((sim.idpdy.ma == 0.0).all())
-        diff = sim.idpdx.ma[:, 0, :] - sim.idpdx.values[:, 0, :1]
+        rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.x / 100000
+        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        ip(buoy)
+        self.assertTrue((ip.idpdy.ma == 0.0).all())
+        diff = ip.idpdx.ma[:, 0, :] - ip.idpdx.values[:, 0, :1]
         self.assertLess(np.abs(diff).max(), tol)
 
         # lock exchange density in y-direction
-        sim.rho.values[:, :50, :] = rho_min
-        sim.rho.values[:, 50:, :] = rho_max
-        sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(sim.buoy)
-        self.assertTrue((sim.idpdx.ma == 0.0).all())
+        rho.values[:, :50, :] = rho_min
+        rho.values[:, 50:, :] = rho_max
+        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        ip(buoy)
+        self.assertTrue((ip.idpdx.ma == 0.0).all())
         dP_dy = (
             -domain.V.zc.values[:, 0, 0]
             * GRAVITY
@@ -80,14 +83,14 @@ class TestInternalPressure(unittest.TestCase):
         acceleration = -dP_dy / RHO0
         dV = acceleration * domain.V.hn.values[:, 0, 0]
         tol = 1e-14
-        self.assertLess(np.abs(dV - sim.idpdy.values[:, 49, 0]).max(), tol)
+        self.assertLess(np.abs(dV - ip.idpdy.values[:, 49, 0]).max(), tol)
 
         # linearly increasing density in y-direction
-        sim.rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.y / 100000
-        sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        sim.update_internal_pressure_gradient(sim.buoy)
-        self.assertTrue((sim.idpdx.ma == 0.0).all())
-        diff = sim.idpdy.ma[:, :, 0] - sim.idpdy.values[:, :1, 0]
+        rho.values[:, :, :] = rho_min + (rho_max - rho_min) * domain.T.y / 100000
+        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        ip(buoy)
+        self.assertTrue((ip.idpdx.ma == 0.0).all())
+        diff = ip.idpdy.ma[:, :, 0] - ip.idpdy.values[:, :1, 0]
         self.assertLess(np.abs(diff).max(), tol)
 
         # x = np.linspace(0, 50000, 101)

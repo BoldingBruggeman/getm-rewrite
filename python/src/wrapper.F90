@@ -96,8 +96,6 @@ contains
 
       type (type_getm_grid),     pointer :: grid
       type (type_getm_momentum), pointer :: momentum
-      type (type_getm_pressure), pointer :: pressure
-      type (type_getm_sealevel), pointer :: sealevel
       character(len=10),         pointer :: pname
 
       integer, parameter :: subtype_depth_explicit = 2
@@ -189,15 +187,6 @@ contains
          case ('SyD');   p = c_loc(momentum%SyD); grid_type = 3
          case ('SxF');   p = c_loc(momentum%SxF); grid_type = 2
          case ('SyF');   p = c_loc(momentum%SyF); grid_type = 3
-         end select
-      case (2)
-         call c_f_pointer(obj, pressure)
-         select case (pname(:index(pname, C_NULL_CHAR) - 1))
-         case ('dpdx'); p = c_loc(pressure%dpdx); grid_type = 2
-         case ('dpdy'); p = c_loc(pressure%dpdy); grid_type = 3
-         case ('idpdx'); if (allocated(pressure%idpdx)) p = c_loc(pressure%idpdx); grid_type = 2; sub_type = subtype_depth_explicit
-         case ('idpdy'); if (allocated(pressure%idpdy)) p = c_loc(pressure%idpdy); grid_type = 3; sub_type = subtype_depth_explicit
-         case default; p = C_NULL_PTR
          end select
       end select
    end subroutine
@@ -457,44 +446,6 @@ contains
       call c_f_pointer(ptausx, tausx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
       call c_f_pointer(ptausy, tausy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
       call momentum%stresses(tausx, tausy)
-   end subroutine
-
-   function pressure_create(runtype, pdomain, method_internal_pressure) result(ppressure) bind(c)
-      integer(c_int), intent(in), value :: runtype
-      type(c_ptr),    intent(in), value :: pdomain
-      integer,        intent(in), value :: method_internal_pressure
-      type(c_ptr) :: ppressure
-
-      type (type_getm_domain),   pointer :: domain
-      type (type_getm_pressure), pointer :: pressure
-
-      call c_f_pointer(pdomain, domain)
-      allocate(pressure)
-      call pressure%configure()
-      pressure%method_internal_pressure = method_internal_pressure
-      call pressure%initialize(runtype, domain)
-      ppressure = c_loc(pressure)
-   end function
-
-   subroutine pressure_finalize(ppressure) bind(c)
-      type(c_ptr), intent(in), value :: ppressure
-
-      type (type_getm_pressure), pointer :: pressure
-
-      call c_f_pointer(ppressure, pressure)
-      deallocate(pressure)
-   end subroutine
-
-   subroutine c_pressure_internal(ppressure, pbuoy) bind(c)
-      type(c_ptr), intent(in), value :: ppressure
-      type(c_ptr), intent(in), value :: pbuoy
-
-      type (type_getm_pressure), pointer :: pressure
-      real(real64), contiguous, pointer :: buoy(:,:,:)
-
-      call c_f_pointer(ppressure, pressure)
-      call c_f_pointer(pbuoy, buoy, pressure%domain%T%u - pressure%domain%T%l + 1)
-      call pressure%internal(buoy)
    end subroutine
 
    subroutine c_thickness2center_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)
