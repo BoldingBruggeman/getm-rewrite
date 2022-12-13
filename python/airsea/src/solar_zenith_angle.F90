@@ -4,8 +4,6 @@ module mod_solar_zenith_angle
 
    implicit none
 
-   public solar_declination_angle, solar_zenith_angle
-
    private
 
    real(rk), parameter :: pi = 3.14159265358979323846_rk
@@ -14,6 +12,19 @@ module mod_solar_zenith_angle
    real(rk), parameter :: yrdays = 365.25_rk
 
 contains
+
+   subroutine solar_zenith_angle_2d(nx, ny, istart, istop, jstart, jstop, yday, hh, dlon, dlat, zenith_angle) bind(c)
+      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, yday
+      real(rk), intent(in), value                :: hh
+      real(rk), intent(in),    dimension(nx, ny) :: dlon, dlat
+      real(rk), intent(inout), dimension(nx, ny) :: zenith_angle
+
+      real(rk) :: sundec
+
+      sundec = solar_declination_angle(yday)
+      zenith_angle(istart:istop, jstart:jstop) = solar_zenith_angle(sundec, hh, dlon(istart:istop, jstart:jstop), &
+         dlat(istart:istop, jstart:jstop))
+   end subroutine
 
    elemental real(rk) function solar_declination_angle(yday)
       integer, intent(in) :: yday

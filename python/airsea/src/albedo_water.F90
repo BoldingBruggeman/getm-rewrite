@@ -6,9 +6,22 @@ module mod_albedo_water
 
    private
 
-   public albedo_payne, albedo_cogley
-
 contains
+
+   subroutine albedo_water_2d(nx, ny, istart, istop, jstart, jstop, method, zen, yday, albedo) bind(c)
+      integer, intent(in), value                 :: nx, ny, istart, istop, jstart, jstop, method, yday
+      real(rk), intent(in),    dimension(nx, ny) :: zen
+      real(rk), intent(inout), dimension(nx, ny) :: albedo
+
+      select case (method)
+         case (1)
+            albedo(istart:istop, jstart:jstop) = albedo_payne(zen(istart:istop, jstart:jstop))
+         case (2)
+            albedo(istart:istop, jstart:jstop) = albedo_cogley(zen(istart:istop, jstart:jstop), yday)
+         case default
+            stop 'albedo_2d()'
+      end select
+   end subroutine
 
 !-----------------------------------------------------------------------
 !BOP

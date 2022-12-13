@@ -4,9 +4,17 @@ module mod_shortwave_radiation
 
    implicit none
 
-   public
+   private
 
 contains
+
+   subroutine shortwave_radiation_2d(nx, ny, istart, istop, jstart, jstop, yday, zenith_angle, dlat, cloud, swr) bind(c)
+      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, yday
+      real(rk), intent(in),    dimension(nx, ny) :: zenith_angle, dlat, cloud
+      real(rk), intent(inout), dimension(nx, ny) :: swr
+      swr(istart:istop, jstart:jstop) = shortwave_radiation(zenith_angle(istart:istop, jstart:jstop), yday, &
+         dlat(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop))
+   end subroutine
 
 !-----------------------------------------------------------------------
 !BOP

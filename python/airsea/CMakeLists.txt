@@ -26,7 +26,6 @@ add_library(cairsea
    src/solar_zenith_angle.F90
    src/albedo_water.F90
    src/shortwave_radiation.F90
-   src/airsea_2d.F90
 )
 target_compile_definitions(cairsea PRIVATE GUSTINESS)
 
