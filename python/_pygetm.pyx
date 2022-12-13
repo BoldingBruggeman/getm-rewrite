@@ -32,7 +32,6 @@ cdef extern void c_vertical_diffusion_prepare(void* diffusion, int nx, int ny, i
 cdef extern void c_vertical_diffusion_apply(void* diffusion, int nx, int ny, int nz, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double cnpar, int coriolis_scheme) nogil
 cdef extern void momentum_finalize(void* momentum) nogil
-cdef extern void momentum_w_3d(void* momentum, double timestep) nogil
 cdef extern void momentum_shear_frequency(void* momentum, double* pviscosity) nogil
 cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
 cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* diffv) nogil
@@ -47,6 +46,7 @@ cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int 
 cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double avmmol, double* ru, int iterate) nogil
 cdef extern void c_collect_3d_momentum_sources(int nx, int ny, int nz, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4) nogil
 cdef extern void c_advance_2d_transport(int ny, int ny, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U) nogil
+cdef extern void c_w_momentum_3d(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* dyu, const double* dxv, const double* iarea, const double* ho, const double* hn, const double* pk, const double* qk, double dt, double* w)
 cdef extern void c_multiply_add(int n, double* tgt, double* add, double scale_factor) nogil
 cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt) nogil
 cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy) nogil
@@ -300,9 +300,6 @@ cdef class Momentum:
         if self.p != NULL:
             momentum_finalize(self.p)
 
-    def w_3d(self, double timestep):
-        momentum_w_3d(self.p, timestep)
-
     def momentum_diffusion_driver(self, Array h not None, Array hx not None, Array u not None, Array v not None, Array diffu not None, Array diffv not None):
         assert h.grid is self.domain.T
         assert hx.grid is self.domain.X
@@ -447,6 +444,20 @@ def advance_2d_transport(Array U, Array dp, Array taus, Array cor, Array adv, Ar
     c_advance_2d_transport(grid.nx_, grid.ny_, grid.domain.halox, grid.domain.haloy, <int*>mask.p, <double*>alpha.p, <double*>D.p,
        <double*>dp.p, <double*>taus.p, <double*>cor.p, <double*>adv.p, <double*>diff.p, <double*>damp.p,
        <double*>SA.p, <double*>SB.p, <double*>SD.p, <double*>SF.p, <double*>r.p, dt, <double*>U.p)
+
+def w_momentum_3d(Array pk, Array qk, double dt, Array w):
+    cdef Grid grid = w.grid
+    cdef Array mask = grid.mask
+    assert w.z == INTERFACES, 'w'
+    assert pk.grid is grid.ugrid and pk.z == CENTERS, 'pk'
+    assert qk.grid is grid.vgrid and qk.z == CENTERS, 'qk'
+    cdef Array dyu = pk.grid.dy
+    cdef Array dxv = qk.grid.dx
+    cdef Array iarea = grid.iarea
+    cdef Array ho = grid.ho
+    cdef Array hn = grid.hn
+    c_w_momentum_3d(grid.nx_, grid.ny_, grid.nz, grid.domain.halox + 1, grid.domain.halox + grid.nx + 1, grid.domain.haloy + 1, grid.domain.haloy + grid.ny + 1,
+        <int*>mask.p, <double*>dyu.p, <double*>dxv.p, <double*>iarea.p, <double*>ho.p, <double*>hn.p, <double*>pk.p, <double*>qk.p, dt, <double*>w.p)
 
 def advance_surface_elevation(double timestep, Array z, Array U, Array V, Array fwf):
     cdef Grid grid = z.grid

@@ -412,16 +412,6 @@ contains
       end do
    end subroutine
 
-   subroutine momentum_w_3d(pmomentum, timestep) bind(c)
-      type(c_ptr),    intent(in), value :: pmomentum
-      real(c_double), intent(in), value :: timestep
-
-      type (type_getm_momentum), pointer :: momentum
-
-      call c_f_pointer(pmomentum, momentum)
-      call momentum%w_momentum_3d(timestep)
-   end subroutine
-
    subroutine momentum_shear_frequency(pmomentum, pviscosity) bind(c)
       type(c_ptr),    intent(in), value :: pmomentum
       type(c_ptr),    intent(in), value :: pviscosity

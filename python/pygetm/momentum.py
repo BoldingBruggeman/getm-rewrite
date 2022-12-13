@@ -680,7 +680,7 @@ class Momentum(pygetm._pygetm.Momentum):
         # change (ho -> hn). This is done at all points surrounding U and V points, so
         # no further halo exchange of w is needed to support interpolation to U and V
         # grids later on. This does require that transports are up to date in halos.
-        self.w_3d(timestep)
+        pygetm._pygetm.w_momentum_3d(self.pk, self.qk, timestep, self.ww)
 
         itimestep = 1.0 / timestep
 

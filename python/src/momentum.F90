@@ -189,4 +189,31 @@ contains
       end do
    END SUBROUTINE
 
+   subroutine c_w_momentum_3d(nx, ny, nz, imin, imax, jmin, jmax, mask, dyu, dxv, iarea, ho, hn, pk, qk, dt, w) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny, nz, imin, imax, jmin, jmax
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: dyu(nx, ny), dxv(nx, ny), iarea(nx, ny)
+      real(c_double), intent(in) :: ho(nx, ny, nz), hn(nx, ny, nz)
+      real(c_double), intent(in) :: pk(nx, ny, nz), qk(nx, ny, nz)
+      real(c_double), value, intent(in) :: dt
+      real(c_double), intent(inout) :: w(nx, ny, 0:nz)
+
+      integer :: i,j,k
+      real(c_double) :: idt
+
+      idt = 1.0_c_double / dt
+      do k=1,nz-1
+         do j=jmin,jmax
+            do i=imin,imax
+               if (mask(i,j) == 1) then
+                     w(i,j,k) = w(i,j,k-1)-(hn(i,j,k)-ho(i,j,k))*idt &
+                                 -(pk(i,j,k)*dyu(i,j)-pk(i-1,j  ,k)*dyu(i-1,j) &
+                                  +qk(i,j,k)*dxv(i,j)-qk(i  ,j-1,k)*dxv(i,j-1)) &
+                                  *iarea(i,j)
+               end if
+            end do
+         end do
+      end do
+   end subroutine
+
 end module
