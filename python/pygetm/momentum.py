@@ -695,7 +695,7 @@ class Momentum(pygetm._pygetm.Momentum):
 
         # Use updated velocities (uk, vk) to compute shear frequency (SS) at T points
         # (interior only, not in halos)
-        self.update_shear_frequency(viscosity)
+        pygetm._pygetm.shear_frequency(self.uk, self.vk, viscosity, self.SS)
 
         # Calculate bottom friction from updated velocities (and syncronized layer
         # thicknesses hn). This needs to be done before derived quantities such as

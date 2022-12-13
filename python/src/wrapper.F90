@@ -412,19 +412,6 @@ contains
       end do
    end subroutine
 
-   subroutine momentum_shear_frequency(pmomentum, pviscosity) bind(c)
-      type(c_ptr),    intent(in), value :: pmomentum
-      type(c_ptr),    intent(in), value :: pviscosity
-
-      type (type_getm_momentum), pointer :: momentum
-      real(real64), contiguous, pointer, dimension(:,:,:) :: viscosity
-
-      call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(pviscosity, viscosity, (/momentum%domain%T%u(1) - momentum%domain%T%l(1) + 1, &
-         momentum%domain%T%u(2) - momentum%domain%T%l(2) + 1, momentum%domain%T%u(3) - momentum%domain%T%l(3) + 2/))
-      call momentum%shear_frequency(viscosity(:, :, 2:size(viscosity,3) - 1))
-   end subroutine
-
    subroutine momentum_stresses(pmomentum, ptausx, ptausy) bind(c)
       type(c_ptr),    intent(in), value :: pmomentum
       type(c_ptr),    intent(in), value :: ptausx, ptausy
