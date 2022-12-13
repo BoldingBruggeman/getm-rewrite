@@ -54,7 +54,6 @@ add_library( flom
 set_property( TARGET flom PROPERTY FOLDER flom )
 
 add_subdirectory(../src/domain domain)
-add_subdirectory(../src/airsea airsea)
 add_subdirectory(../src/operators operators)
 add_subdirectory(../src/dynamics dynamics)
 
@@ -66,7 +65,7 @@ add_library(cgetm
   src/internal_pressure.F90
 )
 
-target_link_libraries(cgetm getm_domain getm_operators getm_airsea getm_dynamics)
+target_link_libraries(cgetm getm_domain getm_operators getm_dynamics)
 
 add_library(cgotm
   pygotm_wrapper.F90)
