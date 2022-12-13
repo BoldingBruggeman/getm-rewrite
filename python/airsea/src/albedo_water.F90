@@ -8,16 +8,16 @@ module mod_albedo_water
 
 contains
 
-   subroutine albedo_water_2d(nx, ny, istart, istop, jstart, jstop, method, zen, yday, albedo) bind(c)
-      integer, intent(in), value                 :: nx, ny, istart, istop, jstart, jstop, method, yday
+   subroutine albedo_water_2d(nx, ny, imin, imax, jmin, jmax, method, zen, yday, albedo) bind(c)
+      integer, intent(in), value                 :: nx, ny, imin, imax, jmin, jmax, method, yday
       real(rk), intent(in),    dimension(nx, ny) :: zen
       real(rk), intent(inout), dimension(nx, ny) :: albedo
 
       select case (method)
          case (1)
-            albedo(istart:istop, jstart:jstop) = albedo_payne(zen(istart:istop, jstart:jstop))
+            albedo(imin:imax, jmin:jmax) = albedo_payne(zen(imin:imax, jmin:jmax))
          case (2)
-            albedo(istart:istop, jstart:jstop) = albedo_cogley(zen(istart:istop, jstart:jstop), yday)
+            albedo(imin:imax, jmin:jmax) = albedo_cogley(zen(imin:imax, jmin:jmax), yday)
          case default
             stop 'albedo_2d()'
       end select

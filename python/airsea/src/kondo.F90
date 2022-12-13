@@ -8,12 +8,12 @@ module mod_kondo
 
 contains
 
-   subroutine kondo_2d(nx, ny, istart, istop, jstart, jstop, tw, ta, w, cd_mom, cd_sensible, cd_latent) bind(c)
-      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop
+   subroutine kondo_2d(nx, ny, imin, imax, jmin, jmax, tw, ta, w, cd_mom, cd_sensible, cd_latent) bind(c)
+      integer,  intent(in), value                :: nx, ny, imin, imax, jmin, jmax
       real(rk), intent(in),    dimension(nx, ny) :: tw, ta, w
       real(rk), intent(inout), dimension(nx, ny) :: cd_mom, cd_latent, cd_sensible
-      call kondo(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), w(istart:istop, jstart:jstop), &
-         cd_mom(istart:istop, jstart:jstop), cd_sensible(istart:istop, jstart:jstop), cd_latent(istart:istop, jstart:jstop))
+      call kondo(tw(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), w(imin:imax, jmin:jmax), &
+         cd_mom(imin:imax, jmin:jmax), cd_sensible(imin:imax, jmin:jmax), cd_latent(imin:imax, jmin:jmax))
    end subroutine
 
 !-----------------------------------------------------------------------

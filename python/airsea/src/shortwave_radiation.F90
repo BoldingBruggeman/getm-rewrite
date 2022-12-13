@@ -8,12 +8,12 @@ module mod_shortwave_radiation
 
 contains
 
-   subroutine shortwave_radiation_2d(nx, ny, istart, istop, jstart, jstop, yday, zenith_angle, dlat, cloud, swr) bind(c)
-      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, yday
+   subroutine shortwave_radiation_2d(nx, ny, imin, imax, jmin, jmax, yday, zenith_angle, dlat, cloud, swr) bind(c)
+      integer,  intent(in), value                :: nx, ny, imin, imax, jmin, jmax, yday
       real(rk), intent(in),    dimension(nx, ny) :: zenith_angle, dlat, cloud
       real(rk), intent(inout), dimension(nx, ny) :: swr
-      swr(istart:istop, jstart:jstop) = shortwave_radiation(zenith_angle(istart:istop, jstart:jstop), yday, &
-         dlat(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop))
+      swr(imin:imax, jmin:jmax) = shortwave_radiation(zenith_angle(imin:imax, jmin:jmax), yday, &
+         dlat(imin:imax, jmin:jmax), cloud(imin:imax, jmin:jmax))
    end subroutine
 
 !-----------------------------------------------------------------------

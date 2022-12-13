@@ -8,30 +8,30 @@ module mod_longwave_radiation
 
 contains
 
-   subroutine longwave_radiation_2d(nx, ny, istart, istop, jstart, jstop, method, dlat, tw, ta, cloud, ea, qa, ql) bind(c)
-      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, method
+   subroutine longwave_radiation_2d(nx, ny, imin, imax, jmin, jmax, method, dlat, tw, ta, cloud, ea, qa, ql) bind(c)
+      integer,  intent(in), value                :: nx, ny, imin, imax, jmin, jmax, method
       real(rk), intent(in),    dimension(nx, ny) :: dlat, tw, ta, cloud, ea, qa
       real(rk), intent(inout), dimension(nx, ny) :: ql
 
       select case (method)
          case (1)
-            call clark(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
-               cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call clark(dlat(imin:imax, jmin:jmax), tw(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), &
+               cloud(imin:imax, jmin:jmax), ea(imin:imax, jmin:jmax), ql(imin:imax, jmin:jmax))
          case (2)
-            call hastenrath(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
-               cloud(istart:istop, jstart:jstop), qa(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call hastenrath(dlat(imin:imax, jmin:jmax), tw(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), &
+               cloud(imin:imax, jmin:jmax), qa(imin:imax, jmin:jmax), ql(imin:imax, jmin:jmax))
          case (3)
-            call bignami(dlat(istart:istop, jstart:jstop), tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
-               cloud(istart:istop, jstart:jstop), ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call bignami(dlat(imin:imax, jmin:jmax), tw(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), &
+               cloud(imin:imax, jmin:jmax), ea(imin:imax, jmin:jmax), ql(imin:imax, jmin:jmax))
          case (4)
-            call berliand(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), &
-               ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call berliand(tw(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), cloud(imin:imax, jmin:jmax), &
+               ea(imin:imax, jmin:jmax), ql(imin:imax, jmin:jmax))
          case (5)
-            call josey1(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), &
-               ql(istart:istop, jstart:jstop))
+            call josey1(tw(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), cloud(imin:imax, jmin:jmax), &
+               ql(imin:imax, jmin:jmax))
          case (6)
-            call josey2(tw(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), cloud(istart:istop, jstart:jstop), &
-               ea(istart:istop, jstart:jstop), ql(istart:istop, jstart:jstop))
+            call josey2(tw(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), cloud(imin:imax, jmin:jmax), &
+               ea(imin:imax, jmin:jmax), ql(imin:imax, jmin:jmax))
          case default
             stop 'longwave_radiation_2d()'
       end select

@@ -13,8 +13,8 @@ module mod_solar_zenith_angle
 
 contains
 
-   subroutine solar_zenith_angle_2d(nx, ny, istart, istop, jstart, jstop, yday, hh, dlon, dlat, zenith_angle) bind(c)
-      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, yday
+   subroutine solar_zenith_angle_2d(nx, ny, imin, imax, jmin, jmax, yday, hh, dlon, dlat, zenith_angle) bind(c)
+      integer,  intent(in), value                :: nx, ny, imin, imax, jmin, jmax, yday
       real(rk), intent(in), value                :: hh
       real(rk), intent(in),    dimension(nx, ny) :: dlon, dlat
       real(rk), intent(inout), dimension(nx, ny) :: zenith_angle
@@ -22,8 +22,7 @@ contains
       real(rk) :: sundec
 
       sundec = solar_declination_angle(yday)
-      zenith_angle(istart:istop, jstart:jstop) = solar_zenith_angle(sundec, hh, dlon(istart:istop, jstart:jstop), &
-         dlat(istart:istop, jstart:jstop))
+      zenith_angle(imin:imax, jmin:jmax) = solar_zenith_angle(sundec, hh, dlon(imin:imax, jmin:jmax), dlat(imin:imax, jmin:jmax))
    end subroutine
 
    elemental real(rk) function solar_declination_angle(yday)

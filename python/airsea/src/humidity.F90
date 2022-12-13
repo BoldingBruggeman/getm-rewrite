@@ -8,28 +8,28 @@ module mod_humidity
 
 contains
 
-   subroutine humidity_2d(nx, ny, istart, istop, jstart, jstop, method, hum, airp, tw, ta, es, ea, qs, qa, rhoa) bind(c)
-      integer,  intent(in), value                :: nx, ny, istart, istop, jstart, jstop, method
+   subroutine humidity_2d(nx, ny, imin, imax, jmin, jmax, method, hum, airp, tw, ta, es, ea, qs, qa, rhoa) bind(c)
+      integer,  intent(in), value                :: nx, ny, imin, imax, jmin, jmax, method
       real(rk), intent(in),    dimension(nx, ny) :: hum, airp, tw, ta
       real(rk), intent(inout), dimension(nx, ny) :: es, ea, qs, qa, rhoa
 
       !  saturation vapor pressure - using SST
       !  correction for seawater, following Kraus 1972
       !  correcting for salt water assuming 98% RH
-      es(istart:istop, jstart:jstop) = 0.98_rk * saturation_vapor_pressure(tw(istart:istop, jstart:jstop))
+      es(imin:imax, jmin:jmax) = 0.98_rk * saturation_vapor_pressure(tw(imin:imax, jmin:jmax))
 
      !  saturation specific humidity
-      qs(istart:istop, jstart:jstop) = specific_humidity(es(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
+      qs(imin:imax, jmin:jmax) = specific_humidity(es(imin:imax, jmin:jmax), airp(imin:imax, jmin:jmax))
 
       !  must be also calcuated for airtemperature, depending on humidity input
       !  see ../ncdf/ncdf_meteo.F90 for defined constants
       select case (method)
          case (1)  ! relative humidity in % given
    !        get actual vapor pressure from saturation vapor pressure at that air temperature
-            ea(istart:istop, jstart:jstop) = 0.01_rk * hum(istart:istop, jstart:jstop) &
-               * saturation_vapor_pressure(ta(istart:istop, jstart:jstop))
+            ea(imin:imax, jmin:jmax) = 0.01_rk * hum(imin:imax, jmin:jmax) &
+               * saturation_vapor_pressure(ta(imin:imax, jmin:jmax))
    !        convert to specific humidity
-            qa(istart:istop, jstart:jstop) = specific_humidity(ea(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
+            qa(imin:imax, jmin:jmax) = specific_humidity(ea(imin:imax, jmin:jmax), airp(imin:imax, jmin:jmax))
          case (2)  ! Specific humidity from wet bulb temperature
    !        calculate the SVP at wet bulb temp then
    !        use the psychrometer formula to get vapour pressure
@@ -37,24 +37,24 @@ contains
    !        Make sure this is in degC
    !        saturation vapor pressure at wet bulb temperature
    !        actual vapor pressure
-            ea(istart:istop, jstart:jstop) = saturation_vapor_pressure(hum(istart:istop, jstart:jstop)) &
-               - 6.6e-4_rk * (1._rk + 1.15e-3_rk * hum(istart:istop, jstart:jstop)) * airp &
-               * (ta(istart:istop, jstart:jstop) - hum(istart:istop, jstart:jstop))
+            ea(imin:imax, jmin:jmax) = saturation_vapor_pressure(hum(imin:imax, jmin:jmax)) &
+               - 6.6e-4_rk * (1._rk + 1.15e-3_rk * hum(imin:imax, jmin:jmax)) * airp &
+               * (ta(imin:imax, jmin:jmax) - hum(imin:imax, jmin:jmax))
    !        specific humidity in kg/kg
-            qa(istart:istop, jstart:jstop) = specific_humidity(ea(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
+            qa(imin:imax, jmin:jmax) = specific_humidity(ea(imin:imax, jmin:jmax), airp(imin:imax, jmin:jmax))
          case (3)  ! Specific humidity from dew point temperature
-            ea(istart:istop, jstart:jstop) = saturation_vapor_pressure(hum(istart:istop, jstart:jstop))
-            qa(istart:istop, jstart:jstop) = specific_humidity(ea(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
+            ea(imin:imax, jmin:jmax) = saturation_vapor_pressure(hum(imin:imax, jmin:jmax))
+            qa(imin:imax, jmin:jmax) = specific_humidity(ea(imin:imax, jmin:jmax), airp(imin:imax, jmin:jmax))
          case (4)  ! specific humidity in kg/kg is given
-            qa(istart:istop, jstart:jstop) = hum(istart:istop, jstart:jstop)
+            qa(imin:imax, jmin:jmax) = hum(imin:imax, jmin:jmax)
    !        actual water vapor pressure in Pascal
-            ea(istart:istop, jstart:jstop) = vapor_pressure(qa(istart:istop, jstart:jstop), airp(istart:istop, jstart:jstop))
+            ea(imin:imax, jmin:jmax) = vapor_pressure(qa(imin:imax, jmin:jmax), airp(imin:imax, jmin:jmax))
          case default
             stop 'humidity_2d()'
       end select
 
-      rhoa(istart:istop, jstart:jstop) = air_density(airp(istart:istop, jstart:jstop), ta(istart:istop, jstart:jstop), &
-         qa(istart:istop, jstart:jstop))
+      rhoa(imin:imax, jmin:jmax) = air_density(airp(imin:imax, jmin:jmax), ta(imin:imax, jmin:jmax), &
+         qa(imin:imax, jmin:jmax))
 
    end subroutine
 
