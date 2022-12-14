@@ -419,7 +419,6 @@ class Momentum(pygetm._pygetm.Momentum):
             ZERO = ZERO + MASK_ZERO_3D
         for v in ZERO:
             array = getattr(self, v)
-            edges = array.grid._land & array.grid._water_contact
             array.all_values[..., array.grid._land] = 0.0
 
         self.An.update_halos()
@@ -695,7 +694,7 @@ class Momentum(pygetm._pygetm.Momentum):
 
         # Use updated velocities (uk, vk) to compute shear frequency (SS) at T points
         # (interior only, not in halos)
-        pygetm._pygetm.shear_frequency(self.uk, self.vk, viscosity, self.SS)
+        self.shear_frequency(self.uk, self.vk, viscosity, self.SS)
 
         # Calculate bottom friction from updated velocities (and syncronized layer
         # thicknesses hn). This needs to be done before derived quantities such as
@@ -901,7 +900,7 @@ class Momentum(pygetm._pygetm.Momentum):
         update_z0b: bool = False,
     ):
         """Calculate bottom friction
-        
+
         Args:
             u: velocity in x-direction (m s-1) in bottom layer [U grid]
             v: velocity in y-direction (m s-1) in bottom layer [V grid]
@@ -940,6 +939,20 @@ class Momentum(pygetm._pygetm.Momentum):
         out.all_values *= out.grid.cor.all_values
         if U.grid is self.domain.U:
             np.negative(out.all_values, out=out.all_values)
+
+    def shear_frequency(
+        self, uk: core.Array, vk: core.Array, viscosity: core.Array, out: core.Array
+    ):
+        """Calculate squared shear frequency
+
+        Args:
+            uk: depth-explicit velocity in x-direction (m s-1)
+            vk: depth-explicit velocity in y-direction (m s-1)
+            viscosity: vertical viscosity (m2 s-1)
+            out: array to store squared shear frequency (s-2)
+        """
+        pygetm._pygetm.shear_frequency(uk, vk, out)
+        # pygetm._pygetm.shear_frequency2(uk, vk, viscosity, out)
 
     def advance_3d_transport(
         self,

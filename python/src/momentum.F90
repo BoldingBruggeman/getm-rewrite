@@ -216,7 +216,33 @@ contains
       end do
    end subroutine
 
-   subroutine c_shear_frequency(nx, ny, nz, imin, imax, jmin, jmax, mask, h, hu, hv, uk, vk, num, SS) bind(c)
+   subroutine c_shear_frequency(nx, ny, nz, imin, imax, jmin, jmax, mask, hu, hv, uk, vk, SS) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny, nz, imin, imax, jmin, jmax
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: hu(nx, ny, nz), hv(nx, ny, nz)
+      real(c_double), intent(in) :: uk(nx, ny, nz), vk(nx, ny, nz)
+      real(c_double), intent(inout) :: SS(nx, ny, 0:nz)
+
+      integer :: i,j,k
+
+      do k = 1, nz-1
+         do j = jmin, jmax
+            do i = imin, imax
+               if (mask(i,j) > 0) then
+                  SS(i,j,k) = 0.5_c_double * ( &
+                       ((uk(i  ,j,k+1)-uk(i  ,j,k)) / (0.5_c_double*(hu(i  ,j,k+1)+hu(i  ,j,k))))**2 &
+                     + ((uk(i-1,j,k+1)-uk(i-1,j,k)) / (0.5_c_double*(hu(i-1,j,k+1)+hu(i-1,j,k))))**2 &
+                     + ((vk(i,j  ,k+1)-vk(i,j  ,k)) / (0.5_c_double*(hv(i,j  ,k+1)+hv(i,j  ,k))))**2 &
+                     + ((vk(i,j-1,k+1)-vk(i,j-1,k)) / (0.5_c_double*(hv(i,j-1,k+1)+hv(i,j-1,k))))**2 &
+                                         )
+               end if
+            end do
+         end do
+      end do
+   end subroutine
+
+   ! This version should better conserve energy.
+   subroutine c_shear_frequency2(nx, ny, nz, imin, imax, jmin, jmax, mask, h, hu, hv, uk, vk, num, SS) bind(c)
       integer(c_int), value, intent(in) :: nx, ny, nz, imin, imax, jmin, jmax
       integer(c_int), intent(in) :: mask(nx, ny)
       real(c_double), intent(in) :: h(nx, ny, nz), hu(nx, ny, nz), hv(nx, ny, nz)
@@ -229,16 +255,6 @@ contains
          do j = jmin, jmax
             do i = imin, imax
                if (mask(i,j) > 0) then
-#ifndef NEW_SS
-                  ! This is an older version which we should keep here.
-                  SS(i,j,k) = 0.5_c_double * ( &
-                       ((uk(i  ,j,k+1)-uk(i  ,j,k)) / (0.5_c_double*(hu(i  ,j,k+1)+hu(i  ,j,k))))**2 &
-                     + ((uk(i-1,j,k+1)-uk(i-1,j,k)) / (0.5_c_double*(hu(i-1,j,k+1)+hu(i-1,j,k))))**2 &
-                     + ((vk(i,j  ,k+1)-vk(i,j  ,k)) / (0.5_c_double*(hv(i,j  ,k+1)+hv(i,j  ,k))))**2 &
-                     + ((vk(i,j-1,k+1)-vk(i,j-1,k)) / (0.5_c_double*(hv(i,j-1,k+1)+hv(i,j-1,k))))**2 &
-                                         )
-#else
-                  ! This version should better conserve energy.
                   SS(i,j,k) = 0.5_c_double* &
                      ( &
                        (uk(i  ,j,k+1)-uk(i  ,j,k))**2 / (hu(i  ,j,k+1)+hu(i  ,j,k)) * (num(i,  j,  k)+num(i+1,j,  k)) &
@@ -246,7 +262,6 @@ contains
                      + (vk(i,j  ,k+1)-vk(i,j  ,k))**2 / (hv(i,j  ,k+1)+hv(i,j  ,k)) * (num(i,  j,  k)+num(i,  j+1,k)) &
                      + (vk(i,j-1,k+1)-vk(i,j-1,k))**2 / (hv(i,j-1,k+1)+hv(i,j-1,k)) * (num(i,  j-1,k)+num(i,  j,  k)) &
                      ) / (0.5_c_double*(h(i,j,k)+h(i,j,k+1))) / num(i,j,k)
-#endif
                end if
             end do
          end do
