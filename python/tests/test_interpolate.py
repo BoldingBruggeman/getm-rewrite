@@ -152,6 +152,65 @@ class TestInterpolate(unittest.TestCase):
                         ).all()
                     )
 
+    def test_vertical_3d_masked_lastaxis(self):
+        axis = 2
+        nx, ny = 5, 6
+        dx = np.random.random_sample((99,))
+        xp = np.cumsum(dx)
+        shape = [ny, nx]
+        shape.insert(axis, xp.size)
+        fp = np.random.random_sample(tuple(shape))
+
+        shape[axis] = 100
+        shape2 = list(shape)
+        shape2[axis] = 1
+        x = -10 * np.random.random_sample(
+            tuple(shape2)
+        ) + 1.5 * np.random.random_sample(tuple(shape)).cumsum(axis=axis)
+
+        start = np.random.randint(
+            0, fp.shape[axis] - 1, fp.shape[:axis] + fp.shape[axis + 1 :]
+        )
+        stop = np.random.randint(start, fp.shape[axis])
+        ind = np.arange(fp.shape[axis])
+        slc = [np.newaxis] * fp.ndim
+        slc[axis] = slice(None)
+        ind = np.broadcast_to(ind[tuple(slc)], fp.shape)
+        slc = [slice(None)] * fp.ndim
+        slc[axis] = np.newaxis
+        fullstart = start[tuple(slc)]
+        fullstop = stop[tuple(slc)]
+        mask = np.logical_or(ind < fullstart, ind >= fullstop)
+        masked_fp = np.ma.array(fp, mask=mask)
+        f = interp_1d(x, xp, masked_fp, axis=axis)
+
+        def make_slice(i, j, k=slice(None)):
+            slc = [j, i]
+            slc.insert(axis, k)
+            return tuple(slc)
+
+        for i in range(nx):
+            for j in range(ny):
+                if start[j, i] == stop[j, i]:
+                    # no valid points - all output should be masked
+                    self.assertTrue(np.isnan(f[make_slice(i, j)]).all())
+                else:
+                    self.assertTrue(
+                        np.isfinite(
+                            fp[make_slice(i, j, slice(start[j, i], stop[j, i]))]
+                        ).all()
+                    )
+                    f_check = np.interp(
+                        x[make_slice(i, j)],
+                        xp[start[j, i] : stop[j, i]],
+                        fp[make_slice(i, j, slice(start[j, i], stop[j, i]))],
+                    )
+                    self.assertTrue(
+                        np.isclose(
+                            f[make_slice(i, j)], f_check, rtol=self.EPS, atol=self.EPS
+                        ).all()
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
