@@ -32,7 +32,6 @@ cdef extern void c_vertical_diffusion_prepare(void* diffusion, int nx, int ny, i
 cdef extern void c_vertical_diffusion_apply(void* diffusion, int nx, int ny, int nz, int* pmask, double* pho, double* phn, double* pvar, double* pea2, double* pea4) nogil
 cdef extern void* momentum_create(int runtype, void* pdomain, double Am0, double cnpar, int coriolis_scheme) nogil
 cdef extern void momentum_finalize(void* momentum) nogil
-cdef extern void momentum_stresses(void* momentum, double* tausx, double* tausy) nogil
 cdef extern void momentum_diffusion_driver(void* momentum, int nk, double* h, double* hx, double* u, double* v, double* diffu, double* diffv) nogil
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* initial, int up, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
@@ -312,11 +311,6 @@ cdef class Momentum:
         assert diffv.grid is self.domain.V
         cdef int nk = <int>h._array.shape[0] if h.z else 1
         momentum_diffusion_driver(self.p, nk, <double*> h.p, <double*> hx.p, <double*> u.p, <double*> v.p, <double*> diffu.p, <double*> diffv.p)
-
-    def update_stresses(self, Array tausx not None, Array tausy not None):
-        assert tausx.grid is self.domain.T, 'grid mismatch for tausx: expected %s, got %s' % (self.domain.T.postfix, tausx.grid.postfix)
-        assert tausy.grid is self.domain.T, 'grid mismatch for tausy: expected %s, got %s' % (self.domain.T.postfix, tausy.grid.postfix)
-        momentum_stresses(self.p, <double *>tausx.p, <double *>tausy.p)
 
     def wrap(self, Array ar not None, bytes name):
         return ar.wrap_c_array(self.domain, 1, self.p, name)

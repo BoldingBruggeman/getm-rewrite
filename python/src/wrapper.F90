@@ -412,19 +412,6 @@ contains
       end do
    end subroutine
 
-   subroutine momentum_stresses(pmomentum, ptausx, ptausy) bind(c)
-      type(c_ptr),    intent(in), value :: pmomentum
-      type(c_ptr),    intent(in), value :: ptausx, ptausy
-
-      type (type_getm_momentum), pointer :: momentum
-      real(real64), contiguous, pointer, dimension(:,:) :: tausx, tausy
-
-      call c_f_pointer(pmomentum, momentum)
-      call c_f_pointer(ptausx, tausx, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
-      call c_f_pointer(ptausy, tausy, momentum%domain%T%u(1:2) - momentum%domain%T%l(1:2) + 1)
-      call momentum%stresses(tausx, tausy)
-   end subroutine
-
    subroutine c_thickness2center_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)
       integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
       integer(c_int), intent(in)        :: mask(nx, ny)
