@@ -741,17 +741,10 @@ class Simulation:
             )
 
             if self.runtype == BAROCLINIC:
-                # Update total stresses (x and y combined) and calculate the friction
-                # velocities (m s-1) This is for turbulence (GOTM), so all on the T grid
-                # Note that surface stress is currently defined at the start of the
-                # MICROtimestep (only one microtimestep before the end of the current
-                # macrotimestep), whereas bottom stress is at 1/2 of the macrotimestep,
-                # since it is computed from velocities that have just been updated.
-                _pygetm.surface_shear_velocity(self.airsea.taux, self.airsea.tauy, self.ustar_s)
-
                 # Update turbulent quantities (T grid - interfaces) from time=0 to
-                # time=1 (macrotimestep), using surface/buoyancy-related forcing at
-                # time=0, and velocity-related forcing at time=1/2
+                # time=1 (macrotimestep), using surface/buoyancy-related forcing
+                # (ustar_s, z0s, NN) at time=0, and bottom/velocity-related forcing
+                # (ustar_b, z0b, SS) at time=1/2
                 # self.domain.T.z0b.all_values[1:, 1:] = 0.5 * (np.maximum(self.domain.U.z0b.all_values[1:, 1:], self.domain.U.z0b.all_values[1:, :-1]) + np.maximum(self.domain.V.z0b.all_values[:-1, 1:], self.domain.V.z0b.all_values[1:, :-1]))
                 self.turbulence.advance(
                     self.macrotimestep,
@@ -927,6 +920,12 @@ class Simulation:
             self.dpdyo.all_values[...] = self.dpdy.all_values
 
         if baroclinic_active:
+            # Update surface shear velocity (used by GOTM). This requires updated
+            # surface stresses and there can only be done after the airesea update.
+            _pygetm.surface_shear_velocity(
+                self.airsea.taux, self.airsea.tauy, self.ustar_s
+            )
+
             # Update radiation. This must come after the airsea update, which is
             # responsible for calculating swr
             self.radiation(self.airsea.swr, self.fabm.kc if self.fabm else None)
