@@ -460,6 +460,20 @@ class River:
         y: Optional[float] = None,
         spherical: Optional[bool] = None,
     ):
+        """
+        Args:
+            name: unique name for this river
+            i: global index in x-direction (0-based)
+            j: global index in y-direction (0-based)
+            zl: maximum depth to which the river penetrates (non-negative)
+            zu: minimum depth from which the river penetrates (non-negative)
+            x: x coordinate of river
+            y: y coordinate of river
+            spherical: interpret x and y as longitude and latitude.
+                Otherwise they are interpreted as Cartesian coordinates.
+                If this argument not provided (or None), it is inferred from
+                :attr:`Domain.spherical`
+        """
         self.name = name
         self.i_glob = i
         self.j_glob = j
@@ -558,7 +572,12 @@ class Rivers(Mapping[str, River]):
 
     def add_by_location(self, name: str, x: float, y: float, **kwargs):
         """Add a river at a location specified by the nearest coordinates
-        (longitude and latitude on a spherical grid)
+
+        Args:
+            name: river name
+            x: x coordinate of river (longitude if spherical)
+            y: y coordinate of river (latitude if spherical)
+            **kwargs: additional keyword arguments passed to :class:`River`
         """
         if (
             self.grid.domain.glob is not None
