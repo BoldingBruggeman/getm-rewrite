@@ -19,3 +19,4 @@ from .open_boundaries import Side
 from .airsea import HumidityMeasure, LongwaveMethod, AlbedoMethod
 from .output import TimeUnit
 from .momentum import CoriolisScheme
+from .radiation import Jerlov
