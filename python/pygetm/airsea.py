@@ -84,8 +84,10 @@ class Base:
         Args:
             time: date and time
             sst: temperature of the water surface
-            ssu: wind speed in x direction (model-centric, not rotated to be geocentric)
-            ssv: wind speed in y direction (model-centric, not rotated to be geocentric)
+            ssu: surface water velocity in x-direction
+                (model-centric, not rotated to be geocentric)
+            ssv: surface water velocity in y-direction
+                (model-centric, not rotated to be geocentric)
             calculate_heat_flux: update the surface heat flux (:attr:`shf`),
                 net downwelling shortwave flux (:attr:`swr`) and net freshwater
                 flux (:attr:`pe`)
@@ -483,8 +485,10 @@ class FluxesFromMeteo(Fluxes):
         Args:
             time: date and time
             sst: temperature of the water surface (degrees Celsius)
-            ssu: wind speed in x direction (model-centric, not rotated to be geocentric)
-            ssv: wind speed in y direction (model-centric, not rotated to be geocentric)
+            ssu: surface water velocity in x-direction
+                (model-centric, not rotated to be geocentric)
+            ssv: surface water velocity in y-direction
+                (model-centric, not rotated to be geocentric)
             calculate_heat_flux: update the surface heat flux (:attr:`shf`),
                 net downwelling shortwave flux (:attr:`swr`) and net freshwater
                 flux (:attr:`pe`)
