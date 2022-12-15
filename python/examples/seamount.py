@@ -38,7 +38,7 @@ sim = pygetm.Simulation(
 sim.salt.fill(35.0)
 sim.temp.fill(5.0 + 15.0 * np.exp(domain.T.zc / 1000.0))
 
-sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
+sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_II)
 
 output = sim.output_manager.add_netcdf_file(
     "seamount.nc", interval=datetime.timedelta(hours=1)

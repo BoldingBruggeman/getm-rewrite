@@ -65,7 +65,7 @@ sim = pygetm.Simulation(
     internal_pressure_method=pygetm.InternalPressure.SHCHEPETKIN_MCWILLIAMS,
 )
 
-sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_I)
+sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_I)
 
 sim.salt.set(0.0)
 

@@ -52,7 +52,7 @@ class Radiation:
 
 class TwoBand(Radiation):
     def __init__(
-        self, jerlov_type: Optional[int] = None, reflect_at_bottom: bool = False
+        self, jerlov_type: Optional[Jerlov] = None, reflect_at_bottom: bool = False
     ):
         """Two-band (visible and non-visible) model for shortwave radiation and
         absorption throughout the water column. It is driven by downwelling shortwave
