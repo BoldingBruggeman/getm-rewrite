@@ -34,11 +34,17 @@ def get(
         out = pygetm.input.horizontal_interpolation(out, lon, lat)
         return out
 
+    postfix = ""
+    if os.path.join(root, "grid_tpxo9_atlas_30_v5.nc"):
+        postfix = "_v5"
+
     if variable in ("hz", "hu", "hv"):
         # Water depth at z, u, or v points.
         # These are static variables definied in the grid file
         axis = variable[1]
-        with xarray.open_dataset(os.path.join(root, "grid_tpxo9_atlas.nc")) as ds:
+        with xarray.open_dataset(
+            os.path.join(root, "grid_tpxo9_atlas%s.nc" % postfix)
+        ) as ds:
             ds = ds.set_coords(("lat_%s" % axis, "lon_%s" % axis))
             return select(ds[variable])
 
@@ -49,7 +55,7 @@ def get(
     for component in COMPONENTS:
         if verbose:
             print("TPXO: reading %s constituent of %s..." % (component, variable))
-        name = "%s_%s_tpxo9_atlas_30.nc" % (file_prefix, component)
+        name = "%s_%s_tpxo9_atlas_30%s.nc" % (file_prefix, component, postfix)
         path = os.path.join(root, name)
         with xarray.open_dataset(path) as ds:
             ds = ds.set_coords(("lat_%s" % axis, "lon_%s" % axis))
