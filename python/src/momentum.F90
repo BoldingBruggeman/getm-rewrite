@@ -268,4 +268,43 @@ contains
       end do
    end subroutine
 
+
+   subroutine c_surface_shear_velocity(nx, ny, imin, imax, jmin, jmax, mask, taux, tauy, ustar) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny, imin, imax, jmin, jmax
+      integer(c_int), intent(in) :: mask(nx, ny)
+      real(c_double), intent(in) :: taux(nx, ny), tauy(nx, ny)
+      real(c_double), intent(inout) :: ustar(nx, ny)
+
+      integer :: i, j
+
+      ! surface shear velocity (m s-1) = sqrt(surface stress in Pa divided by density rho0)
+      do j = jmin, jmax
+         do i = imin, imax
+            if (mask(i,j) > 0) ustar(i,j) = (taux(i,j)**2 + tauy(i,j)**2)**0.25_c_double * sqrt(rho0i)
+         end do
+      end do
+   end subroutine
+
+   subroutine c_bottom_shear_velocity(nx, ny, imin, imax, jmin, jmax, mask, umask, vmask, uk_bot, vk_bot, rru, rrv, ustar2_x, ustar2_y, ustar) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny, imin, imax, jmin, jmax
+      integer(c_int), intent(in) :: mask(nx,ny), umask(nx,ny), vmask(nx,ny)
+      real(c_double), intent(in) :: uk_bot(nx,ny), vk_bot(nx,ny)
+      real(c_double), intent(in) :: rru(nx,ny), rrv(nx,ny)
+      real(c_double), intent(inout) :: ustar2_x(nx,ny), ustar2_y(nx,ny), ustar(nx,ny)
+
+      integer :: i, j
+
+      ! tendency of transport due to bottom friction (m2 s-2) = bottom stress in Pa divided by density rho0 = squared bottom shear velocity
+      ustar2_x = -uk_bot * rru
+      ustar2_y = -vk_bot * rrv
+      do j = jmin, jmax
+         do i = imin, imax
+            if (mask(i,j) > 0) then
+               ! bottom shear velocity (m s-1) = bottom stress in Pa divided by density rho0
+               ustar(i,j) = (0.5_c_double*((ustar2_x(i-1,j))**2 + (ustar2_x(i,j))**2 + (ustar2_y(i,j-1))**2 + (ustar2_y(i,j))**2))**0.25_c_double
+            end if
+         end do
+      end do
+   end subroutine
+
 end module

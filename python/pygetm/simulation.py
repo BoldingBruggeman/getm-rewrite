@@ -126,8 +126,6 @@ class Simulation:
         "ssv",
         "NN",
         "ustar_s",
-        "ustar_b",
-        "taub",
         "z0s",
         "z0b",
         "fwf",
@@ -172,7 +170,7 @@ class Simulation:
         delay_slow_ip: bool = False,
     ):
         """Simulation
-        
+
         Args:
             domain: simulation domain
             runtype: simulation run type (BAROTROPIC_2D, BAROTROPIC_3D, BAROCLINIC)
@@ -309,14 +307,7 @@ class Simulation:
                 fill_value=FILL_VALUE,
                 attrs=dict(_mask_output=True),
             )
-            self.ustar_b = domain.T.array(
-                fill=0.0,
-                name="ustar_b",
-                units="m s-1",
-                long_name="shear velocity (bottom)",
-                fill_value=FILL_VALUE,
-                attrs=dict(_mask_output=True),
-            )
+
             self.z0s = domain.T.array(
                 name="z0s",
                 units="m",
@@ -324,15 +315,6 @@ class Simulation:
                 fill_value=FILL_VALUE,
             )
             self.z0s.fill(0.1)
-            self.taub = domain.T.array(
-                fill=0.0,
-                name="taub",
-                units="Pa",
-                long_name="bottom shear stress",
-                fill_value=FILL_VALUE,
-                fabm_standard_name="bottom_stress",
-                attrs=dict(_mask_output=True),
-            )
 
             # Forcing variables for macro/3D momentum update
             # These lag behind the forcing for the micro/2D momentum update
@@ -765,18 +747,7 @@ class Simulation:
                 # MICROtimestep (only one microtimestep before the end of the current
                 # macrotimestep), whereas bottom stress is at 1/2 of the macrotimestep,
                 # since it is computed from velocities that have just been updated.
-                self.momentum.update_stresses(self.airsea.taux, self.airsea.tauy)
-                np.sqrt(
-                    self.momentum.ustar2_s.all_values,
-                    out=self.ustar_s.all_values,
-                    where=self.domain.T._water_nohalo,
-                )
-                np.sqrt(
-                    self.momentum.ustar2_b.all_values,
-                    out=self.ustar_b.all_values,
-                    where=self.domain.T._water_nohalo,
-                )
-                self.taub.all_values[...] = self.momentum.ustar2_b.all_values * RHO0
+                _pygetm.surface_shear_velocity(self.airsea.taux, self.airsea.tauy, self.ustar_s)
 
                 # Update turbulent quantities (T grid - interfaces) from time=0 to
                 # time=1 (macrotimestep), using surface/buoyancy-related forcing at
@@ -785,7 +756,7 @@ class Simulation:
                 self.turbulence.advance(
                     self.macrotimestep,
                     self.ustar_s,
-                    self.ustar_b,
+                    self.momentum.ustar_b,
                     self.z0s,
                     self.domain.T.z0b,
                     self.NN,

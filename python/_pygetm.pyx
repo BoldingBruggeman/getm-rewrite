@@ -45,9 +45,11 @@ cdef extern void c_horizontal_diffusion(int imin,int imax,int jmin,int jmax,int 
 cdef extern void c_bottom_friction(int nx, int ny, int* mask, double* u, double* v, double* D, double* z0b, double* z0b_in, double avmmol, double* ru, int iterate) nogil
 cdef extern void c_collect_3d_momentum_sources(int nx, int ny, int nz, int halox, int haloy, int* mask, double* alpha, double* ho, double* hn, double* dp, double* cor, double* adv, double* diff, double* idp, double* taus, double* rr, double dt, double* ea2, double* ea4) nogil
 cdef extern void c_advance_2d_transport(int ny, int ny, int halox, int haloy, int* mask, double* alpha, double* D, double* dp, double* taus, double* cor, double* adv, double* diff, double* damp, double* SA, double* SB, double* SD, double* SF, double* r, double dt, double* U) nogil
-cdef extern void c_w_momentum_3d(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* dyu, const double* dxv, const double* iarea, const double* ho, const double* hn, const double* pk, const double* qk, double dt, double* w)
-cdef extern void c_shear_frequency(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* hu, const double* hv, const double* uk, const double* vk, double* SS)
-cdef extern void c_shear_frequency2(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* h, const double* hu, const double* hv, const double* uk, const double* vk, const double* num, double* SS)
+cdef extern void c_w_momentum_3d(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* dyu, const double* dxv, const double* iarea, const double* ho, const double* hn, const double* pk, const double* qk, double dt, double* w) nogil
+cdef extern void c_shear_frequency(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* hu, const double* hv, const double* uk, const double* vk, double* SS) nogil
+cdef extern void c_shear_frequency2(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* h, const double* hu, const double* hv, const double* uk, const double* vk, const double* num, double* SS) nogil
+cdef extern void c_surface_shear_velocity(int nx, int ny, int imin, int imax, int jmin, int jmax, const int* mask, const double* tausx, const double* tausy, double* ustar2_s) nogil
+cdef extern void c_bottom_shear_velocity(int nx, int ny, int imin, int imax, int jmin, int jmax, const int* mask, const int* umask, const int* vmask, const double* uk_bot, const double* vk_bot, const double* rru, const double* rrv, double* taubx, double* tauby, double* ustar2_b) nogil
 cdef extern void c_multiply_add(int n, double* tgt, double* add, double scale_factor) nogil
 cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt) nogil
 cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy) nogil
@@ -479,6 +481,31 @@ def shear_frequency2(Array uk, Array vk, Array num, Array SS):
     cdef Array hv = vk.grid.hn
     c_shear_frequency2(grid.nx_, grid.ny_, grid.nz, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny,
         <int*>mask.p, <double*>h.p, <double*>hu.p, <double*>hv.p, <double*>uk.p, <double*>vk.p, <double*>num.p, <double*>SS.p)
+
+def surface_shear_velocity(Array taux, Array tauy, Array ustar):
+    cdef Grid grid = ustar.grid
+    assert not ustar.z, 'ustar'
+    assert taux.grid is grid and not taux.z, 'taux'
+    assert tauy.grid is grid and not tauy.z, 'tauy'
+    cdef Array mask = grid.mask
+    c_surface_shear_velocity(grid.nx_, grid.ny_, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny,
+        <int*>mask.p, <double*>taux.p, <double*>tauy.p, <double*>ustar.p)
+
+def bottom_shear_velocity(Array uk, Array vk, Array rru, Array rrv, Array ustar2_x, Array ustar2_y, Array ustar):
+    cdef Grid grid = ustar.grid
+    assert not ustar.z, 'ustar'
+    assert uk.grid is grid.ugrid, 'uk'
+    assert vk.grid is grid.vgrid, 'vk'
+    assert rru.grid is grid.ugrid and not rru.z, 'rru'
+    assert rrv.grid is grid.vgrid and not rrv.z, 'rrv'
+    assert ustar2_x.grid is grid.ugrid and not ustar2_x.z, 'ustar2_x'
+    assert ustar2_y.grid is grid.vgrid and not ustar2_y.z, 'ustar2_y'
+    cdef Array mask = grid.mask
+    cdef Array umask = grid.ugrid.mask
+    cdef Array vmask = grid.vgrid.mask
+    c_bottom_shear_velocity(grid.nx_, grid.ny_, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny,
+        <int*>mask.p, <int*>umask.p, <int*>vmask.p, <double*>uk.p, <double*>vk.p, <double*>rru.p, <double*>rrv.p,
+        <double*>ustar2_x.p, <double*>ustar2_y.p, <double*>ustar.p)
 
 def advance_surface_elevation(double timestep, Array z, Array U, Array V, Array fwf):
     cdef Grid grid = z.grid

@@ -10,7 +10,7 @@ from . import parallel
 from . import operators
 import pygetm.domain
 import pygetm._pygetm
-from .constants import FILL_VALUE, BAROTROPIC_2D, CENTERS
+from .constants import FILL_VALUE, BAROTROPIC_2D, CENTERS, RHO0
 
 
 class CoriolisScheme(enum.IntEnum):
@@ -110,6 +110,10 @@ class Momentum(pygetm._pygetm.Momentum):
         "ea2",
         "ea4",
         "avmmol",
+        "ustar2_bx",
+        "ustar2_by",
+        "ustar_b",
+        "taub",
     )
 
     _array_args = {
@@ -410,6 +414,38 @@ class Momentum(pygetm._pygetm.Momentum):
             fill_value=FILL_VALUE,
         )
 
+        self.ustar2_bx = domain.U.array(
+            name="ustar2_bx",
+            long_name="tendency of transport in x-direction due to bottom friction",
+            units="m2 s-2",
+            attrs=dict(_mask_output=True),
+            fill_value=FILL_VALUE,
+        )
+        self.ustar2_by = domain.V.array(
+            name="ustar2_by",
+            long_name="tendency of transport in y-direction due to bottom friction",
+            units="m2 s-2",
+            attrs=dict(_mask_output=True),
+            fill_value=FILL_VALUE,
+        )
+        self.ustar_b = domain.T.array(
+            fill=0.0,
+            name="ustar_b",
+            units="m s-1",
+            long_name="bottom shear velocity",
+            fill_value=FILL_VALUE,
+            attrs=dict(_mask_output=True),
+        )
+        self.taub = domain.T.array(
+            fill=0.0,
+            name="taub",
+            units="Pa",
+            long_name="bottom shear stress",
+            fill_value=FILL_VALUE,
+            fabm_standard_name="bottom_stress",
+            attrs=dict(_mask_output=True),
+        )
+
     def start(self):
         # Ensure transports and velocities are 0 in masked points
         # NB velocities will be computed from transports, but only in unmasked points,
@@ -704,6 +740,19 @@ class Momentum(pygetm._pygetm.Momentum):
                 self.u_bot, self.v_bot, self.hU_bot, self.hV_bot, self.rru, self.rrv
             )
 
+        pygetm._pygetm.bottom_shear_velocity(
+            self.uk,
+            self.vk,
+            self.rru,
+            self.rrv,
+            self.ustar2_bx,
+            self.ustar2_by,
+            self.ustar_b,
+        )
+        if self.taub.saved:
+            # compute total bottom stress in Pa for e.g. FABM
+            self.taub.all_values[...] = self.ustar_b.all_values ** 2 * RHO0
+
         # Interpolate 3D velocities to advection grids.
         # This needs to be done before uk/vk are changed by the advection operator.
         self.uk.interp(self.uua3d)
@@ -792,15 +841,15 @@ class Momentum(pygetm._pygetm.Momentum):
         if self.apply_bottom_friction:
             # Note: ru and rv have been updated by transport_2d_momentum, using
             # accumulated transports Ui and Vi (representative for t=1/2, just like uk,
-            # vk, rru, rrv). Slow bottom friction (stress/density) is derived by taking
-            # the difference between 3D bottom friction and the inferred ru and rv.
+            # vk, rru, rrv). The associated tendencies of depth-integrated transport
+            # are -ru*u1 and -rv*v1. Slow bottom friction (stress in Pa divided by
+            # density) is derived by taking the difference between the tendency of 3D
+            # (bottom) transport and the inferred depth-integrated tendencies.
             self.SxF.all_values[...] = (
-                -self.rru.all_values * self.uk.all_values[0, ...]
-                + self.ru.all_values * self.u1.all_values
+                self.ustar2_bx.all_values + self.ru.all_values * self.u1.all_values
             )
             self.SyF.all_values[...] = (
-                -self.rrv.all_values * self.vk.all_values[0, ...]
-                + self.rv.all_values * self.v1.all_values
+                self.ustar2_by.all_values + self.rv.all_values * self.v1.all_values
             )
 
     def transport_2d_momentum(
