@@ -54,7 +54,7 @@ for name, river in domain.rivers.items():
     river.flow.set(pygetm.input.from_nc(river_path, name))
     river["salt"].set(0.5)
 
-sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
+sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_II)
 sim.temp.set(11.6)
 sim.salt.set(35.2)
 sim.density.convert_ts(sim.salt, sim.temp)

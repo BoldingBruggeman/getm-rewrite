@@ -1,4 +1,5 @@
 from typing import Optional
+import enum
 
 from . import core
 from . import domain
@@ -7,12 +8,23 @@ from .constants import FILL_VALUE, INTERFACES, CENTERS
 
 import numpy as np
 
-JERLOV_I = 1
-JERLOV_1 = 2
-JERLOV_IA = 3
-JERLOV_IB = 4
-JERLOV_II = 5
-JERLOV_III = 6
+
+class Jerlov(enum.Enum):
+    Type_I = (0.58, 0.35, 23.0)
+    Type_1 = (0.68, 1.2, 28.0)
+    Type_IA = (0.62, 0.6, 20.0)
+    Type_IB = (0.67, 1.0, 17.0)
+    Type_II = (0.77, 1.5, 14.0)
+    Type_III = (0.78, 1.4, 7.9)
+
+
+# For backward compatibility:
+JERLOV_I = Jerlov.Type_I
+JERLOV_1 = Jerlov.Type_1
+JERLOV_IA = Jerlov.Type_IA
+JERLOV_IB = Jerlov.Type_IB
+JERLOV_II = Jerlov.Type_II
+JERLOV_III = Jerlov.Type_III
 
 
 class Radiation:
@@ -149,7 +161,7 @@ class TwoBand(Radiation):
                 fill_value=FILL_VALUE,
             )
 
-    def set_jerlov_type(self, jerlov_type: int):
+    def set_jerlov_type(self, jerlov_type: Jerlov):
         """Derive non-visible fraction of shortwave radiation (:attr:`A`), attenuation
         coefficients of non-visible shortwave radiation (:attr:`kc1`), and attenuation
         length of visible shortwave radiation (:attr:`kc2`) from the Jerlov water type
@@ -157,14 +169,7 @@ class TwoBand(Radiation):
         # Note that attentuation in the dictionary below is described by
         # a length scale (g1, g2 in GOTM/legacy GETM)
         # Its reciprocal is then calculated to set kc1, kc2.
-        A, g1, g2 = {
-            JERLOV_I: (0.58, 0.35, 23.0),
-            JERLOV_1: (0.68, 1.2, 28.0),
-            JERLOV_IA: (0.62, 0.6, 20.0),
-            JERLOV_IB: (0.67, 1.0, 17.0),
-            JERLOV_II: (0.77, 1.5, 14.0),
-            JERLOV_III: (0.78, 1.4, 7.9),
-        }[jerlov_type]
+        A, g1, g2 = jerlov_type.value
         self.A.fill(A)
         self.kc1.fill(1.0 / g1)
         self.kc2.fill(1.0 / g2)
@@ -173,7 +178,7 @@ class TwoBand(Radiation):
 
     def __call__(self, swr: core.Array, kc2_add: Optional[core.Array] = None):
         """Compute heating due to shortwave radiation throughout the water column
-        
+
         Args:
             swr: net downwelling shortwave radiation just below the water surface
                 (i.e., what is left after reflection).

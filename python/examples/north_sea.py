@@ -113,7 +113,7 @@ def create_simulation(
         if sim.runtype > pygetm.BAROTROPIC_2D:
             sim.turbulence.num[...] = 1e-2
     if sim.runtype == pygetm.BAROCLINIC:
-        sim.radiation.set_jerlov_type(pygetm.radiation.JERLOV_II)
+        sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_II)
         sim.temp.set(11.6)
         sim.salt.set(35.2)
 
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--initial",
         action="store_true",
-        help="Read initial salinity and temerature conditions from file",
+        help="Read initial salinity and temperature from file",
     )
     # parser.add_argument('--no_meteo', action='store_true', help='No meteo forcing')
     parser.add_argument(
