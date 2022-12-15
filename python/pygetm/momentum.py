@@ -20,7 +20,7 @@ class CoriolisScheme(enum.IntEnum):
 
 
 MASK_ZERO_2D = ("U", "V", "u1", "v1")
-MASK_ZERO_3D = ("pk", "qk", "uk", "vk", "Ui", "Vi")
+MASK_ZERO_3D = ("pk", "qk", "uk", "vk", "Ui", "Vi", "rru", "rrv")
 
 
 class Momentum(pygetm._pygetm.Momentum):
@@ -213,6 +213,8 @@ class Momentum(pygetm._pygetm.Momentum):
         "advV": dict(attrs=dict(_mask_output=True),),
         "advpk": dict(attrs=dict(_mask_output=True),),
         "advqk": dict(attrs=dict(_mask_output=True),),
+        "rru": dict(attrs=dict(_mask_output=True),),
+        "rrv": dict(attrs=dict(_mask_output=True),),
     }
 
     def __init__(
@@ -305,8 +307,6 @@ class Momentum(pygetm._pygetm.Momentum):
             "diffV",
             "ru",
             "rv",
-            "rru",
-            "rrv",
             "fU",
             "fV",
         )
@@ -429,12 +429,10 @@ class Momentum(pygetm._pygetm.Momentum):
             fill_value=FILL_VALUE,
         )
         self.ustar_b = domain.T.array(
-            fill=0.0,
             name="ustar_b",
             units="m s-1",
             long_name="bottom shear velocity",
             fill_value=FILL_VALUE,
-            attrs=dict(_mask_output=True),
         )
         self.taub = domain.T.array(
             fill=0.0,
@@ -741,8 +739,8 @@ class Momentum(pygetm._pygetm.Momentum):
             )
 
         pygetm._pygetm.bottom_shear_velocity(
-            self.uk,
-            self.vk,
+            self.u_bot,
+            self.v_bot,
             self.rru,
             self.rrv,
             self.ustar2_bx,

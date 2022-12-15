@@ -295,12 +295,16 @@ contains
 
       integer :: i, j
 
-      ! tendency of transport due to bottom friction (m2 s-2) = bottom stress in Pa divided by density rho0 = squared bottom shear velocity
-      ustar2_x = -uk_bot * rru
-      ustar2_y = -vk_bot * rrv
       do j = jmin, jmax
          do i = imin, imax
-            if (mask(i,j) > 0) then
+            ! tendency of transport due to bottom friction (m2 s-2) = bottom stress in Pa divided by density rho0 = squared bottom shear velocity
+            ustar2_x(i,j) = -uk_bot(i,j) * rru(i,j)
+            ustar2_y(i,j) = -vk_bot(i,j) * rrv(i,j)
+         end do
+      end do
+      do j = jmin, jmax
+         do i = imin, imax
+            if (mask(i,j) == 1) then
                ! bottom shear velocity (m s-1) = bottom stress in Pa divided by density rho0
                ustar(i,j) = (0.5_c_double * &
                                ( &
