@@ -285,7 +285,8 @@ contains
       end do
    end subroutine
 
-   subroutine c_bottom_shear_velocity(nx, ny, imin, imax, jmin, jmax, mask, umask, vmask, uk_bot, vk_bot, rru, rrv, ustar2_x, ustar2_y, ustar) bind(c)
+   subroutine c_bottom_shear_velocity(nx, ny, imin, imax, jmin, jmax, mask, umask, vmask, uk_bot, vk_bot, rru, rrv, &
+         ustar2_x, ustar2_y, ustar) bind(c)
       integer(c_int), value, intent(in) :: nx, ny, imin, imax, jmin, jmax
       integer(c_int), intent(in) :: mask(nx,ny), umask(nx,ny), vmask(nx,ny)
       real(c_double), intent(in) :: uk_bot(nx,ny), vk_bot(nx,ny)
@@ -301,7 +302,12 @@ contains
          do i = imin, imax
             if (mask(i,j) > 0) then
                ! bottom shear velocity (m s-1) = bottom stress in Pa divided by density rho0
-               ustar(i,j) = (0.5_c_double*((ustar2_x(i-1,j))**2 + (ustar2_x(i,j))**2 + (ustar2_y(i,j-1))**2 + (ustar2_y(i,j))**2))**0.25_c_double
+               ustar(i,j) = (0.5_c_double * &
+                               ( &
+                                  (ustar2_x(i-1,j  ))**2 + (ustar2_x(i,j))**2 &
+                                + (ustar2_y(i,  j-1))**2 + (ustar2_y(i,j))**2 &
+                               ) &
+                            )**0.25_c_double
             end if
          end do
       end do
