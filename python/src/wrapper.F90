@@ -14,7 +14,7 @@ module pygetm
 
    type array
       real(c_double), allocatable :: rdata(:)
-      real(c_int), allocatable :: idata(:)
+      integer(c_int), allocatable :: idata(:)
    end type
 
 contains
