@@ -136,12 +136,13 @@ cdef class Array:
             self.register()
 
     def allocate(self, shape, dtype):
-        cdef int n
+        cdef int n = 0
         cdef bint is_float = dtype == float
-        if (is_float or dtype == int) and len(shape) > 0:
+        if len(shape) > 0:
             n = 1
             for l in shape:
                 n *= l
+        if (is_float or dtype == int) and n > 0:
             c_allocate_array(n, 0 if is_float else 1, &self.ptype, &self.p)
             if is_float:
                 self._array = numpy.asarray(<double[:n:1]> self.p).reshape(shape)
