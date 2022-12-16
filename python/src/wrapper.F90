@@ -12,7 +12,38 @@ module pygetm
 
    implicit none
 
+   type array
+      real(c_double), allocatable :: rdata(:)
+      real(c_int), allocatable :: idata(:)
+   end type
+
 contains
+
+   subroutine c_allocate_array(n, data_type, ptype, pdata) bind(c)
+      integer(c_int), intent(in), value :: n, data_type
+      type(c_ptr),    intent(out)       :: ptype, pdata
+
+      type(array), pointer :: p
+
+      allocate(p)
+      ptype = c_loc(p)
+      if (data_type == 0) then
+         allocate(p%rdata(n))
+         pdata = c_loc(p%rdata)
+      else
+         allocate(p%idata(n))
+         pdata = c_loc(p%idata)
+      end if
+   end subroutine
+
+   subroutine c_deallocate_array(ptype) bind(c)
+      type(c_ptr), intent(in), value :: ptype
+
+      type(array), pointer :: p
+
+      call c_f_pointer(ptype, p)
+      deallocate(p)
+   end subroutine
 
    function domain_create(imin, imax, jmin, jmax, kmin, kmax, halox, haloy, haloz) result(pdomain) bind(c)
       integer(c_int), intent(in), value :: imin, imax, jmin, jmax, kmin, kmax
@@ -98,8 +129,8 @@ contains
       type (type_getm_momentum), pointer :: momentum
       character(len=10),         pointer :: pname
 
-      integer, parameter :: subtype_depth_explicit = 2
-      integer, parameter :: subtype_depth_explicit_interfaces = 3
+      integer, parameter :: subtype_depth_explicit = 1
+      integer, parameter :: subtype_depth_explicit_interfaces = 2
 
       call c_f_pointer(c_loc(name), pname)
 

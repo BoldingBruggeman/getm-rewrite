@@ -11,6 +11,8 @@ import numpy
 
 from pygetm.constants import *
 
+cdef extern void c_allocate_array(int n, int dtype, void** ptype, void** pdata) nogil
+cdef extern void c_deallocate_array(void* ptype) nogil
 cdef extern void* domain_create(int imin, int imax, int jmin, int jmax, int kmin, int kmax, int* halox, int* haloy, int* haloz) nogil
 cdef extern void* domain_get_grid(void* domain, int grid_type, int imin, int imax, int jmin, int jmax, int kmin, int kmax, int halox, int haloy, int haloz) nogil
 cdef extern void domain_initialize(void* domain, int runtype, double Dmin, int method_vertical_coordinates, double ddl, double ddu, double Dgamma, int gamma_surf, double* maxdt) nogil
@@ -68,9 +70,10 @@ cpdef enum:
 
 cdef class Array:
     cdef void* p
+    cdef void* ptype
     cdef numpy.ndarray _array
     cdef readonly Grid grid
-    cdef readonly int on_boundary
+    cdef readonly bint on_boundary
 
     def __init__(self, Grid grid=None):
         if grid is not None:
@@ -99,19 +102,14 @@ cdef class Array:
                 self._array = numpy.asarray(<double[:self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
                 self._array = numpy.asarray(<int[:self.grid.ny_, :self.grid.nx_:1]> self.p)
-        elif sub_type == 2:
-            # Depth-explicit array on normal grid, layer centers
-            if data_type == 0:
-                self._array = numpy.asarray(<double[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
-            else:
-                self._array = numpy.asarray(<int[:self.grid.nz_, :self.grid.ny_, :self.grid.nx_:1]> self.p)
         else:
-            # Depth-explicit array on normal grid, layer interfaces
-            assert sub_type == 3, 'Subtypes other than 0,2,3 not yet implemented'
+            # Depth-explicit array on normal grid, layer centers or interface
+            assert sub_type == 1 or sub_type == 2, 'Subtypes other than 0,1,2 not yet implemented'
+            nz = self.grid.nz_ if sub_type == 1 else self.grid.nz_ + 1
             if data_type == 0:
-                self._array = numpy.asarray(<double[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<double[:nz, :self.grid.ny_, :self.grid.nx_:1]> self.p)
             else:
-                self._array = numpy.asarray(<int[:self.grid.nz_ + 1, :self.grid.ny_, :self.grid.nx_:1]> self.p)
+                self._array = numpy.asarray(<int[:nz, :self.grid.ny_, :self.grid.nx_:1]> self.p)
         if self._fill_value is None:
             self._fill_value = self._array.flat[0]
         else:
@@ -136,6 +134,28 @@ cdef class Array:
         self.finish_initialization()
         if register:
             self.register()
+
+    def allocate(self, shape, dtype):
+        cdef int n
+        cdef bint is_float = dtype == float
+        if (is_float or dtype == int) and len(shape) > 0:
+            n = 1
+            for l in shape:
+                n *= l
+            c_allocate_array(n, 0 if is_float else 1, &self.ptype, &self.p)
+            if is_float:
+                self._array = numpy.asarray(<double[:n:1]> self.p).reshape(shape)
+            else:
+                self._array = numpy.asarray(<int[:n:1]> self.p).reshape(shape)
+        else:
+            self._array = numpy.empty(shape, dtype=dtype)
+        return self._array
+
+    def __dealloc__(self):
+        if self.ptype != NULL:
+            c_deallocate_array(self.ptype)
+        self.ptype = NULL
+        self.p = NULL
 
 cdef class Grid:
     cdef void* p

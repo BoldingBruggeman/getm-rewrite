@@ -293,7 +293,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if z:
             nz = grid.nz_ + 1 if z == INTERFACES else grid.nz_
             shape.insert(1 if on_boundary else 0, nz)
-        data = np.empty(shape, dtype=dtype)
+        data = ar.allocate(shape, dtype)
         if fill is not None:
             data[...] = fill
         ar.wrap_ndarray(data, on_boundary=on_boundary, register=register)
