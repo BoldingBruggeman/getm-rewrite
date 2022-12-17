@@ -4,10 +4,20 @@
 cimport cython
 include "version.pxi"
 
+from cpython.object cimport PyObject
+from cpython.ref cimport Py_INCREF
+
 from libc.math cimport ceil
 
 cimport numpy
 import numpy
+
+cdef extern from "numpy/arrayobject.h":
+    # a little bit awkward: the reference to obj will be stolen
+    # using PyObject*  to signal that Cython cannot handle it automatically
+    int PyArray_SetBaseObject(numpy.ndarray arr, PyObject *obj) except -1 # -1 means there was an error
+
+numpy.import_array()
 
 from pygetm.constants import *
 
@@ -68,9 +78,13 @@ cpdef enum:
     UVGRID = -3
     VUGRID = -4
 
+cdef class FortranArrayContainer:
+    cdef void* p
+    def __dealloc__(self):
+        c_deallocate_array(self.p)
+
 cdef class Array:
     cdef void* p
-    cdef void* ptype
     cdef numpy.ndarray _array
     cdef readonly Grid grid
     cdef readonly bint on_boundary
@@ -137,26 +151,23 @@ cdef class Array:
 
     def allocate(self, shape, dtype):
         cdef int n = 0
+        cdef int ndim = len(shape)
         cdef bint is_float = dtype == float
-        if len(shape) > 0:
+        cdef numpy.npy_intp dims[3]
+        if ndim > 0:
             n = 1
-            for l in shape:
-                n *= l
-        if (is_float or dtype == int) and n > 0:
-            c_allocate_array(n, 0 if is_float else 1, &self.ptype, &self.p)
-            if is_float:
-                self._array = numpy.asarray(<double[:n:1]> self.p).reshape(shape)
-            else:
-                self._array = numpy.asarray(<int[:n:1]> self.p).reshape(shape)
+            for i in range(ndim):
+                n *= shape[i]
+                dims[i] = shape[i]
+        if (is_float or dtype == numpy.intc or dtype == int) and n > 0:
+            container = FortranArrayContainer()
+            c_allocate_array(n, 0 if is_float else 1, &container.p, &self.p)
+            self._array = numpy.PyArray_SimpleNewFromData(ndim, dims, numpy.NPY_DOUBLE if is_float else numpy.NPY_INT, self.p)
+            Py_INCREF(container)
+            PyArray_SetBaseObject(self._array, <PyObject*>container)
         else:
             self._array = numpy.empty(shape, dtype=dtype)
         return self._array
-
-    def __dealloc__(self):
-        if self.ptype != NULL:
-            c_deallocate_array(self.ptype)
-        self.ptype = NULL
-        self.p = NULL
 
 cdef class Grid:
     cdef void* p
