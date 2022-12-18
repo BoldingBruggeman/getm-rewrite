@@ -715,8 +715,6 @@ class Momentum(pygetm._pygetm.Momentum):
         # grids later on. This does require that transports are up to date in halos.
         pygetm._pygetm.w_momentum_3d(self.pk, self.qk, timestep, self.ww)
 
-        itimestep = 1.0 / timestep
-
         # Compute 3D velocities (m s-1) from 3D transports (m2 s-1) by dividing by
         # layer heights Both velocities and U/V thicknesses are now at time 1/2
         np.divide(
@@ -751,13 +749,6 @@ class Momentum(pygetm._pygetm.Momentum):
             # compute total bottom stress in Pa for e.g. FABM
             self.taub.all_values[...] = self.ustar_b.all_values ** 2 * RHO0
 
-        # Interpolate 3D velocities to advection grids.
-        # This needs to be done before uk/vk are changed by the advection operator.
-        self.uk.interp(self.uua3d)
-        self.vk.interp(self.uva3d)
-        self.uk.interp(self.vua3d)
-        self.vk.interp(self.vva3d)
-
         # Advect 3D u and v velocity from time=1/2 to 1 1/2 using velocities
         # interpolated to its own advection grids. Store the resulting trend, which
         # will be applied as part of the momentum update in the next timestep.
@@ -765,38 +756,32 @@ class Momentum(pygetm._pygetm.Momentum):
         # depth-integrated momentum equations.
         # JB the alternative would be to interpolate transports and then divide by
         # (colocated) layer heights, like we do for 2D
+        self.advpk.all_values[...] = self.uk.all_values
         self.uadv.apply_3d(
-            self.uua3d,
-            self.uva3d,
+            self.uk.interp(self.uua3d),
+            self.vk.interp(self.uva3d),
             self.ww.interp(self.uk.grid),
             timestep,
-            self.uk,
+            self.advpk,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
-        self.advpk.all_values[...] = (
-            self.uk.all_values * self.uadv.h - self.pk.all_values
-        ) * itimestep
+        pygetm._pygetm.reconstruct_transport_change(
+            self.advpk, self.uadv.h, self.pk, timestep
+        )
+
+        self.advqk.all_values[...] = self.vk.all_values
         self.vadv.apply_3d(
-            self.vua3d,
-            self.vva3d,
+            self.uk.interp(self.vua3d),
+            self.vk.interp(self.vva3d),
             self.ww.interp(self.vk.grid),
             timestep,
-            self.vk,
+            self.advqk,
             new_h=True,
             skip_initial_halo_exchange=True,
         )
-        self.advqk.all_values[...] = (
-            self.vk.all_values * self.vadv.h - self.qk.all_values
-        ) * itimestep
-
-        # Restore velocity at time=1/2
-        # (the final value at the end of the current timestep)
-        np.divide(
-            self.pk.all_values, self.pk.grid.hn.all_values, out=self.uk.all_values
-        )
-        np.divide(
-            self.qk.all_values, self.qk.grid.hn.all_values, out=self.vk.all_values
+        pygetm._pygetm.reconstruct_transport_change(
+            self.advqk, self.vadv.h, self.qk, timestep
         )
 
         if self.diffuse_momentum:
@@ -906,35 +891,27 @@ class Momentum(pygetm._pygetm.Momentum):
                 update_z0b,
             )
 
-        itimestep = 1.0 / timestep
-
         # Advection of u velocity (u1)
         U.interp(self.uua)
         V.interp(self.uva)
         self.uua.all_values /= self.domain.UU.D.all_values
         self.uva.all_values /= self.domain.UV.D.all_values
+        advU.all_values[...] = self.u1.all_values
         self.uadv(
-            self.uua, self.uva, timestep, self.u1, skip_initial_halo_exchange=True,
+            self.uua, self.uva, timestep, advU, skip_initial_halo_exchange=True,
         )
-        advU.all_values[...] = (
-            self.u1.all_values * self.uadv.D - U.all_values
-        ) * itimestep
+        pygetm._pygetm.reconstruct_transport_change(advU, self.uadv.D, U, timestep)
 
         # Advection of v velocity (v1)
         U.interp(self.vua)
         V.interp(self.vva)
         self.vua.all_values /= self.domain.VU.D.all_values
         self.vva.all_values /= self.domain.VV.D.all_values
+        advV.all_values[...] = self.v1.all_values
         self.vadv(
-            self.vua, self.vva, timestep, self.v1, skip_initial_halo_exchange=True,
+            self.vua, self.vva, timestep, advV, skip_initial_halo_exchange=True,
         )
-        advV.all_values[...] = (
-            self.v1.all_values * self.vadv.D - V.all_values
-        ) * itimestep
-
-        # Restore depth-averaged velocities as they need to be valid on exit
-        np.divide(U.all_values, U.grid.D.all_values, out=self.u1.all_values)
-        np.divide(V.all_values, V.grid.D.all_values, out=self.v1.all_values)
+        pygetm._pygetm.reconstruct_transport_change(advV, self.vadv.D, V, timestep)
 
     def bottom_friction(
         self,

@@ -61,6 +61,7 @@ cdef extern void c_shear_frequency(int nx, int ny, int nz, int imin, int imax, i
 cdef extern void c_shear_frequency2(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* h, const double* hu, const double* hv, const double* uk, const double* vk, const double* num, double* SS) nogil
 cdef extern void c_surface_shear_velocity(int nx, int ny, int imin, int imax, int jmin, int jmax, const int* mask, const double* tausx, const double* tausy, double* ustar2_s) nogil
 cdef extern void c_bottom_shear_velocity(int nx, int ny, int imin, int imax, int jmin, int jmax, const int* mask, const int* umask, const int* vmask, const double* uk_bot, const double* vk_bot, const double* rru, const double* rrv, double* taubx, double* tauby, double* ustar2_b) nogil
+cdef extern void c_reconstruct_transport_change(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, double* un, const double* hn, const double* Uo, double timestep)
 cdef extern void c_multiply_add(int n, double* tgt, double* add, double scale_factor) nogil
 cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt) nogil
 cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy) nogil
@@ -151,7 +152,7 @@ cdef class Array:
 
     def allocate(self, shape, dtype):
         cdef int n = 0
-        cdef int ndim = len(shape)
+        cdef int ndim = <int>len(shape)
         cdef bint is_float = dtype == float
         cdef numpy.npy_intp dims[3]
         if ndim > 0:
@@ -532,6 +533,12 @@ def bottom_shear_velocity(Array uk, Array vk, Array rru, Array rrv, Array ustar2
     c_bottom_shear_velocity(grid.nx_, grid.ny_, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny,
         <int*>mask.p, <int*>umask.p, <int*>vmask.p, <double*>uk.p, <double*>vk.p, <double*>rru.p, <double*>rrv.p,
         <double*>ustar2_x.p, <double*>ustar2_y.p, <double*>ustar.p)
+
+def reconstruct_transport_change(Array un, numpy.ndarray hn, Array Uo, double timestep):
+    cdef Grid grid = Uo.grid
+    nz = 1 if Uo.ndim == 2 else grid.nz_
+    c_reconstruct_transport_change(grid.nx_, grid.ny_, nz, grid.domain.halox + 1, grid.domain.halox + grid.nx, grid.domain.haloy + 1, grid.domain.haloy + grid.ny,
+        <double*>un.p, <double*>hn.data, <double*>Uo.p, timestep)
 
 def advance_surface_elevation(double timestep, Array z, Array U, Array V, Array fwf):
     cdef Grid grid = z.grid

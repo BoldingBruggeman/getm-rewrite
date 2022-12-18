@@ -268,7 +268,6 @@ contains
       end do
    end subroutine
 
-
    subroutine c_surface_shear_velocity(nx, ny, imin, imax, jmin, jmax, mask, taux, tauy, ustar) bind(c)
       integer(c_int), value, intent(in) :: nx, ny, imin, imax, jmin, jmax
       integer(c_int), intent(in) :: mask(nx, ny)
@@ -318,6 +317,25 @@ contains
                                ) &
                             )**0.25_c_double
             end if
+         end do
+      end do
+   end subroutine
+
+   subroutine c_reconstruct_transport_change(nx, ny, nz, imin, imax, jmin, jmax, un, hn, Uo, timestep) bind(c)
+      integer(c_int), value, intent(in) :: nx, ny, nz, imin, imax, jmin, jmax
+      real(c_double), intent(inout) :: un(nx,ny,nz)
+      real(c_double), intent(in) :: hn(nx,ny,nz), Uo(nx,ny,nz)
+      real(c_double), intent(in), value :: timestep
+
+      integer :: i, j, k
+      real(c_double) :: idt
+
+      idt = 1.0_c_double / timestep
+      do k = 1, nz
+         do j = jmin, jmax
+            do i = 1, nx
+               un(i,j,k) = (un(i,j,k) * hn(i,j,k) - Uo(i,j,k)) * idt
+            end do
          end do
       end do
    end subroutine
