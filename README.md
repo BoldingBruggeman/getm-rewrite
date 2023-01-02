@@ -87,14 +87,36 @@ In the above, replace `<ENVIRONMENT_YML>` with the name of the environment file 
 
 ## Using the model
 
-You should always activate the correct Python environemnt before you use the model with `conda activate pygetm`.
+You should always activate the correct Python environment before you use the model with `conda activate pygetm`.
 This needs to be done any time you start a new shell.
+
+### Jupyter Notebooks
 
 The best place to start with the model is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
 
 ```
 cd python/examples
 python -m jupyterlab
+```
+
+### Simulations
+
+Some of the original GETM test cases have been ported to pygetm:
+
+* [north_sea](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/north_sea_legacy.py) - including [an extended version](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/north_sea_legacy.py) that shows new pygetm features such as command-line configurability.
+* [box_spherical](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/box_spherical.py)
+* [seamount](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/seamount.py)
+
+To run a simulation:
+
+```
+python <RUNSCRIPT.py> [OPTIONS]
+```
+
+To run in parallel:
+
+```
+mpiexec -n <NCPUS> python <RUNSCRIPT.py> [OPTIONS]
 ```
 
 ## Generating optimal subdomain division
@@ -122,14 +144,6 @@ domain = pygetm.legacy.domain_from_topo(os.path.join(getm_setups_dir, 'NorthSea/
 ```
 
 Note the *tiling*-argument.
-
-## Running the model in parallel
-To run the model in parallel on the command line the _mpiexec_ is used like:
-```bash
-mpixec -np 7 python north_sea.py
-```
-
-Note that the -np 7 argument __must__ match the number of subdomains from the _pygetm-subdiv_ command.
 
 ## Contributing
 
