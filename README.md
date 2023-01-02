@@ -9,7 +9,7 @@ You will need the [Anaconda Python distribution](https://www.anaconda.com/produc
 If that fails, you may need to load an anaconda module first: try `module load anaconda` or `module load anaconda3`. If that still does not give you a working `conda` command,
 you may want to install [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 
-Now make sure your conda environment is initialized:
+Before using conda for the very first time, you will need to initialize its environment:
 
 ```
 conda init bash
@@ -23,7 +23,7 @@ After this, restart your shell by logging out and back in.
 
 ### Installation with conda (currently Linux/Windows only)
 
-To install or update pygetm, execute
+To install or update pygetm:
 
 ```
 conda install pygetm -c bolding-bruggeman -c conda-forge
@@ -46,6 +46,11 @@ source ./install
 ```
 
 If you are using a different shell than bash, you may need to replace `source` in the last line  by `bash`. If you are installing on an HPC system that already has a Fortran compiler and MPI libraries that you would like to use, replace `environment.yml` with `environment-min.yml` in the above.
+
+To customize the build step, you typically edit [the install script](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/install). For instance, you can:
+* Specify a specific Fortran compiler to use by adding `-DCMAKE_Fortran_COMPILER=<EXE>` in the first call to cmake
+* Customize compiler flags by adding `export FFLAGS=<FLAGS>` before the first call to cmake
+* Configure FABM by adding options (e.g., `-DFABM_INSTITUTES`, `-DFABM_<INSTITUTE>_BASE`) to the first call to cmake
 
 #### Windows
 
