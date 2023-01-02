@@ -31,11 +31,11 @@ conda install pygetm -c bolding-bruggeman -c conda-forge
 
 ### Manual build and install
 
-If you need a customized verison of pygetm, for instance, built with specific compiler options, or specific biogeochemical models that are not part of the standard [FABM](https://fabm.net) distribution, you can manually obtian the pygetm source code, build it, and then install it.
+If you need a customized version of pygetm, for instance, built with specific compiler options, or with specific biogeochemical models that are not part of the standard [FABM](https://fabm.net) distribution, you can manually obtain the pygetm source code, build it, and then install it.
 
 #### Linux/Mac
 
-First, obtain the repository with setups and scripts:
+To obtain the repository with setups and scripts, set up your conda environment, and build and install pygetm:
 
 ```
 git clone --recursive https://github.com/BoldingBruggeman/getm-rewrite.git
@@ -53,7 +53,7 @@ As on other platforms, you need [Anaconda](https://www.anaconda.com/products/ind
 
 * [Git for Windows](https://git-scm.com/download/win)
 * [Visual Studio Community 2019](https://my.visualstudio.com/Downloads?q=visual%20studio%202019&wt.mc_id=o~msft~vscom~older-downloads)
-* [Intel Fortran Compiler](https://www.intel.com/content/www/us/en/developer/articles/tool/oneapi-standalone-components.html#fortran) - avoid version 2021.4.0, which does not currently work with cmake
+* [Intel Fortran Compiler](https://www.intel.com/content/www/us/en/developer/articles/tool/oneapi-standalone-components.html#fortran)
 * [Microsoft MPI](https://www.microsoft.com/en-us/download/details.aspx?id=100593) - you need both the runtime library and the Software Development Kit
 
 Now obtain the repository with setups and scripts, set up your conda environment, and build and install pygetm:
