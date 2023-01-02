@@ -1,6 +1,6 @@
 # pygetm
 
-This repository contains a rewrite of the General Estuarine Transport Model (GETM).
+This is a rewrite of the [General Estuarine Transport Model (GETM)](https://getm.eu).
 It is mostly written in Python; only performance-critical sectons of the code are implemented in Fortran.
 
 ## Installing
@@ -90,14 +90,14 @@ source ./install
 
 In the above, replace `<ENVIRONMENT_YML>` with the name of the environment file you used previously: `environment.yml` for stand-alone conda environments, or `environment-min.yml` for a setup that uses the local MPI implementation and Fortran compiler.
 
-## Using the model
+## Using pygetm
 
 You should always activate the correct Python environment before you use the model with `conda activate pygetm`.
 This needs to be done any time you start a new shell.
 
 ### Jupyter Notebooks
 
-The best place to start with the model is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
+The best place to start is the [`python/examples`](https://github.com/BoldingBruggeman/getm-rewrite/tree/devel/python/examples) directory with Jupyter Notebooks that demonstrate the functionality of the model:
 
 ```
 cd python/examples
@@ -108,7 +108,7 @@ python -m jupyterlab
 
 Some of the original GETM test cases have been ported to pygetm:
 
-* [north_sea](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/north_sea_legacy.py) - including [an extended version](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/north_sea_legacy.py) that shows new pygetm features such as command-line configurability.
+* [north_sea](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/north_sea_legacy.py) - including [an extended version](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/north_sea.py) that shows new pygetm features such as command-line configurability.
 * [box_spherical](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/box_spherical.py)
 * [seamount](https://github.com/BoldingBruggeman/getm-rewrite/blob/devel/python/examples/seamount.py)
 
