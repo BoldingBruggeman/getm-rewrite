@@ -8,7 +8,7 @@ import pygetm
 import pygetm.legacy
 
 parser = argparse.ArgumentParser()
-parser.add_argument("setup_dir", help="Path to configuration files", default=".")
+parser.add_argument("setup_dir", help="Path to configuration files (NorthSea directory from https://sourceforge.net/p/getm/getm-setups)", default=".")
 args = parser.parse_args()
 
 domain = pygetm.legacy.domain_from_topo(

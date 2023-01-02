@@ -165,7 +165,10 @@ def run(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "setup_dir", type=pathlib.Path, help="Path to configuration files", default="."
+        "setup_dir",
+        type=pathlib.Path,
+        help="Path to configuration files (NorthSea directory from https://sourceforge.net/p/getm/getm-setups)",
+        default=".",
     )
     parser.add_argument(
         "--start",
