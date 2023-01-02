@@ -1,12 +1,10 @@
-# GETM
+# pygetm
 
-This repository contains a rewrite of the General Estuarine Transport Model (GETM) to modern Fortran.
-
-When the first stable version is released (quite some time away) this will be the official version of GETM.
+This repository contains a rewrite of the General Estuarine Transport Model (GETM).
+It is mostly written in Python Most functionality is written in Python;
+only performance-critical sectons of the code are implemented in Fortran.
 
 ## Installing
-
-### Linux and Mac
 
 You will need the [Anaconda Python distribution](https://www.anaconda.com/products/individual). On many systems that is already installed: try running `conda --version`.
 If that fails, you may need to load an anaconda module first: try `module load anaconda` or `module load anaconda3`. If that still does not give you a working `conda` command,
@@ -24,6 +22,18 @@ If you are using a different shell than bash, replace `bash` with the name of yo
 This needs to be done just once, as it modifies your `.bashrc` that is sourced every time you login.
 After this, restart your shell by logging out and back in.
 
+### Installation with conda (currently Linux/Windows only)
+
+To install or update pygetm, execute
+
+```
+conda install pygetm -c bolding-bruggeman -c conda-forge
+```
+
+### Manual installation
+
+#### Linux/Mac
+
 Now obtain the repository with setups and scripts:
 
 ```
@@ -36,7 +46,7 @@ source ./install
 
 If you are using a different shell than bash, you may need to replace `source` in the last line  by `bash`. If you are installing on an HPC system that already has a Fortran compiler and MPI libraries that you would like to use, replace `environment.yml` with `environment-min.yml` in the above.
 
-### Windows
+#### Windows
 
 As on other platforms, you need [Anaconda](https://www.anaconda.com/products/individual) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html). In addition, you need to ensure that software to obtain and build Fortran code is available. Therefore, install:
 
@@ -64,7 +74,7 @@ cmake --build . --config Release
 cmake --install .
 ```
 
-## Staying up to date
+#### Staying up to date
 
 To update this repository including its submodules (GOTM, FABM, etc.), make sure you are in the getm-rewrite directory and execute:
 
