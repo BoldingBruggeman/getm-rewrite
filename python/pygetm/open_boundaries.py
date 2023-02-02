@@ -79,12 +79,15 @@ class OpenBoundary:
             self.side
         ]
         mslice = slice(self.mstart, self.mstop)
+        ldim = -1 if self.side in (Side.WEST, Side.EAST) else -2
+        lstart = self.l + l_inward * start
+        assert lstart >= 0 and lstart < values.shape[ldim]
         if stop is None:
-            lslice = self.l + l_inward * start
+            lslice = lstart
         else:
-            lslice = slice(
-                self.l + l_inward * start, self.l + l_inward * stop, l_inward
-            )
+            llast = self.l + l_inward * (stop - 1)
+            lstop = None if llast == 0 else llast + l_inward
+            lslice = slice(lstart, lstop, l_inward)
         if self.side in (Side.WEST, Side.EAST):
             return values[Ellipsis, mslice, lslice]
         else:
@@ -145,8 +148,9 @@ class Sponge(BoundaryCondition):
             array.grid.mask.all_values, start=1, stop=self.n + 1
         )
         n = mask.shape[-1]
+        assert self.n == n
 
-        # relaxation coeffiicent as per Martinsen & Engedahl (1987), Eq 3
+        # relaxation coefficient as per Martinsen & Engedahl (1987), Eq 3
         # https://doi.org/10.1016/0378-3839(87)90028-7
         sp = np.empty((boundary.np, n), dtype=float)
         sp[...] = ((self.n - np.arange(n)) / (self.n + 1.0)) ** 2
