@@ -35,7 +35,7 @@ def get(
         return out
 
     postfix = ""
-    if os.path.join(root, "grid_tpxo9_atlas_30_v5.nc"):
+    if os.path.isfile(os.path.join(root, "grid_tpxo9_atlas_30_v5.nc")):
         postfix = "_v5"
 
     if variable in ("hz", "hu", "hv"):
