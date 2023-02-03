@@ -183,7 +183,7 @@ class TwoBand(Radiation):
         Args:
             swr: net downwelling shortwave radiation just below the water surface
                 (i.e., what is left after reflection).
-            kc2_add: additional depth-varying attentuation (m-1) of second waveband,
+            kc2_add: additional depth-varying attenuation (m-1) of second waveband,
                 typically associated with chlorophyll or suspended matter
         """
         if self._first:
