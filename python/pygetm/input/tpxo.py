@@ -26,6 +26,8 @@ def get(
 
     lon = numpy.asarray(lon)
     lat = numpy.asarray(lat)
+    if lon.size == 0:
+        return xarray.DataArray(numpy.empty_like(lon))
 
     def select(ncvar) -> xarray.DataArray:
         out = pygetm.input.limit_region(
