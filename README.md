@@ -1,7 +1,7 @@
 # pygetm
 
 This is a rewrite of the [General Estuarine Transport Model (GETM)](https://getm.eu).
-It is mostly written in Python; only performance-critical sectons of the code are implemented in Fortran.
+It is mostly written in Python; only performance-critical sections of the code are implemented in Fortran.
 
 ## Installing
 
