@@ -3,7 +3,6 @@ from typing import Mapping, Optional, List, Union
 import datetime
 import enum
 
-import numpy as np
 from numpy.typing import DTypeLike
 import cftime
 
@@ -282,7 +281,7 @@ class OutputManager:
         values will be added to the temporal mean. Arguments representing the time
         (``seconds_passed``, ``itimestep``, ``time``) must match those in the
         future, complimentary call to :meth:`save`.
-        
+
         Args:
             seconds_passed: total number of seconds that will have passed at the
                 end of the newly starting time step

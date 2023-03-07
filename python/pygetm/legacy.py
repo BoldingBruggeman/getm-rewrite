@@ -14,7 +14,7 @@ def domain_from_topo(
     joffset: int = 0,
     nx: Optional[int] = None,
     ny: Optional[int] = None,
-    **kwargs
+    **kwargs,
 ) -> pygetm.domain.Domain:
     """Create a domain object from a topo.nc file used by legacy GETM.
 
@@ -94,7 +94,7 @@ def domain_from_topo(
                 H=np.ma.filled(H),
                 spherical=True,
                 mask=np.where(np.ma.getmaskarray(H), 0, 1),
-                **kwargs
+                **kwargs,
             )
         elif grid_type == 3:
             # planar curvilinear
@@ -107,7 +107,7 @@ def domain_from_topo(
                 "No support yet for spherical curvilinear coordinates"
             )
         else:
-            raise NotImplementedError("Unknown grid_type %i found" % grid_type)
+            raise NotImplementedError(f"Unknown grid_type {grid_type} found")
     return domain
 
 
@@ -124,9 +124,9 @@ class DatFile:
         line = None
         while not line:
             line = self.f.readline()
-            assert line != "", (
-                "End-of-file reached in %s while trying to read next line." % self.path
-            )
+            assert (
+                line != ""
+            ), f"End-of-file reached in {self.path} while trying to read next line."
             line = line.split("#", 1)[0].split("!", 1)[0].strip()
         return line
 
@@ -220,7 +220,7 @@ def load_riverinfo(domain: pygetm.domain.Domain, path: str):
             if name2split[name] > 1:
                 # This river is split over multiple cells; append an index to its name
                 imouth = name2count.get(name, 0)
-                mouth_name = "%s[%i]" % (name, imouth)
+                mouth_name = f"{name}[{imouth}]"
                 name2count[name] = imouth + 1
 
             # Note: we convert from 1-based indices to 0-based indices!

@@ -66,7 +66,7 @@ class Momentum(pygetm._pygetm.Momentum):
         "SxF",
         "SyF",
     )
-    _all_fortran_arrays = tuple(["_%s" % name for name in _arrays]) + (
+    _all_fortran_arrays = tuple([f"_{name}" for name in _arrays]) + (
         "uadv",
         "vadv",
         "uua",
@@ -267,7 +267,7 @@ class Momentum(pygetm._pygetm.Momentum):
             kwargs.update(self._array_args.get(name, {}))
             setattr(
                 self,
-                "_%s" % name,
+                f"_{name}",
                 self.wrap(core.Array(name=name, **kwargs), name.encode("ascii"),),
             )
 
@@ -280,7 +280,7 @@ class Momentum(pygetm._pygetm.Momentum):
         if not self.apply_bottom_friction:
             self.logger.warning(
                 "Disabling bottom friction because bottom roughness is 0 in"
-                " %i of %i unmasked supergrid cells." % ((z0b == 0.0).sum(), z0b.size)
+                f" {(z0b == 0.0).sum()} of {z0b.size} unmasked supergrid cells."
             )
 
         self.diffuse_momentum = self._Am_const > 0.0
@@ -347,7 +347,7 @@ class Momentum(pygetm._pygetm.Momentum):
 
         if self.advection_scheme is None:
             self.advection_scheme = default_advection_scheme
-        self.logger.info("Advection scheme: %s" % self.advection_scheme.name)
+        self.logger.info(f"Advection scheme: {self.advection_scheme.name}")
         self.uadv = operators.Advection(
             domain.U, scheme=self.advection_scheme, split_2d=self.advection_split_2d
         )
@@ -355,8 +355,8 @@ class Momentum(pygetm._pygetm.Momentum):
             domain.V, scheme=self.advection_scheme, split_2d=self.advection_split_2d
         )
 
-        self.logger.info("Crank-Nicolson parameter: %s" % self.cnpar)
-        self.logger.info("Coriolis interpolation: %s" % self.coriolis_scheme.name)
+        self.logger.info(f"Crank-Nicolson parameter: {self.cnpar}")
+        self.logger.info(f"Coriolis interpolation: {self.coriolis_scheme.name}")
 
         self.uua = domain.UU.array(fill=np.nan)
         self.uva = domain.UV.array(fill=np.nan)
@@ -462,7 +462,7 @@ class Momentum(pygetm._pygetm.Momentum):
         else:
             self.logger.info(
                 "Horizontal diffusivity An used for numerical damping ranges between"
-                " %s and %s m2 s-1" % (self.An.ma.min(), self.An.ma.max())
+                f" {self.An.ma.min()} and {self.An.ma.max()} m2 s-1"
             )
             self.An_uu = self.domain.UU.array(fill=np.nan)
             self.An_uv = self.domain.UV.array(fill=np.nan)
@@ -1031,6 +1031,6 @@ for membername in Momentum._all_fortran_arrays:
     if long_name is not None:
         doc = long_name
         if units:
-            doc += " (%s)" % units
+            doc += f" ({units})"
     prop = property(operator.attrgetter(membername), doc=doc)
     setattr(Momentum, membername[1:], prop)

@@ -61,7 +61,7 @@ class GOTM(Turbulence):
     def __init__(self, path: Optional[str] = None):
         super().__init__()
         if path and not os.path.isfile(path):
-            raise Exception("Configuration file %s does not exist" % path)
+            raise Exception(f"Configuration file {path} does not exist")
         self.path = path
 
     def initialize(self, grid: domain.Grid):

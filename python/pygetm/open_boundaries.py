@@ -316,7 +316,7 @@ class ArrayOpenBoundaries:
     def __init__(self, array: core.Array, type=None):
         self._array = array
         self.values = array.grid.array(
-            name="%s_bdy" % array.name,
+            name=f"{array.name}_bdy",
             z=array.z,
             on_boundary=True,
             fill_value=array.fill_value,
@@ -508,14 +508,9 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                     bdy_mask = tmask[boundary.slice_t]
                     if (bdy_mask == 0).any():
                         self.domain.logger.error(
-                            "Open boundary %s: %i of %i points of this %sern boundary"
-                            " are on land"
-                            % (
-                                boundary.name,
-                                (bdy_mask == 0).sum(),
-                                boundary.np,
-                                side.name.capitalize(),
-                            )
+                            f"Open boundary {boundary.name}: {(bdy_mask == 0).sum()} of"
+                            f" {boundary.np} points of this {side.name.capitalize()}ern"
+                            " boundary are on land"
                         )
                         raise Exception()
 
@@ -624,14 +619,9 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         self.i_glob = self.i - self.domain.halox + self.domain.tiling.xoffset
         self.j_glob = self.j - self.domain.haloy + self.domain.tiling.yoffset
         self.domain.logger.info(
-            "%i open boundaries (%i West, %i North, %i East, %i South)"
-            % (
-                sum(side2count.values()),
-                side2count[Side.WEST],
-                side2count[Side.NORTH],
-                side2count[Side.EAST],
-                side2count[Side.SOUTH],
-            )
+            f"{sum(side2count.values())} open boundaries"
+            f" ({side2count[Side.WEST]} West, {side2count[Side.NORTH]} North,"
+            f" {side2count[Side.EAST]} East, {side2count[Side.SOUTH]} South)"
         )
         if self.np > 0:
             if self.np == self.np_glob:
@@ -643,7 +633,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                 self.local_to_global = None
             else:
                 self.domain.logger.info(
-                    "global-to-local open boundary map: %s" % (self.local_to_global,)
+                    f"global-to-local open boundary map: {self.local_to_global}"
                 )
 
         # Coordinates of open boundary points
