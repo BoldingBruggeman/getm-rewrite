@@ -150,7 +150,7 @@ class FieldCollection:
         time_average: bool = False,
         grid: Optional[pygetm.domain.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
-        generate_unique_name: bool = False
+        generate_unique_name: bool = False,
     ) -> Tuple[str, ...]:
         """Add one or more arrays to this field collection.
 
@@ -188,22 +188,22 @@ class FieldCollection:
             if isinstance(field, str):
                 if field not in self.available_fields:
                     raise Exception(
-                        'Unknown field "%s" requested. Available: %s'
-                        % (field, ", ".join(self.available_fields))
+                        f"Unknown field {field!r} requested."
+                        f" Available: {', '.join(self.available_fields)}"
                     )
                 arrays.append(self.available_fields[field])
             elif isinstance(field, pygetm.core.Array):
                 arrays.append(field)
             else:
                 raise Exception(
-                    "Incorrect field specification %r."
-                    "Expected a string or an object of type pygetm.core.Array." % field
+                    f"Incorrect field specification {field!r}."
+                    " Expected a string or an object of type pygetm.core.Array."
                 )
 
         if len(arrays) > 1 and output_name is not None:
             raise Exception(
-                "Trying to add multiple fields to %r."
-                "In that case, output_name cannot be specified." % (self,)
+                f"Trying to add multiple fields to {self!r}."
+                " In this case, output_name cannot be specified."
             )
 
         names = []
@@ -212,8 +212,8 @@ class FieldCollection:
             if name is None:
                 if array.name is None:
                     raise Exception(
-                        "Trying to add an unnamed variable to %s."
-                        "In this case, output_name must be provided" % self
+                        f"Trying to add an unnamed variable to {self!r}."
+                        " In this case, output_name must be provided"
                     )
                 name = array.name
 
@@ -248,11 +248,11 @@ class FieldCollection:
         if generate_unique_name:
             i = 0
             while final_name in self.fields:
-                final_name = "%s_%i" % (name, i)
+                final_name = f"{name}_{i}"
                 i += 1
         elif final_name in self.fields:
             raise Exception(
-                'A variable with name "%s" has already been added to %s.' % (name, self)
+                f"A variable with name {name!r} has already been added to {self!r}."
             )
         if field.updatable:
             triggering_macro_values = [True]
@@ -282,7 +282,7 @@ class FieldCollection:
 
 
 def grid2dims(grid: pygetm.domain.Grid, z) -> Tuple[str, ...]:
-    dims = ("y%s" % grid.postfix, "x%s" % grid.postfix)
+    dims = (f"y{grid.postfix}", f"x{grid.postfix}")
     if z:
         dims = ("zi" if z == INTERFACES else "z",) + dims
     return dims
@@ -360,7 +360,7 @@ class UnivariateTransform(Base):
         if shape is None:
             shape = source.shape
         super().__init__(
-            expression or "%s(%s)" % (self.__class__.__name__, source.expression),
+            expression or f"{self.__class__.__name__}({source.expression})",
             shape,
             dims or source.dims,
             dtype or source.dtype,
@@ -559,7 +559,7 @@ class Regrid(UnivariateTransformWithData):
             assert z is None
             self.interpolate = source.grid.interpolator(grid)
             shape = source.shape[:-2] + (grid.ny_, grid.nx_)
-            args = ", grid=%s" % (grid.postfix,)
+            args = f", grid={grid.postfix}"
             if source.ndim > 2:
                 z = CENTERS if source.shape[0] == grid.nz else INTERFACES
         else:
@@ -576,7 +576,7 @@ class Regrid(UnivariateTransformWithData):
                 args = ", z=interfaces"
         self._slice = (np.newaxis, Ellipsis) if source.ndim < 3 else (Ellipsis,)
         dims = grid2dims(grid, z)
-        expression = "%s(%s%s)" % (self.__class__.__name__, source.expression, args)
+        expression = f"{self.__class__.__name__}({source.expression}{args})"
         self._grid = grid
         self._z = z
         super().__init__(source, shape=shape, dims=dims, expression=expression)
@@ -612,11 +612,7 @@ class InterpZ(UnivariateTransformWithData):
         shape = (self.z_tgt.size,) + source.shape[-2:]
         dims = (dim,) + source.dims[1:]
         self.z_dim = dim
-        expression = "%s(%s, z=%s)" % (
-            self.__class__.__name__,
-            source.expression,
-            self.z_tgt,
-        )
+        expression = f"{self.__class__.__name__}({source.expression}, z={self.z_tgt})"
         at_centers = source.shape[0] == source.grid.nz
         self.z_src = (source.grid.zc if at_centers else source.grid.zf).all_values
         super().__init__(source, shape=shape, dims=dims, expression=expression)

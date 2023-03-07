@@ -43,7 +43,7 @@ class NetCDFFile(File):
         super().__init__(available_fields, logger, path=path, **kwargs)
         name, ext = os.path.splitext(path)
         if self.sub:
-            name += "_%05i" % rank
+            name += f"_{rank:05}"
         self.path = name + ext
         self.nc = None
         self.itime = 0
@@ -56,7 +56,7 @@ class NetCDFFile(File):
         self._varying_fields = []
 
     def __repr__(self) -> str:
-        return "%s(%r)" % (self.__class__.__name__, self.path)
+        return f"{self.__class__.__name__}({self.path!r})"
 
     def start_now(
         self,
@@ -67,24 +67,22 @@ class NetCDFFile(File):
         if self.is_root or self.sub:
             # Create the NetCDF file
             self.nc = netCDF4.Dataset(self.path, "w", format=self.format)
-            self.nc.history = "created by pygetm %s" % pygetm._pygetm.get_version()
+            self.nc.history = f"created by pygetm {pygetm._pygetm.get_version()}"
             for field in self.fields.values():
                 for dim, length in zip(field.dims, field.shape):
                     if dim not in self.nc.dimensions:
                         self.nc.createDimension(dim, length)
                     elif length != self.nc.dimensions[dim].size:
                         raise Exception(
-                            "Existing dimension %s has incompatible length %i (need %i)"
-                            % (dim, self.nc.dimensions[dim].size, length)
+                            f"Existing dimension {dim} has incompatible length"
+                            f" {self.nc.dimensions[dim].size} (need {length})"
                         )
             self.nc.createDimension("time",)
             self.nctime = self.nc.createVariable("time", float, ("time",))
             self.nctime.axis = "T"
             if time is not None:
                 time_reference = self.time_reference or default_time_reference
-                self.nctime.units = "seconds since %s" % time_reference.strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                self.nctime.units = f"seconds since {time_reference:%Y-%m-%d %H:%M:%S}"
                 self.nctime.calendar = time.calendar
                 self.time_offset = (
                     time - time_reference

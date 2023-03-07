@@ -18,19 +18,15 @@ class Linear2DGridInterpolator:
         yp = np.array(yp)
         x = np.array(x)
         y = np.array(y)
-        assert xp.ndim == 1, "source x coordinate must be 1D but has shape %s" % (
-            xp.shape,
-        )
-        assert yp.ndim == 1, "source y coordinate must be 1D but has shape %s" % (
-            yp.shape,
-        )
+        assert xp.ndim == 1, f"source x coordinate must be 1D but has shape {xp.shape}"
+        assert yp.ndim == 1, f"source y coordinate must be 1D but has shape {yp.shape}"
         self.nxp, self.nyp = xp.size, yp.size
         assert (
             self.nxp > 1
-        ), "source x coordinate must have length > 1, but has length %i" % (self.nxp,)
+        ), f"source x coordinate must have length > 1, but has length {self.nxp}"
         assert (
             self.nyp > 1
-        ), "source y coordinate must have length > 1, but has length %i" % (self.nyp,)
+        ), f"source y coordinate must have length > 1, but has length {self.nyp}"
         x, y = np.broadcast_arrays(x, y)
         dxp = np.diff(xp)
         dyp = np.diff(yp)
@@ -47,12 +43,12 @@ class Linear2DGridInterpolator:
             # reversed source y
             yp = yp[::-1]
         assert (x >= xp[0]).all() and (x <= xp[-1]).all(), (
-            "One or more target x coordinates (%s - %s) fall outside of source range (%s - %s)"
-            % (x.min(), x.max(), xp[0], xp[-1])
+            f"One or more target x coordinates ({x.min()} - {x.max()})"
+            f" fall outside of source range ({xp[0]} - {xp[-1]})"
         )
         assert (y >= yp[0]).all() and (y <= yp[-1]).all(), (
-            "One or more target y coordinates (%s - %s) fall outside of source range (%s - %s)"
-            % (y.min(), y.max(), yp[0], yp[-1])
+            f"One or more target y coordinates ({y.min()} - {y.max()})"
+            f" fall outside of source range ({yp[0]} - {yp[-1]})"
         )
         ix_right = np.minimum(xp.searchsorted(x, side="right"), xp.size - 1)
         ix_left = ix_right - 1
@@ -166,16 +162,16 @@ def interp_1d(x, xp, fp, axis: int = 0):
     xp = np.asarray(xp)
     fp = np.ma.filled(fp, np.nan)
     assert fp.ndim == x.ndim, (
-        "Number of dimensions %i of source values does not match %i"
-        " of target coordinate." % (fp.ndim, x.ndim)
+        f"Number of dimensions {fp.ndim} of source values"
+        f" does not match {x.ndim} of target coordinate."
     )
-    assert xp.ndim == 1, "Source coordinate must be 1D but has shape %s." % (xp.shape,)
+    assert xp.ndim == 1, f"Source coordinate must be 1D but has shape {xp.shape}."
     assert (
         fp.shape[:axis] == x.shape[:axis]
         and fp.shape[axis + 1 :] == x.shape[axis + 1 :]
     ), (
-        "Shapes of source values %s and target coordinate %s should match everywhere"
-        " except the depth dimension (%i)" % (fp.shape, x.shape, axis)
+        f"Shapes of source values {fp.shape} and target coordinate {x.shape}"
+        f" should match everywhere except at the interpolated dimension ({axis})"
     )
     assert fp.shape[axis] == xp.shape[0]
 

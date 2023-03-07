@@ -128,8 +128,8 @@ class TracerCollection(Sequence[Tracer]):
         cnpar: float = 1.0,
     ):
         self.logger = grid.domain.root_logger.getChild("tracers")
-        self.logger.info("Advection scheme: %s" % advection_scheme.name)
-        self.logger.info("Crank-Nicolson parameter: %s" % cnpar)
+        self.logger.info(f"Advection scheme: {advection_scheme.name}")
+        self.logger.info(f"Crank-Nicolson parameter: {cnpar}")
 
         self.grid: domain.Grid = grid
         self._tracers: List[Tracer] = []
@@ -157,8 +157,8 @@ class TracerCollection(Sequence[Tracer]):
             )
         else:
             self.logger.info(
-                "Horizontal diffusivity Ah ranges between %s and %s m2 s-1"
-                % (self.Ah.ma.min(), self.Ah.ma.max())
+                f"Horizontal diffusivity Ah ranges between {self.Ah.ma.min()}"
+                f" and {self.Ah.ma.max()} m2 s-1"
             )
             self.Ah_u = self.grid.ugrid.array(fill=np.nan)
             self.Ah_v = self.grid.vgrid.array(fill=np.nan)
@@ -259,4 +259,3 @@ class TracerCollection(Sequence[Tracer]):
                 avmol = tracer.molecular_diffusivity
                 self._vertical_diffusion.prepare(diffusivity, timestep, avmol)
             self._vertical_diffusion.apply(tracer, ea4=source)
-

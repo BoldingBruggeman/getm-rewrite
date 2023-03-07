@@ -107,8 +107,8 @@ class File(operators.FieldCollection):
             and time is None
         ):
             raise Exception(
-                "For %s to be used, OutputManager.start should be called with"
-                " an actual cftime.datetime object." % self.interval_units
+                f"For {self.interval_units} to be used, OutputManager.start should be"
+                " called with an actual cftime.datetime object."
             )
         self.start_now(seconds_passed, time, default_time_reference)
         if self.save_initial:
