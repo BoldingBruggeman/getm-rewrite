@@ -1,6 +1,8 @@
 from typing import Optional, Mapping
 import os.path
 import logging
+import datetime
+import sys
 
 import cftime
 import netCDF4
@@ -67,7 +69,10 @@ class NetCDFFile(File):
         if self.is_root or self.sub:
             # Create the NetCDF file
             self.nc = netCDF4.Dataset(self.path, "w", format=self.format)
-            self.nc.history = f"created by pygetm {pygetm._pygetm.get_version()}"
+            now = datetime.datetime.now()
+            cmdline = " ".join(sys.argv)
+            self.nc.history = f"{now:%Y-%m-%d %H:%M:%S} {cmdline}"
+            self.nc.source = f"pygetm {pygetm._pygetm.get_version()}"
             for field in self.fields.values():
                 for dim, length in zip(field.dims, field.shape):
                     if dim not in self.nc.dimensions:
