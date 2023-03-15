@@ -9,6 +9,7 @@ import hashlib
 import numpy as np
 import pygetm
 import pygetm.parallel
+import pygetm.util.compare_nc
 
 
 def calculate_md5(path: str) -> str:
@@ -43,11 +44,14 @@ class TestParallelAdvection(unittest.TestCase):
                     kwargs["output"] = "par_adv_%ix%i.nc" % (nrow, ncol)
                     self._test(tiling, scheme=scheme, **kwargs)
                     if tiling.rank == 0:
-                        md5 = calculate_md5(kwargs["output"])
                         if ref_output is None:
-                            ref_output = md5
+                            ref_output = kwargs["output"]
                         else:
-                            self.assertEqual(ref_output, md5)
+                            self.assertTrue(
+                                pygetm.util.compare_nc.compare(
+                                    ref_output, kwargs["output"]
+                                )
+                            )
 
     def _test(
         self,
