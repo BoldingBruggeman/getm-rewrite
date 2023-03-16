@@ -199,7 +199,7 @@ class Grid(_pygetm.Grid):
 
     def initialize(self, nbdyp: int):
         for name in self._fortran_arrays:
-            if not hasattr(self, "_%s" % name):
+            if not hasattr(self, f"_{name}"):
                 self._setup_array(name)
         self.rotation = core.Array.create(
             grid=self,
@@ -242,7 +242,7 @@ class Grid(_pygetm.Grid):
             kwargs = dict(fill_value=FILL_VALUE)
             kwargs.update(self._array_args[name])
             array = core.Array(name=name + self.postfix, **kwargs)
-            setattr(self, "_%s" % name, self.wrap(array, name.encode("ascii")))
+            setattr(self, f"_{name}", self.wrap(array, name.encode("ascii")))
 
         # Obtain corresponding array on the supergrid.
         # If this does not exist, we are done
@@ -272,10 +272,10 @@ class Grid(_pygetm.Grid):
             # that point to the supergrid data; they thus do not consume additional
             # memory.
             values_i = source[self.joffset - 1 : jmax : 2, self.ioffset - 1 : imax : 2]
-            setattr(self, "_%si_" % name, values_i)
+            setattr(self, f"_{name}i_", values_i)
             setattr(
                 self,
-                "_%si" % name,
+                f"_{name}i",
                 values_i[self.halo : -self.halo, self.halo : -self.halo],
             )
 
@@ -312,8 +312,8 @@ class Grid(_pygetm.Grid):
             ip = functools.partial(_pygetm.interp_xy, ioffset=1, joffset=0)
         else:
             raise NotImplementedError(
-                "Cannot interpolate from grid type %s to grid type %s"
-                % (self.postfix, target.postfix)
+                f"Cannot interpolate from grid type {self.postfix} "
+                f"to grid type {target.postfix}"
             )
         self._interpolators[target] = ip
         return ip
@@ -821,16 +821,16 @@ def create_spherical_at_resolution(
         nz: number of vertical layers
         **kwargs: additional arguments passed to :func:`create`
     """
-    assert maxlon > minlon, (
-        "Maximum longitude %s must be greater than minimum longitude %s"
-        % (maxlon, minlon)
-    )
-    assert (
-        maxlat > minlat
-    ), "Maximum latitude %s must be greater than minimum latitude %s" % (maxlat, minlat)
-    assert resolution > 0, "Desired resolution must be greater than 0, but is %s m" % (
-        resolution,
-    )
+    if maxlon <= minlon:
+        raise Exception(
+            f"Maximum longitude {maxlon} must exceed minimum longitude {minlon}"
+        )
+    if maxlat <= minlat:
+        raise Exception(
+            f"Maximum latitude {maxlat} must exceed minimum latitude {minlat}"
+        )
+    if resolution <= 0.0:
+        raise Exception(f"Desired resolution must exceed 0, but is {resolution} m")
     dlat = resolution / (DEG2RAD * R_EARTH)
     minabslat = min(abs(minlat), abs(maxlat))
     dlon = resolution / (DEG2RAD * R_EARTH) / np.cos(DEG2RAD * minabslat)
@@ -921,8 +921,8 @@ def create(
         # Path to dumped Tiling object provided
         if not os.path.isfile(tiling):
             logger.critical(
-                "Cannot find file %s. If tiling is a string, it must be the path to"
-                " an existing file with a pickled tiling object." % tiling
+                f"Cannot find file {tiling!r}. If tiling is a string, it must be the "
+                "path to an existing file with a pickled tiling object."
             )
             raise Exception()
         tiling = parallel.Tiling.load(tiling)
@@ -1023,14 +1023,16 @@ class Domain(_pygetm.Domain):
         logger: Optional[logging.Logger] = None,
         **kwargs,
     ):
-        assert nx == tiling.nx_glob and ny == tiling.ny_glob, (
-            "Extent of global domain (%i, %i) does not match that of tiling (%i, %i)."
-            % (ny, nx, tiling.ny_glob, tiling.nx_glob)
-        )
-        assert tiling.n == tiling.comm.Get_size(), (
-            "Number of active cores in subdomain decompositon (%i) does not match "
-            "available number of cores (%i)." % (tiling.n, tiling.comm.Get_size())
-        )
+        if nx != tiling.nx_glob or ny != tiling.ny_glob:
+            raise Exception(
+                f"Extent of global domain ({ny}, {nx}) does not match "
+                f"that of tiling ({tiling.ny_glob}, {tiling.nx_glob})."
+            )
+        if tiling.n > tiling.comm.Get_size():
+            raise Exception(
+                f"Number of active cores in subdomain decompositon ({tiling.n}) "
+                f"exceeds available number of cores ({tiling.comm.Get_size()})."
+            )
 
         # supergrid metrics: double extent/halos, one point overlap between subdomains
         SCALE = 2
@@ -1068,7 +1070,7 @@ class Domain(_pygetm.Domain):
             )
             assert not np.isnan(
                 c[local_slice]
-            ).any(), "Subdomain %s contains NaN after initial scatter"
+            ).any(), f"Subdomain {tiling.rank} contains NaN after initial scatter"
             kwargs[name] = c
 
         domain = Domain(
@@ -1097,10 +1099,9 @@ class Domain(_pygetm.Domain):
             1 + 2 * (self.ny + 2 * self.haloy),
             1 + 2 * (self.nx + 2 * self.halox),
         )
-        assert data.shape == expected_shape, "Wrong shape: got %s, expected %s." % (
-            data.shape,
-            expected_shape,
-        )
+        assert (
+            data.shape == expected_shape
+        ), f"Wrong shape: got {data.shape}, expected {expected_shape}."
 
         HALO = 4  # supergrid
         fill_value = 0 if np.issubdtype(data.dtype, np.integer) else FILL_VALUE
@@ -1302,11 +1303,11 @@ class Domain(_pygetm.Domain):
                 :class:`pygetm.parallel.Tiling`
         """
         if nx <= 0:
-            raise Exception("Number of x points is %i but must be > 0" % nx)
+            raise Exception(f"Number of x points is {nx} but must be > 0")
         if ny <= 0:
-            raise Exception("Number of y points is %i but must be > 0" % ny)
+            raise Exception(f"Number of y points is {ny} but must be > 0")
         if nz <= 0:
-            raise Exception("Number of z points is %i but must be > 0" % nz)
+            raise Exception(f"Number of z points is {nz} but must be > 0")
         if lat is None and f is None:
             raise Exception(
                 "Either lat of f must be provided to determine the Coriolis parameter."
@@ -1328,7 +1329,7 @@ class Domain(_pygetm.Domain):
         #: global model domain, set on root (rank=0) only
         self.glob: Optional["Domain"] = self
 
-        self.logger.info("Domain size (T grid): %i x %i (%i cells)" % (nx, ny, nx * ny))
+        self.logger.info(f"Domain size (T grid): {nx} x {ny} ({nx * ny} cells)")
 
         self.imin, self.imax = 1, nx
         self.jmin, self.jmax = 1, ny
@@ -1348,7 +1349,7 @@ class Domain(_pygetm.Domain):
         if tiling is None:
             tiling = parallel.Tiling(**kwargs)
         elif kwargs:
-            raise Exception("Encountered unexpected arguments: %s" % ", ".join(kwargs))
+            raise Exception(f"Encountered unexpected arguments: {', '.join(kwargs)}")
         self.tiling = tiling
 
         def setup_metric(
@@ -1533,8 +1534,8 @@ class Domain(_pygetm.Domain):
         if log:
             j, i = np.unravel_index(np.argmin(maxdts), maxdts.shape)
             self.logger.info(
-                "Maximum dt = %.3f s (i=%i, j=%i, bathymetric depth=%.3f m)"
-                % (maxdt, i, j, H[j, i])
+                f"Maximum dt = {maxdt:.3f} s "
+                f"(i={i}, j={j}, bathymetric depth={H[j, i]:.3f} m)"
             )
         return maxdt
 
