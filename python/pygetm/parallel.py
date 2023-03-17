@@ -45,7 +45,7 @@ class Tiling:
         ncpus: Optional[int] = None,
         logger: Optional[logging.Logger] = None,
         max_protrude: float = 0.5,
-        **kwargs
+        **kwargs,
     ) -> "Tiling":
         """Auto-detect the optimal subdomain division and return it as :class:`Tiling` object
 
@@ -121,8 +121,8 @@ class Tiling:
     ):
         if nrow is None or ncol is None:
             assert map is not None, (
-                "If the number of rows and column in the subdomain decomposition is not"
-                "provided, the rank map must be provided instead."
+                "If the number of rows and columns in the subdomain decomposition is"
+                " not provided, the rank map must be provided instead."
             )
             self.map = map
         else:
@@ -131,7 +131,11 @@ class Tiling:
 
         self.n_neigbors = 0
 
-        def find_neighbor(i: int, j: int) -> int:
+        def find_neighbor(ioffset: int, joffset: int) -> int:
+            if self.irow is None:
+                return -1
+            i = self.irow + ioffset
+            j = self.icol + joffset
             if periodic_x:
                 j = j % self.ncol
             if periodic_y:
@@ -144,11 +148,11 @@ class Tiling:
         self.comm = comm
         self.rank: int = self.comm.rank
         self.n = ncpus if ncpus is not None else self.comm.size
-        nactive = (self.map[:, :] != -1).sum()
-        assert nactive == self.n, (
-            "number of active subdomains (%i) does not match group size of MPI"
-            "communicator (%i). Map: %s"
-        ) % (nactive, self.n, self.map)
+        if self.nactive != self.n:
+            raise Exception(
+                f"number of active subdomains ({self.nactive}) does not match assigned"
+                f" number of cores ({self.n}). Map: {self.map}"
+            )
 
         self.periodic_x = periodic_x
         self.periodic_y = periodic_y
@@ -157,18 +161,24 @@ class Tiling:
         for self.irow, self.icol, r in _iterate_rankmap(self.map):
             if r == self.rank:
                 break
+        else:
+            self.irow, self.icol = None, None
 
-        self.top = find_neighbor(self.irow + 1, self.icol)
-        self.bottom = find_neighbor(self.irow - 1, self.icol)
-        self.left = find_neighbor(self.irow, self.icol - 1)
-        self.right = find_neighbor(self.irow, self.icol + 1)
-        self.topleft = find_neighbor(self.irow + 1, self.icol - 1)
-        self.topright = find_neighbor(self.irow + 1, self.icol + 1)
-        self.bottomleft = find_neighbor(self.irow - 1, self.icol - 1)
-        self.bottomright = find_neighbor(self.irow - 1, self.icol + 1)
+        self.top = find_neighbor(+1, 0)
+        self.bottom = find_neighbor(-1, 0)
+        self.left = find_neighbor(0, -1)
+        self.right = find_neighbor(0, +1)
+        self.topleft = find_neighbor(+1, -1)
+        self.topright = find_neighbor(+1, +1)
+        self.bottomleft = find_neighbor(-1, -1)
+        self.bottomright = find_neighbor(-1, +1)
 
         self._caches = {}
         self.nx_glob = None
+
+    @property
+    def nactive(self) -> int:
+        return (self.map[:, :] != -1).sum()
 
     def dump(self, path: str):
         """Save all information about the subdomain division to a pickle file
@@ -230,8 +240,13 @@ class Tiling:
         self.nx_sub, self.ny_sub = nx_sub, ny_sub
         self.xoffset_global = xoffset_global
         self.yoffset_global = yoffset_global
-        self.xoffset = self.icol * self.nx_sub + self.xoffset_global
-        self.yoffset = self.irow * self.ny_sub + self.yoffset_global
+        if self.irow is not None:
+            self.xoffset = self.icol * self.nx_sub + self.xoffset_global
+            self.yoffset = self.irow * self.ny_sub + self.yoffset_global
+        else:
+            # this is a dummy process outside the computation domain
+            self.xoffset = -self.nx_sub
+            self.yoffset = -self.ny_sub
 
     def report(self, logger: logging.Logger):
         """Write information about the subdomain decompostion to the log.
@@ -239,26 +254,17 @@ class Tiling:
         """
         if self.nrow > 1 or self.ncol > 1:
             logger.info(
-                "Using subdomain decomposition %i x %i (%i active nodes)"
-                % (self.nrow, self.ncol, (self.map[:, :] != -1).sum())
+                f"Using subdomain decomposition {self.nrow} x {self.ncol}"
+                f" ({self.nactive} active nodes)"
             )
             logger.info(
-                (
-                    "Global domain shape %i x %i, subdomain shape %i x %i, "
-                    "global offsets x=%i, y=%i"
-                )
-                % (
-                    self.nx_glob,
-                    self.ny_glob,
-                    self.nx_sub,
-                    self.ny_sub,
-                    self.xoffset_global,
-                    self.yoffset_global,
-                )
+                f"Global domain shape {self.nx_glob} x {self.ny_glob},"
+                f" subdomain shape {self.nx_sub} x {self.ny_sub},"
+                f" global offsets x={self.xoffset_global}, y={self.yoffset_global}"
             )
             logger.info(
-                "I am rank %i at subdomain row %i, column %i, with offset x=%i, y=%i"
-                % (self.rank, self.irow, self.icol, self.xoffset, self.yoffset)
+                f"I am rank {self.rank} at subdomain row {self.irow}, "
+                f" column {self.icol}, with offset x={self.xoffset}, y={self.yoffset}"
             )
 
     def __bool__(self) -> bool:
@@ -314,6 +320,21 @@ class Tiling:
         assert isinstance(scale, int)
         assert isinstance(halo_sub, int)
         assert isinstance(halo_glob, int)
+
+        # Shapes of local and global arrays (including halos and inactive strips)
+        local_shape = (
+            scale * self.ny_sub + 2 * halo_sub + share,
+            scale * self.nx_sub + 2 * halo_sub + share,
+        )
+        global_shape = (
+            scale * self.ny_glob + 2 * halo_glob + share,
+            scale * self.nx_glob + 2 * halo_glob + share,
+        )
+
+        if irow is None:
+            local_slice = global_slice = (Ellipsis, slice(0, 0), slice(0, 0))
+            return local_slice, global_slice, local_shape, global_shape
+
         assert self.map[irow, icol] >= 0
 
         # Global start and stop of local subdomain (no halos yet)
@@ -333,16 +354,6 @@ class Tiling:
         xstop_loc = xstop_glob - xstart_glob
         ystart_loc = 0
         ystop_loc = ystop_glob - ystart_glob
-
-        # Shapes of local and global arrays (including halos and inactive strips)
-        local_shape = (
-            scale * self.ny_sub + 2 * halo_sub + share,
-            scale * self.nx_sub + 2 * halo_sub + share,
-        )
-        global_shape = (
-            scale * self.ny_glob + 2 * halo_glob + share,
-            scale * self.nx_glob + 2 * halo_glob + share,
-        )
 
         # Calculate offsets based on limits of the global domain
         extra_offset = halo_sub if exclude_halos else 0
@@ -697,7 +708,7 @@ class Gather:
         self.dtype = dtype
         if tiling.rank == self.root:
             self.buffers = []
-            self.recvbuf = tiling._get_work_array((tiling.n,) + shape, dtype)
+            self.recvbuf = tiling._get_work_array((tiling.comm.size,) + shape, dtype)
             for irow, icol, rank in _iterate_rankmap(tiling.map):
                 if rank >= 0:
                     (
@@ -757,7 +768,7 @@ class Scatter:
         if tiling.comm.rank == root:
             self.buffers = []
             self.sendbuf = tiling._get_work_array(
-                (tiling.n,) + self.recvbuf.shape,
+                (tiling.comm.size,) + self.recvbuf.shape,
                 self.recvbuf.dtype,
                 fill_value=fill_value,
             )

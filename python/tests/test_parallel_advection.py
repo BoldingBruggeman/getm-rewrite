@@ -33,9 +33,11 @@ class TestParallelAdvection(unittest.TestCase):
                 n=self.args.n,
                 profile=self.args.profile,
             )
-        combos = [(1, 1)] + {2: [(1, 2), (2, 1)]}.get(
-            pygetm.parallel.MPI.COMM_WORLD.size, []
-        )
+        combos = [(1, 1)]
+        if pygetm.parallel.MPI.COMM_WORLD.size >= 2:
+            combos += [(1, 2), (2, 1)]
+        if pygetm.parallel.MPI.COMM_WORLD.size >= 4:
+            combos += [(2, 2), (1, 4), (4, 1)]
         for scheme in [pygetm.AdvectionScheme.DEFAULT]:
             ref_output = None
             for nrow, ncol in combos:
