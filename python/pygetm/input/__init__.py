@@ -117,7 +117,7 @@ def from_nc(
     paths: Union[str, Sequence[str]],
     name: str,
     preprocess: Optional[Callable[[xarray.Dataset], xarray.Dataset]] = None,
-    **kwargs
+    **kwargs,
 ) -> xarray.DataArray:
     """Obtain a variable from one or more NetCDF files that can be used as value
     provided to :meth:`InputManager.add` and :meth:`pygetm.core.Array.set`.
@@ -141,14 +141,14 @@ def from_nc(
         pattern = paths
         paths = glob.glob(pattern)
         if not paths:
-            raise Exception("No files found matching %s" % pattern)
+            raise Exception(f"No files found matching {pattern!r}")
     arrays = []
     for path in paths:
         ds = _open(path, preprocess, **kwargs)
         array = ds[name]
         # Note: we wrap the netCDF array ourselves, in order to support lazy operators
         # (e.g., add, multiply)
-        lazyvar = Wrap(array.variable, name="from_nc(%s, %s)" % (path, name))
+        lazyvar = Wrap(array.variable, name=f"from_nc({path!r}, {name!r})")
         array = xarray.DataArray(
             lazyvar,
             dims=array.dims,
@@ -242,7 +242,7 @@ class Operator(LazyArray):
         dtype=None,
         shape=None,
         name: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         # Unpack unnamed arguments
         self.inputs = []
@@ -251,7 +251,7 @@ class Operator(LazyArray):
         for inp in inputs:
             assert isinstance(
                 inp, (np.ndarray, numbers.Number, LazyArray, xarray.Variable)
-            ), "Input has unknown type %s" % type(inp)
+            ), f"Input has unknown type {type(inp)}"
 
             # Unpack to LazyArray if possible
             if isinstance(inp, xarray.Variable) and isinstance(inp._data, LazyArray):
@@ -303,17 +303,16 @@ class Operator(LazyArray):
             passthrough = dict([(i, i) for i in passthrough])
         self.passthrough = passthrough
         assert all([isinstance(dim, int) for dim in self.passthrough]), (
-            "Invalid passthrough: %s. All entries should be of type int"
-            % (self.passthrough,)
+            f"Invalid passthrough: {self.passthrough}."
+            " All entries should be of type int"
         )
 
         # Generate a name for the variable if not provided
         if name is None:
-            name = "%s(%s%s)" % (
-                self._operator_name or self.__class__.__name__,
-                ", ".join(self.input_names),
-                "".join(", %s=%s" % item for item in self.kwargs.items()),
-            )
+            operator_name = self._operator_name or self.__class__.__name__
+            strargs = ", ".join(self.input_names)
+            strkwargs = "".join(f", {k}={v!r}" for (k, v) in self.kwargs.items())
+            name = f"{operator_name}({strargs}{strkwargs})"
 
         super().__init__(shape, dtype or float, name)
 
@@ -837,7 +836,7 @@ class SpatialInterpolation(UnaryOperator):
         shape: Iterable[int],
         npre: int,
         npost: int,
-        **kwargs
+        **kwargs,
     ):
         UnaryOperator.__init__(self, source, shape=shape, **kwargs)
         self._ip = ip
@@ -932,7 +931,7 @@ class VerticalInterpolation(UnaryOperator):
         izdim: int,
         source_z: np.ndarray,
         axis: int = 0,
-        **kwargs
+        **kwargs,
     ):
         self.izdim = izdim
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
@@ -990,7 +989,7 @@ class TemporalInterpolation(UnaryOperator):
         times: np.ndarray,
         climatology: bool,
         dtype=float,
-        **kwargs
+        **kwargs,
     ):
         shape = list(source.shape)
         self._itimedim = itimedim
