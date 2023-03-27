@@ -400,13 +400,13 @@ class Slice(UnaryOperator):
                 # This dimension will be sliced out
                 continue
             assert isinstance(s, slice), (
-                "Dimension %i has unsupported slice type %s with value %s."
-                " Passthrough: %s" % (i, type(s), s, list(self.passthrough))
+                f"Dimension {i} has unsupported slice type {type(s)} with value {s!r}."
+                f" Passthrough: {list(self.passthrough)}"
             )
             start, stop, step = s.indices(l)
             assert i in self.passthrough or (start == 0 and stop == l and step == 1), (
-                "invalid slice for dimension %i with length %i: %i:%i:%i"
-                % (i, l, start, stop, step)
+                f"invalid slice for dimension {i} with length {l}:"
+                f" {start}:{stop}:{step}"
             )
             shape.append(len(range(start, stop, step)))
         data = np.empty(shape, self.dtype)
@@ -440,9 +440,16 @@ class Concatenate(UnaryOperator):
 
     def __getitem__(self, slices) -> np.ndarray:
         slices = list(self._finalize_slices(slices))
+        if (
+            isinstance(slices[self.axis], slice)
+            and slices[self.axis].start is None
+            and slices[self.axis].stop is None
+        ):
+            inputs = [input[tuple(slices)] for input in self.inputs]
+            return np.concatenate(inputs, axis=self.axis)
         assert isinstance(
             slices[self.axis], (int, np.integer)
-        ), "Unsupported slice for concatenated dimension: %s" % (slices[self.axis],)
+        ), f"Unsupported slice for concatenated dimension: {slices[self.axis]!r}"
         if slices[self.axis] < 0:
             slices[self.axis] += self.shape[self.axis]
         assert slices[self.axis] >= 0 and slices[self.axis] < self.shape[self.axis]
@@ -463,27 +470,23 @@ def limit_region(
     verbose: bool = False,
     require_2d: bool = True,
 ) -> xarray.DataArray:
-    assert np.isfinite(minlon) and np.isfinite(
-        maxlon
-    ), "Longitude range %s - %s is not valid" % (minlon, maxlon)
-    assert np.isfinite(minlat) and np.isfinite(
-        maxlat
-    ), "Latitude range %s - %s is not valid" % (minlat, maxlat)
-    assert minlon <= maxlon, (
-        "Minimum longitude %s must be smaller than, or equal to, maximum longitude %s."
-        % (minlon, maxlon)
-    )
-    assert minlat <= maxlat, (
-        "Minimum latitude %s must be smaller than, or equal to, maximum latitude %s."
-        % (minlat, maxlat)
-    )
+    if not np.isfinite(minlon) or not np.isfinite(maxlon):
+        raise Exception(f"Longitude range {minlon} - {maxlon} is not valid")
+    if not np.isfinite(minlat) or not np.isfinite(maxlat):
+        raise Exception(f"Latitude range {minlat} - {maxlat} is not valid")
+    if minlon > maxlon:
+        raise Exception(
+            f"Invalid longitude range: maximum {maxlon} must be >= minimum {minlon}."
+        )
+    if minlat > maxlat:
+        raise Exception(
+            f"Invalid latitude range: maximum {maxlat} must be >= minimum {minlat}."
+        )
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
-    assert source_lon.ndim == 1, "Source longitude must be 1D but has shape %s" % (
-        source_lon.shape,
-    )
-    assert source_lat.ndim == 1, "Source latitude must be 1D but has shape %s" % (
-        source_lat.shape,
-    )
+    if source_lon.ndim != 1:
+        raise Exception(f"Source longitude must be 1D but has shape {source_lon.shape}")
+    if source_lat.ndim != 1:
+        raise Exception(f"Source latitude must be 1D but has shape {source_lat.shape}")
     imin = source_lon.values.searchsorted(minlon, side="right") - 1
     imax = source_lon.values.searchsorted(maxlon, side="left") + 1
     if source_lat.values[1] < source_lat.values[0]:
