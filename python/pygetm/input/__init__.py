@@ -164,6 +164,8 @@ def from_nc(
         return xarray.concat(
             sorted(arrays, key=lambda a: a.getm.time.values.flat[0]),
             dim=arrays[0].getm.time.dims[0],
+            coords="minimal",
+            combine_attrs="drop_conflicts",
         )
 
 
@@ -1113,6 +1115,18 @@ class TemporalInterpolation(UnaryOperator):
         self._slope = (self._next - old) / (self._numnext - numold)
 
 
+def slicespec2string(s: Union[tuple, slice, int]) -> str:
+    if isinstance(s, slice):
+        start = "" if s.start is None else f"{s.start}"
+        stop = "" if s.stop is None else f"{s.stop}"
+        if s.step in (None, 1):
+            return f"{start}:{stop}"
+        return f"{start}:{stop}:{s.step}"
+    elif isinstance(s, tuple):
+        return ",".join([slicespec2string(item) for item in s])
+    return f"{s!r}"
+
+
 def debug_nc_reads(logger: Optional[logging.Logger] = None):
     """Hook into :mod:`xarray` so that every read from a NetCDF file is
     written to the log.
@@ -1128,8 +1142,8 @@ def debug_nc_reads(logger: Optional[logging.Logger] = None):
 
         def _getitem(self, key):
             logger.debug(
-                "Reading %s[%s] from %s"
-                % (self.variable_name, key, self.datastore._filename)
+                f"Reading {self.variable_name}[{slicespec2string(key)}]"
+                f" from {self.datastore._filename}"
             )
             return super()._getitem(key)
 
