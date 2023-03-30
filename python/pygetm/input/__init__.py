@@ -508,14 +508,12 @@ def limit_region(
     if verbose:
         print(imin, imax, source_lon.values.size, jmin, jmax, source_lat.values.size)
     assert (imin >= 0 and imax <= source_lon.values.size) or periodic_lon, (
-        "Requested longitude section %s - %s is not fully covered"
-        " by available range %s - %s"
-        % (minlon, maxlon, source_lon.values[0], source_lon.values[-1])
+        f"Requested longitude section {minlon} - {maxlon} is not fully covered"
+        f" by available range {source_lon.values[0]} - {source_lon.values[-1]}"
     )
     assert jmin >= 0 and jmax <= source_lat.values.size, (
-        "Requested latitude section %s - %s is not fully covered"
-        " by available range %s - %s"
-        % (minlat, maxlat, source_lat.values[0], source_lat.values[-1])
+        f"Requested latitude section {minlat} - {maxlat} is not fully covered"
+        f" by available range {source_lat.values[0]} - {source_lat.values[-1]}"
     )
     if require_2d and jmax - jmin == 1:
         jmin, jmax = (jmin, jmax + 1) if jmin == 0 else (jmin - 1, jmax)
@@ -547,12 +545,8 @@ def limit_region(
     overlap = abs(source_lon.values[-1] - source_lon.values[0] - 360.0) < 1e-5
     if verbose:
         print(
-            "periodic longitude? %s Overlap? %s = %s"
-            % (
-                periodic_lon,
-                abs(source_lon.values[-1] - source_lon.values[0] - 360.0),
-                overlap,
-            )
+            f"periodic longitude? {periodic_lon} Overlap?"
+            f" {abs(source_lon.values[-1] - source_lon.values[0] - 360.0)} = {overlap}"
         )
     left_target = None
     right_target = None
@@ -567,7 +561,7 @@ def limit_region(
         )
         nleft = source_lon.values.size - imin_left + (-1 if overlap else 0)
         if verbose:
-            print("adding %i values on the left" % (nleft,))
+            print(f"adding {nleft} values on the left")
         shape[ilondim] += nleft
         left_target = tuple(
             [{ilondim: slice(0, nleft)}.get(i, s) for i, s in enumerate(center_target)]
@@ -587,11 +581,10 @@ def limit_region(
                 for i, s in enumerate(center_source)
             ]
         )
+        nright = imax_right + (-1 if overlap else 0)
         if verbose:
-            print(
-                "adding %i values on the right" % (imax_right + (-1 if overlap else 0),)
-            )
-        shape[ilondim] += imax_right + (-1 if overlap else 0)
+            print(f"adding {nright} values on the right")
+        shape[ilondim] += nright
         right_target = tuple(
             [
                 {ilondim: slice(s.stop, None)}.get(i, s)
@@ -606,7 +599,7 @@ def limit_region(
     center_target = tuple(center_target)
     shape = tuple(shape)
     if verbose:
-        print("final shape: %s" % (shape,))
+        print(f"final shape: {shape}")
 
     lazyvar = Slice(
         source.variable,
@@ -636,7 +629,7 @@ def concatenate_slices(
     shape[idim] = sum([s.stop - s.start for s in slices])
     shape = tuple(shape)
     if verbose:
-        print("final shape: %s" % (shape,))
+        print(f"final shape: {shape}")
 
     istart = 0
     strslices = ""
@@ -647,7 +640,7 @@ def concatenate_slices(
         target_slice = [slice(None)] * source.ndim
         source_slice[idim] = s
         target_slice[idim] = slice(istart, istart + n)
-        strslices += "[%i:%i]," % (s.start, s.stop)
+        strslices += f"[{s.start}:{s.stop}],"
         final_slices.append((tuple(source_slice), tuple(target_slice)))
         istart += n
     assert istart == shape[idim]
@@ -701,8 +694,8 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
     advanced_indices = []
     for dim in list(indices):
         assert dim in source.dims, (
-            "indexed dimension %s not used by source, which has dimensions %s"
-            % (dim, source.dims)
+            f"indexed dimension {dim} not used by source,"
+            f" which has dimensions {source.dims}"
         )
         if not isinstance(indices[dim], (int, slice)):
             advanced_indices.append(source.dims.index(dim))
@@ -736,7 +729,7 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
             ), "advanced indices must be side-by-side for now"
             advanced_shapes = [indices[source.dims[i]].shape for i in advanced_indices]
             for length in np.broadcast_shapes(*advanced_shapes):
-                dims.append("dim_%i" % len(shape))
+                dims.append(f"dim_{len(shape)}")
                 shape.append(length)
             advanced_added = True
 
@@ -761,17 +754,19 @@ def horizontal_interpolation(
     dtype: numpy.typing.DTypeLike = float,
     mask=None,
 ) -> xarray.DataArray:
-    assert source.getm.longitude is not None, (
-        "Variable %s does not have a valid longitude coordinate." % source.name
-    )
-    assert source.getm.latitude is not None, (
-        "Variable %s does not have a valid latitude coordinate." % source.name
-    )
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
+    if source_lon is None:
+        raise Exception(
+            f"Variable {source.name} does not have a valid longitude coordinate."
+        )
+    if source_lat is None:
+        raise Exception(
+            f"Variable {source.name} does not have a valid latitude coordinate."
+        )
     assert source_lon.ndim == 1
     assert source_lat.ndim == 1
-    assert np.isfinite(lon).all(), "Some longitudes are non-finite: %s" % (lon,)
-    assert np.isfinite(lat).all(), "Some latitudes are non-finite: %s" % (lat,)
+    assert np.isfinite(lon).all(), f"Some longitudes are non-finite: {lon}"
+    assert np.isfinite(lat).all(), f"Some latitudes are non-finite: {lat}"
     lon, lat = np.broadcast_arrays(lon, lat)
     ilondim = source.dims.index(source_lon.dims[0])
     ilatdim = source.dims.index(source_lat.dims[0])
@@ -870,7 +865,7 @@ class SpatialInterpolation(UnaryOperator):
                     and s.start is None
                     and s.stop is None
                     and s.step is None
-                ), ("%s" % s)
+                ), repr(s)
         source = np.asarray(self._source[tuple(src_slice)])
         source.shape = source.shape + (1,) * ntrailing_dim_removed
         result = self._ip(source)
@@ -882,13 +877,14 @@ def vertical_interpolation(
 ) -> xarray.DataArray:
     source_z = source.getm.z
     target_z = np.asarray(target_z)
-    assert source_z is not None, (
-        "Variable %s does not have a valid depth coordinate." % source.name
-    )
+    if source_z is None:
+        raise Exception(
+            f"Variable {source.name} does not have a valid depth coordinate."
+        )
     assert source_z.ndim == 1
     izdim = source.dims.index(source_z.dims[0])
     # assert source.ndim - izdim == target_z.ndim
-    # assert source.shape[izdim + 1:izdim + 3] == target_z.shape[1:], '%s vs %s' % (source.shape[izdim + 1:izdim + 3], target_z.shape[1:])
+    # assert source.shape[izdim + 1:izdim + 3] == target_z.shape[1:], f'{source.shape[izdim + 1:izdim + 3]} vs {target_z.shape[1:]}'
     target2sourcedim = {}
     isourcedim = 0
     for i, l in enumerate(target_z.shape):
@@ -902,12 +898,12 @@ def vertical_interpolation(
             ):
                 isourcedim += 1
             assert isourcedim != izdim, (
-                "Dimension with length %i should precede depth dimension %i in %s,"
-                " which has shape %s" % (l, izdim, source.name, source.shape)
+                f"Dimension with length {l} should precede depth dimension {izdim}"
+                f" in {source.name}, which has shape {source.shape}"
             )
             assert isourcedim < source.ndim, (
-                "Dimension with length %i expected after depth dimension %i in %s,"
-                " which has shape %s" % (l, izdim, source.name, source.shape)
+                f"Dimension with length {l} expected after depth dimension {izdim}"
+                f" in {source.name}, which has shape {source.shape}"
             )
         target2sourcedim[i] = isourcedim
         isourcedim += 1
@@ -998,10 +994,12 @@ class TemporalInterpolation(UnaryOperator):
     ):
         shape = list(source.shape)
         self._itimedim = itimedim
-        assert shape[self._itimedim] > 1, (
-            "Cannot interpolate %s in time because its time dimension has length %i."
-            % (source.name, shape[self._itimedim])
-        )
+        ntime = shape[self._itimedim]
+        if ntime <= 1:
+            raise Exception(
+                f"Cannot interpolate {source.name} in time because"
+                f" its time dimension has length {ntime}."
+            )
         shape.pop(self._itimedim)
 
         super().__init__(source, shape=shape, dtype=dtype, **kwargs)
@@ -1023,8 +1021,8 @@ class TemporalInterpolation(UnaryOperator):
         self._year = self.times[0].year
         if climatology and not all(time.year == self._year for time in self.times):
             raise Exception(
-                "%s cannot be used as climatology because it spans more than"
-                " one calendar year" % self._source_name
+                f"{self._source_name} cannot be used as climatology because"
+                " it spans more than one calendar year"
             )
 
     def __array__(self, dtype=None) -> np.ndarray:
@@ -1051,8 +1049,8 @@ class TemporalInterpolation(UnaryOperator):
             if numtime == self._numnow:
                 return False
             raise Exception(
-                "Time can only increase, but previous time was %s, new time %s"
-                % (self._timevalues.flat[0].strftime(), time.strftime())
+                f"Time can only increase, but previous time was "
+                f" {self._timevalues.flat[0]}, new time {time}"
             )
 
         while self._numnext < numtime:
@@ -1071,8 +1069,8 @@ class TemporalInterpolation(UnaryOperator):
         # Make sure the time series does not start after the requested time.
         if time.calendar != self.times[0].calendar:
             raise Exception(
-                "Simulation calendar %s does not match calendar %s used by %s."
-                % (time.calendar, self.times[0].calendar, self._source_name)
+                f"Simulation calendar {time.calendar} does not match calendar"
+                f" {self.times[0].calendar} used by {self._source_name}."
             )
         if self.climatology:
             clim_time = time.replace(year=self._year)
@@ -1084,9 +1082,8 @@ class TemporalInterpolation(UnaryOperator):
         else:
             if time < self.times[0]:
                 raise Exception(
-                    "Cannot interpolate %s to value at %s, because time series"
-                    " starts only at %s."
-                    % (self._source_name, time.strftime(), self.times[0].strftime())
+                    f"Cannot interpolate {self._source_name} to value at {time},"
+                    f" because time series starts only at {self.times[0]}."
                 )
             self._inext = self.times.searchsorted(time, side="right") - 2
         while self._inext < 1:
@@ -1101,9 +1098,8 @@ class TemporalInterpolation(UnaryOperator):
                 self._year += 1
             else:
                 raise Exception(
-                    "Cannot interpolate %s to value at %s"
-                    " because end of time series was reached (%s)."
-                    % (self._source_name, time.strftime(), self.times[-1].strftime())
+                    f"Cannot interpolate {self._source_name} to value at {time}"
+                    f" because end of time series was reached ({self.times[-1]})."
                 )
         old, numold = self._next, self._numnext
         self._slices[self._itimedim] = self._inext
@@ -1223,8 +1219,8 @@ class InputManager:
             # it specifies information on the open boundaries,
             # of which the current (sub)domain does not have any.
             self._logger.warning(
-                "Ignoring asssignment to array %s because it has no associated data."
-                % array.name
+                "Ignoring asssignment to array {array.name}"
+                " because it has no associated data."
             )
             return
 
@@ -1236,7 +1232,7 @@ class InputManager:
 
         assert isinstance(value, xarray.DataArray), (
             "If value is not numeric, it should be an xarray.DataArray,"
-            " but it is %s (type %s)." % (value, type(value))
+            f" but it is {value!r}."
         )
 
         if include_halos is None:
@@ -1286,15 +1282,15 @@ class InputManager:
                 # interpolate horizontally to open boundary coordinates
                 if source_lon.ndim != 1:
                     raise Exception(
-                        "Unsuitable shape %s of longitude coordinate %s."
-                        " Off-grid boundary information can be used only"
-                        " if its longitude is 1D." % (source_lon.shape, source_lon.name)
+                        f"Unsuitable shape {source_lon.shape} of longitude coordinate"
+                        f" {source_lon.name}. Off-grid boundary information can be used"
+                        f" only if its longitude is 1D."
                     )
                 if source_lat.ndim != 1:
                     raise Exception(
-                        "Unsuitable shape %s of latitude coordinate %s."
-                        " Off-grid boundary information can be used only"
-                        " if its latitude is 1D." % (source_lat.shape, source_lat.name)
+                        f"Unsuitable shape {source_lat.shape} of latitude coordinate"
+                        f" {source_lat.name}. Off-grid boundary information can be used"
+                        f" only if its latitude is 1D."
                     )
                 ilondim = value.dims.index(source_lon.dims[0])
                 ilatdim = value.dims.index(source_lat.dims[0])
@@ -1326,17 +1322,12 @@ class InputManager:
                     )
             elif value.shape[idim] != grid.domain.open_boundaries.np:
                 raise Exception(
-                    "Extent of dimension %i of %s is not compatible with open"
-                    " boundaries. It should have length %i (number of open boundary"
-                    " points in the global domain) or %i (number of open boundary"
-                    " points in the subdomain). Its actual extent is %i."
-                    % (
-                        idim,
-                        value.name,
-                        grid.domain.open_boundaries.np_glob,
-                        grid.domain.open_boundaries.np,
-                        value.shape[idim],
-                    )
+                    f"Extent of dimension {idim} of {value.name} is not compatible with"
+                    f" open boundaries. It should have length"
+                    f" {grid.domain.open_boundaries.np_glob} (number of open boundary"
+                    f" points in the global domain) or {grid.domain.open_boundaries.np}"
+                    f" (number of open boundary points in the curent subdomain)."
+                    f" Its actual extent is {value.shape[idim]}."
                 )
         elif array.ndim != 0:
             # The target is a normal 2D (horizontal-only) or 3D (depth-explicit) array
@@ -1366,8 +1357,8 @@ class InputManager:
                 # the input is already on-grid, but we need to map
                 # from global domain to subdomain
                 assert value.shape[-2:] == global_shape, (
-                    "%s: shape of values %s should match that of global domain %s"
-                    % (array.name, value.shape[-2:], global_shape)
+                    f"{array.name}: shape of values {value.shape[-2:]}"
+                    f" should match that of global domain {global_shape}"
                 )
                 value = value[global_slice]
 
@@ -1379,10 +1370,10 @@ class InputManager:
             elif value.getm.time.dims:
                 time = value.getm.time.values.flat[0]
                 self._logger.warning(
-                    "%s is set to %s, which has only one time point %s."
-                    " The value from this time will be used now."
-                    " %s will not be further updated by the input manager at runtime."
-                    % (array.name, value.name, time.strftime(), array.name,)
+                    f"{array.name} is set to {value.name}, which has only one time"
+                    f" point {time}. The value from this time will be used now."
+                    f" {array.name} will not be further updated by the input manager"
+                    " at runtime."
                 )
                 itimedim = value.dims.index(value.getm.time.dims[0])
                 slc = [slice(None)] * value.ndim
@@ -1406,17 +1397,15 @@ class InputManager:
         try:
             np.broadcast_shapes(value.shape, target.shape)
         except ValueError:
-            assert False, "Source shape %s does not match target shape %s" % (
-                value.shape,
-                target.shape,
-            )
+            assert (
+                False
+            ), f"Source shape {value.shape} does not match target shape {target.shape}"
         data = value.variable._data
         if isinstance(data, LazyArray) and data.is_time_varying():
             time_varying = array.attrs.get("_time_varying", TimeVarying.MICRO)
             suffix = " on macrotimestep" if time_varying == TimeVarying.MACRO else ""
             self._logger.info(
-                "%s will be updated dynamically from %s%s"
-                % (array.name, data.name, suffix,)
+                f"{array.name} will be updated dynamically from {data.name}{suffix}"
             )
             info = (array.name, data, target)
             self._all_fields.append(info)
@@ -1436,15 +1425,14 @@ class InputManager:
                 n_unmasked = unmasked.sum()
                 n_bad = n_unmasked - finite.sum(where=unmasked)
                 self._logger.warning(
-                    "%s is set to %s, which is not finite (e.g., NaN)"
-                    " in %i of %i unmasked points."
-                    % (array.name, value.name, n_bad, n_unmasked)
+                    f"{array.name} is set to {value.name}, which is not finite"
+                    f" (e.g., NaN) in {n_bad} of {n_unmasked} unmasked points."
                 )
             minval = target.min(where=unmasked, initial=np.inf)
             maxval = target.max(where=unmasked, initial=-np.inf)
             self._logger.info(
-                "%s is set to time-invariant %s (minimum: %s, maximum: %s)"
-                % (array.name, value.name, minval, maxval)
+                f"{array.name} is set to time-invariant {value.name}"
+                f" (minimum: {minval}, maximum: {maxval})"
             )
 
     def update(self, time: cftime.datetime, macro: bool = True):
@@ -1458,7 +1446,7 @@ class InputManager:
         numtime = time.toordinal(fractional=True)
         fields = self._all_fields if macro else self._micro_fields
         for name, source, target in fields:
-            self._logger.debug("updating %s" % name)
+            self._logger.debug(f"updating {name}")
             source.update(time, numtime)
             target[...] = source
 

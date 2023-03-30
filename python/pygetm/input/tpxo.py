@@ -45,9 +45,9 @@ def get(
         # These are static variables definied in the grid file
         axis = variable[1]
         with xarray.open_dataset(
-            os.path.join(root, "grid_tpxo9_atlas%s.nc" % postfix)
+            os.path.join(root, f"grid_tpxo9_atlas{postfix}.nc")
         ) as ds:
-            ds = ds.set_coords(("lat_%s" % axis, "lon_%s" % axis))
+            ds = ds.set_coords((f"lat_{axis}", f"lon_{axis}"))
             return select(ds[variable])
 
     scale_factor *= {"h": 1e-3, "u": 1e-4, "v": 1e-4}.get(variable, 1.0)
@@ -56,17 +56,17 @@ def get(
     components: Mapping[str, Tuple[numpy.ndarray, numpy.ndarray]] = {}
     for component in COMPONENTS:
         if verbose:
-            print("TPXO: reading %s constituent of %s..." % (component, variable))
-        name = "%s_%s_tpxo9_atlas_30%s.nc" % (file_prefix, component, postfix)
+            print(f"TPXO: reading {component} constituent of {variable}...")
+        name = f"{file_prefix}_{component}_tpxo9_atlas_30{postfix}.nc"
         path = os.path.join(root, name)
         with xarray.open_dataset(path) as ds:
-            ds = ds.set_coords(("lat_%s" % axis, "lon_%s" % axis))
-            x = select(ds["%sIm" % variable])
+            ds = ds.set_coords((f"lat_{axis}", f"lon_{axis}"))
+            x = select(ds[f"{variable}Im"])
             components[component] = (
-                scale_factor * select(ds["%sRe" % variable]).values,
+                scale_factor * select(ds[f"{variable}Re"]).values,
                 scale_factor * x.values,
             )
-    lazyvar = Data(components, lat, name="tpxo(%s, %s)" % (root, variable))
+    lazyvar = Data(components, lat, name=f"tpxo({root!r}, {variable!r})")
     return xarray.DataArray(lazyvar, dims=x.dims, coords=x.coords, name=lazyvar.name)
 
 
@@ -75,7 +75,7 @@ class Data(pygetm.input.LazyArray):
         self,
         components: Mapping[str, Tuple[numpy.ndarray, numpy.ndarray]],
         lat: numpy.ndarray,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(lat.shape, numpy.float64, **kwargs)
         self.components = components
