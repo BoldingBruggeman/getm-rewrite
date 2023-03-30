@@ -62,7 +62,7 @@ def to_cftime(time: Union[datetime.datetime, cftime.datetime]) -> cftime.datetim
             time.second,
             time.microsecond,
         )
-    raise Exception("Unable to convert %r to cftime.datetime" % time)
+    raise Exception(f"Unable to convert {time!r} to cftime.datetime")
 
 
 def log_exceptions(method):
@@ -231,8 +231,8 @@ class Simulation:
         #: and should be provided as argument airsea to :class:`Simulation`.
         self.airsea = airsea or pygetm.airsea.FluxesFromMeteo()
         assert isinstance(self.airsea, pygetm.airsea.Fluxes), (
-            "airsea argument should be of type pygetm.airsea.Fluxes, but is %s"
-            % type(self.airsea)
+            "airsea argument should be of type pygetm.airsea.Fluxes,"
+            f" but is {type(self.airsea)}"
         )
         self.airsea.initialize(self.domain.T)
 
@@ -424,7 +424,7 @@ class Simulation:
                 else:
                     internal_pressure = pygetm.internal_pressure.ShchepetkinMcwilliams()
             internal_pressure.initialize(self.domain)
-            self.logger.info("Internal pressure method: %r" % internal_pressure)
+            self.logger.info(f"Internal pressure method: {internal_pressure!r}")
             self.internal_pressure = internal_pressure
             self.delay_slow_ip = delay_slow_ip
             if delay_slow_ip:
@@ -467,8 +467,8 @@ class Simulation:
             timevar = ds["zt"].getm.time
             if timevar.ndim > 1:
                 raise Exception(
-                    "Time coordinate must be 0D or 1D (%i dimensions found)"
-                    % timevar.ndim
+                    "Time coordinate must be 0D or 1D"
+                    f" ({timevar.ndim} dimensions found)"
                 )
 
             # Use time reference of restart as default time reference for new output
@@ -487,19 +487,14 @@ class Simulation:
                 itimes = np.where(time_coord == time)[0]
                 if itimes.size == 0:
                     raise Exception(
-                        "Requested restart time %s not found in %s, which spans %s - %s"
-                        % (
-                            time.isoformat(),
-                            path,
-                            time_coord[0].isoformat(),
-                            time_coord[-1].isoformat(),
-                        )
+                        f"Requested restart time {time} not found in {path!r},"
+                        f" which spans {time_coord[0]} - {time_coord[-1]}"
                     )
                 itime = itimes[0]
             elif time_coord.size > 1:
                 self.logger.info(
-                    "Restart file %s contains %i time points. Using last: %s"
-                    % (path, time_coord.size, time_coord[-1].isoformat())
+                    f"Restart file {path!r} contains {time_coord.size} time points."
+                    f" Using last: {time_coord[-1]}"
                 )
 
             # Slice restart file at the required time index
@@ -518,7 +513,7 @@ class Simulation:
             if missing:
                 raise Exception(
                     "The following field(s) are part of the model state but not found "
-                    "in %s: %s" % (path, ", ".join(missing))
+                    f"in {path!r}: {', '.join(missing)}"
                 )
 
         if self.runtype > BAROTROPIC_2D:
@@ -558,7 +553,7 @@ class Simulation:
                 profiling is disabled.
         """
         time = to_cftime(time)
-        self.logger.info("Starting simulation at %s" % time)
+        self.logger.info(f"Starting simulation at {time}")
         self.timestep = timestep
         self.split_factor = split_factor
         self.macrotimestep = self.timestep * self.split_factor
@@ -947,16 +942,14 @@ class Simulation:
         if self._profile:
             name, pr = self._profile
             pr.disable()
-            profile_path = "%s-%03i.prof" % (name, self.domain.tiling.rank)
-            self.logger.info("Writing profiling report to %s" % (profile_path,))
+            profile_path = f"{name}-{self.domain.tiling.rank:03}.prof"
+            self.logger.info(f"Writing profiling report to {profile_path}")
             with open(profile_path, "w") as f:
                 ps = pstats.Stats(pr, stream=f).sort_stats(pstats.SortKey.TIME)
                 ps.print_stats()
                 self.summary_profiling_result(ps)
-        self.logger.info(
-            "Time spent in main loop: %.3f s"
-            % (timeit.default_timer() - self._start_time,)
-        )
+        nsecs = timeit.default_timer() - self._start_time
+        self.logger.info(f"Time spent in main loop: {nsecs:.3f} s")
         self.output_manager.close(self.timestep * self.istep, self.time)
 
     def summary_profiling_result(self, ps: pstats.Stats):
@@ -980,12 +973,12 @@ class Simulation:
             )
             for rank, (tottime, halotime, nwet) in enumerate(all_stat):
                 self.logger.info(
-                    "%i (%i water points): %.3f s" % (rank, nwet, tottime - halotime)
+                    f"{rank} ({nwet} water points): {tottime - halotime:.3f} s"
                 )
             rank = np.argmin([s[1] for s in all_stat])
             self.logger.info(
-                "Most expensive subdomain: %i (see %s-%03i.prof)"
-                % (rank, self._profile[0], rank)
+                f"Most expensive subdomain: {rank}"
+                f" (see {self._profile[0]}-{rank:03}.prof)"
             )
 
     def add_freshwater_inputs(self, timestep: float):
@@ -1110,15 +1103,15 @@ class Simulation:
             self.logger.info("Integrals over global domain:")
             mean_z = (total_volume - self.total_volume_ref) / self.total_area
             self.logger.info(
-                "  volume: %.15e m3 (mean elevation: %s m)" % (total_volume, mean_z)
+                f"  volume: {total_volume:.15e} m3 (mean elevation: {mean_z} m)"
             )
             for tt, total, mean in tracer_totals:
                 ar = tt.array
                 long_name = tt.long_name if tt.long_name is not None else ar.long_name
                 units = tt.units if tt.units is not None else f"{ar.units} m3"
                 self.logger.info(
-                    "  %s: %.15e %s (mean %s: %s %s)"
-                    % (long_name, total, units, ar.long_name, mean, ar.units,)
+                    f"  {long_name}: {total:.15e} {units}"
+                    f" (mean {ar.long_name}: {mean} {ar.units})"
                 )
 
     def advance_surface_elevation(
@@ -1167,11 +1160,11 @@ class Simulation:
                 unmasked_count = unmasked.sum()
                 bad_count = unmasked_count - finite.sum(where=unmasked)
                 self.logger.error(
-                    "Field %s has %i non-finite values (out of %i unmasked values)."
-                    % (field.name, bad_count, unmasked_count)
+                    f"Field {field.name} has {bad_count} non-finite values"
+                    f" (out of {unmasked_count} unmasked values)."
                 )
         if nbad:
-            raise Exception("Non-finite values found in %i fields" % nbad)
+            raise Exception(f"Non-finite values found in {nbad} fields")
 
     @property
     def Ekin(self, rho0: float = RHO0):

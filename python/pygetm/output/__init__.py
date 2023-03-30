@@ -178,7 +178,7 @@ class OutputManager:
             **kwargs: additional keyword arguments passed to
                 :class:`pygetm.output.netcdf.NetCDFFile`
         """
-        self._logger.debug("Adding NetCDF file %s" % path)
+        self._logger.debug(f"Adding NetCDF file {path}")
         file = netcdf.NetCDFFile(
             self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
         )

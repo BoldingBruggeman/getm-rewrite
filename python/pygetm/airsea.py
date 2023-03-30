@@ -190,9 +190,9 @@ class FluxesFromMeteo(Fluxes):
         self.swr.attrs["_mask_output"] = True
         self.sp.fill(self.sp.fill_value)
 
-        self.logger.info("Longwave method: %s" % self.longwave_method.name)
-        self.logger.info("Albedo method: %s" % self.albedo_method.name)
-        self.logger.info("Humidity measure method: %s" % self.humidity_measure.name)
+        self.logger.info(f"Longwave method: {self.longwave_method.name}")
+        self.logger.info(f"Albedo method: {self.albedo_method.name}")
+        self.logger.info(f"Humidity measure method: {self.humidity_measure.name}")
         if self.calculate_swr:
             self.logger.info(
                 "Shortwave radiation calculated from time, location and cloud cover"

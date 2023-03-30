@@ -56,9 +56,9 @@ class Grid(_pygetm.Grid):
         "alpha",
     )
     _all_arrays = tuple(
-        ["_%s" % n for n in _fortran_arrays]
-        + ["_%si" % n for n in _coordinate_arrays]
-        + ["_%si_" % n for n in _coordinate_arrays]
+        [f"_{n}" for n in _fortran_arrays]
+        + [f"_{n}i" for n in _coordinate_arrays]
+        + [f"_{n}i_" for n in _coordinate_arrays]
     )
     __slots__ = _all_arrays + (
         "halo",
@@ -412,7 +412,7 @@ for membername in Grid._all_arrays:
     if long_name:
         doc = long_name
         if units:
-            doc += " (%s)" % units
+            doc += f" ({units})"
     setattr(Grid, membername[1:], property(operator.attrgetter(membername), doc=doc))
 
 
@@ -430,8 +430,8 @@ class RiverTracer(core.Array):
     ):
         super().__init__(
             grid=grid,
-            name=tracer_name + "_in_river_" + river_name,
-            long_name="%s in river %s" % (tracer_name, river_name),
+            name=f"{tracer_name}_in_river_{river_name}",
+            long_name=f"{tracer_name} in river {river_name}",
             **kwargs,
         )
         self.wrap_ndarray(value)
@@ -495,20 +495,19 @@ class River:
             )
             if ind is None:
                 grid.domain.logger.info(
-                    "River %s at x=%s, y=%s not present in this subdomain"
-                    % (self.name, self.x, self.y)
+                    f"River {self.name} at x={self.x}, y={self.y}"
+                    " does not fall within this subdomain"
                 )
                 if grid.domain is grid.domain.glob:
                     raise Exception(
-                        "River %s is located at x=%s, y=%s, "
+                        f"River {self.name} is located at x={self.x}, y={self.y}, "
                         "which does not fall within the global model domain"
-                        % (self.name, self.x, self.y)
                     )
                 return False
             self.j, self.i = ind
             grid.domain.logger.info(
-                "River %s at x=%s, y=%s is located at i=%i, j=%i in this subdomain"
-                % (self.name, self.x, self.y, self.i, self.j)
+                f"River {self.name} at x={self.x}, y={self.y} is located"
+                f" at i={self.i}, j={self.j} in this subdomain"
             )
         else:
             # Location is specified by global i, j. Map to subdomain.
@@ -525,7 +524,7 @@ class River:
             grid=grid,
             name="river_" + self.name + "_flow",
             units="m3 s-1",
-            long_name="inflow from %s" % self.name,
+            long_name=f"inflow from {self.name}",
         )
         self.flow.wrap_ndarray(flow)
 
@@ -600,9 +599,8 @@ class Rivers(Mapping[str, River]):
             mask = self.grid.mask.all_values[river.j, river.i]
             if mask != 1:
                 raise Exception(
-                    "River %s is located at i=%i, j=%i, which is not water"
-                    " (it has mask value %i)."
-                    % (river.name, river.i_glob, river.j_glob, mask)
+                    f"River {river.name} is located at i={river.i_glob},"
+                    " j={river.j_glob}, which is not water (it has mask value {mask})."
                 )
             river.initialize(self.grid, self.flow[..., iriver])
         self.i = np.array([river.i for river in self._rivers], dtype=int)
@@ -1174,10 +1172,9 @@ class Domain(_pygetm.Domain):
         assert np.isfinite(data).all()
         valid_after = True if isinstance(fill_value, int) else data != fill_value
         still_ok = np.where(valid_before, valid_after, True)
-        assert still_ok.all(), "Rank %i: _exchange_metric corrupted %i values: %s." % (
-            self.tiling.rank,
-            still_ok.size - still_ok.sum(),
-            still_ok,
+        assert still_ok.all(), (
+            f"Rank {self.tiling.rank}: _exchange_metric corrupted"
+            f" {still_ok.size - still_ok.sum()} values: {still_ok}."
         )
 
     def _map_array(self, source: ArrayLike, target: np.ndarray):
@@ -1235,8 +1232,8 @@ class Domain(_pygetm.Domain):
             source = interfaces_to_supergrid_2d(source)
         else:
             raise Exception(
-                "Cannot map array with shape %s to local supergrid with shape %s."
-                % (source_shape, target.shape)
+                f"Cannot map array with shape {source_shape}"
+                f" to local supergrid with shape {target.shape}."
             )
 
         target[target_slice] = np.nan_to_num(source[source_slice], nan=FILL_VALUE)
@@ -1627,16 +1624,11 @@ class Domain(_pygetm.Domain):
         for grid in self.grids.values():
             grid.initialize(self.open_boundaries.np)
 
-        self.logger.info(
-            "Number of unmasked points excluding halos: %i on T grid, %i on U grid,"
-            " %i on V grid, %i on X grid"
-            % (
-                (self.T.mask.values > 0).sum(),
-                (self.U.mask.values > 0).sum(),
-                (self.V.mask.values > 0).sum(),
-                (self.X.mask.values > 0).sum(),
+        for grid in (self.T, self.U, self.V, self.X):
+            self.logger.info(
+                f"Number of unmasked {grid.postfix.upper()} points,"
+                f" excluding halos: {(grid.mask.values > 0).sum()}"
             )
-        )
 
         # Water depth and thicknesses on UU/VV grids will be taken from T grid,
         # which near land has valid values where UU/VV are masked
@@ -1757,14 +1749,10 @@ class Domain(_pygetm.Domain):
         Usel = (tdepth[:, 1:] <= critical_depth) | (tdepth[:, :-1] <= critical_depth)
         self.H_[1::2, 2:-2:2][Usel] = np.minimum(tdepth[:, 1:], tdepth[:, :-1])[Usel]
         self.logger.info(
-            "limit_velocity_depth has decreased depth in %i U points (%i currently"
-            " unmasked), %i V points (%i currently unmasked)."
-            % (
-                Usel.sum(),
-                Usel.sum(where=self.mask_[1::2, 2:-2:2] > 0),
-                Vsel.sum(),
-                Vsel.sum(where=self.mask_[2:-2:2, 1::2] > 0),
-            )
+            f"limit_velocity_depth has decreased depth in {Usel.sum()} U points"
+            f" ({Usel.sum(where=self.mask_[1::2, 2:-2:2] > 0)} currently unmasked),"
+            f" {Vsel.sum()} V points ({Vsel.sum(where=self.mask_[2:-2:2, 1::2] > 0)}"
+            " currently unmasked)."
         )
 
     def mask_rectangle(
@@ -2124,8 +2112,8 @@ class Domain(_pygetm.Domain):
                 ally[ny - 1 : 0 : -1, 0],
             )
         )
-        assert not np.isnan(x_bnd).any(), "Invalid x boundary: %s." % (x_bnd,)
-        assert not np.isnan(y_bnd).any(), "Invalid y boundary: %s." % (y_bnd,)
+        assert not np.isnan(x_bnd).any(), f"Invalid x boundary: {x_bnd}."
+        assert not np.isnan(y_bnd).any(), f"Invalid y boundary: {y_bnd}."
         assert x_bnd.size == 2 * ny + 2 * nx - 4
         inside = False
         for i, (vertxi, vertyi) in enumerate(zip(x_bnd, y_bnd)):

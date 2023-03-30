@@ -138,8 +138,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if self._name is not None:
             if self._name in self.grid.domain.fields:
                 raise Exception(
-                    "A field with name '%s' has already been registered"
-                    " with the field manager." % self._name
+                    f"A field with name {self._name!r} has already been registered"
+                    " with the field manager."
                 )
             self.grid.domain.fields[self._name] = self
 
@@ -256,7 +256,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         dtype: DTypeLike = None,
         on_boundary: bool = False,
         register: bool = True,
-        **kwargs
+        **kwargs,
     ) -> "Array":
         """Create a new :class:`Array`
 
@@ -396,7 +396,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if self.units is not None:
             kwargs.setdefault("units", self.units)
         if self.long_name is not None:
-            kwargs.setdefault("long_name", "%s @ k=%i" % (self.long_name, z))
+            kwargs.setdefault("long_name", f"{self.long_name} @ k={z}")
         kwargs["attrs"] = kwargs.get("attrs", {}).copy()
         for att in ("_mask_output",):
             if att in self.attrs:
@@ -524,8 +524,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             invalid = self.ma == self._fill_value
             if invalid.any():
                 (logger or logging.getLogger()).error(
-                    "%s is masked (%s) in %i active grid cells."
-                    % (self.name, self._fill_value, invalid.sum())
+                    f"{self.name} is masked ({self._fill_value})"
+                    f" in {invalid.sum()} active grid cells."
                 )
                 valid = False
         return valid
@@ -550,15 +550,15 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             "lat" + self.grid.postfix,
         ):
             if dom.x_is_1d:
-                coords["x%s" % self.grid.postfix] = self.grid.x.xarray[0, :]
+                coords[f"x{self.grid.postfix}"] = self.grid.x.xarray[0, :]
             if dom.y_is_1d:
-                coords["y%s" % self.grid.postfix] = self.grid.y.xarray[:, 0]
-            coords["x%s2" % self.grid.postfix] = self.grid.x.xarray
-            coords["y%s2" % self.grid.postfix] = self.grid.y.xarray
+                coords[f"y{self.grid.postfix}"] = self.grid.y.xarray[:, 0]
+            coords[f"x{self.grid.postfix}2"] = self.grid.x.xarray
+            coords[f"y{self.grid.postfix}2"] = self.grid.y.xarray
             if dom.lon is not None:
-                coords["lon%s" % self.grid.postfix] = self.grid.lon.xarray
+                coords[f"lon{self.grid.postfix}"] = self.grid.lon.xarray
             if dom.lat is not None:
-                coords["lat%s" % self.grid.postfix] = self.grid.lat.xarray
+                coords[f"lat{self.grid.postfix}"] = self.grid.lat.xarray
         dims = ("y" + self.grid.postfix, "x" + self.grid.postfix)
         if self.ndim == 3:
             dims = ("zi" if self.z == INTERFACES else "z",) + dims
