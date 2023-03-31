@@ -52,7 +52,7 @@ def get_timeseries(
         if name in long_names:
             attrs["long_name"] = long_names[name]
         name2var[name] = xarray.DataArray(
-            values, coords={"time": timevar}, dims=("time",), name=name
+            values, coords={"time": timevar}, dims=("time",), name=name, attrs=attrs
         )
     return xarray.Dataset(name2var)
 
