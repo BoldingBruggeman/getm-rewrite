@@ -13,6 +13,7 @@ import glob
 import numbers
 import logging
 import enum
+import functools
 
 import numpy as np
 import numpy.typing
@@ -57,45 +58,41 @@ class GETMAccessor:
     def __init__(self, xarray_obj: xarray.DataArray):
         self._obj = xarray_obj
 
-        self._coordinates: Optional[Mapping[str, xarray.DataArray]] = None
-
     @property
     def longitude(self) -> Optional[xarray.DataArray]:
-        return self._interpret_coordinates().get("longitude")
+        return self.coordinates.get("longitude")
 
     @property
     def latitude(self) -> Optional[xarray.DataArray]:
-        return self._interpret_coordinates().get("latitude")
+        return self.coordinates.get("latitude")
 
     @property
     def z(self) -> Optional[xarray.DataArray]:
-        return self._interpret_coordinates().get("z")
+        return self.coordinates.get("z")
 
     @property
     def time(self) -> Optional[xarray.DataArray]:
-        return self._interpret_coordinates().get("time")
+        return self.coordinates.get("time")
 
-    def _interpret_coordinates(self) -> Mapping[str, xarray.DataArray]:
-        if self._coordinates is None:
-            self._coordinates = {}
-            for name, coord in self._obj.coords.items():
-                units = coord.attrs.get("units")
-                standard_name = coord.attrs.get("standard_name")
-                if standard_name in ("latitude", "longitude"):
-                    self._coordinates[standard_name] = coord
-                elif coord.attrs.get("positive") or standard_name in Z_STANDARD_NAMES:
-                    self._coordinates["z"] = coord
-                elif units in LATITUDE_UNITS:
-                    self._coordinates["latitude"] = coord
-                elif units in LONGITUDE_UNITS:
-                    self._coordinates["longitude"] = coord
-                elif coord.size > 0 and isinstance(
-                    coord.values.flat[0], cftime.datetime
-                ):
-                    self._coordinates["time"] = coord
-                elif name == "zax":
-                    self._coordinates["z"] = coord
-        return self._coordinates
+    @functools.cached_property
+    def coordinates(self) -> Mapping[str, xarray.DataArray]:
+        _coordinates = {}
+        for name, coord in self._obj.coords.items():
+            units = coord.attrs.get("units")
+            standard_name = coord.attrs.get("standard_name")
+            if standard_name in ("latitude", "longitude"):
+                _coordinates[standard_name] = coord
+            elif coord.attrs.get("positive") or standard_name in Z_STANDARD_NAMES:
+                _coordinates["z"] = coord
+            elif units in LATITUDE_UNITS:
+                _coordinates["latitude"] = coord
+            elif units in LONGITUDE_UNITS:
+                _coordinates["longitude"] = coord
+            elif coord.size > 0 and isinstance(coord.values.flat[0], cftime.datetime):
+                _coordinates["time"] = coord
+            elif name == "zax":
+                _coordinates["z"] = coord
+        return _coordinates
 
 
 open_nc_files = []
