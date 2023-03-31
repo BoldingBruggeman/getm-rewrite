@@ -1059,7 +1059,7 @@ class TemporalInterpolation(UnaryOperator):
             if numtime == self._numnow:
                 return False
             raise Exception(
-                f"Time can only increase, but previous time was "
+                f"Time can only increase, but previous time was"
                 f" {self._timevalues.flat[0]}, new time {time}"
             )
 
