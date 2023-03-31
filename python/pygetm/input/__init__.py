@@ -972,7 +972,10 @@ def _as_lazyarray(array: xarray.DataArray) -> LazyArray:
     if isinstance(variable._data, LazyArray):
         return variable._data
     else:
-        return Wrap(variable, name=array.name)
+        name = array.name
+        if "source" in array.encoding:
+            name += " in " + array.encoding["source"]
+        return Wrap(variable, name=name)
 
 
 class TemporalInterpolation(UnaryOperator):

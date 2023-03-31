@@ -1,6 +1,7 @@
 import argparse
 import datetime
 from typing import Iterable, Mapping
+import os
 
 import cftime
 import numpy as np
@@ -51,9 +52,11 @@ def get_timeseries(
             attrs["units"] = units[name]
         if name in long_names:
             attrs["long_name"] = long_names[name]
-        name2var[name] = xarray.DataArray(
+        ar = xarray.DataArray(
             values, coords={"time": timevar}, dims=("time",), name=name, attrs=attrs
         )
+        ar.encoding["source"] = os.path.normpath(path)
+        name2var[name] = ar
     return xarray.Dataset(name2var)
 
 
