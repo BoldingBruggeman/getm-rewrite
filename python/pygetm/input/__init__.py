@@ -269,7 +269,7 @@ class Operator(LazyArray):
             # If this is a Wrap, unwrap
             # (the wrapping was only for ufunc support)
             if isinstance(inp, Wrap):
-                inp = inp.inputs[0]
+                inp = inp._source
 
             if isinstance(inp, LazyArray):
                 self.lazy_inputs.append(inp)
@@ -369,9 +369,11 @@ class UFunc(Operator):
 
 
 class Wrap(UnaryOperator):
-    def __init__(self, source: xarray.Variable, **kwargs):
+    def __init__(self, source: xarray.Variable, name: str, **kwargs):
         assert isinstance(source, xarray.Variable)
-        super().__init__(source, passthrough=True, dtype=source.dtype, **kwargs)
+        super().__init__(
+            source, passthrough=True, dtype=source.dtype, name=name, **kwargs
+        )
 
     def apply(self, source, dtype=None) -> np.ndarray:
         return source
@@ -599,7 +601,7 @@ def limit_region(
         print(f"final shape: {shape}")
 
     lazyvar = Slice(
-        source.variable,
+        _as_lazyarray(source),
         shape=shape,
         passthrough=[i for i in range(len(shape)) if i not in (ilondim, ilatdim)],
     )
@@ -643,7 +645,7 @@ def concatenate_slices(
     assert istart == shape[idim]
 
     lazyvar = Slice(
-        source.variable,
+        _as_lazyarray(source),
         shape=shape,
         passthrough=[i for i in range(len(shape)) if i != idim],
         dtype=source.dtype,
@@ -669,7 +671,7 @@ class Transpose(UnaryOperator):
 
 def transpose(source: xarray.DataArray) -> xarray.DataArray:
     lazyvar = Transpose(
-        source.variable,
+        _as_lazyarray(source),
         shape=source.shape[::-1],
         passthrough=list(range(source.ndim)),
         dtype=source.dtype,
@@ -731,7 +733,7 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
             advanced_added = True
 
     lazyvar = Slice(
-        source.variable, shape=shape, passthrough=passthrough, dtype=source.dtype,
+        _as_lazyarray(source), shape=shape, passthrough=passthrough, dtype=source.dtype,
     )
     lazyvar._slices.append((slices, (slice(None),) * len(shape)))
 
@@ -815,7 +817,7 @@ def horizontal_interpolation(
     )
     lazyvar = HorizontalInterpolation(
         ip,
-        source.variable,
+        _as_lazyarray(source),
         shape,
         min(ilondim, ilatdim),
         source.ndim - max(ilondim, ilatdim) - 1,
@@ -829,7 +831,7 @@ class HorizontalInterpolation(UnaryOperator):
     def __init__(
         self,
         ip: pygetm.util.interpolate.Linear2DGridInterpolator,
-        source: xarray.Variable,
+        source: LazyArray,
         shape: Iterable[int],
         npre: int,
         npost: int,
@@ -914,7 +916,7 @@ def vertical_interpolation(
         else:
             coords[n] = c
     lazyvar = VerticalInterpolation(
-        source.variable, target_z, izdim, source_z.values, itargetdim,
+        _as_lazyarray(source), target_z, izdim, source_z.values, itargetdim,
     )
     return xarray.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
@@ -924,7 +926,7 @@ def vertical_interpolation(
 class VerticalInterpolation(UnaryOperator):
     def __init__(
         self,
-        source: xarray.Variable,
+        source: LazyArray,
         z: np.ndarray,
         izdim: int,
         source_z: np.ndarray,
@@ -955,7 +957,7 @@ def temporal_interpolation(
     assert time_coord is not None, "No time coordinate found"
     itimedim = source.dims.index(time_coord.dims[0])
     lazyvar = TemporalInterpolation(
-        source.variable, itimedim, time_coord.values, climatology,
+        _as_lazyarray(source), itimedim, time_coord.values, climatology,
     )
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
     coords = dict(source.coords.items())
@@ -963,6 +965,14 @@ def temporal_interpolation(
     return xarray.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
+
+
+def _as_lazyarray(array: xarray.DataArray) -> LazyArray:
+    variable = array.variable
+    if isinstance(variable._data, LazyArray):
+        return variable._data
+    else:
+        return Wrap(variable, name=array.name)
 
 
 class TemporalInterpolation(UnaryOperator):
@@ -982,7 +992,7 @@ class TemporalInterpolation(UnaryOperator):
 
     def __init__(
         self,
-        source: xarray.Variable,
+        source: LazyArray,
         itimedim: int,
         times: np.ndarray,
         climatology: bool,
