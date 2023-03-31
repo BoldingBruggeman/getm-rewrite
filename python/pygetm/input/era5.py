@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Iterable, Optional, List
 import multiprocessing
 import os
 import argparse
@@ -24,11 +24,11 @@ DEFAULT_VARIABLES = ("u10", "v10", "t2m", "d2m", "sp", "tcc", "tp")
 
 
 def _download_year(
-    year: int, area: list[float], variable: str, path: str, **cds_settings
+    year: int, area: list[float], variables: List[str], path: str, **cds_settings
 ):
     c = cdsapi.Client(verify=1, progress=False, **cds_settings)
     request = {
-        "variable": [variable],
+        "variable": variables,
         "product_type": "reanalysis",
         "format": "netcdf",
         "year": "%04i" % year,
@@ -60,24 +60,20 @@ def get(
         with open(cdsapirc, "r") as f:
             cds_settings.update(yaml.safe_load(f))
 
-    pool = multiprocessing.Pool(
-        processes=(stop_year - start_year + 1) * len(selected_variables)
-    )
+    pool = multiprocessing.Pool(processes=stop_year - start_year + 1)
+    selected_variables = [VARIABLES[key] for key in selected_variables]
     results = []
-    for key in selected_variables:
-        for year in range(start_year, stop_year + 1):
-            path = os.path.join(target_dir, f"era5_{key}_{year}.nc")
-            print("Queuing download of %s..." % path)
-            results.append(
-                pool.apply_async(
-                    _download_year,
-                    args=(year, area, VARIABLES[key], path),
-                    kwds=cds_settings,
-                )
+    for year in range(start_year, stop_year + 1):
+        path = os.path.join(target_dir, f"era5_{year}.nc")
+        results.append(
+            pool.apply_async(
+                _download_year,
+                args=(year, area, selected_variables, path),
+                kwds=cds_settings,
             )
+        )
     for res in results:
         path = res.get()
-        print("%s done." % path)
 
 
 if __name__ == "__main__":
