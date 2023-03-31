@@ -1,13 +1,17 @@
 import urllib.request
 import tempfile
 from typing import Optional
-import shutil
 import argparse
 
 import xarray
-import rioxarray
+
+try:
+    import rioxarray
+except ImportError:
+    raise Exception("You need rioxarray. See https://corteva.github.io/rioxarray")
 
 BASE_URL = "https://ows.emodnet-bathymetry.eu/wcs?service=wcs&version=1.0.0&"
+DEFAULT_RESOLUTION = 1.0 / 60 / 16
 
 
 def get(
@@ -15,8 +19,8 @@ def get(
     maxlon: float,
     minlat: float,
     maxlat: float,
-    reslon: float = 1.0 / 60 / 16,
-    reslat: float = 1.0 / 60 / 16,
+    reslon: float = DEFAULT_RESOLUTION,
+    reslat: float = DEFAULT_RESOLUTION,
     tiff_path: Optional[str] = None,
     verbose: bool = False,
 ) -> xarray.DataArray:
@@ -53,48 +57,39 @@ def get(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("minlon", help="minimum longitude (degrees East)", type=float)
+    parser.add_argument("maxlon", help="maximum longitude (degrees East)", type=float)
+    parser.add_argument("minlat", help="minimum latitude (degrees North)", type=float)
+    parser.add_argument("maxlat", help="maximum latitude (degrees North)", type=float)
+    parser.add_argument("ncfile", nargs="?", help="NetCDF file to save bathymetry to")
     parser.add_argument(
-        "-a",
-        "--area",
-        nargs=4,
-        type=float,
-        help="bounding box: minlon, maxlon, minlat, maxlat",
-        default=[-5.0, -3.0, 49.5, 51.5],
-    )
-    parser.add_argument(
+        "--resolution",
         "-r",
-        "--res",
-        nargs=2,
         type=float,
-        help="resolution in degrees: reslon, reslat",
-        default=[1.0 / 60 / 16, 1.0 / 60 / 16],
+        help="resolution (degrees)",
+        default=DEFAULT_RESOLUTION,
     )
-    parser.add_argument(
-        "--tiff", type=str, help="TIFF file to save raw bathymetry to",
-    )
+    parser.add_argument("--tiff", help="TIFF file to save raw bathymetry to")
     parser.add_argument("--plot", action="store_true", help="plot the bathymetry")
-    parser.add_argument(
-        "ncfile", nargs="?", type=str, help="NetCDF file to save bathymetry to",
-    )
     parser.add_argument("--verbose", "-v", action="store_true", help="debug output")
-
     args = parser.parse_args()
 
     if args.verbose:
-        print(f"area: {args.area}")
-        print(f"resolution: {args.res}")
+        print(f"Longitude: {args.minlon} - {args.maxlon} degrees East")
+        print(f"Latitude: {args.minlat} - {args.maxlat} degrees North")
+        print(f"Resolution: {args.resolution} degrees")
 
     # url = BASE_URL + "&request=GetCapabilities"
     # url = BASE_URL + "&request=DescribeCoverage&coverage=emodnet:mean"
     # with urllib.request.urlopen(url) as f, open("dump.xml", "wb") as fout:
     #     shutil.copyfileobj(f, fout)
     bathy = get(
-        args.area[0],
-        args.area[1],
-        args.area[2],
-        args.area[3],
-        reslon=args.res[0],
-        reslat=args.res[1],
+        args.minlon,
+        args.maxlon,
+        args.minlat,
+        args.maxlat,
+        reslon=args.resolution,
+        reslat=args.resolution,
         tiff_path=args.tiff,
         verbose=args.verbose,
     )
