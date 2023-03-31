@@ -816,7 +816,7 @@ def horizontal_interpolation(
         + dimensions
         + source.dims[max(ilondim, ilatdim) + 1 :]
     )
-    lazyvar = SpatialInterpolation(
+    lazyvar = HorizontalInterpolation(
         ip,
         source.variable,
         shape,
@@ -828,7 +828,7 @@ def horizontal_interpolation(
     )
 
 
-class SpatialInterpolation(UnaryOperator):
+class HorizontalInterpolation(UnaryOperator):
     def __init__(
         self,
         ip: pygetm.util.interpolate.Linear2DGridInterpolator,
