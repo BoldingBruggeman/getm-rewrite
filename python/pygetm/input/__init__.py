@@ -262,9 +262,9 @@ class Operator(LazyArray):
                 self.input_names.append(str(inp))
             else:
                 # Other datatype, typically xarray.Variable.
-                # Do not call str/repr, as that will cause evaluation
+                # Do not call object's custom str/repr, as that will cause evaluation
                 # (e.g. read from file) of the entire array
-                self.input_names.append(str(type(inp)))
+                self.input_names.append(object.__repr__(inp))
 
             # If this is a Wrap, unwrap
             # (the wrapping was only for ufunc support)
@@ -973,8 +973,10 @@ def _as_lazyarray(array: xarray.DataArray) -> LazyArray:
         return variable._data
     else:
         name = array.name
+        if name is None:
+            name = object.__repr__(variable._data)
         if "source" in array.encoding:
-            name += " in " + array.encoding["source"]
+            name += " from " + array.encoding["source"]
         return Wrap(variable, name=name)
 
 
