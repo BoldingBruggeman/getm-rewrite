@@ -1060,10 +1060,7 @@ class TemporalInterpolation(UnaryOperator):
             # If equal to previous time, we are done. If smaller, raise an exception
             if numtime == self._numnow:
                 return False
-            raise Exception(
-                f"Time can only increase, but previous time was"
-                f" {self._timevalues.flat[0]}, new time {time}"
-            )
+            self._start(time)
 
         while self._numnext < numtime:
             self._move_to_next(time)
@@ -1086,9 +1083,12 @@ class TemporalInterpolation(UnaryOperator):
 
         # Find the time index (_inext) just before the left bound of the window we need.
         # We will subsequently call _move_to_next twice to load the actual window.
+        # If a time in the series exactly matches the requested time, this will be the
+        # right bound of the time window (hence side="left" below), except if that
+        # is the very first time in the time series. Then it will be the left bound.
         if self.climatology:
             clim_time = time.replace(year=self._year)
-            self._inext = self.times.searchsorted(clim_time, side="right") - 2
+            self._inext = self.times.searchsorted(clim_time, side="left") - 2
             self._year = time.year
             if self._inext < -1:
                 self._inext += self.times.size
@@ -1100,7 +1100,7 @@ class TemporalInterpolation(UnaryOperator):
                     f"Cannot interpolate {self._source_name} to value at {time},"
                     f" because time series starts only at {self.times[0]}."
                 )
-            self._inext = self.times.searchsorted(time, side="right") - 2
+            self._inext = max(-1, self.times.searchsorted(time, side="left") - 2)
 
         # Load left and right bound of the window encompassing the current time.
         # After that, all information for linear interpolation (_next, _slope)
