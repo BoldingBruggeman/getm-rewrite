@@ -1057,7 +1057,7 @@ class TemporalInterpolation(UnaryOperator):
             self._start(time)
         elif numtime <= self._numnow:
             # Subsequent call to update, but time has not increased
-            # If equal to previous time, we are done. If smaller, raise an exception
+            # If equal to previous time, we are done. If smaller, rewind
             if numtime == self._numnow:
                 return False
             self._start(time)
