@@ -1078,12 +1078,14 @@ class TemporalInterpolation(UnaryOperator):
         return True
 
     def _start(self, time: cftime.datetime):
-        # Make sure the time series does not start after the requested time.
         if time.calendar != self.times[0].calendar:
             raise Exception(
                 f"Simulation calendar {time.calendar} does not match calendar"
                 f" {self.times[0].calendar} used by {self._source_name}."
             )
+
+        # Find the time index (_inext) just before the left bound of the window we need.
+        # We will subsequently call _move_to_next twice to load the actual window.
         if self.climatology:
             clim_time = time.replace(year=self._year)
             self._inext = self.times.searchsorted(clim_time, side="right") - 2
@@ -1092,14 +1094,19 @@ class TemporalInterpolation(UnaryOperator):
                 self._inext += self.times.size
                 self._year -= 1
         else:
+            # Make sure the time series does not start after the requested time.
             if time < self.times[0]:
                 raise Exception(
                     f"Cannot interpolate {self._source_name} to value at {time},"
                     f" because time series starts only at {self.times[0]}."
                 )
             self._inext = self.times.searchsorted(time, side="right") - 2
-        while self._inext < 1:
-            self._move_to_next(time)
+
+        # Load left and right bound of the window encompassing the current time.
+        # After that, all information for linear interpolation (_next, _slope)
+        # is available.
+        self._move_to_next(time)
+        self._move_to_next(time)
 
     def _move_to_next(self, time: cftime.datetime):
         # Move to next record
