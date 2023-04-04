@@ -584,7 +584,7 @@ class Simulation:
             self.fabm.start(self.time)
 
         # Ensure elevations are valid (not shallower than minimum depth)
-        minz = self.domain.T.D.all_values + self.domain.Dmin
+        minz = -self.domain.T.H.all_values + self.domain.Dmin
         for zname in ("z", "zo", "zin", "zio"):
             z = getattr(self.domain.T, zname)
             shallow = (z.all_values < minz) & self.domain.T._water
