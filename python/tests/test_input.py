@@ -7,10 +7,13 @@ import xarray
 
 import pygetm
 
+NDEC = 14  # number of decimal places to check
+
 
 class TestInput(unittest.TestCase):
     def test_temporal_interpolation(self):
-        data = np.arange(365, dtype=float)
+        idays = np.arange(365)
+        data = np.random.random(365)
         dates = cftime.num2date(np.arange(365), "days since 2015-01-01 00:00:00")
         array = xarray.DataArray(data, {"time": dates}, name="test_series")
 
@@ -56,26 +59,28 @@ class TestInput(unittest.TestCase):
         time = cftime.datetime(2015, 1, 1)
         self.assertTrue(xdata.update(time, time.toordinal(fractional=True)))
         self.assertFalse(xdata.update(time, time.toordinal(fractional=True)))
-        self.assertEqual(np.asarray(xdata), 0.0)
+        self.assertEqual(np.asarray(xdata), data[0])
 
         time = cftime.datetime(2015, 5, 8)
         self.assertTrue(xdata.update(time, time.toordinal(fractional=True)))
         self.assertFalse(xdata.update(time, time.toordinal(fractional=True)))
         nday = (time - cftime.datetime(2015, 1, 1)).days
-        self.assertEqual(np.asarray(xdata), nday)
+        self.assertEqual(np.asarray(xdata), np.interp(nday, idays, data))
 
         time = time + datetime.timedelta(hours=6)
         self.assertTrue(xdata.update(time, time.toordinal(fractional=True)))
-        self.assertEqual(np.asarray(xdata), nday + 0.25)
+        self.assertAlmostEqual(
+            np.asarray(xdata), np.interp(nday + 0.25, idays, data), places=NDEC
+        )
 
         # Try rewinding
         time = cftime.datetime(2015, 5, 8)
         xdata.update(time, time.toordinal(fractional=True))
-        self.assertEqual(np.asarray(xdata), nday)
+        self.assertEqual(np.asarray(xdata), np.interp(nday, idays, data))
 
         time = cftime.datetime(2015, 12, 31)
         self.assertTrue(xdata.update(time, time.toordinal(fractional=True)))
-        self.assertEqual(np.asarray(xdata), 364.0)
+        self.assertEqual(np.asarray(xdata), data[-1])
 
         # Beyond the end of the time series
         time = cftime.datetime(2016, 1, 1)
@@ -95,13 +100,13 @@ class TestInput(unittest.TestCase):
 
         for year in range(2000, 2030):
             self.assertTrue(xdata.update(cftime.datetime(year, 1, 1)))
-            self.assertEqual(np.asarray(xdata), 0.0)
+            self.assertEqual(np.asarray(xdata), data[0])
 
             time = cftime.datetime(year, 5, 8)
             self.assertTrue(xdata.update(time, time.toordinal(fractional=True)))
-            self.assertEqual(np.asarray(xdata), nday)
+            self.assertEqual(np.asarray(xdata), np.interp(nday, idays, data))
 
-        data = np.arange(12, dtype=float)
+        data = np.random.random(12)
         dates = [cftime.datetime(2015, month, 16) for month in range(1, 13)]
         array = xarray.DataArray(data, {"time": dates}, name="test_series")
 
@@ -132,16 +137,24 @@ class TestInput(unittest.TestCase):
 
         for year in range(2000, 2030):
             self.assertTrue(xdata.update(cftime.datetime(year, 1, 1)))
-            self.assertAlmostEqual(np.asarray(xdata), 15.0 / 31.0 * 11, places=14)
+            self.assertAlmostEqual(
+                np.asarray(xdata),
+                15.0 / 31.0 * data[-1] + 16.0 / 31.0 * data[0],
+                places=NDEC,
+            )
 
             self.assertTrue(xdata.update(cftime.datetime(year, 1, 16)))
-            self.assertEqual(np.asarray(xdata), 0.0)
+            self.assertEqual(np.asarray(xdata), data[0])
 
             self.assertTrue(xdata.update(cftime.datetime(year, 5, 1)))
-            self.assertEqual(np.asarray(xdata), 3.5)
+            self.assertAlmostEqual(
+                np.asarray(xdata), 0.5 * (data[3] + data[4]), places=NDEC
+            )
 
             self.assertTrue(xdata.update(cftime.datetime(year, 10, 1)))
-            self.assertEqual(np.asarray(xdata), 8.5)
+            self.assertAlmostEqual(
+                np.asarray(xdata), 0.5 * (data[8] + data[9]), places=NDEC
+            )
 
 
 if __name__ == "__main__":
