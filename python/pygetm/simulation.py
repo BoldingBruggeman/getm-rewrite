@@ -583,6 +583,18 @@ class Simulation:
         if self.fabm:
             self.fabm.start(self.time)
 
+        # Ensure elevations are valid (not shallower than minimum depth)
+        minz = self.domain.T.D.all_values + self.domain.Dmin
+        for zname in ("z", "zo", "zin", "zio"):
+            z = getattr(self.domain.T, zname)
+            shallow = (z.all_values < minz) & self.domain.T._water
+            if shallow.any():
+                self.logger.warning(
+                    f"Increasing {shallow.sum()} elevations in {zname} to avoid"
+                    f" water depths below the minimum depth of {self.domain.Dmin} m."
+                )
+                np.putmask(z.all_values, shallow, minz)
+
         # First (out of two) 2D depth update based on old elevations zo
         z_backup = self.domain.T.z.all_values.copy()
         self.domain.T.z.all_values[...] = self.domain.T.zo.all_values
