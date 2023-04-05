@@ -584,14 +584,14 @@ class Simulation:
             self.fabm.start(self.time)
 
         # Ensure elevations are valid (not shallower than minimum depth)
-        minz = -self.domain.T.H.all_values + self.domain.Dmin
+        minz = -self.domain.T.H.all_values
         for zname in ("z", "zo", "zin", "zio"):
             z = getattr(self.domain.T, zname)
             shallow = (z.all_values < minz) & self.domain.T._water
             if shallow.any():
                 self.logger.warning(
                     f"Increasing {shallow.sum()} elevations in {zname} to avoid"
-                    f" water depths below the minimum depth of {self.domain.Dmin} m."
+                    f" negative water depths."
                 )
                 np.putmask(z.all_values, shallow, minz)
 
