@@ -1,5 +1,5 @@
 import sys
-from typing import Container, Mapping, Optional
+from typing import Container, Mapping
 import numpy as np
 import netCDF4
 
