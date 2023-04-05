@@ -491,7 +491,7 @@ class Momentum(pygetm._pygetm.Momentum):
             tausx: surface stress (Pa) in x-direction
             tausy: surface stress (Pa) in y-direction
             dpdx: surface pressure gradient (dimensionless) in x-direction
-            dpdx: surface pressure gradient (dimensionless) in y-direction
+            dpdy: surface pressure gradient (dimensionless) in y-direction
         """
 
         def u():
