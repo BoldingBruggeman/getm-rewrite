@@ -90,10 +90,10 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     get(
-        args.minlon,
-        args.maxlon,
-        args.minlat,
-        args.maxlat,
+        args.minlon - (args.minlon % 0.25),
+        args.maxlon + (-args.maxlon % 0.25),
+        args.minlat - (args.minlat % 0.25),
+        args.maxlat + (-args.maxlat % 0.25),
         args.start_year,
         args.stop_year,
         cdsapirc=args.cdsapirc,
