@@ -2227,6 +2227,7 @@ class Domain(_pygetm.Domain):
         # Update total water depth on advection grids. These must be 1/2 timestep
         # behind the T grid. That's already the case for the X grid, but for the T grid
         # we explicitly compute and use the average of old and new D.
+        _pygetm.clip_z(self.z_T_half, self.Dmin)
         np.add(
             self.T.H.all_values, self.z_T_half.all_values, out=self.D_T_half.all_values
         )
