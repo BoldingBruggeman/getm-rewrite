@@ -171,9 +171,15 @@ class TwoBand(Radiation):
         # Attentuation in the Jerlov values is described by a length scale (g1, g2
         # in GOTM/legacy GETM). Its reciprocal is calculated to set kc1, kc2.
         A, g1, g2 = jerlov_type.value
+        kc1 = 1.0 / g1
+        kc2 = 1.0 / g2
         self.A.fill(A)
-        self.kc1.fill(1.0 / g1)
-        self.kc2.fill(1.0 / g2)
+        self.kc1.fill(kc1)
+        self.kc2.fill(kc2)
+        self.logger.info(
+            f"Using Jerlov {jerlov_type.name.replace('_', ' ')} attenuation:"
+            f" A={A}, kc1={kc1:.4f} m-1, kc2={kc2:.4f} m-1"
+        )
 
     jerlov_type = property(fset=set_jerlov_type)
 
