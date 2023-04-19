@@ -163,9 +163,8 @@ class FABM:
             self._yearday = self.model.dependencies.find(
                 "number_of_days_since_start_of_the_year"
             )
-            self._yearday.value = (
-                time - cftime.datetime(time.year, 1, 1)
-            ).total_seconds() / 86400.0
+            timedelta = time - cftime.datetime(time.year, 1, 1)
+            self._yearday.value = timedelta.total_seconds() / 86400.0
         except KeyError:
             self._yearday = None
 
@@ -219,9 +218,11 @@ class FABM:
         :meth:`advance`
         """
         if self._yearday:
-            self._yearday.value = (
-                time - cftime.datetime(time.year, 1, 1)
-            ).total_seconds() / 86400.0
+            timedelta = time - cftime.datetime(time.year, 1, 1)
+            self._yearday.value = timedelta.total_seconds() / 86400.0
+        valid = self.model.check_state(self.repair)
+        if not (valid or self.repair):
+            raise Exception("FABM state contains invalid values.")
         self.model.get_sources(
             out=(self.sources_interior, self.sources_surface, self.sources_bottom)
         )

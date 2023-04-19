@@ -16,8 +16,8 @@ SPLIT_FACTOR = 30
 
 
 class TestFABM(unittest.TestCase):
-    def simulate(
-        self, fabm_yaml, bioshade_feedback: bool = False
+    def setup(
+        self, fabm_yaml, bioshade_feedback: bool = False, repair: bool = True
     ) -> Tuple[pygetm.domain.Domain, pygetm.Simulation]:
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),
@@ -34,11 +34,19 @@ class TestFABM(unittest.TestCase):
             pygetm.BAROCLINIC,
             airsea=pygetm.airsea.Fluxes(),
             radiation=pygetm.radiation.Radiation(),
-            fabm=pygetm.fabm.FABM(fabm_yaml, bioshade_feedback=bioshade_feedback),
+            fabm=pygetm.fabm.FABM(
+                fabm_yaml, bioshade_feedback=bioshade_feedback, repair=repair
+            ),
         )
         sim.start(START, TIMESTEP, SPLIT_FACTOR)
         if not bioshade_feedback:
             self.assertIsNone(sim.fabm.kc)
+        return domain, sim
+
+    def simulate(
+        self, *args, **kwargs
+    ) -> Tuple[pygetm.domain.Domain, pygetm.Simulation]:
+        domain, sim = self.setup(*args, **kwargs)
         while sim.time < STOP:
             sim.advance()
         sim.finish()
@@ -131,6 +139,23 @@ class TestFABM(unittest.TestCase):
         domain, sim = self.simulate(fabm_yaml, bioshade_feedback=True)
         expected = initial * specific_light_attenuation
         self.assertLess(np.abs(sim.fabm.kc.ma / expected - 1).max(), TOLERANCE)
+
+    def test_check_state(self):
+        fabm_yaml = {
+            "instances": {
+                "tracer": {"model": "bb/passive", "initialization": {"c": 1.0}}
+            }
+        }
+
+        domain, sim = self.setup(fabm_yaml, repair=False)
+        sim["tracer_c"].set(-1.0)
+        with self.assertRaisesRegex(Exception, "FABM state contains invalid values."):
+            sim.fabm.update_sources()
+
+        domain, sim = self.setup(fabm_yaml, repair=True)
+        sim["tracer_c"].set(-1.0)
+        sim.fabm.update_sources()
+        self.assertTrue((sim["tracer_c"].ma == 0.0).all())
 
 
 if __name__ == "__main__":
