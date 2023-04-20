@@ -23,7 +23,7 @@ class TestRadiation(unittest.TestCase):
         domain.update_depth(True)
         return domain
 
-    def test(self):
+    def test_downwelling(self):
         swr_sf_value = 100.0
 
         def _check():
@@ -40,7 +40,7 @@ class TestRadiation(unittest.TestCase):
         rad = pygetm.radiation.TwoBand()
         rad.initialize(domain.T)
         swr_sf = domain.T.array(fill=np.nan)
-        swr_sf.fill(100.0)
+        swr_sf.fill(swr_sf_value)
         self.assertRaises(AssertionError, rad, swr_sf)
 
         rad.kc1.fill(0.1)
@@ -73,6 +73,46 @@ class TestRadiation(unittest.TestCase):
             0.7 * np.exp(0.5 * domain.T.zf.ma) + 0.3 * np.exp(0.15 * domain.T.zf.ma)
         )
         _check()
+
+    def test_bottom_reflection(self):
+        swr_sf_value = 100.0
+        domain = self.create_domain()
+        rad = pygetm.radiation.TwoBand(reflect_at_bottom=True)
+        rad.initialize(domain.T)
+        swr_sf = domain.T.array(fill=np.nan)
+        swr_sf.fill(swr_sf_value)
+        rad.kc1.fill(0.5)
+        rad.kc2.fill(0.1)
+        rad.A.fill(0.7)
+        rad.bottom_albedo.fill(0.2)
+        rad(swr_sf)
+        down1 = swr_sf.ma * 0.7 * np.exp(0.5 * domain.T.zf.ma)
+        down2 = swr_sf.ma * 0.3 * np.exp(0.1 * domain.T.zf.ma)
+        expected_down = down1 + down2
+        up1 = (
+            0.2
+            * down1[0, ...]
+            * np.exp(-0.5 * (domain.T.zf.ma - domain.T.zf.ma[0, ...]))
+        )
+        up2 = (
+            0.2
+            * down2[0, ...]
+            * np.exp(-0.1 * (domain.T.zf.ma - domain.T.zf.ma[0, ...]))
+        )
+        expected_up = up1 + up2
+        expected_abs = (expected_down[1:, ...] - expected_down[:-1, ...]) + (
+            expected_up[:-1, ...] - expected_up[1:, ...]
+        )
+        expected_abs[0, ...] += expected_down[0, ...] - expected_up[0, ...]
+        self.assertLess(
+            np.abs(rad.rad.ma - expected_down).max() / swr_sf_value, TOLERANCE
+        )
+        self.assertLess(
+            np.abs(rad.rad_up.ma - expected_up).max() / swr_sf_value, TOLERANCE
+        )
+        self.assertLess(
+            np.abs(rad.swr_abs.ma - expected_abs).max() / swr_sf_value, TOLERANCE
+        )
 
 
 if __name__ == "__main__":
