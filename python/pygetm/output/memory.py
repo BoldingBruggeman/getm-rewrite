@@ -54,7 +54,7 @@ class MemoryFile(File):
             else:
                 dims = field.dims
                 values = field.get()
-            attrs = field.atts.copy()
+            attrs = field.attrs.copy()
             if coord_names:
                 attrs["coordinates"] = " ".join(coord_names)
             name = renames.get(name, name)

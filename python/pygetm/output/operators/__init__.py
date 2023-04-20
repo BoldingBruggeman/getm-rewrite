@@ -32,7 +32,7 @@ class Base:
         "ndim",
         "dims",
         "fill_value",
-        "atts",
+        "attrs",
         "time_varying",
         "coordinates",
     )
@@ -45,7 +45,7 @@ class Base:
         dtype: DTypeLike,
         fill_value=None,
         time_varying: Union[TimeVarying, Literal[False]] = TimeVarying.MICRO,
-        atts={},
+        attrs={},
     ):
         self.expression = expression
         self.dtype = dtype
@@ -53,7 +53,7 @@ class Base:
         self.dims = dims
         self.ndim = len(shape)
         self.fill_value = fill_value
-        self.atts = atts
+        self.attrs = attrs
         self.time_varying = time_varying
         self.coordinates = []
 
@@ -292,10 +292,10 @@ class Field(Base):
     __slots__ = "collection", "array"
 
     def __init__(self, array: pygetm.core.Array, dtype: Optional[DTypeLike] = None):
-        atts = {}
+        attrs = {}
         for key, value in array.attrs.items():
             if not key.startswith("_"):
-                atts[key] = value
+                attrs[key] = value
 
         self.array = array
         default_time_varying = TimeVarying.MACRO if array.z else TimeVarying.MICRO
@@ -310,7 +310,7 @@ class Field(Base):
             dtype or array.dtype,
             array.fill_value,
             time_varying,
-            atts,
+            attrs,
         )
 
     def get(
@@ -366,7 +366,7 @@ class UnivariateTransform(Base):
             dtype or source.dtype,
             source.fill_value,
             source.time_varying,
-            source.atts,
+            source.attrs,
         )
         self._source = source
 
@@ -501,10 +501,10 @@ class TimeAverage(UnivariateTransformWithData):
     def __init__(self, source: Field):
         super().__init__(source)
         self._n = 0
-        if "cell_methods" in self.atts:
-            self.atts["cell_methods"] += " time: mean"
+        if "cell_methods" in self.attrs:
+            self.attrs["cell_methods"] += " time: mean"
         else:
-            self.atts["cell_methods"] = "time: mean"
+            self.attrs["cell_methods"] = "time: mean"
         self.values.fill(self.fill_value)
 
     @property
@@ -629,6 +629,6 @@ class InterpZ(UnivariateTransformWithData):
     @property
     def coords(self):
         for c in super().coords:
-            if c.atts.get("axis") == "Z":
+            if c.attrs.get("axis") == "Z":
                 c = WrappedArray(self.z_tgt, self.z_dim, (self.z_dim,))
             yield c

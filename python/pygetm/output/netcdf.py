@@ -105,7 +105,7 @@ class NetCDFFile(File):
                 )
                 ncvar.set_auto_maskandscale(False)
                 ncvar.expression = field.expression
-                for att, value in field.atts.items():
+                for att, value in field.attrs.items():
                     setattr(ncvar, att, value)
                 if field.coordinates:
                     setattr(ncvar, "coordinates", " ".join(field.coordinates))
