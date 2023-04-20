@@ -254,7 +254,7 @@ class TwoBand(Radiation):
                 out=self._rad,
             )
             self.rad_up.all_values += self._rad.all_values
-            self.swr_abs.all_values[0, ...] -= self.rad_up.all_values[0,...]
+            self.swr_abs.all_values[0, ...] -= self.rad_up.all_values[0, ...]
             self.swr_abs.all_values -= np.diff(self.rad_up.all_values, axis=0)
 
         if self.par0.saved:
