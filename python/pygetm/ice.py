@@ -38,7 +38,7 @@ class Ice:
             self.has_ice = self.covered.any()
             self.ice.all_values[unmasked] = np.where(self.covered[unmasked], 1.0, 0.0)
             if self.has_ice:
-                ct_sf.all_values[self.covered] = ct_freezing[self.covered]
+                np.putmask(ct_sf.all_values, self.covered, ct_freezing)
                 airsea.shf.all_values[self.covered & (airsea.shf.all_values < 0)] = 0.0
 
         if self.has_ice:
