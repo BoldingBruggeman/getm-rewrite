@@ -35,6 +35,10 @@ class TestRadiation(unittest.TestCase):
             self.assertLess(
                 np.abs(rad.swr_abs.ma - expected_abs).max() / swr_sf_value, TOLERANCE
             )
+            land3d = np.broadcast_to(domain.T._land, rad.rad.all_values.shape)
+            self.assertTrue(
+                (rad.rad.all_values[land3d] == pygetm.constants.FILL_VALUE).all()
+            )
 
         domain = self.create_domain()
         rad = pygetm.radiation.TwoBand()
@@ -112,6 +116,10 @@ class TestRadiation(unittest.TestCase):
         )
         self.assertLess(
             np.abs(rad.swr_abs.ma - expected_abs).max() / swr_sf_value, TOLERANCE
+        )
+        land3d = np.broadcast_to(domain.T._land, rad.rad.all_values.shape)
+        self.assertTrue(
+            (rad.rad.all_values[land3d] == pygetm.constants.FILL_VALUE).all()
         )
 
 

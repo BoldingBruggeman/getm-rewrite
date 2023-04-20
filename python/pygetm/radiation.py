@@ -147,12 +147,6 @@ class TwoBand(Radiation):
                 fill_value=FILL_VALUE,
             )
             self.bottom_albedo.fill(0.0)
-            self.rad_bot_up = grid.array(
-                name="rad_bot_up",
-                units="W m-2",
-                long_name="shortwave radiation reflected at bottom",
-                fill_value=FILL_VALUE,
-            )
             self.rad_up = grid.array(
                 name="rad_up",
                 units="W m-2",
@@ -208,13 +202,13 @@ class TwoBand(Radiation):
         self._kc.all_values[...] = self.kc1.all_values
         self._swr.all_values[...] = self.A.all_values * swr.all_values
         _pygetm.exponential_profile_1band_interfaces(
-            self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self._rad
+            self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self.rad
         )
 
         # Non-visible band - upward
         if self.reflect_at_bottom:
             np.multiply(
-                self._rad.all_values[0, ...],
+                self.rad.all_values[0, ...],
                 self.bottom_albedo.all_values,
                 out=self._swr_up.all_values,
             )
@@ -233,30 +227,22 @@ class TwoBand(Radiation):
             self._kc.all_values += kc2_add.all_values
         self._swr.all_values[...] = swr.all_values - self._swr.all_values
         _pygetm.exponential_profile_1band_interfaces(
-            self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self.rad
+            self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self._rad
         )
 
         # Total downward
         self.rad.all_values += self._rad.all_values
         self.swr_abs.all_values[...] = np.diff(self.rad.all_values, axis=0)
-        rad_bot = self.rad.all_values[0, ...]
 
         # all remaining radiation is absorbed at the bottom and
         # injected in the water layer above it
-        self.swr_abs.all_values[0, ...] += rad_bot
+        self.swr_abs.all_values[0, ...] += self.rad.all_values[0, ...]
 
         # Visible band and total - upward
         if self.reflect_at_bottom:
             np.multiply(
+                self._rad.all_values[0, ...],
                 self.bottom_albedo.all_values,
-                rad_bot,
-                out=self.rad_bot_up.all_values,
-                where=self.grid._water,
-            )
-            self.swr_abs.all_values[0, ...] -= self.rad_bot_up.all_values
-            np.subtract(
-                self.rad_bot_up.all_values,
-                self._swr_up.all_values,
                 out=self._swr_up.all_values,
             )
             _pygetm.exponential_profile_1band_interfaces(
@@ -268,6 +254,7 @@ class TwoBand(Radiation):
                 out=self._rad,
             )
             self.rad_up.all_values += self._rad.all_values
+            self.swr_abs.all_values[0, ...] -= self.rad_up.all_values[0,...]
             self.swr_abs.all_values -= np.diff(self.rad_up.all_values, axis=0)
 
         if self.par0.saved:
