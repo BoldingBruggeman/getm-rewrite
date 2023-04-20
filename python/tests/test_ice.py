@@ -21,10 +21,10 @@ class TestIce(unittest.TestCase):
 
         airsea = pygetm.airsea.FluxesFromMeteo()
         airsea.initialize(domain.T)
-        taux = np.random.uniform(0.001, 0.1, domain.T._water.shape)
-        tauy = np.random.uniform(0.001, 0.1, domain.T._water.shape)
-        airsea.taux.all_values[:, :] = taux
-        airsea.tauy.all_values[:, :] = tauy
+        taux = np.random.uniform(0.001, 0.1, airsea.taux.shape)
+        tauy = np.random.uniform(0.001, 0.1, airsea.tauy.shape)
+        airsea.taux.values[:, :] = taux
+        airsea.tauy.values[:, :] = tauy
 
         ice = pygetm.ice.Ice()
         ice.initialize(domain.T)
@@ -40,8 +40,8 @@ class TestIce(unittest.TestCase):
         self.assertTrue((ct_sf.values[~cover] == 10.0).all())
         self.assertTrue((airsea.taux.values[cover] == 0.0).all())
         self.assertTrue((airsea.tauy.values[cover] == 0.0).all())
-        self.assertTrue((airsea.taux.values[~cover] == taux[2:-2, 2:-2][~cover]).all())
-        self.assertTrue((airsea.tauy.values[~cover] == tauy[2:-2, 2:-2][~cover]).all())
+        self.assertTrue((airsea.taux.values[~cover] == taux[~cover]).all())
+        self.assertTrue((airsea.tauy.values[~cover] == tauy[~cover]).all())
 
 
 if __name__ == "__main__":
