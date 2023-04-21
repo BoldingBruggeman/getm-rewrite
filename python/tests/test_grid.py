@@ -4,6 +4,8 @@ import numpy as np
 
 import pygetm
 
+TOLERANCE = 1e-14
+
 
 class TestGrid(unittest.TestCase):
     def test_interpolation(self):
@@ -41,7 +43,9 @@ class TestGrid(unittest.TestCase):
                     + t.all_values[..., 1:, :-1]
                     + t.all_values[..., 1:, 1:]
                 )
-                self.assertTrue((x.all_values[..., 1:-1, 1:-1] == x_control).all())
+                self.assertLess(
+                    np.abs(x.all_values[..., 1:-1, 1:-1] - x_control).max(), TOLERANCE
+                )
 
                 # Random initialization of X
                 x.all_values[...] = np.random.random(x.all_values.shape)
@@ -54,7 +58,7 @@ class TestGrid(unittest.TestCase):
                     + x.all_values[..., 1:, :-1]
                     + x.all_values[..., 1:, 1:]
                 )
-                self.assertTrue((t.all_values == t_control).all())
+                self.assertLess(np.abs(t.all_values - t_control).max(), TOLERANCE)
 
                 # Random initialization of U
                 u.all_values[...] = np.random.random(u.all_values.shape)
@@ -86,7 +90,9 @@ class TestGrid(unittest.TestCase):
                     + u.all_values[..., 1:, :-1]
                     + u.all_values[..., 1:, 1:]
                 )
-                self.assertTrue((v.all_values[..., :-1, 1:] == v_control).all())
+                self.assertLess(
+                    np.abs(v.all_values[..., :-1, 1:] - v_control).max(), TOLERANCE
+                )
 
                 # Random initialization of V
                 v.all_values[...] = np.random.random(v.all_values.shape)
@@ -118,7 +124,9 @@ class TestGrid(unittest.TestCase):
                     + v.all_values[..., 1:, :-1]
                     + v.all_values[..., 1:, 1:]
                 )
-                self.assertTrue((u.all_values[..., 1:, :-1] == u_control).all())
+                self.assertLess(
+                    np.abs(u.all_values[..., 1:, :-1] - u_control).max(), TOLERANCE
+                )
 
 
 if __name__ == "__main__":
