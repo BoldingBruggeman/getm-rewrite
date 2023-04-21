@@ -155,5 +155,6 @@ class TestRadiation(unittest.TestCase):
             np.abs(rad.par0.ma - down2[-1, ...]).max() / swr_sf_value, TOLERANCE
         )
 
+
 if __name__ == "__main__":
     unittest.main()
