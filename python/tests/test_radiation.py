@@ -30,19 +30,21 @@ class TestRadiation(unittest.TestCase):
             self.assertLess(
                 np.abs(rad.rad.ma - expected).max() / swr_sf_value, TOLERANCE
             )
+            land3d = np.broadcast_to(domain.T._land, rad.rad.all_values.shape)
+            self.assertTrue(
+                (rad.rad.all_values[land3d] == pygetm.constants.FILL_VALUE).all()
+            )
             expected_abs = expected[1:, ...] - expected[:-1, ...]
             expected_abs[0, ...] += expected[0, ...]
             self.assertLess(
                 np.abs(rad.swr_abs.ma - expected_abs).max() / swr_sf_value, TOLERANCE
             )
-            land3d = np.broadcast_to(domain.T._land, rad.rad.all_values.shape)
-            self.assertTrue(
-                (rad.rad.all_values[land3d] == pygetm.constants.FILL_VALUE).all()
-            )
 
         domain = self.create_domain()
         rad = pygetm.radiation.TwoBand()
         rad.initialize(domain.T)
+        rad.par0.saved = True
+        rad.par.saved = True
         swr_sf = domain.T.array(fill=np.nan)
         swr_sf.fill(swr_sf_value)
         self.assertRaises(AssertionError, rad, swr_sf)
@@ -53,13 +55,20 @@ class TestRadiation(unittest.TestCase):
         rad(swr_sf)
         expected = swr_sf.ma * np.exp(0.1 * domain.T.zf.ma)
         _check()
+        self.assertEqual(np.abs(rad.par.ma).max(), 0.0)
+        self.assertEqual(np.abs(rad.par0.ma).max(), 0.0)
 
         rad.kc1.fill(100.0)
         rad.kc2.fill(0.2)
         rad.A.fill(0.0)
         rad(swr_sf)
         expected = swr_sf.ma * np.exp(0.2 * domain.T.zf.ma)
+        expected_par = swr_sf.ma * np.exp(0.2 * domain.T.zc.ma)
         _check()
+        self.assertEqual(np.abs(rad.par0.ma).max(), swr_sf_value)
+        self.assertLess(
+            np.abs(rad.par.ma - expected_par).max() / swr_sf_value, TOLERANCE
+        )
 
         rad.kc1.fill(0.5)
         rad.kc2.fill(0.1)
@@ -68,7 +77,14 @@ class TestRadiation(unittest.TestCase):
         expected = swr_sf.ma * (
             0.7 * np.exp(0.5 * domain.T.zf.ma) + 0.3 * np.exp(0.1 * domain.T.zf.ma)
         )
+        expected_par = swr_sf.ma * 0.3 * np.exp(0.1 * domain.T.zc.ma)
         _check()
+        self.assertLess(
+            np.abs(rad.par.ma - expected_par).max() / swr_sf_value, TOLERANCE
+        )
+        self.assertLess(
+            np.abs(rad.par0.ma - 0.3 * swr_sf_value).max() / swr_sf_value, TOLERANCE
+        )
 
         kc2_add = domain.T.array(z=pygetm.CENTERS, fill=np.nan)
         kc2_add.fill(0.05)
@@ -76,13 +92,22 @@ class TestRadiation(unittest.TestCase):
         expected = swr_sf.ma * (
             0.7 * np.exp(0.5 * domain.T.zf.ma) + 0.3 * np.exp(0.15 * domain.T.zf.ma)
         )
+        expected_par = swr_sf.ma * 0.3 * np.exp(0.15 * domain.T.zc.ma)
         _check()
+        self.assertLess(
+            np.abs(rad.par.ma - expected_par).max() / swr_sf_value, TOLERANCE
+        )
+        self.assertLess(
+            np.abs(rad.par0.ma - 0.3 * swr_sf_value).max() / swr_sf_value, TOLERANCE
+        )
 
     def test_bottom_reflection(self):
         swr_sf_value = 100.0
         domain = self.create_domain()
         rad = pygetm.radiation.TwoBand(reflect_at_bottom=True)
         rad.initialize(domain.T)
+        rad.par0.saved = True
+        rad.par.saved = True
         swr_sf = domain.T.array(fill=np.nan)
         swr_sf.fill(swr_sf_value)
         rad.kc1.fill(0.5)
@@ -122,6 +147,13 @@ class TestRadiation(unittest.TestCase):
             (rad.rad.all_values[land3d] == pygetm.constants.FILL_VALUE).all()
         )
 
+        expected_par = swr_sf.ma * 0.3 * np.exp(0.1 * domain.T.zc.ma)
+        self.assertLess(
+            np.abs(rad.par.ma - expected_par).max() / swr_sf_value, TOLERANCE
+        )
+        self.assertLess(
+            np.abs(rad.par0.ma - down2[-1, ...]).max() / swr_sf_value, TOLERANCE
+        )
 
 if __name__ == "__main__":
     unittest.main()
