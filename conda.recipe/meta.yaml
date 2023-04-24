@@ -3,7 +3,10 @@ package:
   version: "0.7"
 
 source:
-  git_url: https://github.com/BoldingBruggeman/getm-rewrite.git
+  - git_url: https://github.com/BoldingBruggeman/getm-rewrite.git
+  - git_url: https://git.code.sf.net/p/getm/getm-setups
+    git_depth: 1
+    folder: getm-setups
 
 build:
   entry_points:
@@ -34,7 +37,6 @@ requirements:
 test:
   requires:
     - scipy
-    - git
   imports:
     - pygetm
   commands:
@@ -43,11 +45,11 @@ test:
     - pygetm-compare-nc -h
     - set GETM_SETUPS_DIR=./getm-setups # [win]
     - export GETM_SETUPS_DIR=./getm-setups # [unix]
-    - git clone https://git.code.sf.net/p/getm/getm-setups
     - python -m unittest discover -s python/tests -v
   source_files:
     - python/tests/*.py
     - python/examples/north_sea.py
+    - getm-setups/NorthSea
 
 about:
   home: https://pygetm.readthedocs.io
