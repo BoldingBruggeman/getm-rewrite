@@ -1,6 +1,9 @@
 package:
   name: pygetm
-  version: "0.6"
+  version: "0.7"
+
+source:
+  git_url: https://github.com/BoldingBruggeman/getm-rewrite.git
 
 build:
   entry_points:
@@ -31,15 +34,20 @@ requirements:
 test:
   requires:
     - scipy
+    - git
   imports:
     - pygetm
   commands:
-    - python {{ RECIPE_DIR }}/../python/tests/test_interpolate.py -v
-    - python {{ RECIPE_DIR }}/../python/tests/test_vertical_diffusion.py -v
-    - python {{ RECIPE_DIR }}/../python/tests/test_2d_transport.py -v  
     - pygetm-subdiv -h
     - pygetm-test-scaling -h
     - pygetm-compare-nc -h
+    - set GETM_SETUPS_DIR=./getm-setups # [win]
+    - export GETM_SETUPS_DIR=./getm-setups # [unix]
+    - git clone https://git.code.sf.net/p/getm/getm-setups
+    - python -m unittest discover -s python/tests -v
+  source_files:
+    - python/tests/*.py
+    - python/examples/north_sea.py
 
 about:
   home: https://pygetm.readthedocs.io
