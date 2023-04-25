@@ -53,4 +53,10 @@ test:
 
 about:
   home: https://pygetm.readthedocs.io
+  summary: Python-based 3D hydrodynamic model for coastal oceans
+  description: |
+    pygetm is a rewrite of the General Estuarine Transport Model (GETM)
+    in Python (mostly) and Fortran (performance-critical sections)
   license: GPL
+  doc_url: https://pygetm.readthedocs.io
+  dev_url: https://github.com/BoldingBruggeman/getm-rewrite
