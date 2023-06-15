@@ -24,7 +24,7 @@ DEFAULT_VARIABLES = ("u10", "v10", "t2m", "d2m", "sp", "tcc", "tp")
 
 
 def _download_year(
-    year: int, area: list[float], variables: List[str], path: str, **cds_settings
+    year: int, area: List[float], variables: List[str], path: str, **cds_settings
 ):
     c = cdsapi.Client(verify=1, progress=False, **cds_settings)
     request = {
