@@ -1238,7 +1238,7 @@ class InputManager:
             # it specifies information on the open boundaries,
             # of which the current (sub)domain does not have any.
             self._logger.warning(
-                "Ignoring asssignment to array {array.name}"
+                f"Ignoring asssignment to array {array.name}"
                 " because it has no associated data."
             )
             return
