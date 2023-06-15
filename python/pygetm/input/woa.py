@@ -62,6 +62,7 @@ def convert(woapaths: str, outfile: str, name: Optional[str]) -> str:
         nctime = ncout.createVariable("time", float, ("time",))
         time_ref = datetime.datetime(2000, 1, 1)
         nctime.units = f"days since {time_ref}"
+        nctime.calendar = "standard"
         print("  - monthly data:")
         for imonth in range(1, 13):
             print("    - %i" % imonth)
