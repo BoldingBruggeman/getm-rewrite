@@ -63,7 +63,7 @@ def convert(woapaths: str, outfile: str, name: Optional[str]) -> str:
         time_ref = datetime.datetime(2000, 1, 1)
         nctime.units = f"days since {time_ref}"
         print("  - monthly data:")
-        for imonth in range(1, 2): #13):
+        for imonth in range(1, 13):
             print("    - %i" % imonth)
             dt = datetime.datetime(2000, imonth, 15, 12)
             with netCDF4.Dataset(woapaths % imonth) as ncin:
