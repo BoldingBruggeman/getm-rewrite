@@ -119,15 +119,16 @@ def fill(path: str, varname: str, logger: Optional[logging.Logger] = None):
 
     with netCDF4.Dataset(path, "r+") as nc:
         ncvar = nc[varname]
-        indices = np.indices(ncvar.shape[1:])
+        coords = np.array(np.moveaxis(np.indices(ncvar.shape[1:]), 0, -1), dtype=float)
+        coords[:, 0] *= 0.9  # favour nearby depths over nearby lon/lat
         masked = np.ma.getmaskarray(ncvar[0, :, :, :])
         unmasked = ~masked
-        masked_ind = np.array(indices[:, masked].T, dtype=float)
-        unmasked_ind = np.array(indices[:, unmasked].T, dtype=float)
-        logger.info(f"  - building KDTree")
-        tree = scipy.spatial.cKDTree(unmasked_ind)
-        logger.info(f"  - finding nearest neighbors")
-        dist, inearest = tree.query(masked_ind, workers=-1)
+        masked_coords = coords[masked, :]
+        unmasked_coords = coords[unmasked, :]
+        logger.info("  - building KDTree")
+        tree = scipy.spatial.cKDTree(unmasked_coords)
+        logger.info("  - finding nearest neighbors")
+        dist, inearest = tree.query(masked_coords, workers=-1)
         for itime in range(ncvar.shape[0]):
             logger.info(f"  - writing time {itime}")
             data = ncvar[itime, ...]
