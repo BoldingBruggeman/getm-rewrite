@@ -27,10 +27,14 @@ add_subdirectory(../extern/python-otps2 python-otps2 EXCLUDE_FROM_ALL)
 add_subdirectory(../extern/pygsw pygsw EXCLUDE_FROM_ALL)
 add_subdirectory(airsea pyairsea EXCLUDE_FROM_ALL)
 
-set(GOTM_BUILD_LIBRARIES_ONLY ON)
-set(GOTM_USE_FABM OFF CACHE BOOL "Use FABM" FORCE)
-set(GOTM_USE_NetCDF OFF CACHE BOOL "Use NetCDF" FORCE)
-add_subdirectory(../extern/gotm gotm EXCLUDE_FROM_ALL)
+set(FLEXOUT_USE_NetCDF OFF CACHE BOOL "Enable output in NetCDF format" FORCE)
+mark_as_advanced(FLEXOUT_USE_NetCDF)
+add_subdirectory(../extern/gotm/extern/flexout flexout EXCLUDE_FROM_ALL)
+
+add_subdirectory(../extern/gotm/src/util gotm/util)
+add_subdirectory(../extern/gotm/src/turbulence gotm/turbulence)
+target_include_directories(turbulence PRIVATE ../extern/gotm/include)
+target_include_directories(util PRIVATE ../extern/gotm/include)
 
 set(PYFABM_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyfabm CACHE STRING "Directory to write pyfabm library to" FORCE)
 set(PYFABM_NAME "fabm" CACHE STRING "Base name of library" FORCE)
