@@ -1345,7 +1345,7 @@ class InputManager:
                     f" open boundaries. It should have length"
                     f" {grid.domain.open_boundaries.np_glob} (number of open boundary"
                     f" points in the global domain) or {grid.domain.open_boundaries.np}"
-                    f" (number of open boundary points in the curent subdomain)."
+                    f" (number of open boundary points in the current subdomain)."
                     f" Its actual extent is {value.shape[idim]}."
                 )
         elif array.ndim != 0:

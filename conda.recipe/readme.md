@@ -11,5 +11,5 @@ been fixed.
 
 `conda-build <RECIPEDIR> -c conda-forge`
 
-If VS2017 of VS2019 + MSVC v141 is installed, this command should work on a
+If VS2017 or VS2019 + MSVC v141 is installed, this command should work on a
 normal command prompt. (no need to load MSVC or Intel-specific environments)
