@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.1.3)
+# Ensure FindPython3 supports NumPy
+cmake_minimum_required(VERSION 3.14)
 
 # Create main project.
 project(pygetm VERSION 0.1.0 LANGUAGES Fortran C)
@@ -32,6 +33,7 @@ set(GOTM_USE_NetCDF OFF CACHE BOOL "Use NetCDF" FORCE)
 add_subdirectory(../extern/gotm gotm EXCLUDE_FROM_ALL)
 
 set(PYFABM_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyfabm CACHE STRING "Directory to write pyfabm library to" FORCE)
+set(PYFABM_NAME "fabm" CACHE STRING "Base name of library" FORCE)
 set(PYFABM_DIM_COUNT 3 CACHE STRING "Number of FABM dimensions" FORCE)
 set(FABM_FORCED_REAL_KIND c_double)
 add_compile_definitions(_FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_MASKED_VALUE_=0 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
@@ -99,8 +101,8 @@ add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygotm>" pygetm/
                    COMMAND ${CMAKE_COMMAND} -E make_directory pygetm/pyfabm
-                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:fabm_c>" pygetm/pyfabm/
-                   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/../extern/fabm/src/drivers/python/pyfabm/__init__.py" pygetm/pyfabm/
+                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:fabm>" pygetm/pyfabm/
+                   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/../extern/fabm/src/pyfabm/__init__.py" pygetm/pyfabm/
                    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)

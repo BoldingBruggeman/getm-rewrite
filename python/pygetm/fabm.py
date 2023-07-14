@@ -61,7 +61,7 @@ class FABM:
         model = self.model = pyfabm.Model(
             self.path,
             shape=shape,
-            libname="fabm_c",
+            libname="fabm",
             start=(0, halo, halo),
             stop=(shape[0], shape[1] - halo, shape[2] - halo),
         )
