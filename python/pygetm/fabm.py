@@ -117,7 +117,8 @@ class FABM:
             ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
             tracer_totals.append(tracer.TracerTotal(ar))
 
-        # Optionally request PAR attenuation coefficient from FABM for feedbacks to physics
+        # Optionally request PAR attenuation coefficient from FABM for
+        # feedbacks to physics
         self.kc = None
         self.kc_variable = None
         if self.bioshade_feedback:
@@ -248,4 +249,3 @@ class FABM:
         _pygetm.multiply_add(
             self.model.bottom_state.ravel(), self.sources_bottom.ravel(), timestep
         )
-

@@ -183,9 +183,9 @@ class Density:
         lat: Optional[core.Array] = None,
         in_situ: bool = False,
     ) -> Tuple[xarray.DataArray, xarray.DataArray]:
-        """Lazily convert practical salinity and potential temperature to absolute salinity
-        and conservative temperature. The conversion is done only when the returned
-        objects are indexed or cast to a :class:`numpy.ndarray`.
+        """Lazily convert practical salinity and potential temperature to absolute
+        salinity and conservative temperature. The conversion is done only when the
+        returned objects are indexed or cast to a :class:`numpy.ndarray`.
 
         Args:
             salt: practical salinity (PSU)
