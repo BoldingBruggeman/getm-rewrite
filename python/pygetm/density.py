@@ -255,7 +255,7 @@ class LazyConvert(Operator):
         if self.in_situ:
             # Convert from in-situ to potential temperature
             pt0 = np.empty_like(temp)
-            pygsw.pt0_from_t(salt.ravel(), temp.ravel(), p.ravel(), pt0.ravel())
+            pygsw.pt0_from_t(sa.ravel(), temp.ravel(), p.ravel(), pt0.ravel())
         ct = np.empty_like(pt0)
         pygsw.ct_from_pt(sa.ravel(), pt0.ravel(), ct.ravel())
         return ct
