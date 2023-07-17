@@ -5,7 +5,7 @@ import os
 
 import cftime
 import numpy as np
-import xarray
+import xarray as xr
 
 
 METEO_COLUMNS = ("u10", "v10", "sp", "t2m", "hum", "tcc")
@@ -25,7 +25,7 @@ def get_timeseries(
     columns: Iterable[str],
     units: Mapping[str, str] = {},
     long_names: Mapping[str, str] = {},
-) -> xarray.Dataset:
+) -> xr.Dataset:
     dts = []
     all_values = []
     with open(path) as f:
@@ -44,7 +44,7 @@ def get_timeseries(
             )
             all_values.append(list(map(float, items)))
 
-    timevar = xarray.DataArray(np.array(dts), dims=("time",))
+    timevar = xr.DataArray(np.array(dts), dims=("time",))
     name2var = dict(time=timevar)
     for name, values in zip(columns, np.transpose(all_values)):
         attrs = {}
@@ -52,15 +52,15 @@ def get_timeseries(
             attrs["units"] = units[name]
         if name in long_names:
             attrs["long_name"] = long_names[name]
-        ar = xarray.DataArray(
+        ar = xr.DataArray(
             values, coords={"time": timevar}, dims=("time",), name=name, attrs=attrs
         )
         ar.encoding["source"] = os.path.normpath(path)
         name2var[name] = ar
-    return xarray.Dataset(name2var)
+    return xr.Dataset(name2var)
 
 
-def get_meteo(path: str) -> xarray.Dataset:
+def get_meteo(path: str) -> xr.Dataset:
     return get_timeseries(path, METEO_COLUMNS, METEO_UNITS, METEO_LONG_NAMES)
 
 

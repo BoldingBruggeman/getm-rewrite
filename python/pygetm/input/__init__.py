@@ -18,7 +18,7 @@ import functools
 import numpy as np
 import numpy.typing
 import numpy.lib.mixins
-import xarray
+import xarray as xr
 import cftime
 
 import pygetm.util.interpolate
@@ -53,29 +53,29 @@ Z_STANDARD_NAMES = (
 )
 
 
-@xarray.register_dataarray_accessor("getm")
+@xr.register_dataarray_accessor("getm")
 class GETMAccessor:
-    def __init__(self, xarray_obj: xarray.DataArray):
+    def __init__(self, xarray_obj: xr.DataArray):
         self._obj = xarray_obj
 
     @property
-    def longitude(self) -> Optional[xarray.DataArray]:
+    def longitude(self) -> Optional[xr.DataArray]:
         return self.coordinates.get("longitude")
 
     @property
-    def latitude(self) -> Optional[xarray.DataArray]:
+    def latitude(self) -> Optional[xr.DataArray]:
         return self.coordinates.get("latitude")
 
     @property
-    def z(self) -> Optional[xarray.DataArray]:
+    def z(self) -> Optional[xr.DataArray]:
         return self.coordinates.get("z")
 
     @property
-    def time(self) -> Optional[xarray.DataArray]:
+    def time(self) -> Optional[xr.DataArray]:
         return self.coordinates.get("time")
 
     @functools.cached_property
-    def coordinates(self) -> Mapping[str, xarray.DataArray]:
+    def coordinates(self) -> Mapping[str, xr.DataArray]:
         _coordinates = {}
         for name, coord in self._obj.coords.items():
             units = coord.attrs.get("units")
@@ -103,7 +103,7 @@ def _open(path, preprocess=None, **kwargs):
     for k, ds in open_nc_files:
         if k == key:
             return ds
-    ds = xarray.open_dataset(path, **kwargs)
+    ds = xr.open_dataset(path, **kwargs)
     if preprocess:
         ds = preprocess(ds)
     open_nc_files.append((key, ds))
@@ -113,9 +113,9 @@ def _open(path, preprocess=None, **kwargs):
 def from_nc(
     paths: Union[str, Sequence[str]],
     name: str,
-    preprocess: Optional[Callable[[xarray.Dataset], xarray.Dataset]] = None,
+    preprocess: Optional[Callable[[xr.Dataset], xr.Dataset]] = None,
     **kwargs,
-) -> xarray.DataArray:
+) -> xr.DataArray:
     """Obtain a variable from one or more NetCDF files that can be used as value
     provided to :meth:`InputManager.add` and :meth:`pygetm.core.Array.set`.
 
@@ -146,7 +146,7 @@ def from_nc(
         # Note: we wrap the netCDF array ourselves, in order to support lazy operators
         # (e.g., add, multiply)
         lazyvar = Wrap(array.variable, name=f"from_nc({path!r}, {name!r})")
-        array = xarray.DataArray(
+        array = xr.DataArray(
             lazyvar,
             dims=array.dims,
             coords=array.coords,
@@ -158,7 +158,7 @@ def from_nc(
         return arrays[0]
     else:
         assert all(array.getm.time is not None for array in arrays)
-        return xarray.concat(
+        return xr.concat(
             sorted(arrays, key=lambda a: a.getm.time.values.flat[0]),
             dim=arrays[0].getm.time.dims[0],
             coords="minimal",
@@ -201,7 +201,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         if "out" in kwargs:
             return NotImplemented
 
-        COMPATIBLE_TYPES = (np.ndarray, numbers.Number, LazyArray, xarray.Variable)
+        COMPATIBLE_TYPES = (np.ndarray, numbers.Number, LazyArray, xr.Variable)
         for x in inputs:
             if not isinstance(x, COMPATIBLE_TYPES):
                 return NotImplemented
@@ -249,11 +249,11 @@ class Operator(LazyArray):
         self.input_names = []
         for inp in inputs:
             assert isinstance(
-                inp, (np.ndarray, numbers.Number, LazyArray, xarray.Variable)
+                inp, (np.ndarray, numbers.Number, LazyArray, xr.Variable)
             ), f"Input has unknown type {type(inp)}"
 
             # Unpack to LazyArray if possible
-            if isinstance(inp, xarray.Variable) and isinstance(inp._data, LazyArray):
+            if isinstance(inp, xr.Variable) and isinstance(inp._data, LazyArray):
                 inp = inp._data
 
             if isinstance(inp, LazyArray):
@@ -283,7 +283,7 @@ class Operator(LazyArray):
             shapes = []
             for input in inputs:
                 if isinstance(
-                    input, (np.ndarray, LazyArray, xarray.DataArray, xarray.Variable)
+                    input, (np.ndarray, LazyArray, xr.DataArray, xr.Variable)
                 ):
                     shapes.append(input.shape)
             shape = np.broadcast_shapes(*shapes)
@@ -369,8 +369,8 @@ class UFunc(Operator):
 
 
 class Wrap(UnaryOperator):
-    def __init__(self, source: xarray.Variable, name: str, **kwargs):
-        assert isinstance(source, xarray.Variable)
+    def __init__(self, source: xr.Variable, name: str, **kwargs):
+        assert isinstance(source, xr.Variable)
         super().__init__(
             source, passthrough=True, dtype=source.dtype, name=name, **kwargs
         )
@@ -462,7 +462,7 @@ class Concatenate(UnaryOperator):
 
 
 def limit_region(
-    source: xarray.DataArray,
+    source: xr.DataArray,
     minlon: float,
     maxlon: float,
     minlat: float,
@@ -470,7 +470,7 @@ def limit_region(
     periodic_lon: bool = False,
     verbose: bool = False,
     require_2d: bool = True,
-) -> xarray.DataArray:
+) -> xr.DataArray:
     if not np.isfinite(minlon) or not np.isfinite(maxlon):
         raise Exception(f"Longitude range {minlon} - {maxlon} is not valid")
     if not np.isfinite(minlat) or not np.isfinite(maxlat):
@@ -566,7 +566,7 @@ def limit_region(
             [{ilondim: slice(0, nleft)}.get(i, s) for i, s in enumerate(center_target)]
         )
         center_target[ilondim] = slice(nleft, nleft + imax - imin)
-        target_lon = xarray.concat(
+        target_lon = xr.concat(
             (source_lon[left_source[ilondim]] - 360.0, target_lon),
             source_lon.dims[0],
             combine_attrs="no_conflicts",
@@ -590,7 +590,7 @@ def limit_region(
                 for i, s in enumerate(center_target)
             ]
         )
-        target_lon = xarray.concat(
+        target_lon = xr.concat(
             (target_lon, source_lon[right_source[ilondim]] + 360.0),
             source_lon.dims[0],
             combine_attrs="no_conflicts",
@@ -614,14 +614,14 @@ def limit_region(
     coords = dict(source.coords.items())
     coords[source_lon.name] = target_lon
     coords[source_lat.name] = target_lat
-    return xarray.DataArray(
+    return xr.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
 
 def concatenate_slices(
-    source: xarray.DataArray, idim: int, slices: Tuple[slice, ...], verbose=False
-) -> xarray.DataArray:
+    source: xr.DataArray, idim: int, slices: Tuple[slice, ...], verbose=False
+) -> xr.DataArray:
     assert idim < source.ndim
     assert all([isinstance(s, slice) for s in slices])
     shape = list(source.shape)
@@ -656,7 +656,7 @@ def concatenate_slices(
     for name, c in source.coords.items():
         if source.dims[idim] not in c.dims:
             coords[name] = c
-    return xarray.DataArray(
+    return xr.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
@@ -684,8 +684,8 @@ class Transpose(UnaryOperator):
 
 
 def transpose(
-    source: xarray.DataArray, axes: Optional[Iterable[int]] = None
-) -> xarray.DataArray:
+    source: xr.DataArray, axes: Optional[Iterable[int]] = None
+) -> xr.DataArray:
     if axes is None:
         axes = range(source.ndim)[::-1]
     dims = [source.dims[i] for i in axes]
@@ -707,7 +707,7 @@ def transpose(
             caxes = [c.dims.index(d) for d in newcdims]
             coords[name] = transpose(c, caxes)
         coords[name] = c
-    return xarray.DataArray(
+    return xr.DataArray(
         lazyvar,
         dims=dims,
         coords=coords,
@@ -716,7 +716,7 @@ def transpose(
     )
 
 
-def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
+def isel(source: xr.DataArray, **indices) -> xr.DataArray:
     """Index named dimensions with integers, slice objects or integer arrays"""
     advanced_indices = []
     for dim in list(indices):
@@ -726,8 +726,8 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
         )
         if not isinstance(indices[dim], (int, slice)):
             advanced_indices.append(source.dims.index(dim))
-            #            indices[dim] = xarray.Variable([source.dims[advanced_indices[0]]], np.asarray(indices[dim], dtype=np.intp))
-            indices[dim] = xarray.Variable(
+            #            indices[dim] = xr.Variable([source.dims[advanced_indices[0]]], np.asarray(indices[dim], dtype=np.intp))
+            indices[dim] = xr.Variable(
                 ["__newdim"], np.asarray(indices[dim], dtype=np.intp)
             )
 
@@ -769,18 +769,18 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
     for name, c in source.coords.items():
         if all(dim not in c.dims for dim in indices):
             coords[name] = c
-    return xarray.DataArray(
+    return xr.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
 
 def horizontal_interpolation(
-    source: xarray.DataArray,
-    lon: xarray.DataArray,
-    lat: xarray.DataArray,
+    source: xr.DataArray,
+    lon: xr.DataArray,
+    lat: xr.DataArray,
     dtype: numpy.typing.DTypeLike = float,
     mask=None,
-) -> xarray.DataArray:
+) -> xr.DataArray:
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
     if source_lon is None:
         raise Exception(
@@ -827,8 +827,8 @@ def horizontal_interpolation(
         lon_name = lon_name + "_"
     if lat_name in dimensions and lat.ndim > 1:
         lat_name = lat_name + "_"
-    lon = xarray.DataArray(lon, dims=dimensions, name=lon_name, attrs=source_lon.attrs)
-    lat = xarray.DataArray(lat, dims=dimensions, name=lat_name, attrs=source_lat.attrs)
+    lon = xr.DataArray(lon, dims=dimensions, name=lon_name, attrs=source_lon.attrs)
+    lat = xr.DataArray(lat, dims=dimensions, name=lat_name, attrs=source_lat.attrs)
     coords = dict(
         [
             (k, v)
@@ -850,7 +850,7 @@ def horizontal_interpolation(
         min(ilondim, ilatdim),
         source.ndim - max(ilondim, ilatdim) - 1,
     )
-    return xarray.DataArray(
+    return xr.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
@@ -900,8 +900,8 @@ class HorizontalInterpolation(UnaryOperator):
 
 
 def vertical_interpolation(
-    source: xarray.DataArray, target_z: numpy.typing.ArrayLike, itargetdim: int = 0
-) -> xarray.DataArray:
+    source: xr.DataArray, target_z: numpy.typing.ArrayLike, itargetdim: int = 0
+) -> xr.DataArray:
     source_z = source.getm.z
     target_z = np.asarray(target_z)
     if source_z is None:
@@ -946,7 +946,7 @@ def vertical_interpolation(
     lazyvar = VerticalInterpolation(
         _as_lazyarray(source), target_z, izdim, source_z.values, itargetdim
     )
-    return xarray.DataArray(
+    return xr.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
@@ -979,8 +979,8 @@ class VerticalInterpolation(UnaryOperator):
 
 
 def temporal_interpolation(
-    source: xarray.DataArray, climatology: bool = False
-) -> xarray.DataArray:
+    source: xr.DataArray, climatology: bool = False
+) -> xr.DataArray:
     time_coord = source.getm.time
     assert time_coord is not None, "No time coordinate found"
     itimedim = source.dims.index(time_coord.dims[0])
@@ -990,12 +990,12 @@ def temporal_interpolation(
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
     coords = dict(source.coords.items())
     coords[time_coord.dims[0]] = lazyvar._timecoord
-    return xarray.DataArray(
+    return xr.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
 
 
-def _as_lazyarray(array: xarray.DataArray) -> LazyArray:
+def _as_lazyarray(array: xr.DataArray) -> LazyArray:
     variable = array.variable
     if isinstance(variable._data, LazyArray):
         return variable._data
@@ -1047,7 +1047,7 @@ class TemporalInterpolation(UnaryOperator):
         self._current = np.empty(shape, dtype=self.dtype)
 
         self.times = times
-        self._timecoord = xarray.DataArray(self.times[0])
+        self._timecoord = xr.DataArray(self.times[0])
         self._timevalues = self._timecoord.values
 
         self._numnow = None
@@ -1223,7 +1223,7 @@ class InputManager:
     def add(
         self,
         array: pygetm.core.Array,
-        value: Union[numbers.Number, np.ndarray, xarray.DataArray, LazyArray],
+        value: Union[numbers.Number, np.ndarray, xr.DataArray, LazyArray],
         periodic_lon: bool = True,
         on_grid: Union[bool, OnGrid] = False,
         include_halos: Optional[bool] = None,
@@ -1277,7 +1277,7 @@ class InputManager:
             array.fill(value)
             return
 
-        assert isinstance(value, xarray.DataArray), (
+        assert isinstance(value, xr.DataArray), (
             "If value is not numeric, it should be an xarray.DataArray,"
             f" but it is {value!r}."
         )

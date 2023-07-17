@@ -3,7 +3,7 @@ from typing import Tuple, Mapping
 
 import numpy
 import cftime
-import xarray
+import xarray as xr
 import otps2
 from numpy.typing import ArrayLike
 
@@ -21,15 +21,15 @@ def get(
     verbose: bool = False,
     root: str = ROOT,
     scale_factor: float = 1.0,
-) -> xarray.DataArray:
+) -> xr.DataArray:
     assert variable in ("h", "u", "v", "hz", "hu", "hv")
 
     lon = numpy.asarray(lon)
     lat = numpy.asarray(lat)
     if lon.size == 0:
-        return xarray.DataArray(numpy.empty_like(lon))
+        return xr.DataArray(numpy.empty_like(lon))
 
-    def select(ncvar) -> xarray.DataArray:
+    def select(ncvar) -> xr.DataArray:
         out = pygetm.input.limit_region(
             ncvar, lon.min(), lon.max(), lat.min(), lat.max(), periodic_lon=True
         )
@@ -44,9 +44,7 @@ def get(
         # Water depth at z, u, or v points.
         # These are static variables definied in the grid file
         axis = variable[1]
-        with xarray.open_dataset(
-            os.path.join(root, f"grid_tpxo9_atlas{postfix}.nc")
-        ) as ds:
+        with xr.open_dataset(os.path.join(root, f"grid_tpxo9_atlas{postfix}.nc")) as ds:
             ds = ds.set_coords((f"lat_{axis}", f"lon_{axis}"))
             return select(ds[variable])
 
@@ -59,7 +57,7 @@ def get(
             print(f"TPXO: reading {component} constituent of {variable}...")
         name = f"{file_prefix}_{component}_tpxo9_atlas_30{postfix}.nc"
         path = os.path.join(root, name)
-        with xarray.open_dataset(path) as ds:
+        with xr.open_dataset(path) as ds:
             ds = ds.set_coords((f"lat_{axis}", f"lon_{axis}"))
             x = select(ds[f"{variable}Im"])
             components[component] = (
@@ -67,7 +65,7 @@ def get(
                 scale_factor * x.values,
             )
     lazyvar = Data(components, lat, name=f"tpxo({root!r}, {variable!r})")
-    return xarray.DataArray(lazyvar, dims=x.dims, coords=x.coords, name=lazyvar.name)
+    return xr.DataArray(lazyvar, dims=x.dims, coords=x.coords, name=lazyvar.name)
 
 
 class Data(pygetm.input.LazyArray):

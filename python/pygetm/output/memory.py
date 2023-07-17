@@ -2,7 +2,7 @@ from typing import Optional
 
 import numpy as np
 import cftime
-import xarray
+import xarray as xr
 
 from . import File
 
@@ -27,16 +27,16 @@ class MemoryFile(File):
             values.append(np.array(field.get(), copy=True))
 
     @property
-    def x(self) -> xarray.Dataset:
+    def x(self) -> xr.Dataset:
         # If the dataset is already cached, return that
         if self._x is not None:
             return self._x
 
         # Time coordinates
-        sec = xarray.Variable(("time",), self._seconds, {"units": "s"})
+        sec = xr.Variable(("time",), self._seconds, {"units": "s"})
         timecoords = {"seconds": sec}
         if self._times is not None:
-            timecoords["time"] = xarray.Variable(("time",), np.array(self._times))
+            timecoords["time"] = xr.Variable(("time",), np.array(self._times))
 
         renames = {}
         for name, field in self.fields.items():
@@ -59,7 +59,7 @@ class MemoryFile(File):
                 attrs["coordinates"] = " ".join(coord_names)
             name = renames.get(name, name)
             values = np.ma.masked_equal(values, field.fill_value)
-            name2var[name] = xarray.Variable(dims, values, attrs)
+            name2var[name] = xr.Variable(dims, values, attrs)
 
         # Create dataarrays (variables + coordinates)
         arrays = {}
@@ -67,10 +67,10 @@ class MemoryFile(File):
             coords = {}
             for c in var.attrs.get("coordinates", "").split():
                 coords[c] = name2var[c]
-            arrays[name] = xarray.DataArray(var, coords=coords, name=name)
+            arrays[name] = xr.DataArray(var, coords=coords, name=name)
 
         # Return dataset with all arrays
-        return xarray.Dataset(arrays)
+        return xr.Dataset(arrays)
 
     def close_now(self, *args, **kwargs):
         self._x = self.x

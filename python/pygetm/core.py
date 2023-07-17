@@ -6,7 +6,7 @@ from functools import partial
 import numpy as np
 import numpy.lib.mixins
 from numpy.typing import DTypeLike, ArrayLike
-import xarray
+import xarray as xr
 
 from . import _pygetm
 from . import parallel
@@ -54,7 +54,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         attrs: Mapping[str, Any] = {},
     ):
         _pygetm.Array.__init__(self, grid)
-        self._xarray: Optional[xarray.DataArray] = None
+        self._xarray: Optional[xr.DataArray] = None
         self._scatter: Optional[parallel.Scatter] = None
         self._gather: Optional[parallel.Gather] = None
         assert (
@@ -501,7 +501,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             # one return value
             return self.create(self.grid, result)
 
-    def set(self, value: Union[float, np.ndarray, xarray.DataArray], **kwargs):
+    def set(self, value: Union[float, np.ndarray, xr.DataArray], **kwargs):
         """Link this array to a field or value using
         :attr:`~pygetm.domain.Domain.input_manager`, which will perform temporal and
         spatial interpolation as required.
@@ -530,7 +530,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 valid = False
         return valid
 
-    def as_xarray(self, mask: bool = False) -> xarray.DataArray:
+    def as_xarray(self, mask: bool = False) -> xr.DataArray:
         """Return this array wrapped in an :class:`xarray.DataArray` that includes
         coordinates and can be used for plotting
         """
@@ -563,7 +563,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if self.ndim == 3:
             dims = ("zi" if self.z == INTERFACES else "z",) + dims
         values = self.values if not mask else self.ma
-        _xarray = xarray.DataArray(
+        _xarray = xr.DataArray(
             values, coords=coords, dims=dims, attrs=attrs, name=self.name
         )
         if not mask:
@@ -571,4 +571,3 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return _xarray
 
     xarray = property(as_xarray)
-

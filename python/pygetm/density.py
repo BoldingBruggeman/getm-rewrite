@@ -2,7 +2,7 @@ from typing import Optional, Union, Tuple
 import numbers
 
 import numpy as np
-import xarray
+import xarray as xr
 
 from . import core
 from . import _pygetm
@@ -176,13 +176,13 @@ class Density:
 
     @staticmethod
     def lazy_convert_ts(
-        salt: xarray.DataArray,
-        temp: xarray.DataArray,
+        salt: xr.DataArray,
+        temp: xr.DataArray,
         p: Optional[core.Array] = None,
         lon: Optional[core.Array] = None,
         lat: Optional[core.Array] = None,
         in_situ: bool = False,
-    ) -> Tuple[xarray.DataArray, xarray.DataArray]:
+    ) -> Tuple[xr.DataArray, xr.DataArray]:
         """Lazily convert practical salinity and potential temperature to absolute
         salinity and conservative temperature. The conversion is done only when the
         returned objects are indexed or cast to a :class:`numpy.ndarray`.
@@ -203,11 +203,11 @@ class Density:
             a tuple with lazy arrays for absolute salinity (g kg-1) and conservative
             temperature (degrees Celsius)
         """
-        gridsrc = salt if isinstance(salt, xarray.DataArray) else temp
+        gridsrc = salt if isinstance(salt, xr.DataArray) else temp
 
         def _broadcast_coordinate(
-            c: xarray.DataArray,
-        ) -> Union[xarray.DataArray, np.ndarray]:
+            c: xr.DataArray,
+        ) -> Union[xr.DataArray, np.ndarray]:
             if c.ndim == gridsrc.ndim:
                 return c
             s = [np.newaxis] * gridsrc.ndim
@@ -225,24 +225,24 @@ class Density:
         lon = np.asarray(lon)
         lat = np.asarray(lat)
         p = np.asarray(p)
-        salt = salt if not isinstance(salt, xarray.DataArray) else salt.variable
-        temp = temp if not isinstance(temp, xarray.DataArray) else temp.variable
+        salt = salt if not isinstance(salt, xr.DataArray) else salt.variable
+        temp = temp if not isinstance(temp, xr.DataArray) else temp.variable
         csalt = LazyConvert(salt, temp, lon, lat, p, in_situ, True)
         ctemp = LazyConvert(salt, temp, lon, lat, p, in_situ, False)
         return (
-            xarray.DataArray(csalt, coords=gridsrc.coords, dims=gridsrc.dims),
-            xarray.DataArray(ctemp, coords=gridsrc.coords, dims=gridsrc.dims),
+            xr.DataArray(csalt, coords=gridsrc.coords, dims=gridsrc.dims),
+            xr.DataArray(ctemp, coords=gridsrc.coords, dims=gridsrc.dims),
         )
 
 
 class LazyConvert(Operator):
     def __init__(
         self,
-        salt: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
-        temp: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
-        lon: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
-        lat: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
-        p: Union[np.ndarray, numbers.Number, LazyArray, xarray.Variable],
+        salt: Union[np.ndarray, numbers.Number, LazyArray, xr.Variable],
+        temp: Union[np.ndarray, numbers.Number, LazyArray, xr.Variable],
+        lon: Union[np.ndarray, numbers.Number, LazyArray, xr.Variable],
+        lat: Union[np.ndarray, numbers.Number, LazyArray, xr.Variable],
+        p: Union[np.ndarray, numbers.Number, LazyArray, xr.Variable],
         in_situ: bool = False,
         return_salt: bool = True,
     ):

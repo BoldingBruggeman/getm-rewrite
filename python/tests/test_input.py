@@ -3,7 +3,7 @@ import datetime
 
 import numpy as np
 import cftime
-import xarray
+import xarray as xr
 
 import pygetm
 
@@ -15,7 +15,7 @@ class TestInput(unittest.TestCase):
         idays = np.arange(365)
         data = np.random.random(365)
         dates = cftime.num2date(np.arange(365), "days since 2015-01-01 00:00:00")
-        array = xarray.DataArray(data, {"time": dates}, name="test_series")
+        array = xr.DataArray(data, {"time": dates}, name="test_series")
 
         xip = pygetm.input.temporal_interpolation(array)
         xdata: pygetm.input.TemporalInterpolation = xip.variable._data
@@ -108,7 +108,7 @@ class TestInput(unittest.TestCase):
 
         data = np.random.random(12)
         dates = [cftime.datetime(2015, month, 16) for month in range(1, 13)]
-        array = xarray.DataArray(data, {"time": dates}, name="test_series")
+        array = xr.DataArray(data, {"time": dates}, name="test_series")
 
         # Try start times just before and just at the start of the time series
         xdata = pygetm.input.temporal_interpolation(

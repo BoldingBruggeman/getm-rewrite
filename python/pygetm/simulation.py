@@ -9,7 +9,7 @@ import enum
 import numpy as np
 import cftime
 
-import xarray
+import xarray as xr
 
 from .constants import (
     BAROTROPIC_2D,
@@ -449,7 +449,8 @@ class Simulation:
     def load_restart(
         self, path: str, time: Optional[cftime.datetime] = None, **kwargs
     ) -> cftime.datetime:
-        """Load the model state from a restart file. This must be called before :meth:`start`.
+        """Load the model state from a restart file.
+        This must be called before :meth:`start`.
 
         Args:
             path: NetCDF file to load restart state from
@@ -463,7 +464,7 @@ class Simulation:
         """
         kwargs.setdefault("decode_times", True)
         kwargs["use_cftime"] = True
-        with xarray.open_dataset(path, **kwargs) as ds:
+        with xr.open_dataset(path, **kwargs) as ds:
             timevar = ds["zt"].getm.time
             if timevar.ndim > 1:
                 raise Exception(
@@ -643,7 +644,7 @@ class Simulation:
 
         # Start output manager
         self.output_manager.start(
-            self.istep, self.time, default_time_reference=self.default_time_reference,
+            self.istep, self.time, default_time_reference=self.default_time_reference
         )
 
         # Verify all fields have finite values. Do this after self.output_manager.start
@@ -888,9 +889,7 @@ class Simulation:
             self.ssv,
             calculate_heat_flux=baroclinic_active,
         )
-        self.ice(
-            baroclinic_active, self.temp_sf, self.salt_sf, self.airsea,
-        )
+        self.ice(baroclinic_active, self.temp_sf, self.salt_sf, self.airsea)
 
         # Update depth-integrated freshwater fluxes:
         # precipitation, evaporation, condensation, rivers
@@ -1182,5 +1181,5 @@ class Simulation:
     def Ekin(self, rho0: float = RHO0):
         U = self.momentum.U.interp(self.domain.T)
         V = self.momentum.V.interp(self.domain.T)
-        vel2_D2 = U ** 2 + V ** 2
+        vel2_D2 = U**2 + V**2
         return 0.5 * rho0 * self.domain.T.area * vel2_D2 / self.domain.T.D

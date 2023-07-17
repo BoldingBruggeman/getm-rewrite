@@ -3,7 +3,7 @@ import tempfile
 from typing import Optional
 import argparse
 
-import xarray
+import xarray as xr
 
 try:
     import rioxarray
@@ -23,7 +23,7 @@ def get(
     reslat: float = DEFAULT_RESOLUTION,
     tiff_path: Optional[str] = None,
     verbose: bool = False,
-) -> xarray.DataArray:
+) -> xr.DataArray:
     if maxlon < minlon:
         raise Exception(
             f"Maximum longitude {maxlon} must exceed minimum longitude {minlon}"

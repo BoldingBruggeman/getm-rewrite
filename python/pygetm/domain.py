@@ -7,7 +7,7 @@ import functools
 
 import numpy as np
 from numpy.typing import ArrayLike
-import xarray
+import xarray as xr
 import netCDF4
 
 from . import _pygetm
@@ -623,7 +623,7 @@ class Rivers(Mapping[str, River]):
 
 
 def find_interfaces(c: ArrayLike) -> np.ndarray:
-    c_if = np.empty((c.size + 1),)
+    c_if = np.empty((c.size + 1))
     d = np.diff(c)
     c_if[1:-1] = c[:-1] + 0.5 * d
     c_if[0] = c[0] - 0.5 * d[0]
@@ -710,9 +710,7 @@ def centers_to_supergrid_2d(
     data[..., ::2, 1::2] = data_if_ip[:2, ..., :-1].mean(axis=0)
 
     data_if_ip[0, ..., :-1, :] = data_centers[..., 1:-1, :-1]
-    data_if_ip[1, ..., :-1, :] = data_centers[
-        ..., 1:-1, 1:,
-    ]
+    data_if_ip[1, ..., :-1, :] = data_centers[..., 1:-1, 1:]
     data[..., 1::2, ::2] = data_if_ip[:2, ..., :-1, :].mean(axis=0)
 
     return data
@@ -913,7 +911,7 @@ def create(
         except ValueError:
             tmask = np.broadcast_to(mask, (1 + 2 * ny, 1 + 2 * nx))[1::2, 1::2]
         tiling = parallel.Tiling.autodetect(
-            mask=tmask, logger=parlogger, periodic_x=periodic_x, periodic_y=periodic_y,
+            mask=tmask, logger=parlogger, periodic_x=periodic_x, periodic_y=periodic_y
         )
     elif isinstance(tiling, str):
         # Path to dumped Tiling object provided
@@ -1521,7 +1519,7 @@ class Domain(_pygetm.Domain):
             dx
             * dy
             / np.sqrt(
-                2.0 * GRAVITY * (H + z) * (dx ** 2 + dy ** 2),
+                2.0 * GRAVITY * (H + z) * (dx**2 + dy**2),
                 where=mask,
                 out=np.ones_like(H),
             )
@@ -1548,7 +1546,7 @@ class Domain(_pygetm.Domain):
         # The user could modify mask, bathymetry, bottom roughness freely until now.
         # Ensure they are marked invalid inside halos and outside the global domain.
         local_slice, _, _, _ = self.tiling.subdomain2slices(
-            halo_sub=4, scale=2, share=1, exclude_halos=True, exclude_global_halos=True,
+            halo_sub=4, scale=2, share=1, exclude_halos=True, exclude_global_halos=True
         )
         outside = np.full(self.H_.shape, True)
         outside[local_slice] = False
@@ -1585,7 +1583,7 @@ class Domain(_pygetm.Domain):
         self.mask_[...] = backup
 
         # Initialize open boundaries
-        # This modifies the mask, and therefore must be done before the grids initialize.
+        # This modifies the mask and therefore must be done before the grids initialize.
         self.open_boundaries.initialize()
 
         # At this point we could make a copy of self.mask_ that would be useful for
@@ -1700,7 +1698,7 @@ class Domain(_pygetm.Domain):
             not self._initialized
         ), "set_bathymetry cannot be called after the domain has been initialized."
 
-        if not isinstance(depth, xarray.DataArray):
+        if not isinstance(depth, xr.DataArray):
             self._map_array(depth, self.H_)
         else:
             # Depth is provided as xarray object that includes coordinates (we require
@@ -1852,7 +1850,8 @@ class Domain(_pygetm.Domain):
         sub: bool = False,
         spherical: Optional[bool] = None,
     ):
-        """Plot the domain, optionally including bathymetric depth, mesh and river positions.
+        """Plot the domain, optionally including bathymetric depth, mesh and
+        river positions.
 
         Args:
             fig: :class:`matplotlib.figure.Figure` instance to plot to. If not provided,
@@ -1927,7 +1926,8 @@ class Domain(_pygetm.Domain):
             if not self._initialized:
                 raise Exception(
                     "Cannot plot rivers until after the domain has initialized."
-                    " Either initialize the domain first or call plot with show_rivers=False"
+                    " Either initialize the domain first or call plot with"
+                    " show_rivers=False"
                 )
             for river in self.rivers.values():
                 iloc, jloc = 1 + river.i * 2, 1 + river.j * 2
@@ -2125,8 +2125,8 @@ class Domain(_pygetm.Domain):
         return inside
 
     def update_depth(self, _3d: bool = False, timestep: float = 0.0):
-        """Use old and new surface elevation on T grid to update elevations on U, V, X grids
-        and subsequently update total water depth ``D`` on all grids.
+        """Use old and new surface elevation on T grid to update elevations on
+        U, V, X grids and subsequently update total water depth ``D`` on all grids.
 
         Args:
             _3d: update elevations of the macrotimestep (``zin``) rather than
