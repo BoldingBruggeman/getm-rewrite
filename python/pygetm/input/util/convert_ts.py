@@ -103,10 +103,12 @@ if __name__ == "__main__":
     parser.add_argument("--sname", help="name of practical salinity variable (input)")
     parser.add_argument("--tname", help="name of in-situ temperature variable (input)")
     parser.add_argument(
-        "--saname", help="name of practical salinity variable (output)", default="sa"
+        "--saname", help="name of absolute salinity variable (output)", default="sa"
     )
     parser.add_argument(
-        "--ctname", help="name of in-situ temperature variable (output)", default="ct"
+        "--ctname",
+        help="name of conservative temperature variable (output)",
+        default="ct",
     )
     args = parser.parse_args()
     convert_ts(
