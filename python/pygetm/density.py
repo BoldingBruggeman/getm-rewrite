@@ -204,12 +204,24 @@ class Density:
             temperature (degrees Celsius)
         """
         gridsrc = salt if isinstance(salt, xarray.DataArray) else temp
+
+        def _broadcast_coordinate(
+            c: xarray.DataArray,
+        ) -> Union[xarray.DataArray, np.ndarray]:
+            if c.ndim == gridsrc.ndim:
+                return c
+            s = [np.newaxis] * gridsrc.ndim
+            for i, d in enumerate(gridsrc.dims):
+                if d in c.dims:
+                    s[i] = slice(None)
+            return np.asarray(c)[tuple(s)]
+
         if lon is None:
-            lon = gridsrc.getm.longitude
+            lon = _broadcast_coordinate(gridsrc.getm.longitude)
         if lat is None:
-            lat = gridsrc.getm.latitude
+            lat = _broadcast_coordinate(gridsrc.getm.latitude)
         if p is None:
-            p = gridsrc.getm.z
+            p = _broadcast_coordinate(gridsrc.getm.z)
         lon = np.asarray(lon)
         lat = np.asarray(lat)
         p = np.asarray(p)
