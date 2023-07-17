@@ -662,26 +662,54 @@ def concatenate_slices(
 
 
 class Transpose(UnaryOperator):
+    def __init__(self, a, axes: Iterable[int], **kwargs):
+        super().__init__(a, **kwargs)
+        self.axes = axes
+        self.oldaxes = list(axes)
+        for inew, iold in enumerate(self.axes):
+            self.oldaxes[iold] = inew
+
     def __array__(self, dtype=None) -> np.ndarray:
-        return np.asarray(self._source).transpose()
+        return np.asarray(self._source).transpose(self.axes)
 
     def __getitem__(self, slices) -> np.ndarray:
-        return self._source[slices[::-1]].transpose()
+        newslices = list(self._finalize_slices(slices))
+        finalslices = [slice(None)] * len(newslices)
+        for inew, s in enumerate(slices):
+            if isinstance(s, (int, np.integer)):
+                newslices[inew] = slice(s, s + 1)
+                finalslices[inew] = 0
+        oldslices = tuple(newslices[inew] for inew in self.oldaxes)
+        return self._source[oldslices].transpose(self.axes)[tuple(finalslices)]
 
 
-def transpose(source: xarray.DataArray) -> xarray.DataArray:
+def transpose(
+    source: xarray.DataArray, axes: Optional[Iterable[int]] = None
+) -> xarray.DataArray:
+    if axes is None:
+        axes = range(source.ndim)[::-1]
+    dims = [source.dims[i] for i in axes]
+    shape = [source.shape[i] for i in axes]
     lazyvar = Transpose(
         _as_lazyarray(source),
-        shape=source.shape[::-1],
+        axes,
+        shape=shape,
         passthrough=list(range(source.ndim)),
         dtype=source.dtype,
     )
     coords = {}
     for name, c in source.coords.items():
-        coords[name] = c.transpose()
+        if c.ndim > 1:
+            newcdims = []
+            for d in dims:
+                if d in c.dims:
+                    newcdims.append(d)
+            caxes = [c.dims.index(d) for d in newcdims]
+            coords[name] = transpose(c, caxes)
+        coords[name] = c
     return xarray.DataArray(
         lazyvar,
-        dims=source.dims[::-1],
+        dims=dims,
         coords=coords,
         attrs=source.attrs,
         name=lazyvar.name,
@@ -733,7 +761,7 @@ def isel(source: xarray.DataArray, **indices) -> xarray.DataArray:
             advanced_added = True
 
     lazyvar = Slice(
-        _as_lazyarray(source), shape=shape, passthrough=passthrough, dtype=source.dtype,
+        _as_lazyarray(source), shape=shape, passthrough=passthrough, dtype=source.dtype
     )
     lazyvar._slices.append((slices, (slice(None),) * len(shape)))
 
@@ -916,7 +944,7 @@ def vertical_interpolation(
         else:
             coords[n] = c
     lazyvar = VerticalInterpolation(
-        _as_lazyarray(source), target_z, izdim, source_z.values, itargetdim,
+        _as_lazyarray(source), target_z, izdim, source_z.values, itargetdim
     )
     return xarray.DataArray(
         lazyvar, dims=source.dims, coords=coords, attrs=source.attrs, name=lazyvar.name
@@ -957,7 +985,7 @@ def temporal_interpolation(
     assert time_coord is not None, "No time coordinate found"
     itimedim = source.dims.index(time_coord.dims[0])
     lazyvar = TemporalInterpolation(
-        _as_lazyarray(source), itimedim, time_coord.values, climatology,
+        _as_lazyarray(source), itimedim, time_coord.values, climatology
     )
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
     coords = dict(source.coords.items())
@@ -1287,10 +1315,6 @@ class InputManager:
                 i_bnd = grid.domain.open_boundaries.i_glob
                 j_bnd = grid.domain.open_boundaries.j_glob
                 value = isel(value, **{value.dims[-1]: i_bnd, value.dims[-2]: j_bnd})
-                if array.z:
-                    # open boundary arrays have z dimension last (fastest varying),
-                    # but gridded 3D data have z first
-                    value = transpose(value)
             elif (
                 source_lon is not None
                 and source_lat is not None
@@ -1327,6 +1351,16 @@ class InputManager:
                     value = pygetm.input.horizontal_interpolation(
                         value, lon_bnd, lat_bnd
                     )
+
+            if array.z and value.getm.z is not None and value.getm.z.ndim == 1:
+                # Source and target arrays are depth-explicit and the source depth is 1D
+                # Ensure it is the last (fastest varying) dimension
+                izdim = value.dims.index(value.getm.z.dims[0])
+                if izdim != value.ndim - 1:
+                    axes = list(range(value.ndim))
+                    axes.append(axes.pop(izdim))
+                    value = transpose(value, axes)
+
             idim = value.ndim - (2 if array.z else 1)
             if value.shape[idim] == grid.domain.open_boundaries.np_glob:
                 # The source array covers all open boundaries (global domain).
