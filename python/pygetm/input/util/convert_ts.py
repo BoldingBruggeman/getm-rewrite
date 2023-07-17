@@ -1,6 +1,8 @@
 from typing import Mapping, Optional
 import logging
 import argparse
+import datetime
+import sys
 
 import numpy as np
 import netCDF4
@@ -48,6 +50,9 @@ def convert_ts(
             sname = _find_standard_variable(nc_s_file, "sea_water_salinity")
         if tname is None:
             tname = _find_standard_variable(nc_t_file, "sea_water_temperature")
+
+        cmdline = " ".join(sys.argv)
+        ncout.history = f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} {cmdline}"
 
         nc_t = nc_t_file[tname]
         nc_s = nc_s_file[sname]
