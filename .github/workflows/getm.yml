@@ -35,9 +35,9 @@ jobs:
           source ./install
       - name: Run notebooks
         run: |
-          conda install -c conda-forge ipython jupyterlab ipympl cmocean pyqt matplotlib
+          conda install -c conda-forge ipython jupyterlab ipympl cmocean matplotlib
           cd python/examples
-          ipython -c "%run Kelvin_wave_in_a_channel.ipynb"
+          ipython --gui qt -c "%run Kelvin_wave_in_a_channel.ipynb"
       - name: Run test suite
         run: |
           cd python/tests
