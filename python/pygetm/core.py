@@ -34,6 +34,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "_ndim",
         "_size",
         "_dtype",
+        "values",
         "update_halos",
         "update_halos_start",
         "update_halos_finish",
