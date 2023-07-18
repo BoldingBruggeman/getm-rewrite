@@ -81,6 +81,6 @@ jobs:
           pygetm-test-scaling --nmax 4 --compare north_sea_2d.nc --compare north_sea_3d.nc north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
       - name: Run notebooks
         run: |
-          conda env update --file environment.yml
+          conda install -c conda-forge ipython jupyterlab ipympl cmocean pyqt
           cd python/examples
           ipython -c "%run Kelvin_wave_in_a_channel.ipynb"
