@@ -3,6 +3,8 @@ on: push
 jobs:
    gfortran:
       runs-on: ${{ matrix.os }}
+      env:
+        RDMAV_FORK_SAFE: 1
       defaults:
         run:
           shell: bash -el {0}
@@ -77,8 +79,6 @@ jobs:
         run: |
           cd python/examples
           pygetm-test-scaling --nmax 4 --compare north_sea_2d.nc --compare north_sea_3d.nc north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
-        env:
-          RDMAV_FORK_SAFE: 1
       - name: Run notebooks
         run: |
           cd python/examples
