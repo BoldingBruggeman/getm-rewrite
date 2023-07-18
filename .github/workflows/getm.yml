@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install gfortran-9 mpich
       - name: Clone
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
            submodules: recursive
            ssh-key: ${{ secrets.BB_TESTING_SSH }}
