@@ -10,7 +10,7 @@ name: pygetm
 channels:
   - conda-forge
 dependencies:
-  - python=3.8.11
+  - python>=3.8
   - cmake
   - fortran-compiler
   - cython
