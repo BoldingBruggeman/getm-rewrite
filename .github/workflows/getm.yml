@@ -2,14 +2,18 @@ name: Build and test
 on: push
 jobs:
    gfortran:
-      runs-on: ubuntu-20.04
+      runs-on: ${{ matrix.os }}
+      defaults:
+        run:
+          shell: bash -el {0}
+      strategy:
+        fail-fast: false
+        matrix:
+          os: ["ubuntu-latest"] #, "macos-latest", "windows-latest"]
+          python-version: ["3.8", "3.9", "3.10", "3.11"]
       steps:
       - name: Install dependencies
         run: sudo apt-get install gfortran-9 mpich
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
       - name: Clone
         uses: actions/checkout@v2
         with:
@@ -18,19 +22,17 @@ jobs:
       - name: Clone getm-setups
         run: |
           git clone https://git.code.sf.net/p/getm/getm-setups
-      - name: Install conda environment
-        run: |
-          conda env create -f environment-min.yml   # environment.yml
-          conda init bash
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          environment-file: environment-min.yml
+          activate-environment: pygetm
       - name: Compile
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           source ./install
       - name: Run test suite
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           cd python/tests
           python -m unittest -v
           mpiexec -n 2 python test_parallel_advection.py -v
@@ -38,26 +40,18 @@ jobs:
           GETM_SETUPS_DIR: ../../getm-setups
       - name: Test box with spherical coordinates
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           cd python/examples
           python box_spherical.py ../../getm-setups/box_spherical --start "2004-01-01 00:00:00" --stop "2004-01-03 00:00:00"
       - name: Test North Sea in 2D barotropic mode
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           cd python/examples
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --runtype 1
       - name: Test North Sea in 3D baroclinic mode
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           cd python/examples
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
       - name: Test North Sea restarts
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           cd python/examples
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --no_rivers --debug_output
           mv -v north_sea_2d.nc north_sea_2d_ref.nc
@@ -68,8 +62,6 @@ jobs:
           pygetm-compare-nc north_sea_3d.nc north_sea_3d_ref.nc --itime1 -1 --itime2 -1 -v
       - name: Test North Sea restarts with rivers
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           cd python/examples
           rm -fv *.nc
           python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --debug_output
@@ -83,7 +75,9 @@ jobs:
           pygetm-compare-nc north_sea_3d.nc north_sea_3d_ref.nc --itime1 -1 --itime2 -1 -v
       - name: Test North Sea scaling
         run: |
-          source ${CONDA}/etc/profile.d/conda.sh
-          conda activate pygetm
           cd python/examples
           pygetm-test-scaling --nmax 4 --compare north_sea_2d.nc --compare north_sea_3d.nc north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
+      - name: Run notebooks
+        run: |
+          cd python/examples
+          ipython -c "%run Kelvin_wave_in_a_channel.ipynb"
