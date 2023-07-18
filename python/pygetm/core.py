@@ -39,6 +39,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "update_halos_start",
         "update_halos_finish",
         "compare_halos",
+        "open_boundaries",
     )
     grid: "domain.Grid"
 
