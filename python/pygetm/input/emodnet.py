@@ -34,7 +34,7 @@ def get(
         )
     url = BASE_URL + (
         f"request=GetCoverage&coverage=emodnet:mean&crs=EPSG:4326"
-        f"&BBOX={minlon},{minlat},{maxlon},{maxlat}"
+        f"&BBOX={minlon-reslon},{minlat-reslat},{maxlon+reslon},{maxlat+reslat}"
         f"&format=GeoTIFF&interpolation=nearest"
         f"&resx={reslon}&resy={reslat}"
     )
@@ -48,10 +48,13 @@ def get(
         fout.write(f.read())
     if verbose:
         print("Opening TIFF as xarray...")
-    da = rioxarray.open_rasterio(fout.name)
+    da = rioxarray.open_rasterio(fout.name, default_name="bath")
     # os.remove(fout.name)
     da["x"].attrs["units"] = "degrees_east"
     da["y"].attrs["units"] = "degrees_north"
+    if da.ndim == 3 and da.shape[0] == 1:
+        # Squeeze out band dimension
+        da = da[0, :, :]
     return da
 
 
