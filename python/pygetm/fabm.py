@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, MutableMapping, Iterable
 
 import numpy as np
 import cftime
@@ -22,6 +22,8 @@ class FABM:
         self.path = path
         self.repair = repair
         self.bioshade_feedback: bool = bioshade_feedback
+
+        self._variable2array: MutableMapping[pyfabm.Variable, core.Array] = {}
 
     def initialize(
         self,
@@ -54,6 +56,7 @@ class FABM:
             if send_data:
                 ar.wrap_ndarray(variable.data, register=False)
             ar.register()
+            self._variable2array[variable] = ar
             return ar
 
         shape = grid.hn.all_values.shape  # shape including halos
@@ -74,7 +77,7 @@ class FABM:
         for i, variable in enumerate(model.interior_state_variables):
             ar_w = core.Array(grid=grid)
             ar_w.wrap_ndarray(self.vertical_velocity[i, ...])
-            tracer_collection.add(
+            ar = tracer_collection.add(
                 data=variable.data,
                 vertical_velocity=ar_w,
                 name=variable.output_name,
@@ -84,16 +87,16 @@ class FABM:
                 rivers_follow_target_cell=variable.no_river_dilution,
                 precipitation_follows_target_cell=variable.no_precipitation_dilution,
             )
+            self._variable2array[variable] = ar
         for variable in model.surface_state_variables + model.bottom_state_variables:
             variable_to_array(variable, send_data=True, attrs=dict(_part_of_state=True))
 
         # Add diagnostics, initially without associated data
         # Data will be sent later, only if the variable is selected for output,
         # and thus, activated in FABM
-        self._diag_arrays = []
         for variable in model.diagnostic_variables:
             current_shape = grid.H.shape if variable.horizontal else grid.hn.shape
-            self._diag_arrays.append(variable_to_array(variable, shape=current_shape))
+            variable_to_array(variable, shape=current_shape)
 
         # Required inputs: mask and cell thickness
         model.link_mask(grid.mask.all_values)
@@ -138,6 +141,10 @@ class FABM:
                 )
                 self.kc.register()
 
+    @property
+    def default_outputs(self) -> Iterable[core.Array]:
+        return [a for v, a in self._variable2array.items() if v.output]
+
     def start(self, time: Optional[cftime.datetime] = None):
         """Prepare FABM. This includes flagging which diagnostics need saving based on
         the output manager configuration, offering fields registered with the field
@@ -146,8 +153,8 @@ class FABM:
         """
         # Tell FABM which diagnostics are saved. FABM will allocate and manage memory
         # only for those that are. This MUST be done before calling self.model.start
-        for variable, array in zip(self.model.diagnostic_variables, self._diag_arrays):
-            variable.save = array.saved
+        for variable in self.model.diagnostic_variables:
+            variable.save = self._variable2array[variable].saved
 
         # Transfer GETM fields with a standard name to FABM
         for field in self.grid.domain.fields.values():
@@ -178,7 +185,8 @@ class FABM:
 
         # Fill GETM placeholder arrays for all FABM diagnostics that will be
         # computed/saved.
-        for variable, array in zip(self.model.diagnostic_variables, self._diag_arrays):
+        for variable in self.model.diagnostic_variables:
+            array = self._variable2array[variable]
             if array.saved:
                 # Provide the array with data (NB it has been registered before)
                 array.wrap_ndarray(variable.data, register=False)
@@ -209,6 +217,7 @@ class FABM:
             units=variable.units,
             long_name=variable.long_path,
             z=len(variable.shape) == 3,
+            attrs={"_time_varying": TimeVarying.MACRO},
         )
         variable.link(arr.all_values)
         return arr
