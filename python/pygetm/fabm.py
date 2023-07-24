@@ -42,7 +42,9 @@ class FABM:
         if grid.lat is not None:
             grid.lat.fabm_standard_name = "latitude"
 
-        def variable_to_array(variable, send_data: bool = False, **kwargs):
+        def variable_to_array(
+            variable: pyfabm.Variable, send_data: bool = False, **kwargs
+        ):
             kwargs.setdefault("attrs", {})["_time_varying"] = TimeVarying.MACRO
             ar = core.Array(
                 name=variable.output_name,
@@ -57,7 +59,6 @@ class FABM:
                 ar.wrap_ndarray(variable.data, register=False)
             ar.register()
             self._variable2array[variable] = ar
-            return ar
 
         shape = grid.hn.all_values.shape  # shape including halos
         halo = grid.domain.halo
