@@ -124,7 +124,7 @@ class TracerCollection(Sequence[Tracer]):
     def __init__(
         self,
         grid: domain.Grid,
-        advection_scheme: operators.AdvectionScheme,
+        advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.DEFAULT,
         cnpar: float = 1.0,
     ):
         self.logger = grid.domain.root_logger.getChild("tracers")
