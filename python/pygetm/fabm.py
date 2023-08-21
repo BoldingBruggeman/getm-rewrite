@@ -51,9 +51,9 @@ class FABM:
                 units=variable.units,
                 long_name=variable.long_path,
                 fill_value=variable.missing_value,
-                dtype=self.model.fabm.dtype,
+                dtype=self.model.fabm.numpy_dtype,
                 grid=grid,
-                **kwargs
+                **kwargs,
             )
             if send_data:
                 ar.wrap_ndarray(variable.data, register=False)
@@ -114,7 +114,7 @@ class FABM:
                 units=variable.units,
                 long_name=variable.long_name,
                 fill_value=variable.missing_value,
-                dtype=model.fabm.dtype,
+                dtype=model.fabm.numpy_dtype,
                 grid=grid,
                 attrs=dict(_time_varying=TimeVarying.MACRO),
             )
@@ -136,7 +136,7 @@ class FABM:
                     units="m-1",
                     long_name="attenuation of visible radiation by FABM",
                     shape=grid.hn.shape,
-                    dtype=self.model.fabm.dtype,
+                    dtype=self.model.fabm.numpy_dtype,
                     grid=self.grid,
                     attrs=dict(_time_varying=TimeVarying.MACRO),
                 )
@@ -202,7 +202,9 @@ class FABM:
         if self.kc_variable is not None:
             self.kc.wrap_ndarray(self.kc_variable.value, register=False)
 
-    def get_dependency(self, name: str) -> core.Array:
+    def get_dependency(
+        self, name: str, array: Optional[core.Array] = None
+    ) -> core.Array:
         """Retrieve the array that will hold values for the specified FABM dependency.
         This array can subsequently be assigned a value or be linked to a
         time/space-varying input with :attr:`~pygetm.core.Array.set`.
@@ -211,17 +213,23 @@ class FABM:
             name: name of the dependency
         """
         variable = self.model.dependencies.find(name)
-        if len(variable.shape) == 0:
-            return variable
-        arr = self.grid.array(
-            name=variable.output_name,
-            units=variable.units,
-            long_name=variable.long_path,
-            z=len(variable.shape) == 3,
-            attrs={"_time_varying": TimeVarying.MACRO},
-        )
-        variable.link(arr.all_values)
-        return arr
+        if array is None:
+            array = core.Array(
+                name=variable.output_name,
+                units=variable.units,
+                long_name=variable.long_path,
+                shape=variable.shape,
+                dtype=self.model.fabm.numpy_dtype,
+                grid=self.grid,
+                attrs=dict(_time_varying=TimeVarying.MACRO),
+            )
+            data = np.empty(variable.shape, dtype=self.model.fabm.numpy_dtype)
+            array.wrap_ndarray(data, register=False)
+        else:
+            data = array.all_values.view()
+            data.shape = variable.shape
+        variable.link(data)
+        return array
 
     def update_sources(self, time: Optional[cftime.datetime] = None):
         """Update sources, vertical velocities, and diagnostics.
