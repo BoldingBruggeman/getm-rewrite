@@ -1504,6 +1504,7 @@ class Domain(_pygetm.Domain):
         self.open_boundaries = open_boundaries.OpenBoundaries(self)
         self.rivers = Rivers(self.T)
         self.default_output_transforms = []
+        self.input_grid_mappers = []
 
     def cfl_check(self, z: float = 0.0, log: bool = True) -> float:
         """Determine maximum time step for depth-integrated equations

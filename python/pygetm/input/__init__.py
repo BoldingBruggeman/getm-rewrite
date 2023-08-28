@@ -14,6 +14,7 @@ import numbers
 import logging
 import enum
 import functools
+import itertools
 
 import numpy as np
 import numpy.typing
@@ -386,6 +387,7 @@ class Slice(UnaryOperator):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._slices = []
+        self.passthrough_own_slices = True
 
     def __array__(self, dtype=None) -> np.ndarray:
         data = np.empty(self.shape, dtype or self.dtype)
@@ -396,8 +398,12 @@ class Slice(UnaryOperator):
     def __getitem__(self, slices) -> np.ndarray:
         slices = self._finalize_slices(slices)
         shape = []
-        for i, (l, s) in enumerate(zip(self.shape, slices)):
-            if i in self.passthrough and isinstance(s, (int, np.integer)):
+        keep = [
+            not (i in self.passthrough and isinstance(s, (int, np.integer)))
+            for i, s in enumerate(slices)
+        ]
+        for i, (l, s, k) in enumerate(zip(self.shape, slices, keep)):
+            if not k:
                 # This dimension will be sliced out
                 continue
             assert isinstance(s, slice), (
@@ -412,18 +418,24 @@ class Slice(UnaryOperator):
             shape.append(len(range(start, stop, step)))
         data = np.empty(shape, self.dtype)
         for src_slice, tgt_slice in self._slices:
-            src_slice = list(src_slice)
+            if self.passthrough_own_slices:
+                # Forward our own slices to source array
+                src_slice = list(src_slice)
+            else:
+                # Apply our own slices only after retrieving data from source array
+                # Only passed-through slices provided as argument are passed to source
+                mid_slice = tuple(itertools.compress(src_slice, keep))
+                src_slice = [slice(None)] * len(src_slice)
+
+            # Forward passed-through slices provided as argument to source array
             for iout, iin in self.passthrough.items():
                 src_slice[iin] = slices[iout]
-            tgt_slice = tuple(
-                [
-                    ori
-                    for i, (cust, ori) in enumerate(zip(slices, tgt_slice))
-                    if i not in self.passthrough
-                    or not isinstance(cust, (int, np.integer))
-                ]
-            )
-            data[tgt_slice] = self._source[tuple(src_slice)]
+
+            tgt_slice = tuple(itertools.compress(tgt_slice, keep))
+            values = self._source[tuple(src_slice)]
+            if not self.passthrough_own_slices:
+                values = values[mid_slice]
+            data[tgt_slice] = values
         return data
 
 
@@ -694,7 +706,7 @@ def transpose(
         _as_lazyarray(source),
         axes,
         shape=shape,
-        passthrough=list(range(source.ndim)),
+        passthrough=range(source.ndim),
         dtype=source.dtype,
     )
     coords = {}
@@ -1407,13 +1419,19 @@ class InputManager:
                 )
                 value = horizontal_interpolation(value, lon, lat)
             else:
-                # the input is already on-grid, but we need to map
-                # from global domain to subdomain
-                assert value.shape[-2:] == global_shape, (
-                    f"{array.name}: shape of values {value.shape[-2:]}"
-                    f" should match that of global domain {global_shape}"
-                )
-                value = value[global_slice]
+                # the input is already on-grid
+                for grid_mapper in grid.domain.input_grid_mappers:
+                    mapped_value = grid_mapper(value, array)
+                    if mapped_value is not None:
+                        value = mapped_value
+                        break
+                else:
+                    # default grid mapping: from global domain to subdomain
+                    assert value.shape[-2:] == global_shape, (
+                        f"{array.name}: shape of values {value.shape[-2:]}"
+                        f" should match that of global domain {global_shape}"
+                    )
+                    value = value[global_slice]
 
         if value.getm.time is not None:
             # The source data is time-dependent; during the simulation it will be
