@@ -1027,7 +1027,7 @@ class TemporalInterpolation(UnaryOperator):
         self,
         source: LazyArray,
         itimedim: int,
-        times: np.ndarray,
+        times: numpy.typing.ArrayLike,
         climatology: bool,
         dtype=float,
         **kwargs,
@@ -1046,7 +1046,7 @@ class TemporalInterpolation(UnaryOperator):
 
         self._current = np.empty(shape, dtype=self.dtype)
 
-        self.times = times
+        self.times = np.asarray(times)
         self._timecoord = xr.DataArray(self.times[0])
         self._timevalues = self._timecoord.values
 
