@@ -1421,7 +1421,7 @@ class InputManager:
             else:
                 # the input is already on-grid
                 for grid_mapper in grid.domain.input_grid_mappers:
-                    mapped_value = grid_mapper(value, array)
+                    mapped_value = grid_mapper(value)
                     if mapped_value is not None:
                         value = mapped_value
                         break
