@@ -392,7 +392,10 @@ class Slice(UnaryOperator):
     def __array__(self, dtype=None) -> np.ndarray:
         data = np.empty(self.shape, dtype or self.dtype)
         for src_slice, tgt_slice in self._slices:
-            data[tgt_slice] = self._source[src_slice]
+            if self.passthrough_own_slices:
+                data[tgt_slice] = self._source[src_slice]
+            else:
+                data[tgt_slice] = np.asarray(self._source, dtype=dtype)[src_slice]
         return data
 
     def __getitem__(self, slices) -> np.ndarray:
@@ -1283,17 +1286,6 @@ class InputManager:
             )
             return
 
-        if isinstance(value, (numbers.Number, np.ndarray)):
-            # Constant-in-time fill value. Set it, then forget about the array
-            # as it will not require further updating.
-            array.fill(value)
-            return
-
-        assert isinstance(value, xr.DataArray), (
-            "If value is not numeric, it should be an xarray.DataArray,"
-            f" but it is {value!r}."
-        )
-
         if include_halos is None:
             include_halos = array.attrs.get("_require_halos", False) or array.attrs.get(
                 "_part_of_state", False
@@ -1313,6 +1305,36 @@ class InputManager:
             global_shape,
         ) = grid.domain.tiling.subdomain2slices(
             exclude_halos=not include_halos, halo_sub=2
+        )
+
+        def _map_to_grid():
+            # the input is already on-grid
+            for grid_mapper in grid.domain.input_grid_mappers:
+                mapped_value = grid_mapper(value)
+                if mapped_value is not None:
+                    return mapped_value
+            else:
+                # default grid mapping: from global domain to subdomain
+                assert value.shape[-2:] == global_shape, (
+                    f"{array.name}: shape of values {value.shape[-2:]}"
+                    f" should match that of global domain {global_shape}"
+                )
+                return value[global_slice]
+
+        if isinstance(value, (numbers.Number, np.ndarray)):
+            if array.on_boundary:
+                pass
+            elif array.ndim != 0 and on_grid != OnGrid.NONE:
+                value = _map_to_grid()
+
+            # Constant-in-time fill value. Set it, then forget about the array
+            # as it will not require further updating.
+            array.fill(value)
+            return
+
+        assert isinstance(value, xr.DataArray), (
+            "If value is not numeric, it should be an xarray.DataArray,"
+            f" but it is {value!r}."
         )
 
         target_slice = (Ellipsis,)
@@ -1420,18 +1442,7 @@ class InputManager:
                 value = horizontal_interpolation(value, lon, lat)
             else:
                 # the input is already on-grid
-                for grid_mapper in grid.domain.input_grid_mappers:
-                    mapped_value = grid_mapper(value)
-                    if mapped_value is not None:
-                        value = mapped_value
-                        break
-                else:
-                    # default grid mapping: from global domain to subdomain
-                    assert value.shape[-2:] == global_shape, (
-                        f"{array.name}: shape of values {value.shape[-2:]}"
-                        f" should match that of global domain {global_shape}"
-                    )
-                    value = value[global_slice]
+                value = _map_to_grid()
 
         if value.getm.time is not None:
             # The source data is time-dependent; during the simulation it will be
