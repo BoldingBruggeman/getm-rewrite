@@ -18,10 +18,12 @@ class FABM:
         path: str = "fabm.yaml",
         repair: bool = True,
         bioshade_feedback: bool = False,
+        libname: str = "fabm",
     ):
         self.path = path
         self.repair = repair
         self.bioshade_feedback: bool = bioshade_feedback
+        self.libname = libname
 
         self._variable2array: MutableMapping[pyfabm.Variable, core.Array] = {}
 
@@ -65,7 +67,7 @@ class FABM:
         model = self.model = pyfabm.Model(
             self.path,
             shape=shape,
-            libname="fabm",
+            libname=self.libname,
             start=(0, halo, halo),
             stop=(shape[0], shape[1] - halo, shape[2] - halo),
         )
@@ -100,7 +102,12 @@ class FABM:
             variable_to_array(variable, shape=current_shape)
 
         # Required inputs: mask and cell thickness
-        model.link_mask(grid.mask.all_values)
+        if hasattr(grid.domain, "mask3d"):
+            model.link_mask(grid.domain.mask3d.all_values, grid.mask.all_values)
+        else:
+            model.link_mask(grid.mask.all_values)
+        if hasattr(grid.domain, "bottom_indices"):
+            model.link_bottom_index(grid.domain.bottom_indices.all_values)
         model.link_cell_thickness(grid.hn.all_values)
 
         # Conserved quantities (depth-integrated)
