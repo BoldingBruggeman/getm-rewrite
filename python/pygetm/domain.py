@@ -77,6 +77,7 @@ class Grid(_pygetm.Grid):
         "rotated",
         "_water_contact",
         "_land",
+        "_land3d",
         "_water",
         "_water_nohalo",
     )

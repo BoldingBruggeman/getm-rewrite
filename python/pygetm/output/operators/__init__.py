@@ -90,6 +90,8 @@ class Base:
 
     @property
     def mask(self) -> np.ndarray:
+        if self.ndim > 2 and hasattr(self.grid, "_land3d"):
+            return self.grid._land3d
         return self.grid._land
 
 
@@ -487,7 +489,7 @@ class Mask(UnivariateTransformWithData):
     def __init__(self, source: Field):
         super().__init__(source)
         self._mask = source.mask
-        assert self._mask.shape == self.shape[-2:]
+        assert self._mask.shape == self.shape[-self._mask.ndim :]
 
     def get(
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
