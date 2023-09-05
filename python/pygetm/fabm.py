@@ -41,6 +41,8 @@ class FABM:
 
         # Assign FABM standard names to grid arrays
         grid.hn.fabm_standard_name = "cell_thickness"
+        grid.H.fabm_standard_name = "bottom_depth_below_geoid"
+        grid.D.fabm_standard_name = "bottom_depth"
         if grid.lon is not None:
             grid.lon.fabm_standard_name = "longitude"
         if grid.lat is not None:
