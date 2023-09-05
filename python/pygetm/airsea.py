@@ -268,7 +268,7 @@ class FluxesFromMeteo(Fluxes):
             units="degree",
             fill_value=FILL_VALUE,
             attrs=dict(
-                _time_varying=TimeVarying.MACRO, standard_name="solar_zenith_angle",
+                _time_varying=TimeVarying.MACRO, standard_name="solar_zenith_angle"
             ),
         )
         self.albedo = grid.array(
@@ -432,7 +432,7 @@ class FluxesFromMeteo(Fluxes):
             time: date and time
         """
         hh = time.hour + time.minute / 60.0 + time.second / 3600.0
-        yday = time.timetuple().tm_yday  # 1 for all of 1 January
+        yday = time.dayofyr  # 1 for all of 1 January
         pyairsea.solar_zenith_angle(
             yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values
         )
