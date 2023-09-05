@@ -19,11 +19,13 @@ class FABM:
         repair: bool = True,
         bioshade_feedback: bool = False,
         libname: str = "fabm",
+        time_varying: TimeVarying = TimeVarying.MACRO,
     ):
         self.path = path
         self.repair = repair
         self.bioshade_feedback: bool = bioshade_feedback
         self.libname = libname
+        self.time_varying = time_varying
 
         self._variable2array: MutableMapping[pyfabm.Variable, core.Array] = {}
 
@@ -47,7 +49,7 @@ class FABM:
         def variable_to_array(
             variable: pyfabm.Variable, send_data: bool = False, **kwargs
         ):
-            kwargs.setdefault("attrs", {})["_time_varying"] = TimeVarying.MACRO
+            kwargs.setdefault("attrs", {})["_time_varying"] = self.time_varying
             ar = core.Array(
                 name=variable.output_name,
                 units=variable.units,
@@ -123,7 +125,7 @@ class FABM:
                 fill_value=variable.missing_value,
                 dtype=model.fabm.numpy_dtype,
                 grid=grid,
-                attrs=dict(_time_varying=TimeVarying.MACRO),
+                attrs=dict(_time_varying=self.time_varying),
             )
             ar.wrap_ndarray(self.conserved_quantity_totals[i, ...], register=False)
             tracer_totals.append(tracer.TracerTotal(ar))
@@ -145,7 +147,7 @@ class FABM:
                     shape=grid.hn.shape,
                     dtype=self.model.fabm.numpy_dtype,
                     grid=self.grid,
-                    attrs=dict(_time_varying=TimeVarying.MACRO),
+                    attrs=dict(_time_varying=self.time_varying),
                 )
                 self.kc.register()
 
@@ -228,7 +230,7 @@ class FABM:
                 shape=variable.shape,
                 dtype=self.model.fabm.numpy_dtype,
                 grid=self.grid,
-                attrs=dict(_time_varying=TimeVarying.MACRO),
+                attrs=dict(_time_varying=self.time_varying),
             )
             data = np.empty(variable.shape, dtype=self.model.fabm.numpy_dtype)
             array.wrap_ndarray(data, register=False)
