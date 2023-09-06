@@ -207,7 +207,12 @@ class FABM:
                 del self.grid.domain.fields[array.name]
 
         # Apply mask to all state variables (interior, bottom, surface)
-        for variable in self.model.state_variables:
+        for variable in self.model.interior_state_variables:
+            mask = getattr(self.grid, "_land3d", self.grid._land)
+            variable.value[..., mask] = variable.missing_value
+        for variable in self.model.bottom_state_variables:
+            variable.value[..., self.grid._land] = variable.missing_value
+        for variable in self.model.surface_state_variables:
             variable.value[..., self.grid._land] = variable.missing_value
 
         if self.kc_variable is not None:
