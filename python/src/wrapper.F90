@@ -494,6 +494,37 @@ contains
       where (mask /= 0) z = max(-H + Dmin, z)
    end subroutine
 
+   subroutine c_vertical_advection_to_sources(nx, ny, nz, mask, c, w, h, s) bind(c)
+      ! first-order upstream-biased advection, e.g., for integrating FABM sinking/floating into source term
+      integer(c_int), intent(in), value :: nx, ny, nz
+      integer(c_int), intent(in)        :: mask(nx, ny, nz)
+      real(c_double), intent(in)        :: c(nx, ny, nz), w(nx, ny, nz), h(nx, ny, nz)
+      real(c_double), intent(inout)     :: s(nx, ny, nz)
+
+      integer :: i, j, k
+      real(c_double) :: local_w, flux
+      real(c_double) :: upward = -1.0_c_double  ! -1 for surface-to-bottom ordering!
+
+      do k=1,nz-1
+         do j=1,ny
+            do i=1,nx
+               if (mask(i,j,k) == 1 .and. mask(i,j,k+1) == 1) then
+                  local_w = upward * 0.5_c_double * (w(i,j,k) + w(i,j,k+1))
+                  if (local_w > 0.0_c_double) then
+                     ! Towards greater k
+                     flux = local_w * c(i,j,k)
+                  else
+                     ! Towards smaller k
+                     flux = local_w * c(i,j,k+1)
+                  end if
+                  s(i,j,k)   = s(i,j,k) - flux / h(i,j,k)
+                  s(i,j,k+1) = s(i,j,k+1) + flux / h(i,j,k+1)
+               end if
+            end do
+         end do
+      end do
+   end subroutine
+
    SUBROUTINE c_multiply_add(n, tgt, add, scale_factor) bind(c)
       integer(c_int), value, intent(in) :: n
       real(c_double), intent(inout) :: tgt(n)

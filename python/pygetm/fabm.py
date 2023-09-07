@@ -263,6 +263,16 @@ class FABM:
         )
         self.model.get_vertical_movement(self.vertical_velocity)
 
+    def add_vertical_movement_to_sources(self):
+        h = self.grid.hn.all_values
+        mask = self.grid.domain.mask3d.all_values
+        for itracer in range(self.model.interior_state.shape[0]):
+            w = self.vertical_velocity[itracer, ...]
+            if w.any():
+                c = self.model.interior_state[itracer, ...]
+                s = self.sources_interior[itracer, ...]
+                _pygetm.vertical_advection_to_sources(mask, c, w, h, s)
+
     def update_totals(self):
         """Ensure sums of conserved quantities are up to date."""
         self.model.get_conserved_quantities(out=self.conserved_quantity_totals)

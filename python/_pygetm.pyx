@@ -66,6 +66,7 @@ cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int halo
 cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy) nogil
 cdef extern void c_blumberg_mellor(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* umask, const int* vmask, const double* idxu, const double* idyv, const double* hu, const double* hv, const double* zf, const double* buoy, double* idpdx, double* idpdy) nogil
 cdef extern void c_shchepetkin_mcwilliams(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const int* umask, const int* vmask, const double* idxu, const double* idyv, const double* h, const double* z, const double* zc, const double* buoy, double* idpdx, double* idpdy) nogil
+cdef extern void c_vertical_advection_to_sources(int nx, int ny, int nz, const int* mask, const double* c, const double* w, const double* h, double* s)
 
 
 cpdef enum:
@@ -592,6 +593,9 @@ def shchepetkin_mcwilliams(Array buoy, Array idpdx, Array idpdy):
 def multiply_add(double[::1] tgt, double[::1] add, double scale_factor):
     if tgt.shape[0] != 0:
         c_multiply_add(<int>tgt.shape[0], &tgt[0], &add[0], scale_factor)
+
+def vertical_advection_to_sources(int[:, :, ::1] mask, double[:, : , ::1] c, double[:, : , ::1] w, double[:, : , ::1] h, double[:, : , ::1] s):
+    c_vertical_advection_to_sources(<int>c.shape[2], <int>c.shape[1], <int>c.shape[0], &mask[0,0,0], &c[0,0,0], &w[0,0,0], &h[0,0,0], &s[0,0,0])
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
