@@ -29,12 +29,12 @@ def get_logger(level=logging.INFO, comm=MPI.COMM_WORLD) -> logging.Logger:
     if comm.rank == 0:
         handlers.append(logging.StreamHandler())
     if comm.size > 1:
-        file_handler = logging.FileHandler("getm-%04i.log" % comm.rank, mode="w")
+        file_handler = logging.FileHandler(f"getm-{comm.rank:04}.log", mode="w")
         file_handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
         handlers.append(file_handler)
     logging.basicConfig(level=level, handlers=handlers, force=True)
     logger = logging.getLogger()
-    logger.info("pygetm %s" % _pygetm.get_version())
+    logger.info(f"pygetm {_pygetm.get_version()}")
     return logger
 
 
@@ -47,7 +47,8 @@ class Tiling:
         max_protrude: float = 0.5,
         **kwargs,
     ) -> "Tiling":
-        """Auto-detect the optimal subdomain division and return it as :class:`Tiling` object
+        """Auto-detect the optimal subdomain division and return it as
+        :class:`Tiling` object
 
         Args:
             mask: mask for the global domain (0: masked, non-zero: active)
@@ -83,8 +84,8 @@ class Tiling:
 
     @staticmethod
     def load(path: str) -> "Tiling":
-        """Create a :class:`Tiling` object from information in a pickle file that was produced
-        with :meth:`Tiling.dump`
+        """Create a :class:`Tiling` object from information in a pickle file
+        that was produced with :meth:`Tiling.dump`
         """
         with open(path, "rb") as f:
             (
@@ -114,12 +115,21 @@ class Tiling:
         nrow: Optional[int] = None,
         ncol: Optional[int] = None,
         map: Optional[np.ndarray] = None,
-        comm=MPI.COMM_WORLD,
+        comm: Optional[MPI.Comm] = None,
         periodic_x: bool = False,
         periodic_y: bool = False,
         ncpus: Optional[int] = None,
     ):
-        if nrow is None or ncol is None:
+        self.comm = comm or MPI.COMM_WORLD.Dup()
+        self.rank: int = self.comm.rank
+        self.n = ncpus if ncpus is not None else self.comm.size
+
+        if nrow is None and ncol is not None:
+            nrow = self.n // ncol
+        if ncol is None and nrow is not None:
+            ncol = self.n // nrow
+
+        if nrow is None and ncol is None:
             assert map is not None, (
                 "If the number of rows and columns in the subdomain decomposition is"
                 " not provided, the rank map must be provided instead."
@@ -145,9 +155,6 @@ class Tiling:
                 return int(self.map[i, j])
             return -1
 
-        self.comm = comm
-        self.rank: int = self.comm.rank
-        self.n = ncpus if ncpus is not None else self.comm.size
         if self.nactive != self.n:
             raise Exception(
                 f"number of active subdomains ({self.nactive}) does not match assigned"
@@ -268,8 +275,7 @@ class Tiling:
             )
 
     def __bool__(self) -> bool:
-        """Return True if the curent subdomain has any neighbors, False otherwise.
-        """
+        """Return True if the curent subdomain has any neighbors, False otherwise."""
         return self.n_neigbors > 0
 
     def wrap(self, *args, **kwargs) -> "DistributedArray":
@@ -291,8 +297,8 @@ class Tiling:
         Tuple[int, int],
         Tuple[int, int],
     ]:
-        """Determine the activate extent of a subdomain in terms of the slices spanned in
-        subdomain arrays and in global arrays
+        """Determine the activate extent of a subdomain in terms of the slices
+        spanned in subdomain arrays and in global arrays
 
         Args:
             irow: row of the subdomain (default: current)
@@ -382,8 +388,7 @@ class Tiling:
         return local_slice, global_slice, local_shape, global_shape
 
     def describe(self):
-        """Print neighbours of the current subdomain
-        """
+        """Print neighbours of the current subdomain"""
 
         def p(x):
             return "-" if x is None else x
@@ -426,8 +431,8 @@ class Tiling:
         if background is not None:
             # Background field (e.g., bathymetry) provided
             assert background.shape == (self.ny_glob, self.nx_glob), (
-                "Argument background has incorrrect shape %s. Expected %s"
-                % (background.shape, (self.ny_glob, self.nx_glob))
+                f"Argument background has incorrrect shape {background.shape}."
+                f" Expected ({self.ny_glob}, {self.nx_glob})"
             )
             ax.add_artist(matplotlib.patches.Rectangle(*rect, ec="None", fc="w"))
             ax.pcolormesh(
@@ -539,13 +544,13 @@ class DistributedArray:
         owncaches = []
 
         def add_task(
-            recvtag: Neighbor, sendtag: Neighbor, outer: np.ndarray, inner: np.ndarray,
+            recvtag: Neighbor, sendtag: Neighbor, outer: np.ndarray, inner: np.ndarray
         ):
             name = recvtag.name.lower()
             neighbor = getattr(tiling, name)
             assert isinstance(neighbor, int), (
-                "Wrong type for neighbor %s: %s (type %s)"
-                % (name, neighbor, type(neighbor))
+                f"Wrong type for neighbor {name}:"
+                f" {neighbor} (type {type(neighbor)})"
             )
             assert inner.shape == outer.shape
             if neighbor != -1:
@@ -663,17 +668,9 @@ class DistributedArray:
             if not np.array_equal(outer, cache, equal_nan=True):
                 delta = outer - cache
                 print(
-                    (
-                        "Rank %i: mismatch in %s halo! Maximum absolute difference: %s."
-                        "Current %s vs. received %s"
-                    )
-                    % (
-                        self.rank,
-                        self.halo2name[id(outer)],
-                        np.abs(delta).max(),
-                        outer,
-                        cache,
-                    )
+                    f"Rank {self.rank}: mismatch in {self.halo2name[id(outer)]} halo!"
+                    f" Maximum absolute difference: {np.abs(delta).max()}."
+                    f" Current {outer} vs. received {cache}"
                 )
                 match = False
         Waitall(send_reqs)
@@ -718,8 +715,8 @@ class Gather:
                         global_shape,
                     ) = tiling.subdomain2slices(irow, icol, exclude_halos=True)
                     assert shape[-2:] == local_shape, (
-                        "Field shape %s differs from expected %s"
-                        % (shape[-2:], local_shape)
+                        f"Field shape {shape[-2:]} differs"
+                        f" from expected {local_shape}"
                     )
                     self.buffers.append(
                         (self.recvbuf[(rank,) + local_slice], global_slice)
@@ -734,13 +731,13 @@ class Gather:
         if self.recvbuf is not None:
             if out is None:
                 out = np.empty(
-                    self.recvbuf.shape[1:-2] + self.global_shape, dtype=self.dtype,
+                    self.recvbuf.shape[1:-2] + self.global_shape, dtype=self.dtype
                 )
                 if self.fill_value is not None:
                     out.fill(self.fill_value)
             assert out.shape[-2:] == self.global_shape, (
-                "Global shape %s differs from expected %s"
-                % (out.shape[-2:], self.global_shape)
+                f"Global shape {out.shape[-2:]} differs"
+                f" from expected {self.global_shape}"
             )
             for source, global_slice in self.buffers:
                 out[slice_spec + global_slice] = source
@@ -789,8 +786,8 @@ class Scatter:
                         exclude_halos=exclude_halos,
                     )
                     assert field.shape[-2:] == local_shape, (
-                        "Field shape %s differs from expected %s"
-                        % (field.shape[-2:], local_shape)
+                        f"Field shape {field.shape[-2:]} differs"
+                        f" from expected {local_shape}"
                     )
                     self.buffers.append(
                         (self.sendbuf[(rank,) + local_slice], global_slice)
@@ -804,8 +801,8 @@ class Scatter:
         if self.sendbuf is not None:
             # we are root and have to send the global field
             assert global_data.shape[-2:] == self.global_shape, (
-                "Global shape %s differs from expected %s"
-                % (global_data.shape[-2:], self.global_shape)
+                f"Global shape {global_data.shape[-2:]} differs"
+                f" from expected {self.global_shape}"
             )
             for sendbuf, global_slice in self.buffers:
                 sendbuf[...] = global_data[global_slice]
@@ -823,8 +820,9 @@ def find_optimal_divison(
     weight_halo: int = 10,
     max_protrude: float = 0.5,
     logger: Optional[logging.Logger] = None,
-    comm: MPI.Comm = MPI.COMM_WORLD,
+    comm: Optional[MPI.Comm] = None,
 ) -> Optional[Mapping[str, Any]]:
+    comm = comm or MPI.COMM_WORLD.Dup()
     if ncpus is None:
         ncpus = comm.size
 
@@ -864,11 +862,11 @@ def find_optimal_divison(
         logger.info(
             (
                 "Determining optimal subdomain decomposition of global domain of "
-                "%i x %i (%i active cells) for %i cores"
+                f"{mask.shape[1]} x {mask.shape[0]} ({(mask != 0).sum()} active cells)"
+                f" for {ncpus} cores"
             )
-            % (mask.shape[1], mask.shape[0], (mask != 0).sum(), ncpus)
         )
-        logger.info("Trying %i possible subdomain sizes" % (nx_ny_combos.shape[0],))
+        logger.info(f"Trying {nx_ny_combos.shape[0]} possible subdomain sizes")
 
     cost, solution = None, None
     for nx_sub, ny_sub in nx_ny_combos[comm.rank :: comm.size]:
@@ -898,7 +896,7 @@ def find_optimal_divison(
     solutions = comm.allgather(solution)
     solution = min(filter(None, solutions), key=lambda x: x["cost"], default=None)
     if logger and solution:
-        logger.info("Optimal subdomain decomposition: %s" % solution)
+        logger.info(f"Optimal subdomain decomposition: {solution}")
     return solution
 
 
@@ -941,7 +939,7 @@ def test_scaling_command():
     )
     args, leftover_args = parser.parse_known_args()
     if leftover_args:
-        print("Arguments %s will be passed to %s" % (leftover_args, args.setup_script))
+        print(f"Arguments {leftover_args} will be passed to {args.setup_script}")
     test_scaling(
         args.setup_script,
         args.nmax,
@@ -981,7 +979,7 @@ def test_scaling(
         ntest.insert(0, 1)
     for n in ntest:
         print(
-            "Running %s with %i CPUs... " % (os.path.basename(setup_script), n),
+            f"Running {os.path.basename(setup_script)} with {n} CPUs... ",
             end="",
             flush=True,
         )
@@ -995,32 +993,27 @@ def test_scaling(
             success = False
             if n == ntest[0]:
                 print(
-                    (
-                        "First simulation failed with return code %i - quitting."
-                        "Last result:"
-                    )
-                    % p.returncode
+                    f"First simulation failed with return code {p.returncode}."
+                    "Quitting."
+                    "Last result:"
                 )
                 print(p.stdout)
                 print()
                 break
-            log_path = "scaling-%03i.log" % n
+            log_path = f"scaling-{n:03}.log"
             with open(log_path, "w") as f:
                 f.write(p.stdout)
-            print(
-                "FAILED with return code %i, log written to %s"
-                % (p.returncode, log_path)
-            )
+            print(f"FAILED with return code {p.returncode}, log written to {log_path}")
             continue
         m = re.search("Time spent in main loop: ([\\d\\.]+) s", p.stdout)
         duration = float(m.group(1))
-        print("%.3f s in main loop" % (duration,))
+        print(f"{duration:.3} s in main loop")
         ncpus.append(n)
         durations.append(duration)
         for i, path in enumerate(compare):
             if n == 1:
                 print(
-                    "  copying reference %s to temporary file... " % path,
+                    f"  copying reference {path} to temporary file... ",
                     end="",
                     flush=True,
                 )
@@ -1032,14 +1025,14 @@ def test_scaling(
                 print("done.")
             else:
                 print(
-                    "  comparing %s wih reference produced with 1 CPUs... " % (path,),
+                    f"  comparing {path} with reference produced with 1 CPUs... ",
                     flush=True,
                 )
                 if not compare_nc.compare(path, refnames[i]):
                     success = False
 
     for refname in refnames:
-        print("Deleting reference result %s... " % refname, end="")
+        print(f"Deleting reference result {refname}... ", end="")
         os.remove(refname)
         print("done.")
 
@@ -1050,7 +1043,7 @@ def test_scaling(
         ax.plot(ncpus, durations, ".")
         ax.grid()
         ax.set_xlabel("number of CPUs")
-        ax.set_ylabel("duration of %s" % os.path.basename(setup_script))
+        ax.set_ylabel(f"duration of {os.path.basename(setup_script)}")
         ax.set_ylim(0, None)
         if out:
             fig.savefig(out, dpi=300)
