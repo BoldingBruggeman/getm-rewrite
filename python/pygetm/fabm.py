@@ -157,6 +157,10 @@ class FABM:
     def default_outputs(self) -> Iterable[core.Array]:
         return [a for v, a in self._variable2array.items() if v.output]
 
+    @property
+    def state_variables(self) -> Iterable[core.Array]:
+        return [self._variable2array[v] for v in self.model.state_variables]
+
     def start(self, time: Optional[cftime.datetime] = None):
         """Prepare FABM. This includes flagging which diagnostics need saving based on
         the output manager configuration, offering fields registered with the field
@@ -217,6 +221,13 @@ class FABM:
 
         if self.kc_variable is not None:
             self.kc.wrap_ndarray(self.kc_variable.value, register=False)
+
+    def has_dependency(self, name: str) -> bool:
+        try:
+            self.model.dependencies.find(name)
+        except KeyError:
+            return False
+        return True
 
     def get_dependency(
         self, name: str, array: Optional[core.Array] = None
