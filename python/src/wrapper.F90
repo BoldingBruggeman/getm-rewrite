@@ -501,9 +501,19 @@ contains
       real(c_double), intent(in)        :: c(nx, ny, nz), w(nx, ny, nz), h(nx, ny, nz)
       real(c_double), intent(inout)     :: s(nx, ny, nz)
 
+      logical :: active
       integer :: i, j, k
       real(c_double) :: local_w, flux
       real(c_double) :: upward = -1.0_c_double  ! -1 for surface-to-bottom ordering!
+
+      active = .false.
+      outer: do k=1,nz
+         do j=1+halo,ny-halo
+            active = any(w(1+halo:nx-halo,j,k) /= 0.0_c_double)  ! Note FABM guarantees w is 0 in masked points
+            if (active) exit outer
+         end do
+      end do outer
+      if (.not. active) return
 
       do k=1,nz-1
          do j=1+halo,ny-halo

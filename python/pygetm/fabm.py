@@ -280,10 +280,9 @@ class FABM:
         mask = self.grid.domain.mask3d.all_values
         for itracer in range(self.model.interior_state.shape[0]):
             w = self.vertical_velocity[itracer, ...]
-            if w.any():
-                c = self.model.interior_state[itracer, ...]
-                s = self.sources_interior[itracer, ...]
-                _pygetm.vertical_advection_to_sources(halo, mask, c, w, h, s)
+            c = self.model.interior_state[itracer, ...]
+            s = self.sources_interior[itracer, ...]
+            _pygetm.vertical_advection_to_sources(halo, mask, c, w, h, s)
 
     def update_totals(self):
         """Ensure sums of conserved quantities are up to date."""
