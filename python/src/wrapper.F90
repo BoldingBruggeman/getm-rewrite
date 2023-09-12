@@ -494,9 +494,9 @@ contains
       where (mask /= 0) z = max(-H + Dmin, z)
    end subroutine
 
-   subroutine c_vertical_advection_to_sources(nx, ny, nz, mask, c, w, h, s) bind(c)
+   subroutine c_vertical_advection_to_sources(nx, ny, nz, halo, mask, c, w, h, s) bind(c)
       ! first-order upstream-biased advection, e.g., for integrating FABM sinking/floating into source term
-      integer(c_int), intent(in), value :: nx, ny, nz
+      integer(c_int), intent(in), value :: nx, ny, nz, halo
       integer(c_int), intent(in)        :: mask(nx, ny, nz)
       real(c_double), intent(in)        :: c(nx, ny, nz), w(nx, ny, nz), h(nx, ny, nz)
       real(c_double), intent(inout)     :: s(nx, ny, nz)
@@ -506,8 +506,8 @@ contains
       real(c_double) :: upward = -1.0_c_double  ! -1 for surface-to-bottom ordering!
 
       do k=1,nz-1
-         do j=1,ny
-            do i=1,nx
+         do j=1+halo,ny-halo
+            do i=1+halo,nx-halo
                if (mask(i,j,k) == 1 .and. mask(i,j,k+1) == 1) then
                   local_w = upward * 0.5_c_double * (w(i,j,k) + w(i,j,k+1))
                   if (local_w > 0.0_c_double) then
