@@ -43,6 +43,7 @@ class Base:
             long_name="surface air pressure",
             units="Pa",
             fill_value=FILL_VALUE,
+            fabm_standard_name="surface_air_pressure",
             attrs=dict(_require_halos=True, standard_name="surface_air_pressure"),
         )
         self.swr = grid.array(
