@@ -19,6 +19,9 @@ VARIABLES = {
     "tcc": "total_cloud_cover",
     "tp": "total_precipitation",
     "ssr": "surface_net_solar_radiation",
+    "tco3": "total_column_ozone",
+    "tcwv": "total_column_water_vapour",
+    "tclw": "total_column_cloud_liquid_water",
 }
 DEFAULT_VARIABLES = ("u10", "v10", "t2m", "d2m", "sp", "tcc", "tp")
 
@@ -85,10 +88,27 @@ if __name__ == "__main__":
     parser.add_argument("start_year", help="start year", type=int)
     parser.add_argument("stop_year", help="stop year", type=int)
     parser.add_argument(
+        "-v",
+        help=f"variable to download ({', '.join(VARIABLES)})",
+        action="append",
+        dest="variables",
+        default=[],
+    )
+    parser.add_argument(
+        "--no_default_variables", action="store_false", dest="default_variables"
+    )
+    parser.add_argument(
         "--cdsapirc",
-        help="path to CDS configuration file (see https://cds.climate.copernicus.eu/api-how-to)",
+        help=(
+            "path to CDS configuration file"
+            " (see https://cds.climate.copernicus.eu/api-how-to)"
+        ),
     )
     args = parser.parse_args()
+    vars = set(args.variables)
+    if args.default_variables:
+        vars.update(DEFAULT_VARIABLES)
+
     get(
         args.minlon - (args.minlon % 0.25),
         args.maxlon + (-args.maxlon % 0.25),
@@ -96,5 +116,6 @@ if __name__ == "__main__":
         args.maxlat + (-args.maxlat % 0.25),
         args.start_year,
         args.stop_year,
+        selected_variables=vars,
         cdsapirc=args.cdsapirc,
     )
