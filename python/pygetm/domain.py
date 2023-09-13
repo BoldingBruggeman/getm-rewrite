@@ -1025,10 +1025,10 @@ class Domain(_pygetm.Domain):
                 f"Extent of global domain ({ny}, {nx}) does not match "
                 f"that of tiling ({tiling.ny_glob}, {tiling.nx_glob})."
             )
-        if tiling.n > tiling.comm.Get_size():
+        if tiling.n > tiling.comm.size:
             raise Exception(
                 f"Number of active cores in subdomain decompositon ({tiling.n}) "
-                f"exceeds available number of cores ({tiling.comm.Get_size()})."
+                f"exceeds available number of cores ({tiling.comm.size})."
             )
 
         # supergrid metrics: double extent/halos, one point overlap between subdomains
