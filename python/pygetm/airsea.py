@@ -227,6 +227,7 @@ class FluxesFromMeteo(Fluxes):
             long_name="specific humidity",
             units="kg kg-1",
             fill_value=FILL_VALUE,
+            fabm_standard_name="surface_specific_humidity",
             attrs=dict(standard_name="specific_humidity", _mask_output=True),
         )
         if self.humidity_measure == HumidityMeasure.DEW_POINT_TEMPERATURE:
@@ -289,6 +290,7 @@ class FluxesFromMeteo(Fluxes):
             long_name="air temperature @ 2 m",
             units="degrees_Celsius",
             fill_value=FILL_VALUE,
+            fabm_standard_name="surface_temperature",
             attrs=dict(standard_name="air_temperature"),
         )
 
@@ -311,6 +313,7 @@ class FluxesFromMeteo(Fluxes):
             long_name="total cloud cover",
             units="1",
             fill_value=FILL_VALUE,
+            fabm_standard_name="cloud_area_fraction",
             attrs=dict(
                 _time_varying=TimeVarying.MACRO, standard_name="cloud_area_fraction"
             ),
