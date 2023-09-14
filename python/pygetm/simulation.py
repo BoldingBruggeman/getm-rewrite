@@ -145,6 +145,7 @@ class Simulation:
         "delay_slow_ip",
         "total_volume_ref",
         "total_area",
+        "nuh_ct",
     ) + _time_arrays
 
     domain: pygetm.domain.Domain
@@ -323,6 +324,7 @@ class Simulation:
             self.dpdxo = domain.U.array()
             self.dpdyo = domain.V.array()
 
+            self.nuh_ct = None
             if fabm:
                 if not isinstance(fabm, pygetm.fabm.FABM):
                     fabm = pygetm.fabm.FABM(
@@ -338,6 +340,18 @@ class Simulation:
 
             self.pres = domain.depth
             self.pres.fabm_standard_name = "pressure"
+            if self.fabm.has_dependency("vertical_tracer_diffusivity"):
+                self.nuh_ct = domain.T.array(
+                    name="nuh_ct",
+                    units="m2 s-1",
+                    long_name="turbulent diffusivity of heat",
+                    z=CENTERS,
+                    fill_value=FILL_VALUE,
+                    attrs=dict(
+                        standard_name="ocean_vertical_heat_diffusivity", _mask_output=True
+                    ),
+                )
+                self.nuh_ct.fabm_standard_name = "vertical_tracer_diffusivity"
 
         self.sst = domain.T.array(
             name="sst",
@@ -935,6 +949,9 @@ class Simulation:
             # Update radiation. This must come after the airsea update, which is
             # responsible for calculating swr
             self.radiation(self.airsea.swr, self.fabm.kc if self.fabm else None)
+
+            if self.nuh_ct is not None:
+                self.turbulence.nuh.interp(self.nuh_ct)
 
             # Update source terms of biogeochemistry, using the new tracer
             # concentrations. Do this last because FABM could depend on any of the
