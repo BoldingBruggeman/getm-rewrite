@@ -338,20 +338,22 @@ class Simulation:
                     self.logger.getChild("FABM"),
                 )
 
+                if self.fabm.has_dependency("vertical_tracer_diffusivity"):
+                    self.nuh_ct = domain.T.array(
+                        name="nuh_ct",
+                        units="m2 s-1",
+                        long_name="turbulent diffusivity of heat",
+                        z=CENTERS,
+                        fill_value=FILL_VALUE,
+                        attrs=dict(
+                            standard_name="ocean_vertical_heat_diffusivity",
+                            _mask_output=True,
+                        ),
+                    )
+                    self.nuh_ct.fabm_standard_name = "vertical_tracer_diffusivity"
+
             self.pres = domain.depth
             self.pres.fabm_standard_name = "pressure"
-            if self.fabm.has_dependency("vertical_tracer_diffusivity"):
-                self.nuh_ct = domain.T.array(
-                    name="nuh_ct",
-                    units="m2 s-1",
-                    long_name="turbulent diffusivity of heat",
-                    z=CENTERS,
-                    fill_value=FILL_VALUE,
-                    attrs=dict(
-                        standard_name="ocean_vertical_heat_diffusivity", _mask_output=True
-                    ),
-                )
-                self.nuh_ct.fabm_standard_name = "vertical_tracer_diffusivity"
 
         self.sst = domain.T.array(
             name="sst",
