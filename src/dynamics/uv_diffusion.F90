@@ -343,7 +343,7 @@ MODULE SUBROUTINE diffusion_driver(self,h,hx,u,v,diffu,diffv)
       do i=TG%imin,TG%imax
          flux(i,j)=0._real64
          if (TG%mask(i,j) == 1) then
-            flux(i,j) = 2._real64 * self%Am0 * TG%dx(i,j) * TG%h(i,j) * (v(i,j) - v(i,j-1)) * TG%idy(i,j)
+            flux(i,j) = 2._real64 * self%Am0 * TG%dx(i,j) * h(i,j) * (v(i,j) - v(i,j-1)) * TG%idy(i,j)
          end if
       end do
    end do
