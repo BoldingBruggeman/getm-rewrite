@@ -223,9 +223,13 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             return all_values
 
     def global_sum(
-        self, reproducible: bool = False, where: Optional["Array"] = None
+        self,
+        reproducible: bool = False,
+        where: Optional["Array"] = None,
+        to_all: bool = False,
     ) -> Optional[np.ndarray]:
         if reproducible:
+            assert not to_all
             all = self.gather()
             if where is not None:
                 where = where.gather()
@@ -237,7 +241,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             local_sum = self.values.sum(
                 where=np._NoValue if where is None else where.values
             )
-            return parallel.Sum(self.grid.domain.tiling, local_sum)()
+            tiling = self.grid.domain.tiling
+            reduce = tiling.allreduce if to_all else tiling.reduce
+            return reduce(local_sum)
 
     def global_mean(
         self, reproducible: bool = False, where: Optional["Array"] = None
@@ -246,7 +252,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if where is not None:
             count = where.global_sum()
         else:
-            count = parallel.Sum(self.grid.domain.tiling, self.values.size)()
+            count = self.grid.domain.tiling.reduce(self.values.size)
         if sum is not None:
             return sum / count
 

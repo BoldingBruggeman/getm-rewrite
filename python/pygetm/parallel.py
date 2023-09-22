@@ -483,6 +483,16 @@ class Tiling:
                 self._caches[key].fill(fill_value)
         return self._caches[key]
 
+    def reduce(self, field: np.ndarray, op=MPI.SUM) -> Optional[np.ndarray]:
+        out = None if self.rank != 0 else np.empty_like(field)
+        self.comm.Reduce(field, out, op)
+        return out
+
+    def allreduce(self, field: np.ndarray, op=MPI.SUM) -> np.ndarray:
+        out = np.empty_like(field)
+        self.comm.Allreduce(field, out, op)
+        return out
+
 
 @enum.unique
 class Neighbor(enum.IntEnum):
@@ -675,18 +685,6 @@ class DistributedArray:
                 match = False
         Waitall(send_reqs)
         return match
-
-
-class Sum:
-    def __init__(self, tiling: Tiling, field: np.ndarray, root: int = 0):
-        self.comm = tiling.comm
-        self.root = root
-        self.field = field
-        self.result = None if tiling.rank != self.root else np.empty_like(field)
-
-    def __call__(self) -> Optional[np.ndarray]:
-        self.comm.Reduce(self.field, self.result, op=MPI.SUM, root=self.root)
-        return self.result
 
 
 class Gather:
