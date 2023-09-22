@@ -252,6 +252,7 @@ class FABM:
             )
             data = np.empty(variable.shape, dtype=self.model.fabm.numpy_dtype)
             array.wrap_ndarray(data, register=False)
+            array.register()
         else:
             data = array.all_values.view()
             data.shape = variable.shape
