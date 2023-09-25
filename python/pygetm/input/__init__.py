@@ -171,7 +171,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, shape: Iterable[int], dtype: numpy.typing.DTypeLike, name: str):
         self.shape = tuple(shape)
         self.ndim = len(self.shape)
-        self.dtype = dtype
+        self.dtype = np.dtype(dtype)
         self.name = name
 
     def update(self, time: cftime.datetime, numtime: np.longdouble) -> bool:
@@ -353,8 +353,9 @@ class Operator(LazyArray):
 
 
 class UnaryOperator(Operator):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, arg, *extra_args, **kwargs):
+        kwargs = {"dtype": arg.dtype, **kwargs}
+        super().__init__(arg, *extra_args, **kwargs)
         self._source = self.inputs[0]
         self._source_name = self.input_names[0]
 
@@ -362,6 +363,7 @@ class UnaryOperator(Operator):
 class UFunc(Operator):
     def __init__(self, ufunc, method: str, *inputs, **kwargs):
         self._operator_name = ufunc.__name__
+        kwargs = {"dtype": np.result_type(*inputs), **kwargs}
         super().__init__(*inputs, passthrough=True, **kwargs)
         self.ufunc = getattr(ufunc, method)
 
@@ -384,8 +386,8 @@ class Wrap(UnaryOperator):
 
 
 class Slice(UnaryOperator):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, arg, **kwargs):
+        super().__init__(arg, **kwargs)
         self._slices = []
         self.passthrough_own_slices = True
 
@@ -442,8 +444,9 @@ class Slice(UnaryOperator):
         return data
 
 
-class Concatenate(UnaryOperator):
-    def __init__(self, arrays, axis: int = 0, *args, **kwargs):
+class Concatenate(Operator):
+    def __init__(self, arrays, axis: int = 0, **kwargs):
+        kwargs = {"dtype": np.result_type(*arrays), **kwargs}
         shape = list(arrays[0].shape)
         for array in arrays[1:]:
             shape[axis] += array.shape[axis]
@@ -880,7 +883,7 @@ class HorizontalInterpolation(UnaryOperator):
         npost: int,
         **kwargs,
     ):
-        UnaryOperator.__init__(self, source, shape=shape, **kwargs)
+        super().__init__(source, shape=shape, **kwargs)
         self._ip = ip
         self.npre = npre
         self.npost = npost
