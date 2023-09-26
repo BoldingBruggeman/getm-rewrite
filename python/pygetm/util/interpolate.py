@@ -14,10 +14,10 @@ class Linear2DGridInterpolator:
         mask=None,
     ):
         assert ndim_trailing >= 0
-        xp = np.array(xp)
-        yp = np.array(yp)
-        x = np.array(x)
-        y = np.array(y)
+        xp = np.array(xp, dtype=float)
+        yp = np.array(yp, dtype=float)
+        x = np.array(x, dtype=float)
+        y = np.array(y, dtype=float)
         assert xp.ndim == 1, f"source x coordinate must be 1D but has shape {xp.shape}"
         assert yp.ndim == 1, f"source y coordinate must be 1D but has shape {yp.shape}"
         self.nxp, self.nyp = xp.size, yp.size
@@ -158,8 +158,8 @@ class LinearVectorized1D:
 
 
 def interp_1d(x, xp, fp, axis: int = 0):
-    x = np.asarray(x)
-    xp = np.asarray(xp)
+    x = np.asarray(x, dtype=float)
+    xp = np.asarray(xp, dtype=float)
     fp = np.ma.filled(fp, np.nan)
     assert fp.ndim == x.ndim, (
         f"Number of dimensions {fp.ndim} of source values"

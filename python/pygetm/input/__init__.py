@@ -17,7 +17,7 @@ import functools
 import itertools
 
 import numpy as np
-import numpy.typing
+import numpy.typing as npt
 import numpy.lib.mixins
 import xarray as xr
 import cftime
@@ -168,7 +168,7 @@ def from_nc(
 
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
-    def __init__(self, shape: Iterable[int], dtype: numpy.typing.DTypeLike, name: str):
+    def __init__(self, shape: Iterable[int], dtype: npt.DTypeLike, name: str):
         self.shape = tuple(shape)
         self.ndim = len(self.shape)
         self.dtype = np.dtype(dtype)
@@ -793,11 +793,7 @@ def isel(source: xr.DataArray, **indices) -> xr.DataArray:
 
 
 def horizontal_interpolation(
-    source: xr.DataArray,
-    lon: xr.DataArray,
-    lat: xr.DataArray,
-    dtype: numpy.typing.DTypeLike = float,
-    mask=None,
+    source: xr.DataArray, lon: xr.DataArray, lat: xr.DataArray, mask=None
 ) -> xr.DataArray:
     source_lon, source_lat = source.getm.longitude, source.getm.latitude
     if source_lon is None:
@@ -883,7 +879,7 @@ class HorizontalInterpolation(UnaryOperator):
         npost: int,
         **kwargs,
     ):
-        super().__init__(source, shape=shape, **kwargs)
+        super().__init__(source, shape=shape, dtype=float, **kwargs)
         self._ip = ip
         self.npre = npre
         self.npost = npost
@@ -918,7 +914,7 @@ class HorizontalInterpolation(UnaryOperator):
 
 
 def vertical_interpolation(
-    source: xr.DataArray, target_z: numpy.typing.ArrayLike, itargetdim: int = 0
+    source: xr.DataArray, target_z: npt.ArrayLike, itargetdim: int = 0
 ) -> xr.DataArray:
     source_z = source.getm.z
     target_z = np.asarray(target_z)
@@ -983,7 +979,9 @@ class VerticalInterpolation(UnaryOperator):
         passthrough = [idim for idim in range(source.ndim) if idim != self.izdim]
         shape = list(source.shape)
         shape[self.izdim] = z.shape[axis]
-        super().__init__(source, shape=shape, passthrough=passthrough, **kwargs)
+        super().__init__(
+            source, shape=shape, dtype=float, passthrough=passthrough, **kwargs
+        )
         self.z = z
         self.axis = axis
         self.source_z = source_z
@@ -1045,9 +1043,9 @@ class TemporalInterpolation(UnaryOperator):
         self,
         source: LazyArray,
         itimedim: int,
-        times: numpy.typing.ArrayLike,
+        times: npt.ArrayLike,
         climatology: bool,
-        dtype=float,
+        dtype: npt.DTypeLike = float,
         **kwargs,
     ):
         shape = list(source.shape)
