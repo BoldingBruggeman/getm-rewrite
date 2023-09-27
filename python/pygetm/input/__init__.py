@@ -186,8 +186,12 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         if func == np.result_type:
             args = tuple(x.dtype if isinstance(x, LazyArray) else x for x in args)
             return np.result_type(*args)
-        if func == np.concatenate:
+        elif func == np.concatenate:
             return Concatenate(*args, **kwargs)
+        elif func == np.ndim:
+            return self.ndim
+        elif func == np.shape:
+            return self.shape
         args = tuple(np.asarray(x) if isinstance(x, LazyArray) else x for x in args)
         kwargs = dict(
             (k, np.asarray(v)) if isinstance(v, LazyArray) else (k, v)
@@ -195,7 +199,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         )
         return func(*args, **kwargs)
 
-    def __array_ufunc__(self, ufunc, method: str, *inputs, **kwargs):
+    def __array_ufunc__(self, ufunc, method: str, *args, **kwargs):
         if method != "__call__":
             return NotImplemented
 
@@ -203,11 +207,11 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
             return NotImplemented
 
         COMPATIBLE_TYPES = (np.ndarray, numbers.Number, LazyArray, xr.Variable)
-        for x in inputs:
+        for x in args:
             if not isinstance(x, COMPATIBLE_TYPES):
                 return NotImplemented
 
-        return UFunc(ufunc, method, *inputs, **kwargs)
+        return UFunc(ufunc, method, *args, **kwargs)
 
     def __array__(self, dtype=None) -> np.ndarray:
         raise NotImplementedError
@@ -237,61 +241,69 @@ class Operator(LazyArray):
 
     def __init__(
         self,
-        *inputs,
+        *args,
         passthrough=(),
-        dtype=None,
-        shape=None,
+        dtype: npt.DTypeLike = None,
+        shape: Optional[Tuple[int]] = None,
         name: Optional[str] = None,
+        kwslice: Iterable[str] = (),
         **kwargs,
     ):
+        def _repr(a) -> str:
+            if isinstance(a, LazyArray):
+                return a.name
+            elif np.ndim(a) == 0:
+                return str(a)
+            # Other datatype, typically xarray.Variable.
+            # Do not call object's custom str/repr, as that will cause evaluation
+            # (e.g. read from file) of the entire array
+            return f"{type(a).__name__}(shape={np.shape(a)}, dtype={np.result_type(a)})"
+
         # Unpack unnamed arguments
-        self.inputs = []
-        self.lazy_inputs = []
-        self.input_names = []
-        for inp in inputs:
+        self.args = []
+        self.arg_names = []
+        for arg in args:
             assert isinstance(
-                inp, (np.ndarray, numbers.Number, LazyArray, xr.Variable)
-            ), f"Input has unknown type {type(inp)}"
+                arg, (np.ndarray, numbers.Number, LazyArray, xr.Variable)
+            ), f"Argument has unknown type {type(arg)}"
 
             # Unpack to LazyArray if possible
-            if isinstance(inp, xr.Variable) and isinstance(inp._data, LazyArray):
-                inp = inp._data
+            if isinstance(arg, xr.Variable) and isinstance(arg._data, LazyArray):
+                arg = arg._data
 
-            if isinstance(inp, LazyArray):
-                self.input_names.append(inp.name)
-            elif isinstance(inp, (np.ndarray, numbers.Number)):
-                self.input_names.append(str(inp))
-            else:
-                # Other datatype, typically xarray.Variable.
-                # Do not call object's custom str/repr, as that will cause evaluation
-                # (e.g. read from file) of the entire array
-                self.input_names.append(object.__repr__(inp))
+            self.arg_names.append(_repr(arg))
 
             # If this is a Wrap, unwrap
             # (the wrapping was only for ufunc support)
-            if isinstance(inp, Wrap):
-                inp = inp._source
+            if isinstance(arg, Wrap):
+                arg = arg._source
 
-            if isinstance(inp, LazyArray):
-                self.lazy_inputs.append(inp)
-            self.inputs.append(inp)
+            self.args.append(arg)
+        self._lazy_args = [arg for arg in self.args if isinstance(arg, LazyArray)]
 
         # Store keyword arguments as-is (no unpacking)
         self.kwargs = kwargs
+        kwarg_names = {k: _repr(v) for k, v in kwargs.items()}
 
-        # Infer shape from inputs if not provided
+        # Infer shape from positional arguments if not provided
+        self._sliced_kwargs = []
         if shape is None:
-            shapes = []
-            for input in inputs:
-                if isinstance(
-                    input, (np.ndarray, LazyArray, xr.DataArray, xr.Variable)
-                ):
-                    shapes.append(input.shape)
+            shapes = [np.shape(input) for input in args]
             shape = np.broadcast_shapes(*shapes)
 
-        for i in range(len(self.inputs)):
-            if isinstance(self.inputs[i], np.ndarray):
-                self.inputs[i] = np.broadcast_to(self.inputs[i], shape)
+            def broadcast(a):
+                if np.ndim(a) != 0 and np.shape(a) != shape:
+                    return np.broadcast_to(a, shape)
+                return a
+
+            self.args = tuple(map(broadcast, self.args))
+            for k in kwslice:
+                if k in self.kwargs:
+                    self.kwargs[k] = broadcast(self.kwargs[k])
+                    self._sliced_kwargs.append(k)
+
+        if dtype is None:
+            dtype = np.result_type(*self.args)
 
         # Process dimensions for which we can passthrough slices to inputs
         # This can be True (= all dimensions), an iterable, or a dictionary mapping
@@ -300,32 +312,30 @@ class Operator(LazyArray):
         if passthrough is True:
             passthrough = range(len(shape))
         if not isinstance(passthrough, dict):
-            passthrough = dict([(i, i) for i in passthrough])
+            passthrough = {i: i for i in passthrough}
         self.passthrough = passthrough
         assert all([isinstance(dim, int) for dim in self.passthrough]), (
             f"Invalid passthrough: {self.passthrough}."
             " All entries should be of type int"
         )
 
+        # Determine which arguments get slices passed through
+        self._sliced_args = [np.ndim(a) != 0 for a in self.args]
+
         # Generate a name for the variable if not provided
         if name is None:
             operator_name = self._operator_name or self.__class__.__name__
-            strargs = ", ".join(self.input_names)
-            strkwargs = "".join(f", {k}={v!r}" for (k, v) in self.kwargs.items())
+            strargs = ", ".join(self.arg_names)
+            strkwargs = "".join(f", {k}={v}" for (k, v) in kwarg_names.items())
             name = f"{operator_name}({strargs}{strkwargs})"
 
-        super().__init__(shape, dtype or float, name)
+        super().__init__(shape, dtype, name)
 
     def update(self, *args) -> bool:
-        updated = False
-        for input in self.lazy_inputs:
-            updated = input.update(*args) or updated
-        return updated
+        return any([arg.update(*args) for arg in self._lazy_args])
 
     def is_time_varying(self) -> bool:
-        return self.lazy_inputs and any(
-            input.is_time_varying() for input in self.lazy_inputs
-        )
+        return any(input.is_time_varying() for input in self._lazy_args)
 
     def __getitem__(self, slices) -> np.ndarray:
         preslices, postslices = [], []
@@ -337,48 +347,55 @@ class Operator(LazyArray):
             else:
                 preslices.append(slice(None))
                 postslices.append(slc)
-        inputs = [
-            inp
-            if isinstance(inp, numbers.Number)
-            else np.asarray(inp[tuple(preslices)])
-            for inp in self.inputs
-        ]
-        return self.apply(*inputs)[tuple(postslices)]
+        preslices = tuple(preslices)
 
-    def apply(self, *inputs, dtype=None) -> np.ndarray:
+        args = [
+            np.asarray(arg[preslices] if s else arg)
+            for arg, s in zip(self.args, self._sliced_args)
+        ]
+        kwargs = self.kwargs
+        if self._sliced_kwargs:
+            kw_override = {
+                k: np.asarray(kwargs[k][preslices]) for k in self._sliced_kwargs
+            }
+            kwargs = {**kwargs, **kw_override}
+        return self.apply(*args, **kwargs)[tuple(postslices)]
+
+    def apply(self, *args: np.ndarray, dtype=None, **kwargs) -> np.ndarray:
         raise NotImplementedError
 
     def __array__(self, dtype=None) -> np.ndarray:
-        return self.apply(*[np.asarray(inp) for inp in self.inputs], dtype=dtype)
+        args = map(np.asarray, self.args)
+        kwargs = self.kwargs
+        if self._sliced_kwargs:
+            kw_override = {k: np.asarray(kwargs[k]) for k in self._sliced_kwargs}
+            kwargs = {**kwargs, **kw_override}
+        return self.apply(*args, dtype=dtype, **kwargs)
 
 
 class UnaryOperator(Operator):
-    def __init__(self, arg, *extra_args, **kwargs):
-        kwargs = {"dtype": arg.dtype, **kwargs}
-        super().__init__(arg, *extra_args, **kwargs)
-        self._source = self.inputs[0]
-        self._source_name = self.input_names[0]
+    def __init__(self, arg, **kwargs):
+        super().__init__(arg, **kwargs)
+        self._source = self.args[0]
+        self._source_name = self.arg_names[0]
 
 
 class UFunc(Operator):
-    def __init__(self, ufunc, method: str, *inputs, **kwargs):
+    def __init__(self, ufunc, method: str, *args, **kwargs):
         self._operator_name = ufunc.__name__
-        kwargs = {"dtype": np.result_type(*inputs), **kwargs}
-        super().__init__(*inputs, passthrough=True, **kwargs)
+        super().__init__(*args, passthrough=True, kwslice=("where",), **kwargs)
         self.ufunc = getattr(ufunc, method)
 
-    def apply(self, *inputs, dtype=None) -> np.ndarray:
-        return self.ufunc(*inputs, **self.kwargs)
+    def apply(self, *args: np.ndarray, **kwargs) -> np.ndarray:
+        return self.ufunc(*args, **kwargs)
 
 
 class Wrap(UnaryOperator):
-    def __init__(self, source: xr.Variable, name: str, **kwargs):
+    def __init__(self, source: xr.Variable, name: str):
         assert isinstance(source, xr.Variable)
-        super().__init__(
-            source, passthrough=True, dtype=source.dtype, name=name, **kwargs
-        )
+        super().__init__(source, passthrough=True, name=name)
 
-    def apply(self, source, dtype=None) -> np.ndarray:
+    def apply(self, source: np.ndarray, dtype=None) -> np.ndarray:
         return source
 
     def update(self, *args) -> bool:
@@ -386,8 +403,8 @@ class Wrap(UnaryOperator):
 
 
 class Slice(UnaryOperator):
-    def __init__(self, arg, **kwargs):
-        super().__init__(arg, **kwargs)
+    def __init__(self, source, shape: Tuple[int], passthrough):
+        super().__init__(source, shape=shape, passthrough=passthrough)
         self._slices = []
         self.passthrough_own_slices = True
 
@@ -446,7 +463,6 @@ class Slice(UnaryOperator):
 
 class Concatenate(Operator):
     def __init__(self, arrays, axis: int = 0, **kwargs):
-        kwargs = {"dtype": np.result_type(*arrays), **kwargs}
         shape = list(arrays[0].shape)
         for array in arrays[1:]:
             shape[axis] += array.shape[axis]
@@ -455,7 +471,7 @@ class Concatenate(Operator):
         super().__init__(*arrays, shape=shape, **kwargs)
 
     def __array__(self, dtype=None) -> np.ndarray:
-        return np.concatenate(self.inputs, axis=self.axis, dtype=dtype)
+        return np.concatenate(self.args, axis=self.axis, dtype=dtype)
 
     def __getitem__(self, slices) -> np.ndarray:
         slices = list(self._finalize_slices(slices))
@@ -464,15 +480,15 @@ class Concatenate(Operator):
             and slices[self.axis].start is None
             and slices[self.axis].stop is None
         ):
-            inputs = [input[tuple(slices)] for input in self.inputs]
-            return np.concatenate(inputs, axis=self.axis)
+            args = [input[tuple(slices)] for args in self.args]
+            return np.concatenate(args, axis=self.axis)
         assert isinstance(
             slices[self.axis], (int, np.integer)
         ), f"Unsupported slice for concatenated dimension: {slices[self.axis]!r}"
         if slices[self.axis] < 0:
             slices[self.axis] += self.shape[self.axis]
         assert slices[self.axis] >= 0 and slices[self.axis] < self.shape[self.axis]
-        for input in self.inputs:
+        for input in self.args:
             if slices[self.axis] < input.shape[self.axis]:
                 return np.asarray(input[tuple(slices)])
             slices[self.axis] -= input.shape[self.axis]
@@ -666,7 +682,6 @@ def concatenate_slices(
         _as_lazyarray(source),
         shape=shape,
         passthrough=[i for i in range(len(shape)) if i != idim],
-        dtype=source.dtype,
     )
     lazyvar._slices.extend(final_slices)
 
@@ -778,9 +793,7 @@ def isel(source: xr.DataArray, **indices) -> xr.DataArray:
                 shape.append(length)
             advanced_added = True
 
-    lazyvar = Slice(
-        _as_lazyarray(source), shape=shape, passthrough=passthrough, dtype=source.dtype
-    )
+    lazyvar = Slice(_as_lazyarray(source), shape=shape, passthrough=passthrough)
     lazyvar._slices.append((slices, (slice(None),) * len(shape)))
 
     coords = {}
@@ -988,7 +1001,7 @@ class VerticalInterpolation(UnaryOperator):
         if (self.source_z >= 0.0).all():
             self.source_z = -self.source_z
 
-    def apply(self, source, dtype=None) -> np.ndarray:
+    def apply(self, source: np.ndarray, dtype=None) -> np.ndarray:
         return pygetm.util.interpolate.interp_1d(
             self.z, self.source_z, source, axis=self.axis
         )

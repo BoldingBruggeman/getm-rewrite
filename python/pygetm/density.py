@@ -255,7 +255,15 @@ class LazyConvert(Operator):
         self.in_situ = in_situ
         self.return_salt = return_salt
 
-    def apply(self, salt, temp, lon, lat, p, dtype=None) -> np.ndarray:
+    def apply(
+        self,
+        salt: np.ndarray,
+        temp: np.ndarray,
+        lon: np.ndarray,
+        lat: np.ndarray,
+        p: np.ndarray,
+        dtype=None,
+    ) -> np.ndarray:
         salt = np.asarray(salt, dtype=float)
         temp = np.asarray(temp, dtype=float)
         salt, temp, lon, lat, p = np.broadcast_arrays(salt, temp, lon, lat, p)
