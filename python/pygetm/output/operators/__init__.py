@@ -8,6 +8,8 @@ from typing import (
     Mapping,
     Literal,
     Callable,
+    List,
+    Any,
 )
 import collections
 import enum
@@ -45,7 +47,7 @@ class Base:
         dtype: DTypeLike,
         fill_value=None,
         time_varying: Union[TimeVarying, Literal[False]] = TimeVarying.MICRO,
-        attrs={},
+        attrs: Mapping[str, Any] = {},
     ):
         self.expression = expression
         self.dtype = dtype
@@ -55,7 +57,7 @@ class Base:
         self.fill_value = fill_value
         self.attrs = attrs
         self.time_varying = time_varying
-        self.coordinates = []
+        self.coordinates: List[str] = []
 
     def get(
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()

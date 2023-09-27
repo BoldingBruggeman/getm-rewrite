@@ -56,6 +56,7 @@ class NetCDFFile(File):
         self.format = format
         self._field2nc = {}
         self._varying_fields = []
+        self.nctime_bnds = None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.path!r})"
@@ -82,7 +83,7 @@ class NetCDFFile(File):
                             f"Existing dimension {dim} has incompatible length"
                             f" {self.nc.dimensions[dim].size} (need {length})"
                         )
-            self.nc.createDimension("time",)
+            self.nc.createDimension("time")
             self.nctime = self.nc.createVariable("time", float, ("time",))
             self.nctime.axis = "T"
             if time is not None:
@@ -96,6 +97,7 @@ class NetCDFFile(File):
                 self.nctime.units = "s"
                 self.nctime.standard_name = "time"
             self.ncvars = []
+            needs_time_bounds = False
             for output_name, field in self.fields.items():
                 dims = field.dims
                 if field.time_varying:
@@ -108,8 +110,16 @@ class NetCDFFile(File):
                 for att, value in field.attrs.items():
                     setattr(ncvar, att, value)
                 if field.coordinates:
-                    setattr(ncvar, "coordinates", " ".join(field.coordinates))
+                    ncvar.coordinates = " ".join(field.coordinates)
+                needs_time_bounds |= "time: mean" in field.attrs.get("cell_methods", "")
                 self._field2nc[field] = ncvar
+            if needs_time_bounds:
+                self.nc.createDimension("nv", 2)
+                self.nctime_bnds = self.nc.createVariable(
+                    "time_bnds", float, ("time", "nv")
+                )
+                self.nctime.bounds = "time_bnds"
+                self.previous_time_coord = self.time_offset + seconds_passed
 
         for field in self.fields.values():
             if field.time_varying:
@@ -119,7 +129,11 @@ class NetCDFFile(File):
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if self.nc is not None:
-            self.nctime[self.itime] = self.time_offset + seconds_passed
+            time_coord = self.time_offset + seconds_passed
+            self.nctime[self.itime] = time_coord
+            if self.nctime_bnds is not None:
+                self.nctime_bnds[self.itime, :] = [self.previous_time_coord, time_coord]
+                self.previous_time_coord = time_coord
         for field in self._varying_fields:
             field.get(self._field2nc.get(field), slice_spec=(self.itime,))
         self.itime += 1
