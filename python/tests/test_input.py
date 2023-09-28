@@ -156,6 +156,39 @@ class TestInput(unittest.TestCase):
                 np.asarray(xdata), 0.5 * (data[8] + data[9]), places=NDEC
             )
 
+    def test_concatenate(self):
+        axis = 1
+        a1 = np.random.random((100, 10))
+        a2 = np.random.random((100, 5))
+        a = pygetm.input.Concatenate((a1, a2), axis=axis)
+        self.assertTrue(a.shape == (100, a1.shape[axis] + a2.shape[1]))
+        data = np.asarray(a)
+        self.assertTrue((data == np.concatenate((a1, a2), axis=axis)).all())
+        self.assertTrue((data[:, : a1.shape[axis]] == a1).all())
+        self.assertTrue((data[:, a1.shape[axis] :] == a2).all())
+        data2 = a[:, :]
+        self.assertTrue((data == data2).all())
+        self.assertTrue((a[:, 5] == a1[:, 5]).all())
+        self.assertTrue((a[:, 12] == a2[:, 2]).all())
+        data_slc = a[0, ...]
+        self.assertTrue((data_slc == data[0, ...]).all())
+
+        axis = 0
+        a1 = np.random.random((10, 100))
+        a2 = np.random.random((5, 100))
+        a = pygetm.input.Concatenate((a1, a2), axis=axis)
+        self.assertTrue(a.shape == (a1.shape[axis] + a2.shape[axis], 100))
+        data = np.asarray(a)
+        self.assertTrue((data == np.concatenate((a1, a2), axis=axis)).all())
+        self.assertTrue((data[: a1.shape[axis], :] == a1).all())
+        self.assertTrue((data[a1.shape[axis] :, :] == a2).all())
+        data2 = a[:, :]
+        self.assertTrue((data == data2).all())
+        self.assertTrue((a[5, :] == a1[5, :]).all())
+        self.assertTrue((a[12, :] == a2[2, :]).all())
+        data_slc = a[..., 0]
+        self.assertTrue((data_slc == data[..., 0]).all())
+
 
 if __name__ == "__main__":
     unittest.main()

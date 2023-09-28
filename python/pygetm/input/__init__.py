@@ -471,27 +471,36 @@ class Concatenate(Operator):
         super().__init__(*arrays, shape=shape, **kwargs)
 
     def __array__(self, dtype=None) -> np.ndarray:
-        return np.concatenate(self.args, axis=self.axis, dtype=dtype)
+        arrays = [np.asarray(array, dtype=dtype) for array in self.args]
+        return np.concatenate(arrays, axis=self.axis)
 
     def __getitem__(self, slices) -> np.ndarray:
-        slices = list(self._finalize_slices(slices))
+        slices = self._finalize_slices(slices)
+        axis = self.axis
         if (
-            isinstance(slices[self.axis], slice)
-            and slices[self.axis].start is None
-            and slices[self.axis].stop is None
+            isinstance(slices[axis], slice)
+            and slices[axis].start is None
+            and slices[axis].stop is None
         ):
-            args = [input[tuple(slices)] for args in self.args]
-            return np.concatenate(args, axis=self.axis)
+            arrays = [np.asarray(array[slices]) for array in self.args]
+            for s in slices[:axis]:
+                if isinstance(s, (int, np.integer)):
+                    # This dimension precedes the axis over which we concatenate
+                    # and it will be sliced out from the source arrays
+                    # Therefore, the axis over which we concatenate decreases by 1
+                    axis -= 1
+            return np.concatenate(arrays, axis=axis)
         assert isinstance(
-            slices[self.axis], (int, np.integer)
-        ), f"Unsupported slice for concatenated dimension: {slices[self.axis]!r}"
-        if slices[self.axis] < 0:
-            slices[self.axis] += self.shape[self.axis]
-        assert slices[self.axis] >= 0 and slices[self.axis] < self.shape[self.axis]
-        for input in self.args:
-            if slices[self.axis] < input.shape[self.axis]:
-                return np.asarray(input[tuple(slices)])
-            slices[self.axis] -= input.shape[self.axis]
+            slices[axis], (int, np.integer)
+        ), f"Unsupported slice for concatenated dimension: {slices[axis]!r}"
+        slices = list(slices)
+        if slices[axis] < 0:
+            slices[axis] += self.shape[axis]
+        assert slices[axis] >= 0 and slices[axis] < self.shape[axis]
+        for array in self.args:
+            if slices[axis] < array.shape[axis]:
+                return np.asarray(array[tuple(slices)])
+            slices[axis] -= array.shape[axis]
         assert False, "Index out of bounds?"
 
 
