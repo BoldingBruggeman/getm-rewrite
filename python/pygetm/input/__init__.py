@@ -24,6 +24,7 @@ import cftime
 
 import pygetm.util.interpolate
 from pygetm.constants import CENTERS, TimeVarying
+from pygetm.parallel import MPI
 
 if TYPE_CHECKING:
     import pygetm.core
@@ -174,6 +175,10 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
         self.dtype = np.dtype(dtype)
         self.name = name
 
+    @property
+    def size(self) -> int:
+        return int(np.prod(self.shape))
+
     def update(self, time: cftime.datetime, numtime: np.longdouble) -> bool:
         return False
 
@@ -192,6 +197,8 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
             return self.ndim
         elif func == np.shape:
             return self.shape
+        elif func == np.size:
+            return self.size
         args = tuple(np.asarray(x) if isinstance(x, LazyArray) else x for x in args)
         kwargs = dict(
             (k, np.asarray(v)) if isinstance(v, LazyArray) else (k, v)
@@ -1017,13 +1024,21 @@ class VerticalInterpolation(UnaryOperator):
 
 
 def temporal_interpolation(
-    source: xr.DataArray, climatology: bool = False
+    source: xr.DataArray,
+    climatology: bool = False,
+    comm: MPI.Comm = MPI.COMM_SELF,
+    logger: Optional[logging.Logger] = None,
 ) -> xr.DataArray:
     time_coord = source.getm.time
     assert time_coord is not None, "No time coordinate found"
     itimedim = source.dims.index(time_coord.dims[0])
     lazyvar = TemporalInterpolation(
-        _as_lazyarray(source), itimedim, time_coord.values, climatology
+        _as_lazyarray(source),
+        itimedim,
+        time_coord.values,
+        climatology,
+        comm=comm,
+        logger=logger,
     )
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
     coords = dict(source.coords.items())
@@ -1060,6 +1075,7 @@ class TemporalInterpolation(UnaryOperator):
         "_year",
         "_timevalues",
     )
+    MAX_CACHE_SIZE = 0
 
     def __init__(
         self,
@@ -1068,6 +1084,8 @@ class TemporalInterpolation(UnaryOperator):
         times: npt.ArrayLike,
         climatology: bool,
         dtype: npt.DTypeLike = float,
+        comm: MPI.Comm = MPI.COMM_SELF,
+        logger: Optional[logging.Logger] = None,
         **kwargs,
     ):
         shape = list(source.shape)
@@ -1097,11 +1115,36 @@ class TemporalInterpolation(UnaryOperator):
 
         self.climatology = climatology
         self._year = self.times[0].year
+        self._cache = {}
+        self._use_cache = False
         if climatology and not all(time.year == self._year for time in self.times):
             raise Exception(
                 f"{self._source_name} cannot be used as climatology because"
                 " it spans more than one calendar year"
             )
+        if climatology and self.MAX_CACHE_SIZE > 0:
+            memory = np.asarray(source.size * (self.dtype.itemsize / 1024 / 1024))
+
+            # Ensure all subdomains take same caching decision
+            # In part because performance generally does not improve until all
+            # subdomains cache, but foremost because underlying LazyArrays may
+            # use collective MPI operations in which all subdomains MUST participate
+            comm.Allreduce(MPI.IN_PLACE, memory, MPI.MAX)
+
+            self._use_cache = memory < self.MAX_CACHE_SIZE
+            if logger:
+                if self._use_cache:
+                    logger.info(
+                        f"{source.name} is a climatology that will be cached in memory."
+                        f" This requires {memory:.1f} MB, which is less than the"
+                        f" maximum allowed cache size of {self.MAX_CACHE_SIZE} MB"
+                    )
+                else:
+                    logger.info(
+                        f"Not caching {source.name} because this would require"
+                        f" {memory:.1f} MB, which is more than the maximum allowed"
+                        f" cache size of {self.MAX_CACHE_SIZE} MB"
+                    )
 
     def __array__(self, dtype=None) -> np.ndarray:
         return self._current
@@ -1186,9 +1229,15 @@ class TemporalInterpolation(UnaryOperator):
                     f"Cannot interpolate {self._source_name} to value at {time}"
                     f" because end of time series was reached ({self.times[-1]})."
                 )
-        old, numold = self._next, self._numnext
-        self._slices[self._itimedim] = self._inext
-        self._next = np.asarray(self._source[tuple(self._slices)], dtype=self.dtype)
+        old = self._next
+        numold = self._numnext
+        if self._inext in self._cache:
+            self._next = self._cache[self._inext]
+        else:
+            self._slices[self._itimedim] = self._inext
+            self._next = np.asarray(self._source[tuple(self._slices)], dtype=self.dtype)
+            if self._use_cache:
+                self._cache[self._inext] = self._next
         next_time = self.times[self._inext]
         if self.climatology:
             next_time = next_time.replace(year=self._year)
@@ -1471,7 +1520,12 @@ class InputManager:
             # The source data is time-dependent; during the simulation it will be
             # interpolated in time.
             if value.getm.time.size > 1:
-                value = temporal_interpolation(value, climatology=climatology)
+                value = temporal_interpolation(
+                    value,
+                    climatology=climatology,
+                    comm=grid.domain.tiling.comm,
+                    logger=self._logger,
+                )
             elif value.getm.time.dims:
                 time = value.getm.time.values.flat[0]
                 self._logger.warning(
