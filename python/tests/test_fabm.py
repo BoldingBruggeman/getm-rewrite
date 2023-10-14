@@ -150,11 +150,11 @@ class TestFABM(unittest.TestCase):
         domain, sim = self.setup(fabm_yaml, repair=False)
         sim["tracer_c"].set(-1.0)
         with self.assertRaisesRegex(Exception, "FABM state contains invalid values."):
-            sim.fabm.update_sources()
+            sim.fabm.update_sources(0.0)
 
         domain, sim = self.setup(fabm_yaml, repair=True)
         sim["tracer_c"].set(-1.0)
-        sim.fabm.update_sources()
+        sim.fabm.update_sources(0.0)
         self.assertTrue((sim["tracer_c"].ma == 0.0).all())
 
 

@@ -959,7 +959,7 @@ class Simulation:
             # concentrations. Do this last because FABM could depend on any of the
             # variables computed before
             if self.fabm:
-                self.fabm.update_sources(self.time)
+                self.fabm.update_sources(self.timestep * self.istep, self.time)
 
         if self.report_totals != 0 and self.istep % self.report_totals == 0:
             self.report_domain_integrals()

@@ -259,7 +259,9 @@ class FABM:
         variable.link(data)
         return array
 
-    def update_sources(self, time: Optional[cftime.datetime] = None):
+    def update_sources(
+        self, seconds_passed: float, time: Optional[cftime.datetime] = None
+    ):
         """Update sources, vertical velocities, and diagnostics.
         This does not update the state variables themselves; that is done by
         :meth:`advance`
@@ -271,7 +273,8 @@ class FABM:
         if not (valid or self.repair):
             raise Exception("FABM state contains invalid values.")
         self.model.get_sources(
-            out=(self.sources_interior, self.sources_surface, self.sources_bottom)
+            seconds_passed,
+            out=(self.sources_interior, self.sources_surface, self.sources_bottom),
         )
         self.model.get_vertical_movement(self.vertical_velocity)
 
