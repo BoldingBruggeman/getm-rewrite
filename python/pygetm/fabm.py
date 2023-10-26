@@ -1,11 +1,12 @@
 import logging
 from typing import List, Optional, MutableMapping, Iterable
+import os
 
 import numpy as np
 import cftime
+import pyfabm
 
 from . import domain
-from . import pyfabm
 from . import core
 from . import tracer
 from . import _pygetm
@@ -18,7 +19,7 @@ class FABM:
         path: str = "fabm.yaml",
         repair: bool = True,
         bioshade_feedback: bool = False,
-        libname: str = "fabm",
+        libname: str = os.path.join(os.path.dirname(__file__), "fabm"),
         time_varying: TimeVarying = TimeVarying.MACRO,
     ):
         self.path = path

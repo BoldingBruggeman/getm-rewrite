@@ -40,12 +40,6 @@ if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
   target_compile_options(util PRIVATE -ffree-line-length-none)
 endif()
 
-set(PYFABM_DIR ${CMAKE_CURRENT_BINARY_DIR}/pyfabm CACHE STRING "Directory to write pyfabm library to" FORCE)
-set(PYFABM_NAME "fabm" CACHE STRING "Base name of library" FORCE)
-set(FABM_FORCED_REAL_KIND c_double)
-add_compile_definitions(_FABM_DIMENSION_COUNT_=3 _FABM_DEPTH_DIMENSION_INDEX_=3 _FABM_MASK_TYPE_=integer _FABM_MASKED_VALUE_=0 _FABM_HORIZONTAL_MASK_ _FABM_VERTICAL_BOTTOM_TO_SURFACE_)
-add_subdirectory(../extern/fabm/src/drivers/python fabm EXCLUDE_FROM_ALL)
-
 set(GET_GIT_INFO_SCRIPT "../extern/fabm/src/cmake/Modules/GetGitInfo.cmake")
 add_custom_target(pygetm_version
    ${CMAKE_COMMAND} -DINFILE=version.pxi.in -DOUTFILE=${CMAKE_CURRENT_BINARY_DIR}/version.pxi -P ${GET_GIT_INFO_SCRIPT}
@@ -107,9 +101,6 @@ add_custom_command(OUTPUT wheel.stamp
                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/pygetm" pygetm
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygetm>" pygetm/
                    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:_pygotm>" pygetm/
-                   COMMAND ${CMAKE_COMMAND} -E make_directory pygetm/pyfabm
-                   COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:fabm>" pygetm/pyfabm/
-                   COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/../extern/fabm/src/pyfabm/__init__.py" pygetm/pyfabm/
                    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/setup.py" bdist_wheel
                    VERBATIM)
 add_custom_target(wheel ALL DEPENDS wheel.stamp)

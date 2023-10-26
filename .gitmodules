@@ -12,5 +12,4 @@
 	url = ../pygsw.git
 [submodule "extern/fabm"]
 	path = extern/fabm
-	url = ../../fabm-model/fabm.git
-	branch = pyfabm_nd
+	url = ../../fabm-model/fabm-plus.git
