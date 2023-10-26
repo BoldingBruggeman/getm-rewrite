@@ -16,5 +16,6 @@ dependencies:
   - xarray
   - netcdf4
   - scipy
+  - pyfabm>=2
   - pip:
     - mpi4py

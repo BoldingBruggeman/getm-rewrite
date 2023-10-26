@@ -3,9 +3,9 @@ name: pygetm
 channels:
   - conda-forge
 dependencies:
-  - python=3.8
+  - python>=3.8
   - cmake
-  - gfortran=9
+  - fortran-compiler
   - cython
   - pip
   - mpi4py
@@ -13,3 +13,4 @@ dependencies:
   - xarray
   - netcdf4
   - scipy
+  - pyfabm>=2

@@ -21,10 +21,10 @@ dependencies:
   - xarray
   - netcdf4
   - scipy
+  - pyfabm>=2
   - matplotlib
   - cmocean
   - cartopy
   - proj
   - jupyterlab
   - ipympl
-
