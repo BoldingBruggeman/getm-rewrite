@@ -29,10 +29,10 @@ cdef extern void domain_initialize(void* domain, int runtype, double Dmin, int m
 cdef extern void grid_finalize(void* grid) nogil
 cdef extern void domain_finalize(void* domain) nogil
 cdef extern void domain_do_vertical(void* domain, double timestep) nogil
-cdef extern void grid_interp_x(int nx, int ny, int nz, double* source, double* target, int ioffset) nogil
-cdef extern void grid_interp_y(int nx, int ny, int nz, double* source, double* target, int joffset) nogil
-cdef extern void grid_interp_z(int nx, int ny, int nz1, int nz2, double* source, double* target, int koffset) nogil
-cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, double* source, double* target, int ioffset, int joffset) nogil
+cdef extern void grid_interp_x(int nx, int ny, int nz, const double* source, double* target, int ioffset) nogil
+cdef extern void grid_interp_y(int nx, int ny, int nz, const double* source, double* target, int joffset) nogil
+cdef extern void grid_interp_z(int nx, int ny, int nz1, int nz2, const double* source, double* target, int koffset) nogil
+cdef extern void grid_interp_xy(int nx1, int ny1, int nx2, int ny2, int nz, const double* source, double* target, int ioffset, int joffset) nogil
 cdef extern void get_array(int source_type, void* grid, const char* name, int* grid_type, int* sub_type, int* data_type, void** p) nogil
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
 cdef extern void advection_finalize(void* advection) nogil
@@ -60,7 +60,7 @@ cdef extern void c_shear_frequency(int nx, int ny, int nz, int imin, int imax, i
 cdef extern void c_shear_frequency2(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const double* h, const double* hu, const double* hv, const double* uk, const double* vk, const double* num, double* SS) nogil
 cdef extern void c_surface_shear_velocity(int nx, int ny, int imin, int imax, int jmin, int jmax, const int* mask, const double* tausx, const double* tausy, double* ustar2_s) nogil
 cdef extern void c_bottom_shear_velocity(int nx, int ny, int imin, int imax, int jmin, int jmax, const int* mask, const int* umask, const int* vmask, const double* uk_bot, const double* vk_bot, const double* rru, const double* rrv, double* taubx, double* tauby, double* ustar2_b) nogil
-cdef extern void c_reconstruct_transport_change(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, double* un, const double* hn, const double* Uo, double timestep)
+cdef extern void c_reconstruct_transport_change(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, double* un, const double* hn, const double* Uo, double timestep) nogil
 cdef extern void c_multiply_add(int n, double* tgt, const double* add, double scale_factor) nogil
 cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt) nogil
 cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy) nogil
@@ -195,16 +195,16 @@ cdef class Grid:
     def wrap(self, Array ar, bytes name, register=True):
         return ar.wrap_c_array(self.domain, 0, self.p, name, register)
 
-def interp_x(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
+def interp_x(const double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
     grid_interp_x(<int>source.shape[2], <int>source.shape[1], <int>source.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
-def interp_y(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
+def interp_y(const double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
     grid_interp_y(<int>source.shape[2], <int>source.shape[1], <int>source.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
-def interp_z(double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
+def interp_z(const double[:,:,::1] source not None, double[:,:,::1] target not None, int offset):
     grid_interp_z(<int>source.shape[2], <int>source.shape[1], <int>source.shape[0], <int>target.shape[0], &source[0,0,0], &target[0,0,0], offset)
 
-def interp_xy(double[:,:,::1] source not None, double[:,:,::1] target not None, int ioffset, int joffset):
+def interp_xy(const double[:,:,::1] source not None, double[:,:,::1] target not None, int ioffset, int joffset):
     grid_interp_xy(<int>source.shape[2], <int>source.shape[1], <int>target.shape[2], <int>target.shape[1], <int>source.shape[0], &source[0,0,0], &target[0,0,0], ioffset, joffset)
 
 cdef class Domain:
@@ -600,7 +600,7 @@ def vertical_advection_to_sources(int halo, int[:, :, ::1] mask, double[:, : , :
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.profile(False)
-cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) nogil:
+cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) noexcept nogil:
     for j in range(jstart, jstop):
         for i in range(istart, istop):
             if mask[j, i] != 0:
@@ -610,7 +610,7 @@ cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstar
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.profile(False)
-cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) nogil:
+cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) noexcept nogil:
     cdef int count = 0
     for j in range(jstart, jstop):
         for i in range(istart, istop):
@@ -621,7 +621,7 @@ cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, in
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.cdivision(True)
-cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus, double max_protrude) nogil:
+cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus, double max_protrude) noexcept nogil:
     cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
     cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
     cdef int free_cpus = ncpus
@@ -645,7 +645,7 @@ cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoff
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.cdivision(True)
 @cython.initializedcheck(False)
-cdef void get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int[::1] map, int* nrow, int* ncol) nogil:
+cdef void get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int[::1] map, int* nrow, int* ncol) noexcept nogil:
     cdef int row, col, i
     nrow[0] = <int>ceil((mask.shape[0] - yoffset) / float(ny))
     ncol[0] = <int>ceil((mask.shape[1] - xoffset) / float(nx))
@@ -659,7 +659,7 @@ cdef void get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffs
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.profile(False)
 @cython.initializedcheck(False)
-cdef int get_from_map(const int[::1] map, int nrow, int ncol, int row, int col) nogil:
+cdef int get_from_map(const int[::1] map, int nrow, int ncol, int row, int col) noexcept nogil:
     if row < 0 or col < 0 or row >= nrow or col >= ncol:
         return 0
     return map[row * ncol + col]
@@ -667,7 +667,7 @@ cdef int get_from_map(const int[::1] map, int nrow, int ncol, int row, int col) 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.initializedcheck(False)
-cdef int get_cost(const int[::1] map, int nrow, int ncol, int nx, int ny, int weight_unmasked, int weight_any, int weight_halo) nogil:
+cdef int get_cost(const int[::1] map, int nrow, int ncol, int nx, int ny, int weight_unmasked, int weight_any, int weight_halo) noexcept nogil:
     cdef int row, col, nint, nout, max_cost
     cdef int halo = 2
     max_cost = 0
