@@ -3,10 +3,7 @@ package:
   version: {{ environ.get("GIT_DESCRIBE_TAG", "").lstrip("v") }}
 
 source:
-  - git_url: https://github.com/BoldingBruggeman/getm-rewrite.git
-  - git_url: https://git.code.sf.net/p/getm/getm-setups
-    git_depth: 1
-    folder: getm-setups
+  git_url: https://github.com/BoldingBruggeman/getm-rewrite.git
 
 build:
   entry_points:
@@ -37,19 +34,20 @@ requirements:
 test:
   requires:
     - scipy
+    - git
   imports:
     - pygetm
   commands:
     - pygetm-subdiv -h
     - pygetm-test-scaling -h
     - pygetm-compare-nc -h
+    - git clone --depth 1 https://git.code.sf.net/p/getm/getm-setups
     - set GETM_SETUPS_DIR=./getm-setups # [win]
     - export GETM_SETUPS_DIR=./getm-setups # [unix]
     - python -m unittest discover -s python/tests -v
   source_files:
     - python/tests/*.py
     - python/examples/north_sea.py
-    - getm-setups/NorthSea
 
 about:
   home: https://pygetm.readthedocs.io
