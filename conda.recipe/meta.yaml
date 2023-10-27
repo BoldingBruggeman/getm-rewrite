@@ -32,7 +32,7 @@ requirements:
     - xarray
     - mpi4py
     - netCDF4
-    - pyyaml # for FABM
+    - pyfabm>=2
 
 test:
   requires:
