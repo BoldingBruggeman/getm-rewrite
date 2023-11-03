@@ -174,8 +174,8 @@ class FieldCollection:
                 collection. If this is not set and a field with this name was added
                 previously, an exception will be raised.
 
-            Returns:
-                tuple with names of the newly added fields
+        Returns:
+            tuple with names of the newly added fields
         """
         if not fields:
             raise Exception(
