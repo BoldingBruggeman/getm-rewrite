@@ -1849,9 +1849,11 @@ class Domain(_pygetm.Domain):
         show_mask: bool = False,
         show_mesh: bool = True,
         show_rivers: bool = True,
+        show_subdomains: bool = False,
         editable: bool = False,
         sub: bool = False,
         spherical: Optional[bool] = None,
+        tiling: Optional[parallel.Tiling] = None,
     ):
         """Plot the domain, optionally including bathymetric depth, mesh and
         river positions.
@@ -1881,7 +1883,14 @@ class Domain(_pygetm.Domain):
             # Otherwise just ignore this and return.
             if self.glob:
                 return self.glob.plot(
-                    fig, show_bathymetry, show_mask, show_mesh, show_rivers, editable
+                    fig,
+                    show_bathymetry,
+                    show_mask,
+                    show_mesh,
+                    show_rivers,
+                    show_subdomains,
+                    editable,
+                    tiling=self.tiling,
                 )
             return
 
@@ -1952,6 +1961,21 @@ class Domain(_pygetm.Domain):
             # pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  np.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
             ax.plot(x[::2, ::2], y[::2, ::2], "xk", markersize=3.0)
             ax.plot(x[1::2, 1::2], y[1::2, 1::2], ".k", markersize=2.5)
+
+        if show_subdomains and not sub:
+            if tiling is None:
+                tiling = self.tiling
+            for icol in range(tiling.ncol + 1):
+                i = 2 * (tiling.xoffset_global + icol * tiling.nx_sub)
+                if i >= 0 and i < x.shape[-1]:
+                    ax.plot(x[:, i], y[:, i], "-k", linewidth=2.0)
+                    ax.plot(x[:, i], y[:, i], "--w", linewidth=2.0)
+            for irow in range(tiling.nrow + 1):
+                j = 2 * (tiling.yoffset_global + irow * tiling.ny_sub)
+                if j >= 0 and j < x.shape[-2]:
+                    ax.plot(x[j, :], y[j, :], "-k", linewidth=2.0)
+                    ax.plot(x[j, :], y[j, :], "--w", linewidth=2.0)
+
         ax.set_xlabel("longitude (degrees East)" if spherical else "x (m)")
         ax.set_ylabel("latitude (degrees North)" if spherical else "y (m)")
         if not spherical:
