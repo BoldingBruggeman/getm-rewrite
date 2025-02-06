@@ -950,6 +950,36 @@ class Domain:
         self.mask[self._H < minimum_depth] = 0
 
     @calculate_and_bcast
+    def mask_subbasins(self, nkeep: int = 1):
+        """Identify all separate basins (each a collection of unmasked cell
+        centers connected via top/bottom/left/right interfaces), and mask all
+        but the largest one(s).
+
+        Args:
+            nkeep: number of basins to keep
+        """
+        import skimage.segmentation
+
+        tmask = np.minimum(self.mask[1::2, 1::2], 1)
+        next_id = -1
+        basin2size = {}
+        while True:
+            indices = (tmask == 1).nonzero()
+            if indices[0].size == 0:
+                break
+            seed_point = (indices[0][0], indices[1][0])
+            skimage.segmentation.flood_fill(
+                tmask, seed_point, next_id, connectivity=1, in_place=True
+            )
+            basin2size[next_id] = (tmask == next_id).sum()
+            next_id -= 1
+
+        ordered = sorted(basin2size.keys(), key=lambda x: basin2size[x], reverse=True)
+        for v in ordered[nkeep:]:
+            tmask[tmask == v] = 0
+        self.mask = np.where(tmask == 0, 0, self.mask[1::2, 1::2])
+
+    @calculate_and_bcast
     def limit_velocity_depth(self, critical_depth: float = np.inf):
         """Decrease bathymetric depth of velocity (U, V) points to the minimum of the
         bathymetric depth of both neighboring T points, wherever one of these two

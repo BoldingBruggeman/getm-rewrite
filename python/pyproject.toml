@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygetm"
-version = "0.9.10"
+version = "0.9.12"
 authors = [
   {name = "Jorn Bruggeman", email = "jorn@bolding-bruggeman.com"},
   {name = "Karsten Bolding", email = "karsten@bolding-bruggeman.com"}

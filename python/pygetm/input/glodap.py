@@ -132,7 +132,10 @@ def regrid(
                     f"Clipping requested latitude ({lat.min():.5f} - {lat.max():.5f})"
                     f" to available GLODAP range ({lat_glodap.min()} - {lat_glodap.max()})"
                 )
-    logger.info(f"Interpolating variable and writing them to {outfile}...")
+    logger.info(
+        f"Interpolating {len(target_variables)} variables"
+        f" and writing them to {outfile}..."
+    )
     with netCDF4.Dataset(outfile, "w") as ncbath:
         for name in target_variables:
             values = from_nc(infile, name)
