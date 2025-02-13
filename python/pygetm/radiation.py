@@ -10,6 +10,13 @@ import numpy as np
 
 
 class Jerlov(enum.Enum):
+    """Jerlov water types, expressed as fraction of total shortwave in band 1
+    (non-visible; fast attenuating), the attenuation length (m) of band 1,
+    and the attenuation length (m) of band 2 (visible; slowly attenuating).
+    Taken from Table 2 of Paulson & Simpson (1977)
+    https://doi.org/10.1175/1520-0485(1977)007%3C0952:IMITUO%3E2.0.CO;2,
+    """
+
     Type_I = (0.58, 0.35, 23.0)
     Type_1 = (0.68, 1.2, 28.0)
     Type_IA = (0.62, 0.6, 20.0)
