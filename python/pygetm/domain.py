@@ -420,7 +420,7 @@ class Domain:
 
     # Grid metrics that can be manipulated after the domain is created
     mask = DomainArray(missing_value=0, dtype=int)
-    H = DomainArray()
+    H = DomainArray(edges=EdgeTreatment.CLAMP)
     z0 = DomainArray()
 
     def __init__(
