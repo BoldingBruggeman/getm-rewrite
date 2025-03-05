@@ -5,6 +5,7 @@ from typing import (
     List,
     Mapping,
     Callable,
+    Iterable,
     Tuple,
     Union,
     Set,
@@ -63,7 +64,7 @@ class OpenBoundary:
         self.type_3d = type_3d
         self.inflow_sign = 1.0 if side in (Side.WEST, Side.SOUTH) else -1.0
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"{__class__.__name__}({self.name!r}, {self.side.name},"
             f" {self.l_glob}, {self.mstart_glob}, {self.mstop_glob})"
@@ -107,7 +108,22 @@ class OpenBoundary:
 
     def extract_inward(
         self, values: np.ndarray, start: int, stop: Optional[int] = None
-    ):
+    ) -> np.ndarray:
+        """Extract one or more rows/columns on the T grid, inward from the open boundary.
+
+        Args:
+            values: 2D or 3D array of values on the T grid
+            start: index of the first row/column to extract
+            stop: index of the last row/column to extract (exclusive)
+
+        Returns:
+            Extracted of values on the T grid.
+            If a single row/column is extracted, the shape of the extracted
+            values will be ``(..., np)``, where ``np`` is the number of points of the
+            open boundary, and ``...`` represents any non-xy dimensions of the
+            input array. If ``n  = stop - start`` rows/columns are extracted,
+            the shape will be ``(..., np, n)``
+        """
         l_inward = {Side.WEST: 1, Side.EAST: -1, Side.SOUTH: 1, Side.NORTH: -1}[
             self.side
         ]
@@ -116,8 +132,10 @@ class OpenBoundary:
         lstart = self.l + l_inward * start
         assert lstart >= 0 and lstart < values.shape[ldim]
         if stop is None:
+            # Extract a single row/column
             lslice = lstart
         else:
+            # Extract a range of rows/columns
             llast = self.l + l_inward * (stop - 1)
             lstop = None if llast == 0 else llast + l_inward
             lslice = slice(lstart, lstop, l_inward)
@@ -128,7 +146,7 @@ class OpenBoundary:
                 return np.swapaxes(values[Ellipsis, lslice, mslice], -1, -2)
             return values[Ellipsis, lslice, mslice]
 
-    def extract_uv_in(self, u: np.ndarray, v: np.ndarray):
+    def extract_uv_in(self, u: np.ndarray, v: np.ndarray) -> np.ndarray:
         uv = u if self.side in (Side.WEST, Side.EAST) else v
         return uv[self.slice_uv_in]
 
@@ -138,12 +156,15 @@ class BoundaryCondition:
         pass
 
     def get_updater(
-        self,
-        domain: "Domain",
-        boundary: OpenBoundary,
-        array: core.Array,
-        bdy: np.ndarray,
+        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
     ) -> Callable[[], None]:
+        """Return a function that updates the model values at the open boundary.
+
+        Args:
+            boundary: the open boundary
+            array: array with all model values
+            bdy: prescribed values at the open boundary
+        """
         raise NotImplementedError
 
     def prepare_depth_explicit(self):
@@ -172,22 +193,72 @@ class BoundaryCondition:
 
 
 class Sponge(BoundaryCondition):
-    def __init__(self, n: int = 3):
+    def __init__(
+        self,
+        n: int = 3,
+        tmrlx: bool = False,
+        tmrlx_max: float = 0.25,
+        tmrlx_min: float = 0.0,
+        tmrlx_ucut: float = 0.02,
+        tmrlx_umin: Optional[float] = None,
+    ):
+        """Create a sponge boundary condition, with ``n`` points inward from
+        the open boundary being relaxed to values at the boundary.
+
+        If a flow-dependent relaxation coefficient is used (``tmrlx=True``),
+        values at the boundary itself will blend the prescribed values
+        and a weighted mean over the sponge zone. The fraction based on
+        prescribed values (the relaxation coefficient) will increase with the
+        inward flow velocity.
+
+        Args:
+            n: number of points in the sponge zone; the boundary itself is not
+                 included, so ``n=0`` is equivalent to a clamped boundary.
+            tmrlx: use a flow-dependent relaxation coefficient
+            tmrlx_max: maximum relaxation coefficient (fraction per timestep).
+                Only used if ``tmrlx`` is ``True``.
+            tmrlx_min: minimum relaxation coefficient (fraction per timestep).
+                Only used if ``tmrlx`` is ``True``.
+            tmrlx_ucut: inward flow velocity (m s-1) at which relaxation
+                coefficient reaches its maximum value. Only used if ``tmrlx``
+                is ``True``.
+            tmrlx_umin: inward flow velocity (m s-1) at which relaxation
+                coefficient reaches its minimum value. If ``None``,
+                ``tmrlx_umin`` is set to ``-0.25 * tmrlx_ucut``.
+                Only used if ``tmrlx`` is ``True``.
+        """
         self.n = n
-        self.tmrlx = False
-        self.tmrlx_max = 0.25
-        self.tmrlx_min = 0.0
-        self.tmrlx_ucut = 0.02
-        self.tmrlx_umin = -0.25 * self.tmrlx_ucut
-        self.rlxcoef = None
+        self.tmrlx = tmrlx
+        self.tmrlx_max = tmrlx_max
+        self.tmrlx_min = tmrlx_min
+        self.tmrlx_ucut = tmrlx_ucut
+        if tmrlx_umin is None:
+            tmrlx_umin = -0.25 * tmrlx_ucut
+        self.tmrlx_umin = tmrlx_umin
+        self.rlxcoef: Optional[core.Array] = None
+        self.inflow: Optional[np.ndarray] = None
+
+        # relaxation coefficient as per Martinsen & Engedahl (1987), Eq 3
+        # https://doi.org/10.1016/0378-3839(87)90028-7
+        # These represent the fraction of the cell's value that is replaced
+        # by the value at the boundary, per timestep, as we move inward from
+        # the boundary.
+        self.sponge_coef = ((n - np.arange(n)) / (n + 1.0)) ** 2
 
     def initialize(self, grid: core.Grid):
+        """Create the relaxation coefficient array if using flow-dependent relaxation.
+        This will be called for every open boundary of every array that uses this
+        boundary condition, so we take care to only create the array once.
+        """
         if self.tmrlx and self.rlxcoef is None:
             self.rlxcoef = grid.array(z=CENTERS, on_boundary=True)
             grid.open_boundaries.velocity_3d_in.saved = True
             self.inflow = grid.open_boundaries.velocity_3d_in.all_values
 
     def prepare_depth_explicit(self):
+        """Update the relaxation coefficient based on the current flow velocity.
+        This is done once per timestep and processes all open boundaries at once.
+        """
         if self.tmrlx:
             self.rlxcoef.all_values[...] = (self.tmrlx_max - self.tmrlx_min) * np.clip(
                 (self.inflow - self.tmrlx_umin) / (self.tmrlx_ucut - self.tmrlx_umin),
@@ -196,10 +267,7 @@ class Sponge(BoundaryCondition):
             ) + self.tmrlx_min
 
     def get_updater(
-        self,
-        boundary: OpenBoundary,
-        array: core.Array,
-        bdy: np.ndarray,
+        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
     ) -> Callable[[], None]:
         mask = boundary.extract_inward(
             array.grid.mask.all_values, start=1, stop=self.n + 1
@@ -207,16 +275,19 @@ class Sponge(BoundaryCondition):
         n = mask.shape[-1]
         assert self.n == n
 
-        # relaxation coefficient as per Martinsen & Engedahl (1987), Eq 3
-        # https://doi.org/10.1016/0378-3839(87)90028-7
         sp = np.empty((boundary.np, n), dtype=float)
-        sp[...] = ((self.n - np.arange(n)) / (self.n + 1.0)) ** 2
+        sp[...] = self.sponge_coef
 
         if self.tmrlx:
+            # The flow-dependent relaxation rlxcoef varies in time
+            # and will be updated by prepare_depth_explicit.
+            # It covers all boundaries; here we obtain its slice
+            # corresponding to the current boundary.
             sp[mask == 0] = 0.0  # only include water points
             w = sp / sp.sum(axis=1, keepdims=True)
             rlxcoef = self.rlxcoef.all_values[boundary.slice_bdy].T
         else:
+            # Values at the boundary will be set to prescribed values
             w = None
             rlxcoef = None
         sp[mask != 1] = 0.0  # only include updatable water points (exclude bdy)
@@ -265,6 +336,12 @@ class Sponge(BoundaryCondition):
 
 
 class ZeroGradient(BoundaryCondition):
+    """Zero-gradient boundary condition
+
+    The model values at the open boundary are set to the values at the
+    first point inward from the boundary.
+    """
+
     def get_updater(
         self,
         boundary: OpenBoundary,
@@ -279,6 +356,11 @@ class ZeroGradient(BoundaryCondition):
 
 
 class Clamped(BoundaryCondition):
+    """Clamped boundary condition
+
+    The model values at the open boundary are set to the prescribed values.
+    """
+
     def get_updater(
         self,
         boundary: OpenBoundary,
@@ -296,12 +378,7 @@ class Flather(BoundaryCondition):
     def __init__(self, transport: bool = False):
         self.transport = transport
 
-    def get_updater(
-        self,
-        boundary: OpenBoundary,
-        array: core.Array,
-        bdy: np.ndarray,
-    ):
+    def get_updater(self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray):
         return functools.partial(
             self.update_transport if self.transport else self.update_velocity,
             array.all_values[boundary.slice_t],
@@ -402,8 +479,8 @@ class ArrayOpenBoundaries:
 
     type = property(fset=_set_type)
 
-    def initialize(self):
-        bcs = set()
+    def initialize(self) -> Iterable[BoundaryCondition]:
+        bcs: Set[BoundaryCondition] = set()
         for bdy in self._bdy:
             bdy._type.initialize(self._array.grid)
             self.updaters.append(
