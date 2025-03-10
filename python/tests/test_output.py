@@ -1,5 +1,6 @@
 import unittest
 from typing import Optional
+import datetime
 
 import numpy as np
 import cftime
@@ -62,6 +63,80 @@ class TestOutput(unittest.TestCase):
             logger=pygetm.parallel.get_logger(level="ERROR"),
         )
         return Simulation(domain)
+
+    def test_vertical_interpolation(self):
+        domain = pygetm.domain.create_cartesian(
+            np.linspace(0, 100e3, 50),
+            np.linspace(0, 100e3, 51),
+            interfaces=True,
+            f=0.0,
+            H=10.0,
+            logger=pygetm.parallel.get_logger(level="ERROR"),
+        )
+        sim = pygetm.Simulation(
+            domain,
+            vertical_coordinates=pygetm.vertical_coordinates.Sigma(50),
+            airsea=pygetm.airsea.Fluxes(),
+        )
+        sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_II)
+        centers = sim.T.array(
+            name="centers",
+            units="Units",
+            long_name="LongName",
+            z=pygetm.CENTERS,
+            fill_value=-2e20,
+            attrs=dict(_time_varying=pygetm.TimeVarying.MACRO),
+        )
+        interfaces = sim.T.array(
+            name="interfaces",
+            units="Units",
+            long_name="LongName",
+            z=pygetm.INTERFACES,
+            fill_value=-2e20,
+            attrs=dict(_time_varying=pygetm.TimeVarying.MACRO),
+        )
+        centers.values[...] = (
+            np.arange(centers.shape[0])[::-1, np.newaxis, np.newaxis] + 0.5
+        )
+        interfaces.values[...] = np.arange(interfaces.shape[0])[
+            ::-1, np.newaxis, np.newaxis
+        ]
+
+        start = cftime.datetime(2000, 1, 1)
+        stop = cftime.datetime(2000, 1, 11)
+        path = "test.nc"
+
+        nc = sim.output_manager.add_netcdf_file(
+            path, interval=datetime.timedelta(days=5)
+        )
+        nc.request("centers", "interfaces")
+        nc.request("centers", z=[0, -5, -10], output_name="centers_ip")
+        nc.request("interfaces", z=[0, -5, -10], output_name="interfaces_ip")
+        sim.start(start, 3600.0, 24)
+        while sim.time < stop:
+            sim.advance()
+        sim.finish()
+
+        with netCDF4.Dataset(path) as ds:
+            cip = ds["centers_ip"]
+            self.assertEqual(cip.shape[1], 3)
+            self.assertTrue(np.ma.getmaskarray(cip[:, 0, :, :]).all())
+            cipmid = cip[:, 1, :, :]
+            cipmin = cipmid.min()
+            self.assertTrue((cipmid == cipmin).all())
+            self.assertAlmostEqual(cipmin, 25.0, places=13)
+            self.assertTrue(np.ma.getmaskarray(cip[:, 2, :, :]).all())
+
+            iip = ds["interfaces_ip"]
+            self.assertEqual(iip.shape[1], 3)
+            # NB not testing k=0 because numerical roundoff when calculating
+            # interface positions can cause top interface to be slightly above
+            # 0, which causes interpolation to to return masked values.
+            iipmid = iip[:, 1, :, :]
+            iipmin = iipmid.min()
+            self.assertTrue((iipmid == iipmin).all())
+            self.assertAlmostEqual(iipmin, 25.0, places=13)
+            self.assertTrue((iip[:, 2, :, :] == 50.0).all())
 
     def test_temporal_averaging(self):
         tol = 1e-14
