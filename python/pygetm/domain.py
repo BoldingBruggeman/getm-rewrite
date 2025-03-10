@@ -63,7 +63,7 @@ def coriolis(lat: npt.ArrayLike) -> np.ndarray:
         lat: latitude (°North)
 
     Returns:
-        Coriolis parameter f
+        Coriolis parameter f (rad s-1)
     """
     return (2.0 * OMEGA) * np.sin(DEG2RAD * np.asarray(lat, dtype=float))
 
@@ -457,8 +457,8 @@ class Domain:
                 some arbitrary depth reference (m, positive if bottom lies below the
                 depth reference). Typically the depth reference is mean sea level.
             z0: minimum hydrodynamic bottom roughness (m)
-            f: Coriolis parameter. If not provided, it will be calculated from latitude.
-                In that case argument `lat` must be provided.
+            f: Coriolis parameter (rad s-1). If not provided, it will be calculated
+                from latitude. In that case argument `lat` must be provided.
             periodic_x: use periodic boundary in x-direction (left == right)
             periodic_y: use periodic boundary in y-direction (top == bottom)
             comm: MPI communicator that comprises all processes that should get access
@@ -913,6 +913,41 @@ class Domain:
     def maxdt(self) -> float:
         """Maximum time step (s) for depth-integrated equations"""
         return self.cfl_check()
+
+    def get_rx0(
+        self, zmin: float = 0.0, Dmin: float = 0.0
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculates the slope factor ``rx0`` as defined in
+        https://doi.org/10.1016/j.ocemod.2009.03.009
+
+        At interfaces of shallow points (the depth of at least one wet neighbor
+        being less than ``Dmin``), the surface elevation is clipped to the
+        minimum value that still keeps both points wet.
+
+        Args:
+            zmin: minimum surface elevation (m)
+            Dmin: minimum depth (m)
+
+        Returns:
+            (rx0_u, rx0_v): a tuple  with slope factors at U and V points,
+            positioned at ``[1::2, 2:-2:2]`` and ``[2:-2:2, 1::2]``, respectively
+        """
+        H = self._H[1::2, 1::2]
+        zmin_loc = np.maximum(-H + Dmin, zmin)
+        zmin_u = np.maximum(zmin_loc[:, 1:], zmin_loc[:, :-1])
+        zmin_v = np.maximum(zmin_loc[1:, :], zmin_loc[:-1, :])
+        rx0_u = np.abs(H[:, 1:] - H[:, :-1]) / (H[:, 1:] + H[:, :-1] + 2 * zmin_u)
+        rx0_v = np.abs(H[1:, :] - H[:-1, :]) / (H[1:, :] + H[:-1, :] + 2 * zmin_v)
+        tmask = self._mask[1::2, 1::2] == 0
+        rx0_u[tmask[:, 1:] | tmask[:, :-1]] = 0.0
+        rx0_v[tmask[1:, :] | tmask[:-1, :]] = 0.0
+        return rx0_u, rx0_v
+
+    @property
+    def max_rx0(self) -> float:
+        """Maximum slope factor rx0 as defined in https://doi.org/10.1016/j.ocemod.2009.03.009"""
+        rx0_u, rx0_v = self.get_rx0()
+        return max(rx0_u.max(), rx0_v.max())
 
     # @calculate_and_bcast
     def infer_UVX_masks2(self):
