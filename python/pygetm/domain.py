@@ -949,6 +949,99 @@ class Domain:
         rx0_u, rx0_v = self.get_rx0()
         return max(rx0_u.max(), rx0_v.max())
 
+    def smooth(self, rx0: float = 0.2) -> np.ndarray:
+        """Smooth bathymetry by reducing slope factor to specified maximum.
+
+        The criterion to be satisfied at every interface between wet points is:
+
+        abs(H1 - H2) - rx0 * H1 - rx0 * H2 < 0
+
+        Handling abs as described at https://lpsolve.sourceforge.net/5.1/absolute.htm,
+        we obtain the two criteria:
+
+        ( 1-rx0) * H1 + (-1-rx0) * H2 < 0
+        (-1-rx0) * H1 + ( 1-rx0) * H2 < 0
+
+        Splitting into original bathymetry H and correction H', and rearranging:
+
+        ( 1-rx0)H1' + (-1-rx0)H2' < -( 1-rx0)H1 - (-1-rx0)H2
+        (-1-rx0)H1' + ( 1-rx0)H2' < -(-1-rx0)H1 - ( 1-rx0)H2
+
+        H1' and H2' are the corrections to the bathymetry, estimated by linear programming
+        as described in https://doi.org/10.1016/j.ocemod.2009.03.009
+
+        Args:
+             rx0: maximum slope factor
+        """
+        if self.max_rx0 <= rx0:
+            return np.zeros_like(self.H[1::2, 1::2])
+
+        import scipy.optimize
+        import scipy.sparse
+
+        twet = self._mask[1::2, 1::2] != 0
+        nwet = twet.sum()
+        H = self.H[1::2, 1::2][twet]
+        iwet = np.full(twet.shape, -1, dtype=np.intp)
+        iwet[twet] = np.arange(nwet)
+        uwet = twet[:, 1:] & twet[:, :-1]
+        vwet = twet[1:, :] & twet[:-1, :]
+        nu = uwet.sum()
+        nv = vwet.sum()
+        n = nu + nv
+        nconstraints = n * 2 + nwet * 2
+
+        A_values = np.empty((nconstraints, 2))
+        A_i = np.empty_like(A_values, dtype=np.intp)
+        A_j = np.empty_like(A_values, dtype=np.intp)
+        b = np.zeros(nconstraints)
+
+        # Constraints on raw [not absolute] bathymetry corrections
+        A_values[:n, 0] = 1.0 - rx0
+        A_values[:n, 1] = -1.0 - rx0
+        A_values[n : 2 * n, 0] = -1.0 - rx0
+        A_values[n : 2 * n, 1] = 1.0 - rx0
+        A_i[:, :] = np.arange(nconstraints)[:, np.newaxis]
+        A_j[:nu, 0] = iwet[:, :-1][uwet]
+        A_j[:nu, 1] = iwet[:, 1:][uwet]
+        A_j[nu:n, 0] = iwet[:-1, :][vwet]
+        A_j[nu:n, 1] = iwet[1:, :][vwet]
+        A_j[n : 2 * n, :] = A_j[:n, :]
+        b[: 2 * n] = -(A_values[: 2 * n] * H[A_j[: 2 * n]]).sum(axis=1)
+
+        # Trick to minimize sum of absolute corrections
+        # We introduce one new variable M per wet point (correction),
+        # constrained by M >= H' and M >= -H'
+        # The objective is to minimize sum(M)
+        A_j[2 * n : 2 * n + nwet, 0] = np.arange(nwet)
+        A_j[2 * n : 2 * n + nwet, 1] = np.arange(nwet, 2 * nwet)
+        A_j[2 * n + nwet :, :] = A_j[2 * n : 2 * n + nwet, :]
+        A_values[2 * n : 2 * n + nwet, 0] = 1.0
+        A_values[2 * n + nwet :, 0] = -1.0
+        A_values[2 * n :, 1] = -1.0
+        c = np.zeros(2 * nwet)
+        c[nwet:] = 1.0
+
+        A = scipy.sparse.coo_matrix((A_values.ravel(), (A_i.ravel(), A_j.ravel())))
+        res = scipy.optimize.linprog(c=c, A_ub=A, b_ub=b, bounds=(None, None))
+        if not res.success:
+            raise Exception(
+                f"Failed to optimize bathymetry for rx0<={rx0}: {res.message}"
+            )
+        Hcor = np.zeros_like(self.H[1::2, 1::2])
+        Hcor[twet] = res.x[:nwet]
+        self.H[1::2, 1::2] += Hcor
+
+        # Infer bathymetry at U, V, X points from corrected T points
+        HT = self.H[1::2, 1::2]
+        self.H[1::2, 2:-2:2] = 0.5 * (HT[:, 1:] + HT[:, :-1])
+        self.H[2:-2:2, 1::2] = 0.5 * (HT[1:, :] + HT[:-1, :])
+        self.H[2:-2:2, 2:-2:2] = 0.25 * (
+            HT[1:, 1:] + HT[:-1, 1:] + HT[1:, :-1] + HT[:-1, :-1]
+        )
+
+        return Hcor
+
     # @calculate_and_bcast
     def infer_UVX_masks2(self):
         tmask = self.mask[1::2, 1::2]
