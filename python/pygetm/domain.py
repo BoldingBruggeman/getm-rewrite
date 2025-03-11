@@ -63,7 +63,7 @@ def coriolis(lat: npt.ArrayLike) -> np.ndarray:
         lat: latitude (°North)
 
     Returns:
-        Coriolis parameter f
+        Coriolis parameter f (rad s-1)
     """
     return (2.0 * OMEGA) * np.sin(DEG2RAD * np.asarray(lat, dtype=float))
 
@@ -346,32 +346,6 @@ def create_spherical_at_resolution(
     )
 
 
-class DomainArray:
-    def __init__(self, writeable: bool = True, **kwargs):
-        self.writable = writeable
-        self.kwargs = kwargs
-
-    def __set_name__(self, owner, name):
-        self.private_name = f"_{name}"
-
-    def __get__(self, domain: "Domain", objtype=None) -> Optional[np.ndarray]:
-        values = getattr(domain, self.private_name, None)
-        if values is not None:
-            if values.flags.writeable and not self.writable:
-                values = values.view()
-                values.flags.writeable = False
-            elif not values.flags.writeable and self.writable:
-                values = values.copy()
-                setattr(domain, self.private_name, values)
-        return values
-
-    def __set__(self, domain: "Domain", values: Optional[npt.ArrayLike]):
-        assert self.writable
-        if domain.comm.rank == 0:
-            values = domain._map_array(values, **self.kwargs)
-            setattr(domain, self.private_name, values)
-
-
 def calculate_and_bcast(method):
     @functools.wraps(method)
     def wrapper(self: "Domain", *args, **kwargs):
@@ -407,22 +381,6 @@ def _rotation(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 class Domain:
-    # Grid metrics frozen at initialization
-    x = DomainArray(writeable=False)
-    y = DomainArray(writeable=False)
-    lon = DomainArray(writeable=False)
-    lat = DomainArray(writeable=False)
-    f = DomainArray(writeable=False)
-    dx = DomainArray(writeable=False)
-    dy = DomainArray(writeable=False)
-    rotation = DomainArray(writeable=False)
-    area = DomainArray(writeable=False)
-
-    # Grid metrics that can be manipulated after the domain is created
-    mask = DomainArray(missing_value=0, dtype=int)
-    H = DomainArray()
-    z0 = DomainArray()
-
     def __init__(
         self,
         nx: int,
@@ -456,9 +414,10 @@ class Domain:
             H: initial bathymetric depth. This is the distance between the bottom and
                 some arbitrary depth reference (m, positive if bottom lies below the
                 depth reference). Typically the depth reference is mean sea level.
+                Points with NaN or masked values will be marked as land in the mask.
             z0: minimum hydrodynamic bottom roughness (m)
-            f: Coriolis parameter. If not provided, it will be calculated from latitude.
-                In that case argument `lat` must be provided.
+            f: Coriolis parameter (rad s-1). If not provided, it will be calculated
+                from latitude. In that case argument `lat` must be provided.
             periodic_x: use periodic boundary in x-direction (left == right)
             periodic_y: use periodic boundary in y-direction (top == bottom)
             comm: MPI communicator that comprises all processes that should get access
@@ -529,9 +488,9 @@ class Domain:
             self._lon = self._map_array(lon)
         self._lat = self._map_array(lat, edges=EdgeTreatment.EXTRAPOLATE)
         self._f = self._map_array(f)
-        self._mask = self._map_array(mask, missing_value=0, dtype=int)
-        self._H = self._map_array(H, edges=EdgeTreatment.CLAMP)
-        self._z0 = self._map_array(z0)
+        self.mask = mask
+        self.H = H
+        self.z0 = z0
 
         kwargs_expand = {}
         if self.periodic_x:
@@ -655,6 +614,93 @@ class Domain:
         if mapped_values.shape != target_shape:
             mapped_values = np.broadcast_to(mapped_values, target_shape)
         return mapped_values
+
+    @property
+    def x(self) -> Optional[np.ndarray]:
+        """x coordinate (m)"""
+        return self._x
+
+    @property
+    def y(self) -> Optional[np.ndarray]:
+        """y coordinate (m)"""
+        return self._y
+
+    @property
+    def lon(self) -> Optional[np.ndarray]:
+        """longitude (°East)"""
+        return self._lon
+
+    @property
+    def lat(self) -> Optional[np.ndarray]:
+        """latitude (°North)"""
+        return self._lat
+
+    @property
+    def f(self) -> Optional[np.ndarray]:
+        """Coriolis parameter (rad s-1)"""
+        return self._f
+
+    @property
+    def dx(self) -> Optional[np.ndarray]:
+        """grid cell length in x-direction (m)"""
+        return self._dx
+
+    @property
+    def dy(self) -> Optional[np.ndarray]:
+        """grid cell length in y-direction (m)"""
+        return self._dy
+
+    @property
+    def rotation(self) -> Optional[np.ndarray]:
+        """grid rotation with respect to true North (rad)"""
+        return self._rotation
+
+    @property
+    def area(self) -> Optional[np.ndarray]:
+        """grid cell area (m²)"""
+        return self._area
+
+    @property
+    def mask(self) -> Optional[np.ndarray]:
+        """land-sea mask (0: land, 1: water)"""
+        if not self._mask.flags.writeable:
+            self._mask = self._mask.copy()
+        return self._mask
+
+    @mask.setter
+    def mask(self, values: npt.ArrayLike):
+        self._mask = self._map_array(values, missing_value=0, dtype=int)
+
+    @property
+    def H(self) -> Optional[np.ndarray]:
+        """bathymetric depth (m)
+
+        This is the distance between the bottom and some arbitrary depth
+        reference (m, positive if bottom lies below the depth reference).
+        Typically the depth reference is mean sea level."""
+        if self._H is not None and not self._H.flags.writeable:
+            self._H = self._H.copy()
+        return self._H
+
+    @H.setter
+    def H(self, values: Optional[npt.ArrayLike]):
+        if self.comm.rank == 0 and values is not None:
+            values = np.ma.masked_invalid(values)
+            self._H = self._map_array(values, edges=EdgeTreatment.CLAMP)
+            self._mask = self._mask & np.isfinite(self._H)
+        else:
+            self._H = None
+
+    @property
+    def z0(self) -> Optional[np.ndarray]:
+        """minimum hydrodynamic bottom roughness (m)"""
+        if not self._z0.flags.writeable:
+            self._z0 = self._z0.copy()
+        return self._z0
+
+    @z0.setter
+    def z0(self, values: npt.ArrayLike):
+        self._z0 = self._map_array(values)
 
     def create_tiling(self) -> parallel.Tiling:
         mask = None if self.comm.rank != 0 else self._mask[1::2, 1::2]
@@ -913,6 +959,133 @@ class Domain:
     def maxdt(self) -> float:
         """Maximum time step (s) for depth-integrated equations"""
         return self.cfl_check()
+
+    def get_rx0(
+        self, zmin: float = 0.0, Dmin: float = 0.0
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculates the slope factor ``rx0`` as defined in
+        https://doi.org/10.1016/j.ocemod.2009.03.009
+
+        At interfaces of shallow points (the depth of at least one wet neighbor
+        being less than ``Dmin``), the surface elevation is clipped to the
+        minimum value that still keeps both points wet.
+
+        Args:
+            zmin: minimum surface elevation (m)
+            Dmin: minimum depth (m)
+
+        Returns:
+            (rx0_u, rx0_v): a tuple  with slope factors at U and V points,
+            positioned at ``[1::2, 2:-2:2]`` and ``[2:-2:2, 1::2]``, respectively
+        """
+        H = self._H[1::2, 1::2]
+        zmin_loc = np.maximum(-H + Dmin, zmin)
+        zmin_u = np.maximum(zmin_loc[:, 1:], zmin_loc[:, :-1])
+        zmin_v = np.maximum(zmin_loc[1:, :], zmin_loc[:-1, :])
+        rx0_u = np.abs(H[:, 1:] - H[:, :-1]) / (H[:, 1:] + H[:, :-1] + 2 * zmin_u)
+        rx0_v = np.abs(H[1:, :] - H[:-1, :]) / (H[1:, :] + H[:-1, :] + 2 * zmin_v)
+        tmask = self._mask[1::2, 1::2] == 0
+        rx0_u[tmask[:, 1:] | tmask[:, :-1]] = 0.0
+        rx0_v[tmask[1:, :] | tmask[:-1, :]] = 0.0
+        return rx0_u, rx0_v
+
+    @property
+    @calculate_and_bcast
+    def max_rx0(self) -> float:
+        """Maximum slope factor rx0 as defined in https://doi.org/10.1016/j.ocemod.2009.03.009"""
+        rx0_u, rx0_v = self.get_rx0()
+        return max(rx0_u.max(), rx0_v.max())
+
+    def smooth(self, rx0: float = 0.2) -> Optional[np.ndarray]:
+        """Smooth bathymetry by reducing slope factor to specified maximum.
+
+        The criterion to be satisfied at every interface between wet points is:
+
+        abs(H1 - H2) - rx0 * H1 - rx0 * H2 < 0
+
+        Handling abs as described at https://lpsolve.sourceforge.net/5.1/absolute.htm,
+        we obtain the two criteria:
+
+        ( 1-rx0) * H1 + (-1-rx0) * H2 < 0
+        (-1-rx0) * H1 + ( 1-rx0) * H2 < 0
+
+        Splitting into original bathymetry H and correction H', and rearranging:
+
+        ( 1-rx0)H1' + (-1-rx0)H2' < -( 1-rx0)H1 - (-1-rx0)H2
+        (-1-rx0)H1' + ( 1-rx0)H2' < -(-1-rx0)H1 - ( 1-rx0)H2
+
+        H1' and H2' are the corrections to the bathymetry, estimated by linear programming
+        as described in https://doi.org/10.1016/j.ocemod.2009.03.009
+
+        Args:
+             rx0: maximum slope factor
+
+        Returns:
+            Hcor: bathymetry corrections (m).
+            These are defined at T points, that is, at ``[1::2, 1::2]``
+        """
+        if self.comm.rank != 0:
+            return
+
+        if self.max_rx0 <= rx0:
+            return np.zeros_like(self.H[1::2, 1::2])
+
+        import scipy.optimize
+        import scipy.sparse
+
+        twet = self._mask[1::2, 1::2] != 0
+        nwet = twet.sum()
+        H = self.H[1::2, 1::2][twet]
+        iwet = np.full(twet.shape, -1, dtype=np.intp)
+        iwet[twet] = np.arange(nwet)
+        uwet = twet[:, 1:] & twet[:, :-1]
+        vwet = twet[1:, :] & twet[:-1, :]
+        nu = uwet.sum()
+        nv = vwet.sum()
+        n = nu + nv
+        nconstraints = n * 2 + nwet * 2
+
+        A_values = np.empty((nconstraints, 2))
+        A_i = np.empty_like(A_values, dtype=np.intp)
+        A_j = np.empty_like(A_values, dtype=np.intp)
+        b = np.zeros(nconstraints)
+
+        # Constraints on raw [not absolute] bathymetry corrections
+        A_values[:n, 0] = 1.0 - rx0
+        A_values[:n, 1] = -1.0 - rx0
+        A_values[n : 2 * n, 0] = -1.0 - rx0
+        A_values[n : 2 * n, 1] = 1.0 - rx0
+        A_i[:, :] = np.arange(nconstraints)[:, np.newaxis]
+        A_j[:nu, 0] = iwet[:, :-1][uwet]
+        A_j[:nu, 1] = iwet[:, 1:][uwet]
+        A_j[nu:n, 0] = iwet[:-1, :][vwet]
+        A_j[nu:n, 1] = iwet[1:, :][vwet]
+        A_j[n : 2 * n, :] = A_j[:n, :]
+        b[: 2 * n] = -(A_values[: 2 * n] * H[A_j[: 2 * n]]).sum(axis=1)
+
+        # Trick to minimize sum of absolute corrections
+        # We introduce one new variable M per wet point (correction),
+        # constrained by M >= H' and M >= -H'
+        # The objective is to minimize sum(M)
+        A_j[2 * n : 2 * n + nwet, 0] = np.arange(nwet)
+        A_j[2 * n : 2 * n + nwet, 1] = np.arange(nwet, 2 * nwet)
+        A_j[2 * n + nwet :, :] = A_j[2 * n : 2 * n + nwet, :]
+        A_values[2 * n : 2 * n + nwet, 0] = 1.0
+        A_values[2 * n + nwet :, 0] = -1.0
+        A_values[2 * n :, 1] = -1.0
+        c = np.zeros(2 * nwet)
+        c[nwet:] = 1.0
+
+        A = scipy.sparse.coo_matrix((A_values.ravel(), (A_i.ravel(), A_j.ravel())))
+        res = scipy.optimize.linprog(c=c, A_ub=A, b_ub=b, bounds=(None, None))
+        if not res.success:
+            raise Exception(
+                f"Failed to optimize bathymetry for rx0<={rx0}: {res.message}"
+            )
+        Hcor = np.zeros_like(self.H[1::2, 1::2])
+        Hcor[twet] = res.x[:nwet]
+        self.H = self.H[1::2, 1::2] + Hcor
+        return Hcor
 
     # @calculate_and_bcast
     def infer_UVX_masks2(self):
