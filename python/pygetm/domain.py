@@ -1019,6 +1019,10 @@ class Domain:
 
         Args:
              rx0: maximum slope factor
+
+        Returns:
+            Hcor: bathymetry corrections (m).
+            These are defined at T points, that is, at ``[1::2, 1::2]``
         """
         if self.comm.rank != 0:
             return
