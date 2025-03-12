@@ -256,6 +256,7 @@ class Grid(_pygetm.Grid):
         "_water_contact",
         "_land",
         "_land3d",
+        "_land3d_if",
         "_water",
         "_water_nohalo",
         "horizontal_coordinates",

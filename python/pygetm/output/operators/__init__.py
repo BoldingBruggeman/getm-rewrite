@@ -9,6 +9,7 @@ from typing import (
     Callable,
     List,
     Any,
+    NamedTuple,
 )
 import collections
 import enum
@@ -23,6 +24,33 @@ import pygetm.domain
 import pygetm._pygetm
 import pygetm.util.interpolate
 from pygetm.constants import CENTERS, INTERFACES, TimeVarying
+
+
+class GridInfo(NamedTuple):
+    grid: pygetm.core.Grid
+    z: Optional[Literal[CENTERS, INTERFACES]]
+    on_boundary: bool
+
+    def _get_gather_info(
+        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
+    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
+        return self.grid.get_gather_info(
+            shape=shape,
+            on_boundary=self.on_boundary,
+            dtype=dtype,
+            fill_value=fill_value,
+        )
+
+    def get_mask(self) -> np.ndarray:
+        att = "_land"
+        if self.z and hasattr(self.grid, "_land3d"):
+            att = "_land3d_if" if self.z == INTERFACES else "_land3d"
+        return getattr(self.grid, att)
+
+    def get_coords(self, ndim: int) -> Iterable["Base"]:
+        for array in self.grid._get_coords(ndim, self.z, self.on_boundary):
+            yield Field(array)
+        yield from self.grid.extra_output_coordinates
 
 
 class Base:
@@ -67,20 +95,11 @@ class Base:
         raise NotImplementedError
 
     @property
-    def coords(self) -> Iterable["Base"]:
-        raise NotImplementedError
-
-    @property
     def default_name(self) -> str:
         raise NotImplementedError
 
     def gather(self) -> "Base":
         return Gather(self)
-
-    def _get_gather_info(
-        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
-    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
-        return NotImplementedError
 
     @property
     def updatable(self) -> bool:
@@ -91,16 +110,21 @@ class Base:
         raise NotImplementedError
 
     @property
-    def grid(self) -> Optional[pygetm.core.Grid]:
+    def grid_info(self) -> Optional[GridInfo]:
         return None
+
+    def _get_gather_info(
+        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
+    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
+        return self.grid_info._get_gather_info(shape, dtype, fill_value)
 
     @property
     def mask(self) -> np.ndarray:
-        if self.grid is None:
-            raise NotImplementedError()
-        if self.ndim > 2 and hasattr(self.grid, "_land3d"):
-            return self.grid._land3d
-        return self.grid._land
+        return self.grid_info.get_mask()
+
+    @property
+    def coords(self) -> Iterable["Base"]:
+        yield from self.grid_info.get_coords(self.ndim)
 
 
 class WrappedArray(Base):
@@ -333,35 +357,17 @@ class Field(Base):
             out[slice_spec] = self.array.all_values
             return out
 
-    def _get_gather_info(
-        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
-    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
-        return self.array.grid.get_gather_info(
-            shape=shape,
-            on_boundary=self.array.on_boundary,
-            dtype=dtype,
-            fill_value=fill_value,
-        )
-
-    @property
-    def coords(self) -> Iterable[Base]:
-        for array in self.grid._get_coords(
-            self.ndim, self.array.z, self.array.on_boundary
-        ):
-            yield Field(array)
-        yield from self.grid.extra_output_coordinates
-
     @property
     def default_name(self) -> str:
         return self.array.name
 
     @property
-    def grid(self) -> pygetm.core.Grid:
-        return self.array.grid
+    def grid_info(self) -> GridInfo:
+        return GridInfo(self.array.grid, self.array.z, self.array.on_boundary)
 
 
 class UnivariateTransform(Base):
-    __slots__ = "_source"
+    __slots__ = "_source", "_grid_info_provider"
 
     def __init__(
         self,
@@ -370,6 +376,7 @@ class UnivariateTransform(Base):
         dims: Optional[Iterable[str]] = None,
         dtype: Optional[DTypeLike] = None,
         expression: Optional[str] = None,
+        inherit_grid_info: bool = True,
     ):
         if shape is None:
             shape = source.shape
@@ -383,6 +390,11 @@ class UnivariateTransform(Base):
             source.attrs,
         )
         self._source = source
+        self._grid_info_provider = source if inherit_grid_info else super()
+
+    @property
+    def default_name(self) -> str:
+        return self._source.default_name
 
     @property
     def updatable(self) -> bool:
@@ -393,21 +405,21 @@ class UnivariateTransform(Base):
         return self._source.updater
 
     @property
-    def grid(self) -> pygetm.core.Grid:
-        return self._source.grid
+    def grid_info(self) -> Optional[GridInfo]:
+        return self._grid_info_provider.grid_info
+
+    @property
+    def mask(self) -> np.ndarray:
+        return self._grid_info_provider.mask
 
     @property
     def coords(self) -> Iterable[Base]:
-        yield from self._source.coords
-
-    @property
-    def default_name(self) -> str:
-        return self._source.default_name
+        yield from self._grid_info_provider.coords
 
     def _get_gather_info(
         self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
     ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
-        return self._source._get_gather_info(shape, dtype, fill_value)
+        return self._grid_info_provider._get_gather_info(shape, dtype, fill_value)
 
 
 class UnivariateTransformWithData(UnivariateTransform):
@@ -461,7 +473,7 @@ class Gather(UnivariateTransform):
             yield c.gather()
 
     @property
-    def grid(self) -> None:
+    def grid_info(self) -> None:
         return None
 
 
@@ -529,7 +541,7 @@ class TimeAverage(UnivariateTransformWithData):
 
 
 class Regrid(UnivariateTransformWithData):
-    __slots__ = ("interpolate", "_grid", "_z", "_slice")
+    __slots__ = ("interpolate", "_grid_info", "_slice")
 
     def __init__(
         self,
@@ -537,24 +549,26 @@ class Regrid(UnivariateTransformWithData):
         grid: Optional[pygetm.core.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
     ):
-        assert source.grid is not None
-        grid = grid or source.grid
-        if grid is not source.grid:
+        source_grid_info = source.grid_info
+        assert source_grid_info is not None
+        assert not source_grid_info.on_boundary
+        grid = grid or source_grid_info.grid
+        if grid is not source_grid_info.grid:
             assert z is None
-            self.interpolate = source.grid.interpolator(grid)
+            self.interpolate = source_grid_info.grid.interpolator(grid)
             shape = source.shape[:-2] + (grid.ny_, grid.nx_)
             args = f", grid={grid.postfix}"
             if source.ndim > 2:
-                z = CENTERS if source.shape[0] == grid.nz else INTERFACES
+                z = source_grid_info.z
         else:
             assert z is not None
             if z == CENTERS:
-                assert source.shape[0] == source.grid.nz + 1
+                assert source_grid_info.z == INTERFACES
                 self.interpolate = functools.partial(pygetm._pygetm.interp_z, offset=0)
                 shape = (source.shape[0] - 1,) + source.shape[1:]
                 args = ", z=centers"
             else:
-                assert source.shape[0] == source.grid.nz
+                assert source_grid_info.z == CENTERS
                 self.interpolate = functools.partial(pygetm._pygetm.interp_z, offset=1)
                 shape = (source.shape[0] + 1,) + source.shape[1:]
                 args = ", z=interfaces"
@@ -563,10 +577,10 @@ class Regrid(UnivariateTransformWithData):
             shape=shape,
             dims=grid._get_dims(len(shape), z),
             expression=f"{self.__class__.__name__}({source.expression}{args})",
+            inherit_grid_info=False,
         )
         self._slice = (np.newaxis, Ellipsis) if source.ndim < 3 else (Ellipsis,)
-        self._grid = grid
-        self._z = z
+        self._grid_info = GridInfo(grid, z, False)
 
     def get(
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
@@ -575,21 +589,8 @@ class Regrid(UnivariateTransformWithData):
         return super().get(out, slice_spec)
 
     @property
-    def grid(self) -> pygetm.core.Grid:
-        return self._grid
-
-    @property
-    def coords(self) -> Iterable[Base]:
-        for array in self._grid._get_coords(self.ndim, self._z):
-            yield Field(array)
-        yield from self._grid.extra_output_coordinates
-
-    def _get_gather_info(
-        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
-    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
-        return self._grid.get_gather_info(
-            shape=shape, on_boundary=False, dtype=dtype, fill_value=fill_value
-        )
+    def grid_info(self) -> GridInfo:
+        return self._grid_info
 
 
 class InterpZ(UnivariateTransformWithData):
@@ -602,9 +603,13 @@ class InterpZ(UnivariateTransformWithData):
         dims = (dim,) + source.dims[1:]
         self.z_dim = dim
         expression = f"{self.__class__.__name__}({source.expression}, z={self.z_tgt})"
-        at_centers = source.shape[0] == source.grid.nz
-        self.z_src = (source.grid.zc if at_centers else source.grid.zf).all_values
         super().__init__(source, shape=shape, dims=dims, expression=expression)
+        for c in source.coords:
+            if c.attrs.get("axis") == "Z":
+                self.z_src = c.get()
+                break
+        else:
+            raise ValueError("Could not find source z coordinate")
 
     def get(
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
@@ -621,3 +626,10 @@ class InterpZ(UnivariateTransformWithData):
             if c.attrs.get("axis") == "Z":
                 c = WrappedArray(self.z_tgt, self.z_dim, (self.z_dim,), attrs=c.attrs)
             yield c
+
+    @property
+    def mask(self) -> np.ndarray:
+        grid_info = self.grid_info
+        if grid_info is not None:
+            grid_info = GridInfo(grid_info.grid, None, grid_info.on_boundary)
+        return grid_info.get_mask()
