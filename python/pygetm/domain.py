@@ -242,7 +242,7 @@ def create_cartesian(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
     *,
-    interfaces=False,
+    interfaces: bool = False,
     central_lon: Optional[float] = None,
     central_lat: Optional[float] = None,
     **kwargs,
@@ -250,11 +250,19 @@ def create_cartesian(
     """Create Cartesian domain from x and y coordinates.
 
     Args:
-        x: array with x coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        y: array with y coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        interfaces: coordinates are given at cell interfaces, rather than cell centers.
+        x: array with x coordinates (m).
+            It can have shape ``(nx,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        y: array with y coordinates (m).
+            It can have shape ``(ny,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        interfaces: coordinates are given at cell interfaces rather than cell centers.
+        central_lon: longitude of the center of the domain (°East).
+            The center is ``[x.min() + x.max()]/2, [y.min() + y.max()]/2``.
+        central_lat: latitude of the center of the domain (°North).
+            The center is ``[x.min() + x.max()]/2, [y.min() + y.max()]/2``.
         **kwargs: additional arguments passed to :class:`Domain`
     """
     x = np.asarray(x)
@@ -278,16 +286,20 @@ def create_cartesian(
 
 
 def create_spherical(
-    lon: npt.ArrayLike, lat: npt.ArrayLike, *, interfaces=False, **kwargs
+    lon: npt.ArrayLike, lat: npt.ArrayLike, *, interfaces: bool = False, **kwargs
 ) -> "Domain":
     """Create spherical domain from longitudes and latitudes.
 
     Args:
-        lon: array with longitude coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        lat: array with latitude coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        interfaces: coordinates are given at cell interfaces, rather than cell centers.
+        lon: array with longitude coordinates (°East).
+            It can have shape ``(nx,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        lat: array with latitude coordinates (°North).
+            It can have shape ``(ny,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        interfaces: coordinates are given at cell interfaces rather than cell centers.
         **kwargs: additional arguments passed to :class:`Domain`
     """
     lon = np.asarray(lon)
@@ -975,7 +987,7 @@ class Domain:
             Dmin: minimum depth (m)
 
         Returns:
-            (rx0_u, rx0_v): a tuple  with slope factors at U and V points,
+            a tuple with slope factors at U and V points,
             positioned at ``[1::2, 2:-2:2]`` and ``[2:-2:2, 1::2]``, respectively
         """
         H = self._H[1::2, 1::2]
@@ -1021,7 +1033,7 @@ class Domain:
              rx0: maximum slope factor
 
         Returns:
-            Hcor: bathymetry corrections (m).
+            bathymetry corrections (m).
             These are defined at T points, that is, at ``[1::2, 1::2]``
         """
         if self.comm.rank != 0:
