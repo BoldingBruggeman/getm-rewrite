@@ -52,6 +52,18 @@ class OpenBoundary:
         type_2d: int,
         type_3d: int,
     ):
+        """Create an open boundary.
+        The supplied indices are global indices in the T grid.
+
+        Args:
+            name: unique name for this boundary
+            side: side of the domain
+            l: fixed index (i for left/right boundaries, j for top/bottom)
+            mstart: start index (j for left/right boundaries, i for top/bottom)
+            mstop: stop index (exclusive)
+            type_2d: default type of boundary condition for 2D variables
+            type_3d: default type of boundary condition for 3D variables
+        """
         side = Side(side)
 
         self.name = name
@@ -71,6 +83,7 @@ class OpenBoundary:
         )
 
     def to_local_grid(self, grid: core.Grid):
+        """Convert global indices to local indices of the current subdomain."""
         # NB below we convert to indices in the T grid of the current subdomain
         # INCLUDING halos
         # We also limit the indices to the range valid for the current subdomain.
@@ -147,12 +160,32 @@ class OpenBoundary:
             return values[Ellipsis, lslice, mslice]
 
     def extract_uv_in(self, u: np.ndarray, v: np.ndarray) -> np.ndarray:
+        """Extract velocity or transport across the boundary from components at
+        velocity points (U or V) just inward from the boundary.
+
+        Args:
+            u: 2D or 3D component of velocity or transport in x-direction.
+                It must be defined on the U grid.
+            v: 2D or 3D component of velocity or transport in y-direction.
+                It must be defined on the V grid.
+
+        Returns:
+            2D or 3D array of velocity or transport across the boundary.
+        """
         uv = u if self.side in (Side.WEST, Side.EAST) else v
         return uv[self.slice_uv_in]
 
 
 class BoundaryCondition:
     def initialize(self, grid: core.Grid):
+        """Initialize the boundary condition.
+
+        This method is called once for each open boundary of each array that
+        uses this boundary condition.
+
+        Args:
+            grid: the T grid on which the boundaries are defined
+        """
         pass
 
     def get_updater(
@@ -170,9 +203,26 @@ class BoundaryCondition:
     def prepare_depth_explicit(self):
         pass
 
-    def get_clipper(
-        self, array: core.Array, slc: Tuple[Union[slice, int], ...]
-    ) -> Callable[[np.ndarray, np.ndarray], None]:
+    @staticmethod
+    def get_setter(
+        array: core.Array,
+        slc: Tuple[Union[slice, int], ...],
+        where: Union[bool, np.ndarray] = True,
+    ) -> Callable[[np.ndarray], None]:
+        """Takes an array object and a slice, and returns a function that sets
+        values in the array at the slice, respecting the array's mask and valid
+        range.
+
+        Args:
+            array: array that will be updated
+            slc: slice of the values in the array that will be updated
+            where: boolean array indicating which points to update
+        """
+        out = array.all_values[slc]
+        kwargs = dict()
+        where = (array.grid.mask.all_values[slc] != 0) & where
+        if not where.all():
+            kwargs["where"] = np.broadcast_to(where, out.shape)
         valid_min = array.attrs.get("_minimum")
         if isinstance(valid_min, np.ndarray):
             valid_min = valid_min[slc]
@@ -180,16 +230,44 @@ class BoundaryCondition:
         if isinstance(valid_max, np.ndarray):
             valid_max = valid_max[slc]
         if valid_min is not None and valid_max is not None:
-            return functools.partial(np.clip, a_min=valid_min, a_max=valid_max)
+            return functools.partial(np.clip, valid_min, valid_max, out, **kwargs)
         elif valid_min is not None:
-            return functools.partial(np.maximum, valid_min)
+            return functools.partial(np.maximum, valid_min, out=out, **kwargs)
         elif valid_max is not None:
-            return functools.partial(np.minimum, valid_min)
+            return functools.partial(np.minimum, valid_min, out=out, **kwargs)
+        elif "where" in kwargs:
+            return functools.partial(np.copyto, out, **kwargs)
+        else:
+            return functools.partial(out.__setitem__, (Ellipsis,))
 
-        def no_op(x: np.ndarray, out: np.ndarray):
-            out[...] = x
 
-        return no_op
+class Clamped(BoundaryCondition):
+    """Clamped boundary condition
+
+    The model values at the open boundary are set to the prescribed values.
+    """
+
+    def get_updater(
+        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+    ) -> Callable[[], None]:
+        return functools.partial(self.get_setter(array, boundary.slice_t), bdy.T)
+
+
+class ZeroGradient(BoundaryCondition):
+    """Zero-gradient boundary condition
+
+    The model values at the open boundary are set to the values at the
+    first point inward from the boundary.
+    """
+
+    def get_updater(
+        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+    ) -> Callable[[], None]:
+        where = boundary.extract_inward(array.grid.mask.all_values, start=1) != 0
+        return functools.partial(
+            self.get_setter(array, boundary.slice_t, where),
+            boundary.extract_inward(array.all_values, start=1),
+        )
 
 
 class Sponge(BoundaryCondition):
@@ -207,9 +285,12 @@ class Sponge(BoundaryCondition):
 
         If a flow-dependent relaxation coefficient is used (``tmrlx=True``),
         values at the boundary itself will blend the prescribed values
-        and a weighted mean over the sponge zone. The fraction based on
-        prescribed values (the relaxation coefficient) will increase with the
-        inward flow velocity.
+        and a weighted mean over the sponge zone. The fraction taken from the
+        prescribed values (the relaxation coefficient) will increase with
+        increasing inward flow velocity.
+
+        If flow-dependent relaxation is not used (``tmrlx=False``), values at
+        the boundary will be set to the prescribed values.
 
         Args:
             n: number of points in the sponge zone; the boundary itself is not
@@ -294,125 +375,96 @@ class Sponge(BoundaryCondition):
 
         return functools.partial(
             self.update_boundary,
-            array.all_values[boundary.slice_t],
             boundary.extract_inward(array.all_values, start=1, stop=n + 1),
             bdy.T,
             sp,
             rlxcoef,
             w,
+            self.get_setter(array, boundary.slice_t),
         )
 
     @staticmethod
     def update_boundary(
-        values: np.ndarray,
         sponge_values: np.ndarray,
         bdy_values: np.ndarray,
         sp: np.ndarray,
         rlxcoef: Optional[np.ndarray],
         w: Optional[np.ndarray],
+        bdy_setter: Callable[[np.ndarray], None],
     ):
         """Update model values at open boundary and in sponge zone,
         for a single model variable and single open boundary.
 
         Args:
-            values: current model values at the open boundary (nz x nbdy)
             sponge_values: current model values in the sponge zone
-                (inward from open boundary). (nz x nbdy x nsponge)
-            bdy_values: prescribed values at open boundary (nz x nbdy)
+                (inward from open boundary). (nz x np x nsponge)
+            bdy_values: prescribed values at open boundary (nz x np)
             sp: fraction of model values in sponge zone to be replaced by
-                prescribed values (decreasing inward from boundary) (nbdy x nsponge)
+                prescribed values (decreasing inward from boundary) (np x nsponge)
             rlxcoef: fraction of model values at the open boundary to be taken
                 from prescribed values. The remainder will be based on a
-                weighted mean over the sponge. (nz x nbdy)
+                weighted mean over the sponge. (nz x np)
             w: weight for sponge mean used as part of new model values at the
-                open boundary. (nbdy x nsponge)
+                open boundary. (np x nsponge)
+            bdy_setter: function that updates values at the boundary,
+                respecting their valid range and mask
         """
         if w is not None:
             # note: where=w != 0.0 is used to avoid mixing in NaNs from areas where w=0
             sponge_mean = (w * sponge_values).sum(axis=-1, where=w != 0.0)
             bdy_values = rlxcoef * bdy_values + (1.0 - rlxcoef) * sponge_mean
-        values[...] = bdy_values
+        bdy_setter(bdy_values)
         sponge_values += sp * (bdy_values[..., np.newaxis] - sponge_values)
-
-
-class ZeroGradient(BoundaryCondition):
-    """Zero-gradient boundary condition
-
-    The model values at the open boundary are set to the values at the
-    first point inward from the boundary.
-    """
-
-    def get_updater(
-        self,
-        boundary: OpenBoundary,
-        array: core.Array,
-        bdy: np.ndarray,
-    ) -> Callable[[], None]:
-        return functools.partial(
-            self.get_clipper(array, boundary.slice_t),
-            boundary.extract_inward(array.all_values, start=1),
-            out=array.all_values[boundary.slice_t],
-        )
-
-
-class Clamped(BoundaryCondition):
-    """Clamped boundary condition
-
-    The model values at the open boundary are set to the prescribed values.
-    """
-
-    def get_updater(
-        self,
-        boundary: OpenBoundary,
-        array: core.Array,
-        bdy: np.ndarray,
-    ):
-        return functools.partial(
-            self.get_clipper(array, boundary.slice_t),
-            bdy.T,
-            out=array.all_values[boundary.slice_t],
-        )
 
 
 class Flather(BoundaryCondition):
     def __init__(self, transport: bool = False):
+        """Create a Flather boundary condition for elevation.
+
+        This infers the elevation at the open boundary from prescribed
+        elevation and from the difference between prescribed and modelled
+        velocity across the boundary.
+
+        Args:
+            transport: use prescribed transport at the boundary instead of
+                prescribed velocity
+        """
         self.transport = transport
 
-    def get_updater(self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray):
+    def get_updater(
+        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+    ) -> Callable[[], None]:
         return functools.partial(
             self.update_transport if self.transport else self.update_velocity,
-            array.all_values[boundary.slice_t],
             bdy,
             boundary.tp,
             boundary.flow_ext,
             array.grid.Dclip.all_values[boundary.slice_t],
             boundary.inflow_sign,
-            self.get_clipper(array, boundary.slice_t),
+            self.get_setter(array, boundary.slice_t),
         )
 
     @staticmethod
     def update_velocity(
-        z: np.ndarray,
         z_ext: np.ndarray,
         tp: np.ndarray,
         vel_ext: np.ndarray,
         D: np.ndarray,
         inflow_sign: float,
-        clipper: Callable[[np.ndarray, np.ndarray], None],
+        setter: Callable[[np.ndarray], None],
     ):
-        clipper(z_ext - inflow_sign * (tp - vel_ext * D) / np.sqrt(D * GRAVITY), out=z)
+        setter(z_ext - inflow_sign * (tp - vel_ext * D) / np.sqrt(D * GRAVITY))
 
     @staticmethod
     def update_transport(
-        z: np.ndarray,
         z_ext: np.ndarray,
         tp: np.ndarray,
         tp_ext: np.ndarray,
         D: np.ndarray,
         inflow_sign: float,
-        clipper: Callable[[np.ndarray, np.ndarray], None],
+        setter: Callable[[np.ndarray, np.ndarray], None],
     ):
-        clipper(z_ext - inflow_sign * (tp - tp_ext) / np.sqrt(D * GRAVITY), out=z)
+        setter(z_ext - inflow_sign * (tp - tp_ext) / np.sqrt(D * GRAVITY))
 
 
 class ArrayOpenBoundary:
@@ -530,6 +582,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         "mirror_TV",
         "velocity_3d_in",
         "bcs",
+        "allow_on_land",
     )
 
     def __init__(self, nx: int, ny: int, logger: logging.Logger):
@@ -542,6 +595,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         self.active: List[OpenBoundary] = []
         self._frozen = False
         self.bcs: Set[BoundaryCondition] = set()
+        self.allow_on_land = False
 
     def _make_bc(self, value) -> BoundaryCondition:
         if isinstance(value, BoundaryCondition):
@@ -619,10 +673,8 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                         f"New boundary {name} crosses existing boundary {b.name}"
                         f" at i={i}, j={j}"
                     )
-
-        self._boundaries.append(
-            OpenBoundary(name, side, l, mstart, mstop, type_2d, type_3d)
-        )
+        bdy = OpenBoundary(name, side, l, mstart, mstop, type_2d, type_3d)
+        self._boundaries.append(bdy)
 
     def add_top_boundary(
         self, name: str, j: int, istart: int, istop: int, type_2d: int, type_3d: int
@@ -679,28 +731,29 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         for boundary in self._boundaries:
             l = boundary.l_glob
             mslice = slice(boundary.mstart_glob, boundary.mstop_glob, boundary.mstep)
-            np = boundary.mstop_glob - boundary.mstart_glob
             if boundary.side in (Side.WEST, Side.EAST):
-                bdy_mask = tmask[mslice, l]
+                bdy_tmask = tmask[mslice, l]
+                bdy_uvmask = umask[mslice, l if boundary.side == Side.WEST else l + 1]
             else:
-                bdy_mask = tmask[l, mslice]
+                bdy_tmask = tmask[l, mslice]
+                bdy_uvmask = vmask[l if boundary.side == Side.SOUTH else l + 1, mslice]
 
-            bdy_on_land = bdy_mask == 0
-            if bdy_on_land.any():
-                self.logger.error(
-                    f"Open boundary {boundary.name}: {bdy_on_land.sum()} of"
-                    f" {np} points of this {boundary.side.name.capitalize()}ern"
-                    " boundary are on land"
+            wet = bdy_tmask != 0
+            if not wet.all():
+                self.logger.log(
+                    logging.WARNING if self.allow_on_land else logging.ERROR,
+                    f"Open boundary {boundary.name}: {wet.size - wet.sum()} of"
+                    f" {wet.size} points of this {boundary.side.name.capitalize()}ern"
+                    " boundary are on land",
                 )
-                raise Exception()
+                if not self.allow_on_land:
+                    raise Exception()
 
-            bdy_mask[:] = 2
+            # The open boundary points themselves (T grid)
+            bdy_tmask[wet] = 2
 
             # Velocity points that lie just outside the T points of the open boundary
-            if boundary.side in (Side.WEST, Side.EAST):
-                umask[mslice, l if boundary.side == Side.WEST else l + 1] = 4
-            else:
-                vmask[l if boundary.side == Side.SOUTH else l + 1, mslice] = 4
+            bdy_uvmask[wet] = 4
 
         # Velocity points that lie in between open boundary T points
         umask[:, 1:-1][(tmask[:, :-1] == 2) & (tmask[:, 1:] == 2)] = 3
@@ -766,7 +819,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         # (T grid, for arrays that INclude halos)
         self.i = np.concatenate(bdy_i, dtype=np.intc)
         self.j = np.concatenate(bdy_j, dtype=np.intc)
-        assert (grid.mask.all_values[self.j, self.i] == 2).all()
+        assert self.allow_on_land or (grid.mask.all_values[self.j, self.i] == 2).all()
 
         # Global indices of open boundary points within local subdomain
         # (T grid, for arrays that EXclude halos)
@@ -851,12 +904,14 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         mirror_V = []
         mirror_TU = []
         mirror_TV = []
+        tmask = grid.mask.all_values
         umask = grid.ugrid.mask.all_values
         vmask = grid.vgrid.mask.all_values
         for boundary in self._boundaries:
             if boundary.l is None:
                 continue
 
+            tsel = tmask[boundary.j, boundary.i] == 2
             # Identify velocity points that lie within the open boundary in between
             # tracer points with mask=2. Their indices will be (i_velout, j_velout)
             # on the corresponding velocity grid (U or V). Values at these points
@@ -890,18 +945,19 @@ class OpenBoundaries(Sequence[OpenBoundary]):
             i_out = boundary.i + {Side.WEST: -1}.get(boundary.side, 0)
             j_out = boundary.j + {Side.SOUTH: -1}.get(boundary.side, 0)
             select = (i_in >= 0) & (j_in >= 0) & (i_out >= 0) & (j_out >= 0)
+            select &= tsel
             i_in, i_out, j_in, j_out = (a[select] for a in (i_in, i_out, j_in, j_out))
 
             if boundary.side in (Side.WEST, Side.EAST):
                 assert (grid.ugrid.mask.all_values[j_out, i_out] == 4).all()
                 mirror_U.append([i_in, j_in, i_out, j_out])
                 mirror_V.append([i_velin, j_velin, i_velout, j_velout])
-                mirror_TU.append([boundary.i, boundary.j, i_out, j_out])
+                mirror_TU.append([boundary.i[tsel], boundary.j[tsel], i_out, j_out])
             else:
                 assert (grid.vgrid.mask.all_values[j_out, i_out] == 4).all()
                 mirror_V.append([i_in, j_in, i_out, j_out])
                 mirror_U.append([i_velin, j_velin, i_velout, j_velout])
-                mirror_TV.append([boundary.i, boundary.j, i_out, j_out])
+                mirror_TV.append([boundary.i[tsel], boundary.j[tsel], i_out, j_out])
 
         def pack_mirror(indices: Sequence[Sequence[np.ndarray]]):
             if indices:
@@ -967,6 +1023,9 @@ class OpenBoundaries(Sequence[OpenBoundary]):
             self.v_rot.all_values[:] = v_rot
         if macro_active:
             if self.velocity_3d_in.saved:
+                # Set modelled inward 3D velocity for all boundaries combined
+                # by looping over individual boundaries and assigning to their
+                # velocity slices
                 for boundary in self.active:
                     boundary.velocity_3d_in[:] = boundary.inflow_sign * boundary.vel.T
             for bc in self.bcs:
