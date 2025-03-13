@@ -736,20 +736,34 @@ class Domain:
         velocity_grids: int = 0,
         t_postfix: str = "",
     ) -> core.Grid:
+        final_mask = self.get_final_mask()
         if self.comm.rank == 0:
             if self._H is None:
                 raise Exception("Water depth at rest (H) has not been provided")
-            # We are the root node - update the global mask
-            self.infer_UVX_masks2()
-            self.open_boundaries.adjust_mask(self.mask)
 
             # Map river coordinates to global grid indices
-            self._map_rivers()
+            self._map_rivers(final_mask)
 
         if tiling is None:
             tiling = self.create_tiling()
         elif tiling.nx_glob is None:
             tiling.set_extent(self.nx, self.ny)
+
+        # Map grid attributes to supergrid arrays
+        domain_vars = dict(
+            x=self._x,
+            y=self._y,
+            lon=self._lon,
+            lat=self._lat,
+            cor=self._f,
+            dx=self._dx,
+            dy=self._dy,
+            rotation=self._rotation,
+            area=self._area,
+            mask=final_mask,
+            H=self._H,
+            z0b_min=self._z0,
+        )
 
         # NB the fields argument cannot have a default of {}, as that causes
         # that global dictionary to be shared among all calls to create_grids.
@@ -778,7 +792,7 @@ class Domain:
                 overlap=overlap,
                 **kwargs,
             )
-            self._populate_grid(grid)
+            self._populate_grid(grid, domain_vars)
             grid.input_manager = input_manager
             grid.default_output_transforms = self.default_output_transforms
             grid.extra_output_coordinates = self.extra_output_coordinates
@@ -826,9 +840,7 @@ class Domain:
 
         return T
 
-    def _populate_grid(self, grid: core.Grid):
-        NAMEMAP = dict(z0="z0b_min", f="cor")
-
+    def _populate_grid(self, grid: core.Grid, domain_vars: Mapping[str, np.ndarray]):
         edges_x = EdgeTreatment.PERIODIC if self.periodic_x else EdgeTreatment.MISSING
         edges_y = EdgeTreatment.PERIODIC if self.periodic_y else EdgeTreatment.MISSING
 
@@ -907,31 +919,16 @@ class Domain:
                 target.update_halos()
 
         retrieved_from_domain = set()
-        for name in (
-            "x",
-            "y",
-            "lon",
-            "lat",
-            "f",
-            "dx",
-            "dy",
-            "rotation",
-            "area",
-            "mask",
-            "H",
-            "z0",
-        ):
-            source = getattr(self, f"_{name}", None)
-            available = grid.tiling.comm.bcast(source is not None)
-            if available:
-                target = grid.create_array(NAMEMAP.get(name, name))
+        for name, source in domain_vars.items():
+            if grid.tiling.comm.bcast(source is not None):
+                target = grid.create_array(name)
                 if target is not None:
                     _transfer_variable(source, target)
                     retrieved_from_domain.add(name)
 
         # If the Coriolis parameter was not set explicitly at domain level,
         # calculate it from latitude
-        if "f" not in retrieved_from_domain:
+        if "cor" not in retrieved_from_domain:
             grid.create_array("cor").all_values[...] = coriolis(grid._lat.all_values)
 
         # Set default horizontal coordinates (e.g., for output and online plotting)
@@ -1099,30 +1096,40 @@ class Domain:
         self.H = self.H[1::2, 1::2] + Hcor
         return Hcor
 
-    # @calculate_and_bcast
-    def infer_UVX_masks2(self):
-        tmask = self.mask[1::2, 1::2]
-        umask = self.mask[1::2, ::2]
-        vmask = self.mask[::2, 1::2]
-        xmask = self.mask[::2, ::2]
+    def get_final_mask(self) -> Optional[np.ndarray]:
+        """Infer masks for U, V, X points from T point mask.
+        This closes interfaces and corners that neighbor one or more dry points.
+        Additionally, it sets the mask (values 2,3,4) within and alongside open
+        boundaries.
+        """
+        if self._mask is None:
+            return None
 
+        mask = np.where(self._mask, 1, 0)
+        tmask = mask[1::2, 1::2]
+        umask = mask[1::2, ::2]
+        vmask = mask[::2, 1::2]
+        xmask = mask[::2, ::2]
+
+        # Expand T mask by one row and column in each direction,
+        # respecting periodic boundaries
         edges_x = EdgeTreatment.PERIODIC if self.periodic_x else EdgeTreatment.MISSING
         edges_y = EdgeTreatment.PERIODIC if self.periodic_y else EdgeTreatment.MISSING
         tmask_ex = expand_2d(tmask, edges_x=edges_x, edges_y=edges_y, missing_value=0)
 
-        # Now mask U,V,X points unless all their T neighbors are valid - this mask will
-        # be sent to Fortran and determine which points are computed
-        bad = (tmask_ex[1:-1, 1:] == 0) | (tmask_ex[1:-1, :-1] == 0)
-        umask[bad & (umask == 1)] = 0
-        bad = (tmask_ex[1:, 1:-1] == 0) | (tmask_ex[:-1, 1:-1] == 0)
-        vmask[bad & (vmask == 1)] = 0
-        bad = (
+        # Mask U,V,X points unless all their T neighbors are valid
+        umask[(tmask_ex[1:-1, 1:] == 0) | (tmask_ex[1:-1, :-1] == 0)] = 0
+        vmask[(tmask_ex[1:, 1:-1] == 0) | (tmask_ex[:-1, 1:-1] == 0)] = 0
+        xmask[
             (tmask_ex[1:, 1:] == 0)
             | (tmask_ex[:-1, 1:] == 0)
             | (tmask_ex[1:, :-1] == 0)
             | (tmask_ex[:-1, :-1] == 0)
-        )
-        xmask[bad] = 0
+        ] = 0
+
+        self.open_boundaries.adjust_mask(mask)
+
+        return mask
 
     @calculate_and_bcast
     def mask_shallow(self, minimum_depth: float):
@@ -1306,13 +1313,13 @@ class Domain:
         rotated_domain.open_boundaries.sponge.tmrlx = self.open_boundaries.sponge.tmrlx
         return rotated_domain
 
-    def _map_rivers(self):
+    def _map_rivers(self, mask: np.ndarray):
         assert self.comm.rank == 0
         x_ = None if self._x is None else self._x[1::2, 1::2]
         y_ = None if self._y is None else self._y[1::2, 1::2]
         lon_ = None if self._lon is None else self._lon[1::2, 1::2]
         lat_ = None if self._lat is None else self._lat[1::2, 1::2]
-        self.rivers.map_to_grid(self._mask[1::2, 1::2], x_, y_, lon_, lat_)
+        self.rivers.map_to_grid(mask[1::2, 1::2], x_, y_, lon_, lat_)
 
     def plot(
         self,
@@ -1383,9 +1390,12 @@ class Domain:
             x, y = np.broadcast_arrays(x, y[:, np.newaxis])
             xlabel, ylabel = "cell index", "cell index"
 
+        if show_mask or show_rivers:
+            mask = self.get_final_mask()
+
         if field is None:
             if show_mask:
-                field = self._mask
+                field = mask
                 label = "mask value"
             elif show_bathymetry:
                 import cmocean
@@ -1409,7 +1419,7 @@ class Domain:
             cb.set_label(label)
 
         if show_rivers and self.rivers:
-            self._map_rivers()
+            self._map_rivers(mask)
             for river in self.rivers.global_rivers:
                 i_sup, j_sup = 1 + river.i_glob * 2, 1 + river.j_glob * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]
@@ -1444,12 +1454,15 @@ class Domain:
 
         if show_mesh:
             plot_mesh(
+                ax, x[::2, ::2], y[::2, ::2], colors="w", linestyle="-", linewidth=0.5
+            )
+            plot_mesh(
                 ax, x[::2, ::2], y[::2, ::2], colors="k", linestyle="-", linewidth=0.3
             )
             # ax.pcolor(x[1::2, 1::2], y[1::2, 1::2], np.ma.array(x[1::2, 1::2], mask=True), edgecolors='k', linestyles='--', linewidth=.2)
             # pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  np.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
-            ax.plot(x[::2, ::2], y[::2, ::2], "xk", markersize=3.0)
-            ax.plot(x[1::2, 1::2], y[1::2, 1::2], ".k", markersize=2.5)
+            # ax.plot(x[::2, ::2], y[::2, ::2], "xk", markersize=3.0)
+            # ax.plot(x[1::2, 1::2], y[1::2, 1::2], ".k", markersize=2.5)
 
         if show_subdomains:
             assert tiling is not None
