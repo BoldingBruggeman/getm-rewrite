@@ -242,7 +242,7 @@ def create_cartesian(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
     *,
-    interfaces=False,
+    interfaces: bool = False,
     central_lon: Optional[float] = None,
     central_lat: Optional[float] = None,
     **kwargs,
@@ -250,11 +250,19 @@ def create_cartesian(
     """Create Cartesian domain from x and y coordinates.
 
     Args:
-        x: array with x coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        y: array with y coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        interfaces: coordinates are given at cell interfaces, rather than cell centers.
+        x: array with x coordinates (m).
+            It can have shape ``(nx,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        y: array with y coordinates (m).
+            It can have shape ``(ny,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        interfaces: coordinates are given at cell interfaces rather than cell centers.
+        central_lon: longitude of the center of the domain (°East).
+            The center is ``[x.min() + x.max()]/2, [y.min() + y.max()]/2``.
+        central_lat: latitude of the center of the domain (°North).
+            The center is ``[x.min() + x.max()]/2, [y.min() + y.max()]/2``.
         **kwargs: additional arguments passed to :class:`Domain`
     """
     x = np.asarray(x)
@@ -278,16 +286,20 @@ def create_cartesian(
 
 
 def create_spherical(
-    lon: npt.ArrayLike, lat: npt.ArrayLike, *, interfaces=False, **kwargs
+    lon: npt.ArrayLike, lat: npt.ArrayLike, *, interfaces: bool = False, **kwargs
 ) -> "Domain":
     """Create spherical domain from longitudes and latitudes.
 
     Args:
-        lon: array with longitude coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        lat: array with latitude coordinates (1d or 2d)
-            (at cell interfaces if `interfaces=True`, else at cell centers)
-        interfaces: coordinates are given at cell interfaces, rather than cell centers.
+        lon: array with longitude coordinates (°East).
+            It can have shape ``(nx,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        lat: array with latitude coordinates (°North).
+            It can have shape ``(ny,)`` or ``(ny, nx)``.
+            Coordinates are interpreted to be positioned at cell interfaces if
+            if ``interfaces=True``, at cell centers otherwise.
+        interfaces: coordinates are given at cell interfaces rather than cell centers.
         **kwargs: additional arguments passed to :class:`Domain`
     """
     lon = np.asarray(lon)
@@ -466,6 +478,9 @@ class Domain:
         self.input_grid_mappers = []
 
         if self.comm.rank != 0:
+            self._x = self._y = self._lon = self._lat = None
+            self._mask = self._H = self._z0 = None
+            self._dx = self._dy = self._rotation = self._f = self._area = None
             return
 
         self._x = self._map_array(x, edges=EdgeTreatment.EXTRAPOLATE)
@@ -617,52 +632,134 @@ class Domain:
 
     @property
     def x(self) -> Optional[np.ndarray]:
-        """x coordinate (m)"""
+        """x coordinate (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if x was not provided
+        at domain creation (for instance, for spherical domains).
+        """
         return self._x
 
     @property
     def y(self) -> Optional[np.ndarray]:
-        """y coordinate (m)"""
+        """y coordinate (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if y was not provided
+        at domain creation (for instance, for spherical domains).
+        """
         return self._y
 
     @property
     def lon(self) -> Optional[np.ndarray]:
-        """longitude (°East)"""
+        """longitude (°East)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if lon was not provided
+        at domain creation (for instance, for Cartesian domains).
+        """
         return self._lon
 
     @property
     def lat(self) -> Optional[np.ndarray]:
-        """latitude (°North)"""
+        """latitude (°North)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if lat was not provided
+        at domain creation (for instance, for Cartesian domains with prescribed
+        Coriolis parameter).
+        """
         return self._lat
 
     @property
     def f(self) -> Optional[np.ndarray]:
-        """Coriolis parameter (rad s-1)"""
+        """Coriolis parameter (rad s-1)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if f was not provided
+        at domain creation. In the latter case, it will be calculated from lat.
+        """
         return self._f
 
     @property
     def dx(self) -> Optional[np.ndarray]:
-        """grid cell length in x-direction (m)"""
+        """grid cell length in x-direction (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes.
+        """
         return self._dx
 
     @property
     def dy(self) -> Optional[np.ndarray]:
-        """grid cell length in y-direction (m)"""
+        """grid cell length in y-direction (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes.
+        """
         return self._dy
 
     @property
     def rotation(self) -> Optional[np.ndarray]:
-        """grid rotation with respect to true North (rad)"""
+        """grid rotation with respect to true North (rad)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes, or if the y-axis points
+        to true North in every point (i.e, rotation is zero everywhere).
+        """
         return self._rotation
 
     @property
     def area(self) -> Optional[np.ndarray]:
-        """grid cell area (m²)"""
+        """grid cell area (m²)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes.
+        """
         return self._area
 
     @property
     def mask(self) -> Optional[np.ndarray]:
-        """land-sea mask (0: land, 1: water)"""
+        """land-sea mask (0: land, 1: water)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        It can be changed by assigning directly to the attribute or to slices of it.
+        If assigning directly, values defined on the T grid ``(ny x nx)``, the X grid
+        ``(ny+1 x nx+1)``, or the supergrid ``(ny*2+1 x nx*2+1)`` are accepted,
+        as are scalars. Assigned values are then interpolated to the supergrid.
+
+        This attribute is None on non-root MPI nodes.
+        """
         if not self._mask.flags.writeable:
             self._mask = self._mask.copy()
         return self._mask
@@ -677,7 +774,21 @@ class Domain:
 
         This is the distance between the bottom and some arbitrary depth
         reference (m, positive if bottom lies below the depth reference).
-        Typically the depth reference is mean sea level."""
+        Typically the depth reference is mean sea level.
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        It can be changed by assigning directly to the attribute or to slices of it.
+        If assigning directly, values defined on the T grid ``(ny x nx)``, the X grid
+        ``(ny+1 x nx+1)``, or the supergrid ``(ny*2+1 x nx*2+1)`` are accepted,
+        as are scalars. Assigned values are then interpolated to the supergrid.
+        When assigning directly, masked or NaN values will be marked as land in
+        the mask.
+
+        This attribute is None on non-root MPI nodes or if H was not provided yet.
+        """
         if self._H is not None and not self._H.flags.writeable:
             self._H = self._H.copy()
         return self._H
@@ -693,7 +804,19 @@ class Domain:
 
     @property
     def z0(self) -> Optional[np.ndarray]:
-        """minimum hydrodynamic bottom roughness (m)"""
+        """minimum hydrodynamic bottom roughness (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        It can be changed by assigning directly to the attribute or to slices of it.
+        If assigning directly, values defined on the T grid ``(ny x nx)``, the X grid
+        ``(ny+1 x nx+1)``, or the supergrid ``(ny*2+1 x nx*2+1)`` are accepted,
+        as are scalars. Assigned values are then interpolated to the supergrid.
+
+        This attribute is None on non-root MPI nodes
+        """
         if not self._z0.flags.writeable:
             self._z0 = self._z0.copy()
         return self._z0
@@ -724,20 +847,34 @@ class Domain:
         velocity_grids: int = 0,
         t_postfix: str = "",
     ) -> core.Grid:
+        final_mask = self.get_final_mask()
         if self.comm.rank == 0:
             if self._H is None:
                 raise Exception("Water depth at rest (H) has not been provided")
-            # We are the root node - update the global mask
-            self.infer_UVX_masks2()
-            self.open_boundaries.adjust_mask(self.mask)
 
             # Map river coordinates to global grid indices
-            self._map_rivers()
+            self._map_rivers(final_mask)
 
         if tiling is None:
             tiling = self.create_tiling()
         elif tiling.nx_glob is None:
             tiling.set_extent(self.nx, self.ny)
+
+        # Map grid attributes to supergrid arrays
+        domain_vars = dict(
+            x=self._x,
+            y=self._y,
+            lon=self._lon,
+            lat=self._lat,
+            cor=self._f,
+            dx=self._dx,
+            dy=self._dy,
+            rotation=self._rotation,
+            area=self._area,
+            mask=final_mask,
+            H=self._H,
+            z0b_min=self._z0,
+        )
 
         # NB the fields argument cannot have a default of {}, as that causes
         # that global dictionary to be shared among all calls to create_grids.
@@ -766,7 +903,7 @@ class Domain:
                 overlap=overlap,
                 **kwargs,
             )
-            self._populate_grid(grid)
+            self._populate_grid(grid, domain_vars)
             grid.input_manager = input_manager
             grid.default_output_transforms = self.default_output_transforms
             grid.extra_output_coordinates = self.extra_output_coordinates
@@ -814,9 +951,9 @@ class Domain:
 
         return T
 
-    def _populate_grid(self, grid: core.Grid):
-        NAMEMAP = dict(z0="z0b_min", f="cor")
-
+    def _populate_grid(
+        self, grid: core.Grid, domain_vars: Mapping[str, Optional[np.ndarray]]
+    ):
         edges_x = EdgeTreatment.PERIODIC if self.periodic_x else EdgeTreatment.MISSING
         edges_y = EdgeTreatment.PERIODIC if self.periodic_y else EdgeTreatment.MISSING
 
@@ -895,31 +1032,16 @@ class Domain:
                 target.update_halos()
 
         retrieved_from_domain = set()
-        for name in (
-            "x",
-            "y",
-            "lon",
-            "lat",
-            "f",
-            "dx",
-            "dy",
-            "rotation",
-            "area",
-            "mask",
-            "H",
-            "z0",
-        ):
-            source = getattr(self, f"_{name}", None)
-            available = grid.tiling.comm.bcast(source is not None)
-            if available:
-                target = grid.create_array(NAMEMAP.get(name, name))
+        for name, source in domain_vars.items():
+            if grid.tiling.comm.bcast(source is not None):
+                target = grid.create_array(name)
                 if target is not None:
                     _transfer_variable(source, target)
                     retrieved_from_domain.add(name)
 
         # If the Coriolis parameter was not set explicitly at domain level,
         # calculate it from latitude
-        if "f" not in retrieved_from_domain:
+        if "cor" not in retrieved_from_domain:
             grid.create_array("cor").all_values[...] = coriolis(grid._lat.all_values)
 
         # Set default horizontal coordinates (e.g., for output and online plotting)
@@ -975,7 +1097,7 @@ class Domain:
             Dmin: minimum depth (m)
 
         Returns:
-            (rx0_u, rx0_v): a tuple  with slope factors at U and V points,
+            a tuple with slope factors at U and V points,
             positioned at ``[1::2, 2:-2:2]`` and ``[2:-2:2, 1::2]``, respectively
         """
         H = self._H[1::2, 1::2]
@@ -1021,7 +1143,7 @@ class Domain:
              rx0: maximum slope factor
 
         Returns:
-            Hcor: bathymetry corrections (m).
+            bathymetry corrections (m).
             These are defined at T points, that is, at ``[1::2, 1::2]``
         """
         if self.comm.rank != 0:
@@ -1087,30 +1209,40 @@ class Domain:
         self.H = self.H[1::2, 1::2] + Hcor
         return Hcor
 
-    # @calculate_and_bcast
-    def infer_UVX_masks2(self):
-        tmask = self.mask[1::2, 1::2]
-        umask = self.mask[1::2, ::2]
-        vmask = self.mask[::2, 1::2]
-        xmask = self.mask[::2, ::2]
+    def get_final_mask(self) -> Optional[np.ndarray]:
+        """Infer masks for U, V, X points from T point mask.
+        This closes interfaces and corners that neighbor one or more dry points.
+        Additionally, it sets the mask (values 2,3,4) within and alongside open
+        boundaries.
+        """
+        if self._mask is None:
+            return None
 
+        mask = np.where(self._mask, 1, 0)
+        tmask = mask[1::2, 1::2]
+        umask = mask[1::2, ::2]
+        vmask = mask[::2, 1::2]
+        xmask = mask[::2, ::2]
+
+        # Expand T mask by one row and column in each direction,
+        # respecting periodic boundaries
         edges_x = EdgeTreatment.PERIODIC if self.periodic_x else EdgeTreatment.MISSING
         edges_y = EdgeTreatment.PERIODIC if self.periodic_y else EdgeTreatment.MISSING
         tmask_ex = expand_2d(tmask, edges_x=edges_x, edges_y=edges_y, missing_value=0)
 
-        # Now mask U,V,X points unless all their T neighbors are valid - this mask will
-        # be sent to Fortran and determine which points are computed
-        bad = (tmask_ex[1:-1, 1:] == 0) | (tmask_ex[1:-1, :-1] == 0)
-        umask[bad & (umask == 1)] = 0
-        bad = (tmask_ex[1:, 1:-1] == 0) | (tmask_ex[:-1, 1:-1] == 0)
-        vmask[bad & (vmask == 1)] = 0
-        bad = (
+        # Mask U,V,X points unless all their T neighbors are valid
+        umask[(tmask_ex[1:-1, 1:] == 0) | (tmask_ex[1:-1, :-1] == 0)] = 0
+        vmask[(tmask_ex[1:, 1:-1] == 0) | (tmask_ex[:-1, 1:-1] == 0)] = 0
+        xmask[
             (tmask_ex[1:, 1:] == 0)
             | (tmask_ex[:-1, 1:] == 0)
             | (tmask_ex[1:, :-1] == 0)
             | (tmask_ex[:-1, :-1] == 0)
-        )
-        xmask[bad] = 0
+        ] = 0
+
+        self.open_boundaries.adjust_mask(mask)
+
+        return mask
 
     @calculate_and_bcast
     def mask_shallow(self, minimum_depth: float):
@@ -1294,13 +1426,13 @@ class Domain:
         rotated_domain.open_boundaries.sponge.tmrlx = self.open_boundaries.sponge.tmrlx
         return rotated_domain
 
-    def _map_rivers(self):
+    def _map_rivers(self, mask: np.ndarray):
         assert self.comm.rank == 0
         x_ = None if self._x is None else self._x[1::2, 1::2]
         y_ = None if self._y is None else self._y[1::2, 1::2]
         lon_ = None if self._lon is None else self._lon[1::2, 1::2]
         lat_ = None if self._lat is None else self._lat[1::2, 1::2]
-        self.rivers.map_to_grid(self._mask[1::2, 1::2], x_, y_, lon_, lat_)
+        self.rivers.map_to_grid(mask[1::2, 1::2], x_, y_, lon_, lat_)
 
     def plot(
         self,
@@ -1371,9 +1503,12 @@ class Domain:
             x, y = np.broadcast_arrays(x, y[:, np.newaxis])
             xlabel, ylabel = "cell index", "cell index"
 
+        if show_mask or show_rivers:
+            mask = self.get_final_mask()
+
         if field is None:
             if show_mask:
-                field = self._mask
+                field = mask
                 label = "mask value"
             elif show_bathymetry:
                 import cmocean
@@ -1397,7 +1532,7 @@ class Domain:
             cb.set_label(label)
 
         if show_rivers and self.rivers:
-            self._map_rivers()
+            self._map_rivers(mask)
             for river in self.rivers.global_rivers:
                 i_sup, j_sup = 1 + river.i_glob * 2, 1 + river.j_glob * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]
@@ -1432,12 +1567,15 @@ class Domain:
 
         if show_mesh:
             plot_mesh(
+                ax, x[::2, ::2], y[::2, ::2], colors="w", linestyle="-", linewidth=0.5
+            )
+            plot_mesh(
                 ax, x[::2, ::2], y[::2, ::2], colors="k", linestyle="-", linewidth=0.3
             )
             # ax.pcolor(x[1::2, 1::2], y[1::2, 1::2], np.ma.array(x[1::2, 1::2], mask=True), edgecolors='k', linestyles='--', linewidth=.2)
             # pc = ax.pcolormesh(x[1::2, 1::2], y[1::2, 1::2],  np.ma.array(x[1::2, 1::2], mask=True), edgecolor='gray', linestyles='--', linewidth=.2)
-            ax.plot(x[::2, ::2], y[::2, ::2], "xk", markersize=3.0)
-            ax.plot(x[1::2, 1::2], y[1::2, 1::2], ".k", markersize=2.5)
+            # ax.plot(x[::2, ::2], y[::2, ::2], "xk", markersize=3.0)
+            # ax.plot(x[1::2, 1::2], y[1::2, 1::2], ".k", markersize=2.5)
 
         if show_subdomains:
             assert tiling is not None

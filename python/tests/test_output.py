@@ -53,7 +53,7 @@ class Simulation(pygetm.simulation.BaseSimulation):
 
 
 class TestOutput(unittest.TestCase):
-    def create(self) -> Simulation:
+    def create(self, full: bool, mask_3d: bool) -> Simulation:
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),
             np.linspace(0, 100e3, 51),
@@ -62,38 +62,25 @@ class TestOutput(unittest.TestCase):
             H=10.0,
             logger=pygetm.parallel.get_logger(level="ERROR"),
         )
-        return Simulation(domain)
+        if full:
+            sim = pygetm.Simulation(
+                domain,
+                vertical_coordinates=pygetm.vertical_coordinates.Sigma(50),
+                airsea=pygetm.airsea.Fluxes(),
+            )
+            sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_II)
+            if mask_3d:
+                sim.T._land3d = np.ones_like(sim.T.zc.all_values, dtype=bool)
+                sim.T._land3d_if = np.ones_like(sim.T.zf.all_values, dtype=bool)
+        else:
+            sim = Simulation(domain)
+        return sim
 
     def test_vertical_interpolation(self):
-        domain = pygetm.domain.create_cartesian(
-            np.linspace(0, 100e3, 50),
-            np.linspace(0, 100e3, 51),
-            interfaces=True,
-            f=0.0,
-            H=10.0,
-            logger=pygetm.parallel.get_logger(level="ERROR"),
-        )
-        sim = pygetm.Simulation(
-            domain,
-            vertical_coordinates=pygetm.vertical_coordinates.Sigma(50),
-            airsea=pygetm.airsea.Fluxes(),
-        )
-        sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_II)
-        centers = sim.T.array(
-            name="centers",
-            units="Units",
-            long_name="LongName",
-            z=pygetm.CENTERS,
-            fill_value=-2e20,
-            attrs=dict(_time_varying=pygetm.TimeVarying.MACRO),
-        )
+        sim = self.create(full=True, mask_3d=False)
+        centers = sim.T.array(name="centers", z=pygetm.CENTERS, fill_value=-2e20)
         interfaces = sim.T.array(
-            name="interfaces",
-            units="Units",
-            long_name="LongName",
-            z=pygetm.INTERFACES,
-            fill_value=-2e20,
-            attrs=dict(_time_varying=pygetm.TimeVarying.MACRO),
+            name="interfaces", z=pygetm.INTERFACES, fill_value=-2e20
         )
         centers.values[...] = (
             np.arange(centers.shape[0])[::-1, np.newaxis, np.newaxis] + 0.5
@@ -137,6 +124,52 @@ class TestOutput(unittest.TestCase):
             self.assertTrue((iipmid == iipmin).all())
             self.assertAlmostEqual(iipmin, 25.0, places=13)
             self.assertTrue((iip[:, 2, :, :] == 50.0).all())
+
+    def test_regrid(self):
+        def _test(mask_3d: bool, **kwargs):
+            sim = self.create(full=True, mask_3d=mask_3d)
+            T_2d = sim.T.array(name="T_2d", fill_value=-2e20)
+            T_ct = sim.T.array(name="T_ct", z=pygetm.CENTERS, fill_value=-2e20)
+            T_if = sim.T.array(name="T_if", z=pygetm.INTERFACES, fill_value=-2e20)
+            U_ct = sim.U.array(name="U_ct", z=pygetm.CENTERS, fill_value=-2e20)
+            V_ct = sim.T.array(name="V_ct", z=pygetm.CENTERS, fill_value=-2e20)
+
+            T_2d.values[...] = np.exp(
+                -0.5
+                * (
+                    ((sim.T.x.values - 50e3) / 10e3) ** 2
+                    + ((sim.T.y.values - 50e3) / 10e3) ** 2
+                )
+            )
+            start = cftime.datetime(2000, 1, 1)
+            stop = cftime.datetime(2000, 1, 11)
+            path = "test_regrid.nc"
+
+            nc = sim.output_manager.add_netcdf_file(
+                path, interval=datetime.timedelta(days=5)
+            )
+            nc.request(T_ct, z=pygetm.INTERFACES, **kwargs)
+            nc.request(T_if, z=pygetm.CENTERS, **kwargs)
+            nc.request(T_2d, grid=sim.U, output_name="T_2d_U", **kwargs)
+            nc.request(T_2d, grid=sim.V, output_name="T_2d_V", **kwargs)
+            nc.request(T_2d, grid=sim.X, output_name="T_2d_X", **kwargs)
+            nc.request(T_ct, grid=sim.U, output_name="T_ct_U", **kwargs)
+            nc.request(T_ct, grid=sim.V, output_name="T_ct_V", **kwargs)
+            nc.request(T_ct, grid=sim.X, output_name="T_ct_X", **kwargs)
+            nc.request(T_if, grid=sim.U, output_name="T_if_U", **kwargs)
+            nc.request(T_if, grid=sim.V, output_name="T_if_V", **kwargs)
+            nc.request(T_if, grid=sim.X, output_name="T_if_X", **kwargs)
+            nc.request(U_ct, grid=sim.T, **kwargs)
+            nc.request(V_ct, grid=sim.T, **kwargs)
+            sim.start(start, 3600.0, 24)
+            while sim.time < stop:
+                sim.advance()
+            sim.finish()
+
+        _test(mask_3d=False)
+        _test(mask_3d=False, time_average=True)
+        _test(mask_3d=True)
+        _test(mask_3d=True, time_average=True)
 
     def test_temporal_averaging(self):
         tol = 1e-14
@@ -202,7 +235,7 @@ class TestOutput(unittest.TestCase):
                     start = cftime.datetime(2000, 1, 1, calendar=calendar)
                     stop = cftime.datetime(2003, 1, 1, calendar=calendar)
 
-                    sim = self.create()
+                    sim = self.create(full=False, mask_3d=False)
 
                     add_file("test.nc", save_initial)
                     add_file("test_stop.nc", save_initial, stop=stop.replace(year=2001))
