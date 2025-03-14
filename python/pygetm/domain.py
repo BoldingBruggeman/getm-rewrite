@@ -478,6 +478,9 @@ class Domain:
         self.input_grid_mappers = []
 
         if self.comm.rank != 0:
+            self._x = self._y = self._lon = self._lat = None
+            self._mask = self._H = self._z0 = None
+            self._dx = self._dy = self._rotation = self._f = self._area = None
             return
 
         self._x = self._map_array(x, edges=EdgeTreatment.EXTRAPOLATE)
@@ -629,52 +632,134 @@ class Domain:
 
     @property
     def x(self) -> Optional[np.ndarray]:
-        """x coordinate (m)"""
+        """x coordinate (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if x was not provided
+        at domain creation (for instance, for spherical domains).
+        """
         return self._x
 
     @property
     def y(self) -> Optional[np.ndarray]:
-        """y coordinate (m)"""
+        """y coordinate (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if y was not provided
+        at domain creation (for instance, for spherical domains).
+        """
         return self._y
 
     @property
     def lon(self) -> Optional[np.ndarray]:
-        """longitude (°East)"""
+        """longitude (°East)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if lon was not provided
+        at domain creation (for instance, for Cartesian domains).
+        """
         return self._lon
 
     @property
     def lat(self) -> Optional[np.ndarray]:
-        """latitude (°North)"""
+        """latitude (°North)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if lat was not provided
+        at domain creation (for instance, for Cartesian domains with prescribed
+        Coriolis parameter).
+        """
         return self._lat
 
     @property
     def f(self) -> Optional[np.ndarray]:
-        """Coriolis parameter (rad s-1)"""
+        """Coriolis parameter (rad s-1)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes or if f was not provided
+        at domain creation. In the latter case, it will be calculated from lat.
+        """
         return self._f
 
     @property
     def dx(self) -> Optional[np.ndarray]:
-        """grid cell length in x-direction (m)"""
+        """grid cell length in x-direction (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes.
+        """
         return self._dx
 
     @property
     def dy(self) -> Optional[np.ndarray]:
-        """grid cell length in y-direction (m)"""
+        """grid cell length in y-direction (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes.
+        """
         return self._dy
 
     @property
     def rotation(self) -> Optional[np.ndarray]:
-        """grid rotation with respect to true North (rad)"""
+        """grid rotation with respect to true North (rad)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes, or if the y-axis points
+        to true North in every point (i.e, rotation is zero everywhere).
+        """
         return self._rotation
 
     @property
     def area(self) -> Optional[np.ndarray]:
-        """grid cell area (m²)"""
+        """grid cell area (m²)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        This attribute is None on non-root MPI nodes.
+        """
         return self._area
 
     @property
     def mask(self) -> Optional[np.ndarray]:
-        """land-sea mask (0: land, 1: water)"""
+        """land-sea mask (0: land, 1: water)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        It can be changed by assigning directly to the attribute or to slices of it.
+        If assigning directly, values defined on the T grid ``(ny x nx)``, the X grid
+        ``(ny+1 x nx+1)``, or the supergrid ``(ny*2+1 x nx*2+1)`` are accepted,
+        as are scalars. Assigned values are then interpolated to the supergrid.
+
+        This attribute is None on non-root MPI nodes.
+        """
         if not self._mask.flags.writeable:
             self._mask = self._mask.copy()
         return self._mask
@@ -689,7 +774,21 @@ class Domain:
 
         This is the distance between the bottom and some arbitrary depth
         reference (m, positive if bottom lies below the depth reference).
-        Typically the depth reference is mean sea level."""
+        Typically the depth reference is mean sea level.
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        It can be changed by assigning directly to the attribute or to slices of it.
+        If assigning directly, values defined on the T grid ``(ny x nx)``, the X grid
+        ``(ny+1 x nx+1)``, or the supergrid ``(ny*2+1 x nx*2+1)`` are accepted,
+        as are scalars. Assigned values are then interpolated to the supergrid.
+        When assigning directly, masked or NaN values will be marked as land in
+        the mask.
+
+        This attribute is None on non-root MPI nodes or if H was not provided yet.
+        """
         if self._H is not None and not self._H.flags.writeable:
             self._H = self._H.copy()
         return self._H
@@ -705,7 +804,19 @@ class Domain:
 
     @property
     def z0(self) -> Optional[np.ndarray]:
-        """minimum hydrodynamic bottom roughness (m)"""
+        """minimum hydrodynamic bottom roughness (m)
+
+        It is defined on the supergrid and thus has shape ``(ny*2+1, nx*2+1)``.
+        Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
+        (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
+
+        It can be changed by assigning directly to the attribute or to slices of it.
+        If assigning directly, values defined on the T grid ``(ny x nx)``, the X grid
+        ``(ny+1 x nx+1)``, or the supergrid ``(ny*2+1 x nx*2+1)`` are accepted,
+        as are scalars. Assigned values are then interpolated to the supergrid.
+
+        This attribute is None on non-root MPI nodes
+        """
         if not self._z0.flags.writeable:
             self._z0 = self._z0.copy()
         return self._z0
@@ -840,7 +951,9 @@ class Domain:
 
         return T
 
-    def _populate_grid(self, grid: core.Grid, domain_vars: Mapping[str, np.ndarray]):
+    def _populate_grid(
+        self, grid: core.Grid, domain_vars: Mapping[str, Optional[np.ndarray]]
+    ):
         edges_x = EdgeTreatment.PERIODIC if self.periodic_x else EdgeTreatment.MISSING
         edges_y = EdgeTreatment.PERIODIC if self.periodic_y else EdgeTreatment.MISSING
 
