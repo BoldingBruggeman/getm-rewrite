@@ -32,3 +32,4 @@ dependencies:
   - proj
   - jupyterlab
   - ipympl
+  - nc-time-axis
