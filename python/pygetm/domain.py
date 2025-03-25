@@ -1116,7 +1116,7 @@ class Domain:
     def max_rx0(self) -> float:
         """Maximum slope factor rx0 as defined in https://doi.org/10.1016/j.ocemod.2009.03.009"""
         rx0_u, rx0_v = self.get_rx0()
-        return max(rx0_u.max(), rx0_v.max())
+        return max(rx0_u.max(initial=0.0), rx0_v.max(initial=0.0))
 
     def smooth(self, rx0: float = 0.2) -> Optional[np.ndarray]:
         """Smooth bathymetry by reducing slope factor to specified maximum.
