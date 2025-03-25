@@ -10,6 +10,7 @@ from typing import (
     Union,
     Set,
     TYPE_CHECKING,
+    NamedTuple,
 )
 import functools
 import logging
@@ -189,7 +190,11 @@ class BoundaryCondition:
         pass
 
     def get_updater(
-        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+        self,
+        boundary: OpenBoundary,
+        array: core.Array,
+        bdy: np.ndarray,
+        collection: "ArrayOpenBoundaries",
     ) -> Callable[[], None]:
         """Return a function that updates the model values at the open boundary.
 
@@ -248,7 +253,11 @@ class Clamped(BoundaryCondition):
     """
 
     def get_updater(
-        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+        self,
+        boundary: OpenBoundary,
+        array: core.Array,
+        bdy: np.ndarray,
+        collection: "ArrayOpenBoundaries",
     ) -> Callable[[], None]:
         return functools.partial(self.get_setter(array, boundary.slice_t), bdy.T)
 
@@ -261,7 +270,11 @@ class ZeroGradient(BoundaryCondition):
     """
 
     def get_updater(
-        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+        self,
+        boundary: OpenBoundary,
+        array: core.Array,
+        bdy: np.ndarray,
+        collection: "ArrayOpenBoundaries",
     ) -> Callable[[], None]:
         where = boundary.extract_inward(array.grid.mask.all_values, start=1) != 0
         return functools.partial(
@@ -270,7 +283,7 @@ class ZeroGradient(BoundaryCondition):
         )
 
 
-class Sponge(BoundaryCondition):
+class Sponge(Clamped):
     def __init__(
         self,
         n: int = 3,
@@ -324,7 +337,7 @@ class Sponge(BoundaryCondition):
         # These represent the fraction of the cell's value that is replaced
         # by the value at the boundary, per timestep, as we move inward from
         # the boundary.
-        self.sponge_coef = ((n - np.arange(n)) / (n + 1.0)) ** 2
+        self.sp = ((n - np.arange(n)) / (n + 1.0)) ** 2
 
     def initialize(self, grid: core.Grid):
         """Create the relaxation coefficient array if using flow-dependent relaxation.
@@ -348,59 +361,70 @@ class Sponge(BoundaryCondition):
             ) + self.tmrlx_min
 
     def get_updater(
-        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+        self,
+        boundary: OpenBoundary,
+        array: core.Array,
+        bdy: np.ndarray,
+        collection: "ArrayOpenBoundaries",
     ) -> Callable[[], None]:
-        mask = boundary.extract_inward(
-            array.grid.mask.all_values, start=1, stop=self.n + 1
-        )
-        n = mask.shape[-1]
-        assert self.n == n
+        slicer = functools.partial(boundary.extract_inward, start=1, stop=self.n + 1)
 
-        sp = np.empty((boundary.np, n), dtype=float)
-        sp[...] = self.sponge_coef
+        # Select sponge points that are wet and active (mask=1) and connected
+        # to the open boundary (mask=2) via similar such points.
+        mask = boundary.extract_inward(
+            array.grid.mask.all_values, start=0, stop=self.n + 1
+        )
+        assert mask.shape[-1] == self.n + 1
+        active = mask == 1
+        active[:, 0] |= mask[:, 0] == 2
+        np.logical_and.accumulate(active, axis=-1, out=active)
+        sponge_active = active[:, 1:]
+
+        sponge_target = array.all_values[boundary.slice_t + (np.newaxis,)]
+        collection.add_relaxation(slicer, self.sp, sponge_target, sponge_active)
 
         if self.tmrlx:
             # The flow-dependent relaxation rlxcoef varies in time
             # and will be updated by prepare_depth_explicit.
             # It covers all boundaries; here we obtain its slice
             # corresponding to the current boundary.
-            sp[mask == 0] = 0.0  # only include water points
-            w = sp / sp.sum(axis=1, keepdims=True)
+            w = np.where(sponge_active, self.sp, 0.0)
+            wsum = w.sum(axis=1, keepdims=True)
+            np.divide(w, wsum, out=w, where=wsum != 0.0)
             rlxcoef = self.rlxcoef.all_values[boundary.slice_bdy].T
-        else:
-            # Values at the boundary will be set to prescribed values
-            w = None
-            rlxcoef = None
-        sp[mask != 1] = 0.0  # only include updatable water points (exclude bdy)
 
-        return functools.partial(
-            self.update_boundary,
-            boundary.extract_inward(array.all_values, start=1, stop=n + 1),
-            bdy.T,
-            sp,
-            rlxcoef,
-            w,
-            self.get_setter(array, boundary.slice_t),
-        )
+            return functools.partial(
+                self.update_boundary,
+                slicer(array.all_values),
+                bdy.T,
+                rlxcoef,
+                w,
+                w != 0.0,
+                (w == 0.0).all(axis=1),
+                self.get_setter(array, boundary.slice_t),
+            )
+        else:
+            # Clamp to prescribed values
+            return super().get_updater(boundary, array, bdy, collection)
 
     @staticmethod
     def update_boundary(
         sponge_values: np.ndarray,
         bdy_values: np.ndarray,
-        sp: np.ndarray,
-        rlxcoef: Optional[np.ndarray],
-        w: Optional[np.ndarray],
+        rlxcoef: np.ndarray,
+        w: np.ndarray,
+        nonzerow: np.ndarray,
+        clamp: np.ndarray,
         bdy_setter: Callable[[np.ndarray], None],
     ):
-        """Update model values at open boundary and in sponge zone,
-        for a single model variable and single open boundary.
+        """Update model values at open boundary.
+        The sponge zone update is done from ArrayOpenBoundary.update,
+        via the relaxation term added in get_updater
 
         Args:
             sponge_values: current model values in the sponge zone
                 (inward from open boundary). (nz x np x nsponge)
             bdy_values: prescribed values at open boundary (nz x np)
-            sp: fraction of model values in sponge zone to be replaced by
-                prescribed values (decreasing inward from boundary) (np x nsponge)
             rlxcoef: fraction of model values at the open boundary to be taken
                 from prescribed values. The remainder will be based on a
                 weighted mean over the sponge. (nz x np)
@@ -409,12 +433,10 @@ class Sponge(BoundaryCondition):
             bdy_setter: function that updates values at the boundary,
                 respecting their valid range and mask
         """
-        if w is not None:
-            # note: where=w != 0.0 is used to avoid mixing in NaNs from areas where w=0
-            sponge_mean = (w * sponge_values).sum(axis=-1, where=w != 0.0)
-            bdy_values = rlxcoef * bdy_values + (1.0 - rlxcoef) * sponge_mean
-        bdy_setter(bdy_values)
-        sponge_values += sp * (bdy_values[..., np.newaxis] - sponge_values)
+        # note: where=nonzerow is used to avoid mixing in NaNs from areas where w=0
+        sponge_mean = (w * sponge_values).sum(axis=-1, where=nonzerow)
+        blend = rlxcoef * bdy_values + (1.0 - rlxcoef) * sponge_mean
+        bdy_setter(np.where(clamp, bdy_values, blend))
 
 
 class Flather(BoundaryCondition):
@@ -432,7 +454,11 @@ class Flather(BoundaryCondition):
         self.transport = transport
 
     def get_updater(
-        self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
+        self,
+        boundary: OpenBoundary,
+        array: core.Array,
+        bdy: np.ndarray,
+        collection: "ArrayOpenBoundaries",
     ) -> Callable[[], None]:
         return functools.partial(
             self.update_transport if self.transport else self.update_velocity,
@@ -495,8 +521,15 @@ class ArrayOpenBoundary:
         return self._prescribed_values
 
 
+class Relaxation(NamedTuple):
+    slicer: Callable[[np.ndarray], np.ndarray]
+    weights: np.ndarray
+    values: np.ndarray
+    local: np.ndarray
+
+
 class ArrayOpenBoundaries:
-    __slots__ = "_array", "values", "_bdy", "updaters"
+    __slots__ = "_array", "values", "_bdy", "updaters", "relaxation"
 
     def __init__(self, array: core.Array, type=None):
         self._array = array
@@ -523,6 +556,7 @@ class ArrayOpenBoundaries:
                 )
             )
         self.updaters: List[Callable[[], None]] = []
+        self.relaxation: List[Relaxation] = []
 
     def _set_type(self, value: int):
         value = self._array.grid.open_boundaries._make_bc(value)
@@ -537,16 +571,44 @@ class ArrayOpenBoundaries:
             bdy._type.initialize(self._array.grid)
             self.updaters.append(
                 bdy._type.get_updater(
-                    bdy._boundary, self._array, bdy._prescribed_values
+                    bdy._boundary, self._array, bdy._prescribed_values, self
                 )
             )
             bcs.add(bdy._type)
+
+        if self.relaxation:
+            # Enumerate relaxation terms beyond the open boundary itself
+            # (e.g., sponge zones) and normalize the weights so that the
+            # combined relaxation from all open boundaries can at most exactly
+            # replace the model values at the boundary (max total weight = 1)
+            weight_sum = np.zeros(self.values.grid.mask.all_values.shape)
+            for assign in self.relaxation:
+                local_weight_sum = assign.slicer(weight_sum)
+                local_weight_sum += assign.weights
+            for assign in self.relaxation:
+                assign.weights[...] /= np.maximum(assign.slicer(weight_sum), 1.0)
+
         return bcs
+
+    def add_relaxation(
+        self,
+        slicer: Callable[[np.ndarray], np.ndarray],
+        weights: np.ndarray,
+        values: np.ndarray,
+        active: np.ndarray,
+    ):
+        local = slicer(self._array.all_values)
+        active = (slicer(self._array.grid.mask.all_values) == 1) & active
+        weights = np.where(active, weights, 0.0)
+        self.relaxation.append(Relaxation(slicer, weights, values, local))
 
     def update(self):
         """Update the tracer at the open boundaries"""
         for updater in self.updaters:
             updater()
+        olds = [assign.local.copy() for assign in self.relaxation]
+        for assign, old in zip(self.relaxation, olds):
+            assign.local[...] += assign.weights * (assign.values - old)
 
 
 class OpenBoundaries(Sequence[OpenBoundary]):
