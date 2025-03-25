@@ -430,10 +430,15 @@ class Sponge(Clamped):
                 weighted mean over the sponge. (nz x np)
             w: weight for sponge mean used as part of new model values at the
                 open boundary. (np x nsponge)
+            nonzerow: boolean array indicating where w is non-zero.
+                Cells with zero weight will be excluded from the sponge mean
+                in order to avoid blending in NaNs.
+            clamp: boolean array indicating where no sponge mean is available.
+                In these cells, the model values will be clamped to the
+                prescribed values.
             bdy_setter: function that updates values at the boundary,
                 respecting their valid range and mask
         """
-        # note: where=nonzerow is used to avoid mixing in NaNs from areas where w=0
         sponge_mean = (w * sponge_values).sum(axis=-1, where=nonzerow)
         blend = rlxcoef * bdy_values + (1.0 - rlxcoef) * sponge_mean
         bdy_setter(np.where(clamp, bdy_values, blend))
@@ -524,7 +529,7 @@ class ArrayOpenBoundary:
 class Relaxation(NamedTuple):
     slicer: Callable[[np.ndarray], np.ndarray]
     weights: np.ndarray
-    values: np.ndarray
+    target: np.ndarray
     local: np.ndarray
 
 
@@ -582,11 +587,11 @@ class ArrayOpenBoundaries:
             # combined relaxation from all open boundaries can at most exactly
             # replace the model values at the boundary (max total weight = 1)
             weight_sum = np.zeros(self.values.grid.mask.all_values.shape)
-            for assign in self.relaxation:
-                local_weight_sum = assign.slicer(weight_sum)
-                local_weight_sum += assign.weights
-            for assign in self.relaxation:
-                assign.weights[...] /= np.maximum(assign.slicer(weight_sum), 1.0)
+            for relax in self.relaxation:
+                local_weight_sum = relax.slicer(weight_sum)
+                local_weight_sum += relax.weights
+            for relax in self.relaxation:
+                relax.weights[...] /= np.maximum(relax.slicer(weight_sum), 1.0)
 
         return bcs
 
@@ -594,21 +599,32 @@ class ArrayOpenBoundaries:
         self,
         slicer: Callable[[np.ndarray], np.ndarray],
         weights: np.ndarray,
-        values: np.ndarray,
-        active: np.ndarray,
+        target: np.ndarray,
+        where: np.ndarray,
     ):
+        """Add a boundary-influenced relaxation term, e.g., a sponge zone.
+
+        Args:
+            slicer: function that extracts the relaxation area from the model
+                values. It must take a 2D or 3D array of model values and
+                return the slice corrresponding to the relaxation area.
+            weights: fraction of the model values replaced by relaxation.
+            target: target values to relax towards.
+            where: boolean array indicating where the relaxation term should
+                be applied.
+        """
         local = slicer(self._array.all_values)
-        active = (slicer(self._array.grid.mask.all_values) == 1) & active
-        weights = np.where(active, weights, 0.0)
-        self.relaxation.append(Relaxation(slicer, weights, values, local))
+        where = (slicer(self._array.grid.mask.all_values) == 1) & where
+        weights = np.where(where, weights, 0.0)
+        self.relaxation.append(Relaxation(slicer, weights, target, local))
 
     def update(self):
         """Update the tracer at the open boundaries"""
         for updater in self.updaters:
             updater()
-        olds = [assign.local.copy() for assign in self.relaxation]
-        for assign, old in zip(self.relaxation, olds):
-            assign.local[...] += assign.weights * (assign.values - old)
+        olds = [relax.local.copy() for relax in self.relaxation]
+        for relax, old in zip(self.relaxation, olds):
+            relax.local[...] += relax.weights * (relax.target - old)
 
 
 class OpenBoundaries(Sequence[OpenBoundary]):
