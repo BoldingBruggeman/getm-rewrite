@@ -1146,10 +1146,14 @@ class Domain:
             bathymetry corrections (m).
             These are defined at T points, that is, at ``[1::2, 1::2]``
         """
+        # Retrieval of max_rx0 is a collective operation,
+        # so do this before rank-dependent return
+        current_max_rx0 = self.max_rx0
+
         if self.comm.rank != 0:
             return
 
-        if self.max_rx0 <= rx0:
+        if current_max_rx0 <= rx0:
             return np.zeros_like(self.H[1::2, 1::2])
 
         import scipy.optimize

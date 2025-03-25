@@ -276,7 +276,7 @@ class ZeroGradient(BoundaryCondition):
         bdy: np.ndarray,
         collection: "ArrayOpenBoundaries",
     ) -> Callable[[], None]:
-        where = boundary.extract_inward(array.grid.mask.all_values, start=1) != 0
+        where = boundary.extract_inward(array.grid.mask.all_values, start=1) == 1
         return functools.partial(
             self.get_setter(array, boundary.slice_t, where),
             boundary.extract_inward(array.all_values, start=1),
