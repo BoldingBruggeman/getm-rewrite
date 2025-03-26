@@ -1093,7 +1093,7 @@ def test_scaling(
             continue
         m = re.search("Time spent in main loop: ([\\d\\.]+) s", p.stdout)
         duration = float(m.group(1))
-        print(f"{duration:.3} s in main loop")
+        print(f"{duration:.3f} s in main loop")
         ncpus.append(n)
         durations.append(duration)
         for i, path in enumerate(compare):
