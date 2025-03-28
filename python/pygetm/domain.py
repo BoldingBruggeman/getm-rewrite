@@ -358,7 +358,7 @@ def create_spherical_at_resolution(
     )
 
 
-def calculate_and_bcast(method):
+def apply_on_root_and_bcast(method):
     @functools.wraps(method)
     def wrapper(self: "Domain", *args, **kwargs):
         if self.comm.rank == 0:
@@ -366,6 +366,15 @@ def calculate_and_bcast(method):
         else:
             result = None
         return self.comm.bcast(result)
+
+    return wrapper
+
+
+def apply_only_on_root(method):
+    @functools.wraps(method)
+    def wrapper(self: "Domain", *args, **kwargs):
+        if self.comm.rank == 0:
+            return method(self, *args, **kwargs)
 
     return wrapper
 
@@ -1051,7 +1060,7 @@ class Domain:
         elif self.coordinate_type == CoordinateType.LONLAT:
             grid.horizontal_coordinates += [grid.lon, grid.lat]
 
-    @calculate_and_bcast
+    @apply_on_root_and_bcast
     def cfl_check(
         self, z: float = 0.0, return_location: bool = False
     ) -> Union[float, Tuple[float, int, int, float]]:
@@ -1112,12 +1121,13 @@ class Domain:
         return rx0_u, rx0_v
 
     @property
-    @calculate_and_bcast
+    @apply_on_root_and_bcast
     def max_rx0(self) -> float:
         """Maximum slope factor rx0 as defined in https://doi.org/10.1016/j.ocemod.2009.03.009"""
         rx0_u, rx0_v = self.get_rx0()
-        return max(rx0_u.max(), rx0_v.max())
+        return max(rx0_u.max(initial=0.0), rx0_v.max(initial=0.0))
 
+    @apply_only_on_root
     def smooth(self, rx0: float = 0.2) -> Optional[np.ndarray]:
         """Smooth bathymetry by reducing slope factor to specified maximum.
 
@@ -1146,13 +1156,8 @@ class Domain:
             bathymetry corrections (m).
             These are defined at T points, that is, at ``[1::2, 1::2]``
         """
-        # Retrieval of max_rx0 is a collective operation,
-        # so do this before rank-dependent return
-        current_max_rx0 = self.max_rx0
-
-        if self.comm.rank != 0:
-            return
-
+        rx0_u, rx0_v = self.get_rx0()
+        current_max_rx0 = max(rx0_u.max(initial=0.0), rx0_v.max(initial=0.0))
         if current_max_rx0 <= rx0:
             return np.zeros_like(self.H[1::2, 1::2])
 
@@ -1248,7 +1253,7 @@ class Domain:
 
         return mask
 
-    @calculate_and_bcast
+    @apply_only_on_root
     def mask_shallow(self, minimum_depth: float):
         """Mask all points shallower less the specified value.
 
@@ -1258,7 +1263,7 @@ class Domain:
         """
         self.mask[self._H < minimum_depth] = 0
 
-    @calculate_and_bcast
+    @apply_only_on_root
     def mask_subbasins(self, nkeep: int = 1):
         """Identify all separate basins (each a collection of unmasked cell
         centers connected via top/bottom/left/right interfaces), and mask all
@@ -1288,7 +1293,7 @@ class Domain:
             tmask[tmask == v] = 0
         self.mask = np.where(tmask == 0, 0, self.mask[1::2, 1::2])
 
-    @calculate_and_bcast
+    @apply_only_on_root
     def limit_velocity_depth(self, critical_depth: float = np.inf):
         """Decrease bathymetric depth of velocity (U, V) points to the minimum of the
         bathymetric depth of both neighboring T points, wherever one of these two
@@ -1315,7 +1320,7 @@ class Domain:
             " currently unmasked)."
         )
 
-    @calculate_and_bcast
+    @apply_only_on_root
     def mask_rectangle(
         self,
         xmin: Optional[float] = None,
@@ -1361,7 +1366,7 @@ class Domain:
             selected &= y <= ymax
         self.mask[selected] = mask_value
 
-    @calculate_and_bcast
+    @apply_only_on_root
     def mask_indices(
         self, istart: int, istop: int, jstart: int, jstop: int, mask_value: int = 0
     ):

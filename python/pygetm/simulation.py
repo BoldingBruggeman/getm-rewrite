@@ -531,8 +531,10 @@ class Simulation(BaseSimulation):
 
         self.runtype = runtype
 
+        domain.logger.info(f"Maximum slope factor (rx0): {domain.max_rx0:.3f}")
+
         maxdt, i, j, depth = domain.cfl_check(return_location=True)
-        self.logger.info(
+        domain.logger.info(
             f"Maximum timestep for 2D barotropic processes: {maxdt:.3f} s "
             f"(i={i}, j={j}, bathymetric depth={depth:.3f} m)"
         )
