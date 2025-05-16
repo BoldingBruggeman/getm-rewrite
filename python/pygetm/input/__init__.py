@@ -862,7 +862,7 @@ def horizontal_interpolation(
             raise Exception(
                 f"Variable {source.name} does not have a valid latitude coordinate."
             )
-    elif isinstance(xp, str):
+    elif isinstance(yp, str):
         yp = source.coords[yp]
     assert xp.ndim == 1
     assert yp.ndim == 1
