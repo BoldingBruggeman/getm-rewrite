@@ -1482,8 +1482,14 @@ class InputManager:
                         lat_bnd.max(),
                         periodic_lon=periodic_lon,
                     )
+                    ip_mask = None
+                    if value.getm.time is not None and not array.z:
+                        itimedim = value.dims.index(value.getm.time.dims[0])
+                        slc: List[Union[int, slice]] = [slice(None)] * value.ndim
+                        slc[itimedim] = 0
+                        ip_mask = np.isnan(value[tuple(slc)])
                     value = pygetm.input.horizontal_interpolation(
-                        value, lon_bnd, lat_bnd
+                        value, lon_bnd, lat_bnd, mask=ip_mask
                     )
 
             if array.z and value.getm.z is not None and value.getm.z.ndim == 1:
