@@ -29,7 +29,12 @@ DEFAULT_VARIABLES = ("u10", "v10", "t2m", "d2m", "sp", "tcc", "tp")
 
 
 def _download_year(
-    year: int, area: List[float], variables: List[str], path: str, **cds_settings
+    year: int,
+    area: List[float],
+    variables: List[str],
+    fmt: str,
+    path: str,
+    **cds_settings,
 ):
     c = cdsapi.Client(verify=1, progress=False, **cds_settings)
     request = {
@@ -40,7 +45,7 @@ def _download_year(
         "day": [f"{d:02}" for d in range(1, 32)],
         "time": [f"{h:02}:00" for h in range(0, 24)],
         "grid": ["0.25/0.25"],
-        "data_format": "netcdf",
+        "data_format": fmt,
         "download_format": "unarchived",
         "area": area,
     }
@@ -57,6 +62,7 @@ def get(
     start_year: int,
     stop_year: Optional[int] = None,
     variables: Iterable[str] = DEFAULT_VARIABLES,
+    fmt: str = "netcdf",
     target_dir: str = ".",
     cdsapirc: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
@@ -89,25 +95,30 @@ def get(
         with open(cdsapirc, "r") as f:
             cds_settings.update(yaml.safe_load(f))
 
-    pool = multiprocessing.Pool(processes=stop_year - start_year + 1)
-    selected_variables = [VARIABLES[key] for key in variables]
     results = []
     years = list(range(start_year, stop_year + 1))
+    pool = multiprocessing.Pool(processes=len(years) * len(variables))
     os.makedirs(target_dir, exist_ok=True)
+    ext = "nc" if fmt == "netcdf" else "grib"
+    keys = []
     for year in years:
-        path = os.path.join(target_dir, f"era5_{year}.nc")
-        logger.info(f"  {year}: {path}")
-        results.append(
-            pool.apply_async(
-                _download_year,
-                args=(year, area, selected_variables, path),
-                kwds=cds_settings,
+        logger.info(f"  {year}:")
+        for variable in variables:
+            path = os.path.join(target_dir, f"era5_{variable}_{year}.{ext}")
+            full_name = VARIABLES[variable]
+            logger.info(f"    {full_name}: {path}")
+            results.append(
+                pool.apply_async(
+                    _download_year,
+                    args=(year, area, (full_name,), fmt, path),
+                    kwds=cds_settings,
+                )
             )
-        )
-    year2path = {}
-    for year, res in zip(years, results):
-        year2path[year] = res.get()
-    return year2path
+            keys.append((year, variable))
+    key2path = {}
+    for key, res in zip(keys, results):
+        key2path[key] = res.get()
+    return key2path
 
 
 if __name__ == "__main__":
@@ -120,19 +131,26 @@ if __name__ == "__main__":
     parser.add_argument("stop_year", help="stop year", type=int)
     parser.add_argument(
         "-v",
-        help=f"variable to download ({', '.join(VARIABLES)})",
+        help=f"extra variable to download ({', '.join(VARIABLES)})",
         action="append",
         dest="variables",
+        metavar="VARIABLE",
         default=[],
     )
     parser.add_argument(
-        "--no_default_variables", action="store_false", dest="default_variables"
+        "--no_default_variables",
+        action="store_false",
+        dest="default_variables",
+        help=(
+            f"do not include default variables ({', '.join(DEFAULT_VARIABLES)})"
+            " unless explicitly specified"
+        ),
     )
     parser.add_argument(
         "--cdsapirc",
         help=(
             "path to CDS configuration file"
-            " (see https://cds.climate.copernicus.eu/api-how-to)"
+            " (see https://cds.climate.copernicus.eu/how-to-api)"
         ),
     )
     args = parser.parse_args()
