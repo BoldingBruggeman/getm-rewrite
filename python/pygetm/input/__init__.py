@@ -1139,6 +1139,7 @@ class TemporalInterpolation(UnaryOperator):
             raise Exception(
                 f"{self._source_name} cannot be used as climatology because"
                 " it spans more than one calendar year"
+                f" ({self.times[0]} - {self.times[-1]})."
             )
         if climatology and self.MAX_CACHE_SIZE > 0:
             memory = np.asarray(source.size * (self.dtype.itemsize / 1024 / 1024))
