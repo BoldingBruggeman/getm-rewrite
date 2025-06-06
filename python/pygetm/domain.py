@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Mapping, Optional, Tuple, Union, Iterable, TYPE_CHECKING
 import enum
 import functools
 import logging
@@ -565,6 +565,14 @@ class Domain:
         self._rotation = rotation if rotation[1:-1, 1:-1].any() else None
 
         self._area = self._dx * self._dy
+
+        x_ = None if self._x is None else self._x[1::2, 1::2]
+        y_ = None if self._y is None else self._y[1::2, 1::2]
+        lon_ = None if self._lon is None else self._lon[1::2, 1::2]
+        lat_ = None if self._lat is None else self._lat[1::2, 1::2]
+        self._tlocator = core.Locator(
+            self._mask[1::2, 1::2], x=x_, y=y_, lon=lon_, lat=lat_
+        )
 
     def _map_array(
         self,
@@ -1437,11 +1445,22 @@ class Domain:
 
     def _map_rivers(self, mask: np.ndarray):
         assert self.comm.rank == 0
-        x_ = None if self._x is None else self._x[1::2, 1::2]
-        y_ = None if self._y is None else self._y[1::2, 1::2]
-        lon_ = None if self._lon is None else self._lon[1::2, 1::2]
-        lat_ = None if self._lat is None else self._lat[1::2, 1::2]
-        self.rivers.map_to_grid(mask[1::2, 1::2], x_, y_, lon_, lat_)
+        self.rivers.map_to_grid(self._tlocator)
+
+    @apply_on_root_and_bcast
+    def nearest_point(
+        self,
+        x: float,
+        y: float,
+        *,
+        coordinate_type: Optional[CoordinateType] = None,
+        allowed_mask: Iterable[int] = (1,),
+    ) -> Tuple[int, int]:
+        if coordinate_type is None:
+            coordinate_type = self.coordinate_type
+        return self._tlocator(
+            x, y, coordinate_type=coordinate_type, allowed_mask=allowed_mask
+        )
 
     def plot(
         self,
