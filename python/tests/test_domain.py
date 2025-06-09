@@ -265,9 +265,21 @@ class TestDomain(unittest.TestCase):
             domain.rivers.default_coordinate_type, pygetm.CoordinateType.LONLAT
         )
         river = domain.rivers.add_by_location("foo", 2.0, 3.0)
-        domain.create_grids(10, halox=2, haloy=2)
-        self.assertEqual(river.i_loc - 2, np.argmin(np.abs(lon - 2.0)))
-        self.assertEqual(river.j_loc - 2, np.argmin(np.abs(lat - 3.0)))
+        T = domain.create_grids(10, halox=2, haloy=2)
+        i_loc_exp = np.argmin(np.abs(lon - 2.0)) + 2 - T.tiling.xoffset
+        j_loc_exp = np.argmin(np.abs(lat - 3.0)) + 2 - T.tiling.yoffset
+        inside = (
+            i_loc_exp >= 0
+            and i_loc_exp < T.nx_
+            and j_loc_exp >= 0
+            and j_loc_exp < T.ny_
+        )
+        if inside:
+            self.assertEqual(river.i_loc, i_loc_exp)
+            self.assertEqual(river.j_loc, j_loc_exp)
+        else:
+            self.assertIsNone(river.i_loc)
+            self.assertIsNone(river.j_loc)
 
         nx, ny = 100, 52
         x = np.linspace(0.0, 1e5, nx)
@@ -279,9 +291,21 @@ class TestDomain(unittest.TestCase):
             domain.rivers.default_coordinate_type, pygetm.CoordinateType.XY
         )
         river = domain.rivers.add_by_location("foo", 25000.0, 34000.0)
-        domain.create_grids(10, halox=2, haloy=2)
-        self.assertEqual(river.i_loc - 2, np.argmin(np.abs(x - 25000.0)))
-        self.assertEqual(river.j_loc - 2, np.argmin(np.abs(y - 34000.0)))
+        T = domain.create_grids(10, halox=2, haloy=2)
+        i_loc_exp = np.argmin(np.abs(x - 25000.0)) + 2 - T.tiling.xoffset
+        j_loc_exp = np.argmin(np.abs(y - 34000.0)) + 2 - T.tiling.yoffset
+        inside = (
+            i_loc_exp >= 0
+            and i_loc_exp < T.nx_
+            and j_loc_exp >= 0
+            and j_loc_exp < T.ny_
+        )
+        if inside:
+            self.assertEqual(river.i_loc, i_loc_exp)
+            self.assertEqual(river.j_loc, j_loc_exp)
+        else:
+            self.assertIsNone(river.i_loc)
+            self.assertIsNone(river.j_loc)
 
     def test_open_boundaries(self):
         nx, ny = 100, 52
