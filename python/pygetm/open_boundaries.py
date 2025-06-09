@@ -95,13 +95,19 @@ class OpenBoundary:
         self.l = self.l_glob - l_offset
         self.mstart_ = self.mstart_glob - m_offset
         self.mstop_ = self.mstop_glob - m_offset
-        self.mstart = min(max(0, self.mstart_), m_max)
-        self.mstop = min(max(0, self.mstop_), m_max)
-        if self.l < 0 or self.l >= l_max or self.mstart == self.mstop:
+        mlast = self.mstop_ - self.mstep
+        if (
+            self.l < 0
+            or self.l >= l_max
+            or max(self.mstart_, mlast) < 0
+            or min(self.mstart_, mlast) >= m_max
+        ):
             # Boundary lies completely outside current subdomain. Record it anyway,
             # so we can later set up a global -> local map of open boundary points
             self.l, self.mstart, self.mstop = None, None, None
             return
+        self.mstart = min(max(0, self.mstart_), m_max - 1)
+        self.mstop = min(max(0, mlast), m_max - 1) + self.mstep
 
         mslice = slice(self.mstart, self.mstop, self.mstep)
         ms = np.arange(self.mstart, self.mstop, self.mstep)
@@ -116,6 +122,8 @@ class OpenBoundary:
             self.i, self.j = ms, ls
             self.slice_t = (Ellipsis, l, mslice)
             self.slice_uv_in = (Ellipsis, l if side == Side.SOUTH else l - 1, mslice)
+        assert (self.i >= 0).all() and (self.i < grid.nx_).all()
+        assert (self.j >= 0).all() and (self.j < grid.ny_).all()
 
     def extract_inward(
         self, values: np.ndarray, start: int, stop: Optional[int] = None
