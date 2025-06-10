@@ -935,11 +935,17 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         # Horizontal coordinates of open boundary points
         if grid.lon is not None:
             self.lon = grid.array(
-                on_boundary=True, fill=grid.lon.all_values[self.j, self.i]
+                name="lon_bdy",
+                on_boundary=True,
+                fill=grid.lon.all_values[self.j, self.i],
+                attrs=dict(_time_varying=False),
             )
         if grid.lat is not None:
             self.lat = grid.array(
-                on_boundary=True, fill=grid.lat.all_values[self.j, self.i]
+                name="lat_bdy",
+                on_boundary=True,
+                fill=grid.lat.all_values[self.j, self.i],
+                attrs=dict(_time_varying=False),
             )
 
         if grid.nz:
