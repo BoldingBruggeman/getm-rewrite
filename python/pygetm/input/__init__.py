@@ -1059,8 +1059,10 @@ def temporal_interpolation(
         logger=logger,
     )
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
-    coords = dict(source.coords.items())
-    coords[time_coord.dims[0]] = lazyvar._timecoord
+    coords = {time_coord.dims[0]: lazyvar._timecoord}
+    for n, c in source.coords.items():
+        if time_coord.dims[0] not in c.dims:
+            coords[n] = c
     return xr.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
