@@ -18,7 +18,8 @@ from .simulation import *
 from .constants import *
 from .operators import AdvectionScheme
 from .open_boundaries import Side
-from .airsea import HumidityMeasure, LongwaveMethod, AlbedoMethod
+from .airsea import HumidityMeasure, ShortwaveMethod, LongwaveMethod, AlbedoMethod
+from .airsea import NET_FLUX, DOWNWARDS_FLUX
 from .output import TimeUnit
 from .momentum import CoriolisScheme
 from .radiation import Jerlov
