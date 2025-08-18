@@ -1,4 +1,5 @@
 import logging
+from typing import NewType
 
 import numpy as np
 import cftime
@@ -7,9 +8,13 @@ import awex
 import pygetm.domain
 from . import core
 from .constants import FILL_VALUE, RHO0, TimeVarying
-from awex import HumidityMeasure, LongwaveMethod, AlbedoMethod
+from awex import HumidityMeasure, ShortwaveMethod, LongwaveMethod, AlbedoMethod
 
 CPA = 1008.0  #: specific heat capacity of air (J kg-1 K-1)
+# https://www.engineeringtoolbox.com/emissivity-coefficients-d_447.htm
+emissivity = 0.97
+# NIST CODATA standard
+stefan_boltzmann = 5.670374419e-8
 
 
 class Base:
@@ -62,8 +67,7 @@ class Base:
         self.pe = grid.array(
             name="pe",
             long_name=(
-                "net freshwater flux due to precipitation, condensation,"
-                " evaporation",
+                "net freshwater flux due to precipitation, condensation, evaporation",
             ),
             units="m s-1",
             fill_value=FILL_VALUE,
@@ -150,10 +154,10 @@ class Fluxes(Base):
 class FluxesFromMeteo(Fluxes):
     def __init__(
         self,
+        shortwave_method: ShortwaveMethod = ShortwaveMethod.ROSATI_MIYAKODA,
         longwave_method: LongwaveMethod = LongwaveMethod.CLARK,
         albedo_method: AlbedoMethod = AlbedoMethod.PAYNE,
         humidity_measure: HumidityMeasure = HumidityMeasure.DEW_POINT_TEMPERATURE,
-        calculate_swr: bool = True,
         calculate_evaporation: bool = False,
     ):
         """Calculate air-water fluxes of heat and momentum, as well as surface air
@@ -162,13 +166,18 @@ class FluxesFromMeteo(Fluxes):
         radiation.
 
         Args:
-            longwave_method: method used to calculate net longwave radiation
+            shortwave_method: method used to obtain surface shortwave radiation.
+                NET: specify directly via :meth:`pygetm.core.Array.set` on :attr:`swr`
+                DOWNWARDS: specify downwards shortwave radiation via :meth:`pygetm.core.Array.set`
+                    on :attr:`swr_downwards` then albedo correction will be applied
+                ROSATI_MIYAKODA: calculate the shortwave radiation based on position, time
+                    and cloudcover and apply albedo
+            longwave_method: method used to obtain net longwave radiation
+                NET: specify directly via :meth:`pygetm.core.Array.set` on :attr:`ql`
+                DOWNWARDS: specify downwards longwave radiation via :meth:`pygetm.core.Array.set` on :attr:`ql_downwards`
+                CLARK, HASTENRATH_LAMB, BIGNAMI, BERLIAND_BERLIAND, JOSEY1, JOSEY2: Bulk formula expressions
             albedo_method: method used to calculate surface albedo
             humidity_measure: the units in which air humidity will be provided
-            calculate_swr: whether to calculate surface shortwave radiation.
-                If this is ``False``, shortwave radiation defaults to 0, but
-                it can be manually specified by calling :meth:`pygetm.core.Array.set`
-                on :attr:`swr`.
             calculate_evaporation: whether to calculate evaporation from the latent
                 heat flux. If this is ``True``, precipitation should be prescribed
                 to ensure the net freshwater budget is correct. This can be done by
@@ -178,10 +187,10 @@ class FluxesFromMeteo(Fluxes):
                 calling :meth:`pygetm.core.Array.set` on :attr:`pe`.
         """
         super().__init__()
+        self.shortwave_method = shortwave_method
         self.longwave_method = longwave_method
         self.albedo_method = albedo_method
         self.humidity_measure = humidity_measure
-        self.calculate_swr = calculate_swr
         self.calculate_evaporation = calculate_evaporation
 
     def initialize(self, grid: pygetm.core.Grid, logger: logging.Logger):
@@ -193,13 +202,22 @@ class FluxesFromMeteo(Fluxes):
         self.swr.attrs["_mask_output"] = True
         self.sp.fill(self.sp.fill_value)
 
-        self.logger.info(f"Longwave method: {self.longwave_method.name}")
-        self.logger.info(f"Albedo method: {self.albedo_method.name}")
         self.logger.info(f"Humidity measure method: {self.humidity_measure.name}")
-        if self.calculate_swr:
+        if self.shortwave_method == ShortwaveMethod.NET:
+            self.logger.info("Net surface shortwave radiation is provided")
+        elif self.shortwave_method == ShortwaveMethod.DOWNWARDS:
+            self.logger.info("Downwards surface shortwave radiation is provided")
+        else:
             self.logger.info(
-                "Shortwave radiation calculated from time, location and cloud cover"
+                "Shortwave radiation is calculated from time, location and cloud cover"
             )
+        if self.longwave_method == LongwaveMethod.NET:
+            self.logger.info("Net surface longwave radiation is provided")
+        elif self.longwave_method == LongwaveMethod.DOWNWARDS:
+            self.logger.info("Downwards surface longwave radiation is provided")
+        else:
+            self.logger.info(f"Longwave method: {self.longwave_method.name}")
+        self.logger.info(f"Albedo method: {self.albedo_method.name}")
         if self.calculate_evaporation:
             self.logger.info("Evaporation calculated from latent heat flux")
 
@@ -355,6 +373,19 @@ class FluxesFromMeteo(Fluxes):
                 _mask_output=True,
             ),
         )
+        if self.shortwave_method == ShortwaveMethod.DOWNWARDS:
+            self.swr_downwards = grid.array(
+                name="swr_downwards",
+                long_name="surface gross downwelling shortwave radiation",
+                units="W m-2",
+                fill_value=FILL_VALUE,
+                fabm_standard_name="surface_gross_downwelling_shortwave_flux",
+                attrs=dict(
+                    _time_varying=TimeVarying.MACRO,
+                    standard_name="downward_shortwave_flux_at_sea_water_surface",
+                ),
+            )
+
         self.ql = grid.array(
             name="ql",
             long_name="net downwelling longwave radiation",
@@ -366,6 +397,18 @@ class FluxesFromMeteo(Fluxes):
                 _mask_output=True,
             ),
         )
+        if self.longwave_method == LongwaveMethod.DOWNWARDS:
+            self.ql_downwards = grid.array(
+                name="ql_downwards",
+                long_name="gross downwelling longwave radiation",
+                units="W m-2",
+                fill_value=FILL_VALUE,
+                attrs=dict(
+                    _time_varying=TimeVarying.MACRO,
+                    standard_name="surface_gross_downward_longwave_flux",
+                    _mask_output=True,
+                ),
+            )
 
         self.tp = grid.array(
             name="tp",
@@ -416,18 +459,27 @@ class FluxesFromMeteo(Fluxes):
         Args:
             sst: temperature of the water surface (°C)
         """
-        sst_K = sst.all_values + 273.15
-        t2m_K = self.t2m.all_values + 273.15
-        awex.longwave_radiation(
-            self.longwave_method,
-            self.lat.all_values,
-            sst_K,
-            t2m_K,
-            self.tcc.all_values,
-            self.ea.all_values,
-            self.qa.all_values,
-            self.ql.all_values,
-        )
+        if self.longwave_method == LongwaveMethod.NET:
+            pass
+        elif self.longwave_method == LongwaveMethod.DOWNWARDS:
+            sst_K = sst.all_values + 273.15
+            self.ql.all_values = (
+                self.ql_downwards.all_values
+                - emissivity * stefan_boltzmann * np.power(sst_K, 4)
+            )
+        else:
+            sst_K = sst.all_values + 273.15
+            t2m_K = self.t2m.all_values + 273.15
+            awex.longwave_radiation(
+                self.longwave_method,
+                self.lat.all_values,
+                sst_K,
+                t2m_K,
+                self.tcc.all_values,
+                self.ea.all_values,
+                self.qa.all_values,
+                self.ql.all_values,
+            )
 
     def update_shortwave_radiation(self, time: cftime.datetime):
         """Update net downwelling shortwave radiation :attr:`swr`.
@@ -437,22 +489,37 @@ class FluxesFromMeteo(Fluxes):
         Args:
             time: date and time
         """
-        hh = time.hour + time.minute / 60.0 + time.second / 3600.0
-        yday = time.dayofyr  # 1 for all of 1 January
-        awex.solar_zenith_angle(
-            yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values
-        )
-        awex.shortwave_radiation(
-            yday,
-            self.zen.all_values,
-            self.lat.all_values,
-            self.tcc.all_values,
-            self.swr.all_values,
-        )
-        awex.albedo_water(
-            self.albedo_method, self.zen.all_values, yday, self.albedo.all_values
-        )
-        self.swr.all_values *= 1.0 - self.albedo.all_values
+        if self.shortwave_method == ShortwaveMethod.NET:
+            pass
+        elif self.shortwave_method == ShortwaveMethod.DOWNWARDS:
+            hh = time.hour + time.minute / 60.0 + time.second / 3600.0
+            yday = time.dayofyr  # 1 for all of 1 January
+            awex.solar_zenith_angle(
+                yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values
+            )
+            awex.albedo_water(
+                self.albedo_method, self.zen.all_values, yday, self.albedo.all_values
+            )
+            self.swr.all_values = self.swr_downwards.all_values * (
+                1.0 - self.albedo.all_values
+            )
+        else:
+            hh = time.hour + time.minute / 60.0 + time.second / 3600.0
+            yday = time.dayofyr  # 1 for all of 1 January
+            awex.solar_zenith_angle(
+                yday, hh, self.lon.all_values, self.lat.all_values, self.zen.all_values
+            )
+            awex.shortwave_radiation(
+                yday,
+                self.zen.all_values,
+                self.lat.all_values,
+                self.tcc.all_values,
+                self.swr.all_values,
+            )
+            awex.albedo_water(
+                self.albedo_method, self.zen.all_values, yday, self.albedo.all_values
+            )
+            self.swr.all_values *= 1.0 - self.albedo.all_values
 
     def update_transfer_coefficients(self, sst: core.Array):
         """Update transfer coefficients for momentum (:attr:`cd_mom`), latent heat
@@ -565,8 +632,7 @@ class FluxesFromMeteo(Fluxes):
             )
 
             # Shortwave radiation just below water surface
-            if self.calculate_swr:
-                self.update_shortwave_radiation(time)
+            self.update_shortwave_radiation(time)
 
             # Evaporation (derived from latent heat flux)
             # and precipitation minus evaporation

@@ -20,6 +20,7 @@ VARIABLES = {
     "tcc": "total_cloud_cover",
     "tp": "total_precipitation",
     "ssr": "surface_net_solar_radiation",
+    "ssrd": "surface_solar_radiation_downwards",
     "str": "surface_net_thermal_radiation",
     "strd": "surface_thermal_radiation_downwards",
     "tco3": "total_column_ozone",
