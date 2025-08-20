@@ -490,7 +490,7 @@ class FluxesFromMeteo(Fluxes):
             )
         elif self.longwave_method == DOWNWARD_FLUX:
             sst_K = sst.all_values + 273.15
-            self.ql.all_values = (
+            self.ql.all_values[...] = (
                 self.ql_downwards.all_values
                 - emissivity * stefan_boltzmann * np.power(sst_K, 4)
             )
@@ -525,7 +525,7 @@ class FluxesFromMeteo(Fluxes):
             )
             self.swr.all_values *= 1.0 - self.albedo.all_values
         elif self.shortwave_method == DOWNWARD_FLUX:
-            self.swr.all_values = self.swr_downwards.all_values * (
+            self.swr.all_values[...] = self.swr_downwards.all_values * (
                 1.0 - self.albedo.all_values
             )
 
