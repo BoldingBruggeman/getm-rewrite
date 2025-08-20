@@ -24,8 +24,8 @@ emissivity = 0.97
 # NIST CODATA standard
 stefan_boltzmann = 5.670374419e-8
 
-NET_FLUX = 1
-DOWNWARD_FLUX = 2
+NET_FLUX = -1
+DOWNWARD_FLUX = -2
 
 
 class Base:
