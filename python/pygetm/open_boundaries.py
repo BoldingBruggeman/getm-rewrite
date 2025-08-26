@@ -309,9 +309,16 @@ class Sponge(Clamped):
             n: number of points in the sponge zone; the boundary itself is not
                  included, so ``n=0`` is equivalent to a clamped boundary.
             tmrlx: use a flow-dependent relaxation coefficient
-            tmrlx_max: maximum relaxation coefficient (fraction per timestep).
+            tmrlx_max: maximum fraction to take from prescribed values at the
+                open boundary. The remaining fraction will be taken from a
+                weighted mean over the sponge zone. This maximum is reached
+                at strong inflow (>= ``tmrlx_ucut``).
                 Only used if ``tmrlx`` is ``True``.
-            tmrlx_min: minimum relaxation coefficient (fraction per timestep).
+            tmrlx_min: minimum fraction to take from prescribed values at the
+                open boundary. The remaining fraction will be taken from a
+                weighted mean over the sponge zone. This minimum is reached
+                when water flows outward over the boundary (inflow <=
+                ``tmrlx_umin``).
                 Only used if ``tmrlx`` is ``True``.
             tmrlx_ucut: inward flow velocity (m s-1) at which relaxation
                 coefficient reaches its maximum value. Only used if ``tmrlx``
