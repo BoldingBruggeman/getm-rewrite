@@ -296,11 +296,10 @@ class Sponge(Clamped):
         """Create a sponge boundary condition, with ``n`` points inward from
         the open boundary being relaxed to values at the boundary.
 
-        If a flow-dependent relaxation coefficient is used (``tmrlx=True``),
+        If flow-dependent relaxation is used (``tmrlx=True``),
         values at the boundary itself will blend the prescribed values
         and a weighted mean over the sponge zone. The fraction taken from the
-        prescribed values (the relaxation coefficient) will increase with
-        increasing inward flow velocity.
+        prescribed values will increase with increasing inward flow velocity.
 
         If flow-dependent relaxation is not used (``tmrlx=False``), values at
         the boundary will be set to the prescribed values.
@@ -308,7 +307,10 @@ class Sponge(Clamped):
         Args:
             n: number of points in the sponge zone; the boundary itself is not
                  included, so ``n=0`` is equivalent to a clamped boundary.
-            tmrlx: use a flow-dependent relaxation coefficient
+            tmrlx: make use of prescribed values at the open boundary
+                dependent on flow direction. This is typically used to
+                gradually disable use of prescribed values as the current
+                switches from inflow to outflow over the boundary.
             tmrlx_max: maximum fraction to take from prescribed values at the
                 open boundary. The remaining fraction will be taken from a
                 weighted mean over the sponge zone. This maximum is reached
@@ -318,13 +320,19 @@ class Sponge(Clamped):
                 open boundary. The remaining fraction will be taken from a
                 weighted mean over the sponge zone. This minimum is reached
                 when water flows outward over the boundary (inflow <=
-                ``tmrlx_umin``).
+                ``tmrlx_umin``). Only used if ``tmrlx`` is ``True``.
+            tmrlx_ucut: inward flow velocity (m s-1) at which the use of
+                prescribed boundary values becomes highest. At this inflow, or
+                higher, boundary values are for fraction ``tmrlx_max`` based on
+                prescribed values; the remaining ``1 - tmrlx_max`` is taken
+                from a weighted mean over the sponge zone.
                 Only used if ``tmrlx`` is ``True``.
-            tmrlx_ucut: inward flow velocity (m s-1) at which relaxation
-                coefficient reaches its maximum value. Only used if ``tmrlx``
-                is ``True``.
-            tmrlx_umin: inward flow velocity (m s-1) at which relaxation
-                coefficient reaches its minimum value. If ``None``,
+            tmrlx_umin: inward flow velocity (m s-1) at which the use of
+                prescribed boundary values becomes minimal. Use negative values
+                to indicate outflow. At the specified inflow value, or lower,
+                boundary values are for fraction ``tmrlx_min`` based on
+                prescribed values; the remaining ``1 - tmrlx_min`` is taken
+                from a weighted mean over the sponge zone. If ``None``,
                 ``tmrlx_umin`` is set to ``-0.25 * tmrlx_ucut``.
                 Only used if ``tmrlx`` is ``True``.
         """
