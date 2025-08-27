@@ -21,7 +21,7 @@ dependencies:
   - pyyaml
   - numpy
   - xarray
-  - netcdf4
+  - netcdf4>=1.6
   - scipy
   - pyfabm>=2.1
   - awex
