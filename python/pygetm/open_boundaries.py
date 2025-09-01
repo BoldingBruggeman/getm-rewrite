@@ -40,8 +40,9 @@ class Side(enum.IntEnum):
 
 class OpenBoundary:
     """A single open boundary.
-    This defines the location of the open boundary, but not the type of boundary condition
-    to apply to the different variables. For that, use :attr:`core.Array.open_boundaries`.
+    This defines the location of the open boundary, but not the type of
+    boundary condition to apply to the different variables. For that, use
+    :attr:`core.Array.open_boundaries`.
     """
 
     def __init__(
