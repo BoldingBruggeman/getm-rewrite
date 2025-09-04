@@ -9,7 +9,6 @@ from typing import (
     Tuple,
     Union,
     Set,
-    TYPE_CHECKING,
     NamedTuple,
 )
 import functools
@@ -40,6 +39,12 @@ class Side(enum.IntEnum):
 
 
 class OpenBoundary:
+    """A single open boundary.
+    This defines the location of the open boundary, but not the type of
+    boundary condition to apply to the different variables. For that, use
+    :attr:`core.Array.open_boundaries`.
+    """
+
     def __init__(
         self,
         name: str,
@@ -183,9 +188,17 @@ class OpenBoundary:
 
 
 class BoundaryCondition:
+    """Base class for an open boundary condition that can be applied to any
+    open boundary of any array. Specific types of open boundary condition
+    (clamped, zero-gradient, etc.) must subclass this base class and
+    implement :meth:`get_updater`
+    """
+
     def initialize(self, grid: core.Grid):
         """Initialize the boundary condition.
 
+        Subclasses for specific types of open boundary condition can perform
+        their own initialization here, e.g., by creating auxiliary arrays.
         This method is called once for each open boundary of each array that
         uses this boundary condition.
 
@@ -284,6 +297,21 @@ class ZeroGradient(BoundaryCondition):
 
 
 class Sponge(Clamped):
+    """Sponge boundary condition, with ``n`` points inward from
+    the open boundary being relaxed to values at the boundary.
+
+    If flow-dependent relaxation is used (``tmrlx=True``),
+    values at the boundary itself will blend the prescribed values
+    and a weighted mean over the sponge zone. The fraction taken from the
+    prescribed values will increase with increasing inward flow velocity.
+
+    If flow-dependent relaxation is not used (``tmrlx=False``), values at
+    the boundary will be set to the prescribed values.
+
+    Relaxation rates for the ``n`` points are available as :attr:`sp`.
+    They default to the formulation of `Martinsen & Engedahl (1987)
+    <https://doi.org/10.1016/0378-3839(87)90028-7>`_ (Eq 3)."""
+
     def __init__(
         self,
         n: int = 3,
@@ -293,31 +321,36 @@ class Sponge(Clamped):
         tmrlx_ucut: float = 0.02,
         tmrlx_umin: Optional[float] = None,
     ):
-        """Create a sponge boundary condition, with ``n`` points inward from
-        the open boundary being relaxed to values at the boundary.
-
-        If a flow-dependent relaxation coefficient is used (``tmrlx=True``),
-        values at the boundary itself will blend the prescribed values
-        and a weighted mean over the sponge zone. The fraction taken from the
-        prescribed values (the relaxation coefficient) will increase with
-        increasing inward flow velocity.
-
-        If flow-dependent relaxation is not used (``tmrlx=False``), values at
-        the boundary will be set to the prescribed values.
-
+        """
         Args:
             n: number of points in the sponge zone; the boundary itself is not
                  included, so ``n=0`` is equivalent to a clamped boundary.
-            tmrlx: use a flow-dependent relaxation coefficient
-            tmrlx_max: maximum relaxation coefficient (fraction per timestep).
+            tmrlx: make use of prescribed values at the open boundary
+                dependent on flow direction. This is typically used to
+                gradually disable use of prescribed values as the current
+                switches from inflow to outflow over the boundary.
+            tmrlx_max: maximum fraction to take from prescribed values at the
+                open boundary. The remaining fraction will be taken from a
+                weighted mean over the sponge zone. This maximum is reached
+                at strong inflow (>= ``tmrlx_ucut``).
                 Only used if ``tmrlx`` is ``True``.
-            tmrlx_min: minimum relaxation coefficient (fraction per timestep).
+            tmrlx_min: minimum fraction to take from prescribed values at the
+                open boundary. The remaining fraction will be taken from a
+                weighted mean over the sponge zone. This minimum is reached
+                when water flows outward over the boundary (inflow <=
+                ``tmrlx_umin``). Only used if ``tmrlx`` is ``True``.
+            tmrlx_ucut: inward flow velocity (m s-1) at which the use of
+                prescribed boundary values becomes highest. At this inflow, or
+                higher, boundary values are for fraction ``tmrlx_max`` based on
+                prescribed values; the remaining ``1 - tmrlx_max`` is taken
+                from a weighted mean over the sponge zone.
                 Only used if ``tmrlx`` is ``True``.
-            tmrlx_ucut: inward flow velocity (m s-1) at which relaxation
-                coefficient reaches its maximum value. Only used if ``tmrlx``
-                is ``True``.
-            tmrlx_umin: inward flow velocity (m s-1) at which relaxation
-                coefficient reaches its minimum value. If ``None``,
+            tmrlx_umin: inward flow velocity (m s-1) at which the use of
+                prescribed boundary values becomes minimal. Use negative values
+                to indicate outflow. At the specified inflow value, or lower,
+                boundary values are for fraction ``tmrlx_min`` based on
+                prescribed values; the remaining ``1 - tmrlx_min`` is taken
+                from a weighted mean over the sponge zone. If ``None``,
                 ``tmrlx_umin`` is set to ``-0.25 * tmrlx_ucut``.
                 Only used if ``tmrlx`` is ``True``.
         """
@@ -415,8 +448,8 @@ class Sponge(Clamped):
         bdy_setter: Callable[[np.ndarray], None],
     ):
         """Update model values at open boundary.
-        The sponge zone update is done from ArrayOpenBoundary.update,
-        via the relaxation term added in get_updater
+        The sponge zone update is done from :meth:`ArrayOpenBoundary.update`,
+        via the relaxation term added in :meth:`get_updater`
 
         Args:
             sponge_values: current model values in the sponge zone
@@ -442,23 +475,24 @@ class Sponge(Clamped):
 
 
 class Flather(BoundaryCondition):
+    """Flather boundary condition for elevation.
+
+    This infers the elevation at the open boundary from prescribed
+    elevation and from the difference between prescribed and modelled
+    velocity across the boundary.
+
+    See also:
+
+    Flather, R.A. (1976) A tidal model of the north-west European
+    continental shelf. Mem. Soc. R. Sci. Liege 6 (10), 141-164.
+
+    Blayo, E., & Debreu, L. (2005). Revisiting open boundary conditions
+    from the point of view of characteristic variables. Ocean Modelling,
+    9(3), 231–252. `10.1016/j.ocemod.2004.07.001 <https://doi.org/10.1016/j.ocemod.2004.07.001>`_
+    """
+
     def __init__(self, transport: bool = False):
-        """Create a Flather boundary condition for elevation.
-
-        This infers the elevation at the open boundary from prescribed
-        elevation and from the difference between prescribed and modelled
-        velocity across the boundary.
-
-        See also:
-
-        Flather, R.A. (1976) A tidal model of the north-west European
-        continental shelf. Mem. Soc. R. Sci. Liege 6 (10), 141-164.
-
-        Blayo, E., & Debreu, L. (2005). Revisiting open boundary conditions
-        from the point of view of characteristic variables. Ocean Modelling,
-        9(3), 231–252. `10.1016/j.ocemod.2004.07.001 <https://doi.org/10.1016/j.ocemod.2004.07.001>`_
-
-
+        """
         Args:
             transport: use prescribed transport at the boundary instead of
                 prescribed velocity
@@ -502,6 +536,11 @@ class Flather(BoundaryCondition):
 
 
 class ArrayOpenBoundary:
+    """Single open boundary for a single array.
+    The type of open boundary condition is accessible as :attr:`type`.
+    The values prescribed at the boundary are accessible as :attr:`values`.
+    """
+
     def __init__(
         self,
         open_boundaries: "OpenBoundaries",
@@ -521,11 +560,11 @@ class ArrayOpenBoundary:
         return self._type
 
     @type.setter
-    def type(self, value: int):
+    def type(self, value: Union[int, BoundaryCondition]):
         self._type = self._make_bc(value)
 
     @property
-    def values(self) -> int:
+    def values(self) -> np.ndarray:
         return self._prescribed_values
 
 
@@ -537,6 +576,12 @@ class Relaxation(NamedTuple):
 
 
 class ArrayOpenBoundaries:
+    """All open boundaries for a single array.
+    The values prescribed at all boundaries combined are accessible
+    as :attr:`values`. The type of open boundary condition can be
+    set for all boundaries at once via the :attr:`type` property.
+    """
+
     __slots__ = "_array", "values", "_bdy", "updaters", "relaxation"
 
     def __init__(self, array: core.Array, type=None):
@@ -566,7 +611,7 @@ class ArrayOpenBoundaries:
         self.updaters: List[Callable[[], None]] = []
         self.relaxation: List[Relaxation] = []
 
-    def _set_type(self, value: int):
+    def _set_type(self, value: Union[int, BoundaryCondition]):
         value = self._array.grid.open_boundaries._make_bc(value)
         for bdy in self._bdy:
             bdy.type = value
@@ -678,7 +723,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         self.bcs: Set[BoundaryCondition] = set()
         self.allow_on_land = False
 
-    def _make_bc(self, value) -> BoundaryCondition:
+    def _make_bc(self, value: Union[int, BoundaryCondition]) -> BoundaryCondition:
         if isinstance(value, BoundaryCondition):
             return value
         if value == ZERO_GRADIENT:

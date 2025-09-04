@@ -124,8 +124,8 @@ def regrid(
     lat_ip = lat
     with netCDF4.Dataset(infile) as nc:
         target_variables = [n for n, v in nc.variables.items() if v.ndim == 3]
+        lat_glodap = nc.variables["lat"][:]
         if clamp:
-            lat_glodap = nc.variables["lat"][:]
             lat_ip = np.clip(lat, lat_glodap.min(), lat_glodap.max())
             if (lat != lat_ip).any():
                 logger.warning(
@@ -139,7 +139,14 @@ def regrid(
     with netCDF4.Dataset(outfile, "w") as ncbath:
         for name in target_variables:
             values = from_nc(infile, name)
-            values = limit_region(values, -180.0, 180.0, -80.0, 89.5, periodic_lon=True)
+            values = limit_region(
+                values,
+                -180.0,
+                180.0,
+                lat_glodap.min(),
+                lat_glodap.max(),
+                periodic_lon=True,
+            )
             if not ncbath.variables:
                 ncbath.createDimension("x", lon.shape[1])
                 ncbath.createDimension("y", lon.shape[0])

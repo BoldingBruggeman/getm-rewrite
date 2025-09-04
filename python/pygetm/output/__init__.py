@@ -75,6 +75,8 @@ class File(operators.FieldCollection):
         self.path = path
         self._start = start
         self._stop = stop
+        self._start_seconds = 0.0
+        self._stop_seconds: Optional[float] = None
 
     def _next_time(
         self,
@@ -169,6 +171,7 @@ class OutputManager:
     ):
         self.fields = fields
         self.rank = rank
+        self._files: List[File] = []
         self._active_files: List[File] = []
         self._startable_files: List[File] = []
         self._stoppable_files: List[File] = []
@@ -187,7 +190,7 @@ class OutputManager:
         file = netcdf.NetCDFFile(
             self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
         )
-        self._startable_files.append(file)
+        self._files.append(file)
         return file
 
     def add_recorder(self, **kwargs) -> memory.MemoryFile:
@@ -201,7 +204,7 @@ class OutputManager:
         file = memory.MemoryFile(
             self.fields, self._logger.getChild("memfile"), **kwargs
         )
-        self._startable_files.append(file)
+        self._files.append(file)
         return file
 
     def add_restart(self, path: str, **kwargs) -> netcdf.NetCDFFile:
@@ -261,13 +264,12 @@ class OutputManager:
                 very first simulation.
         """
         self._time_reference = default_time_reference or time
-        for file in self._startable_files:
+        for file in self._files:
             if file._start is not None:
-                file._start = (file._start - time).total_seconds()
-            else:
-                file._start = 0.0
+                file._start_seconds = (file._start - time).total_seconds()
             if file._stop is not None:
-                file._stop = (file._stop - time).total_seconds()
+                file._stop_seconds = (file._stop - time).total_seconds()
+        self._startable_files = list(self._files)
         self._start_files(0.0, itimestep, time)
         self._stop_files(0.0, time)
 
@@ -276,17 +278,17 @@ class OutputManager:
     ):
         for i in range(len(self._startable_files) - 1, -1, -1):
             file = self._startable_files[i]
-            if file._start <= seconds_passed:
+            if file._start_seconds <= seconds_passed:
                 file.start(seconds_passed, itimestep, time, self._time_reference)
                 self._active_files.append(file)
-                if file._stop is not None:
+                if file._stop_seconds is not None:
                     self._stoppable_files.append(file)
                 del self._startable_files[i]
 
     def _stop_files(self, seconds_passed: float, time: Optional[cftime.datetime]):
         for i in range(len(self._stoppable_files) - 1, -1, -1):
             file = self._stoppable_files[i]
-            if file._stop <= seconds_passed:
+            if file._stop_seconds <= seconds_passed:
                 self._active_files.remove(file)
                 del self._stoppable_files[i]
                 file.close(seconds_passed, time)
@@ -332,3 +334,5 @@ class OutputManager:
         """
         for file in self._active_files:
             file.close(seconds_passed, time)
+        self._active_files.clear()
+        self._stoppable_files.clear()

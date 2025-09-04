@@ -156,6 +156,9 @@ if __name__ == "__main__":
             " (see https://cds.climate.copernicus.eu/how-to-api)"
         ),
     )
+    parser.add_argument(
+        "--grib", action="store_const", const="grib", dest="fmt", default="netcdf"
+    )
     args = parser.parse_args()
     vars = set(args.variables)
     if args.default_variables:
@@ -170,4 +173,5 @@ if __name__ == "__main__":
         args.stop_year,
         variables=vars,
         cdsapirc=args.cdsapirc,
+        fmt=args.fmt,
     )
