@@ -1318,8 +1318,10 @@ class Domain:
 
         tdepth = H[1::2, 1::2]
         Vsel = (tdepth[1:, :] <= critical_depth) | (tdepth[:-1, :] <= critical_depth)
+        Vsel &= np.isfinite(tdepth[1:, :]) & np.isfinite(tdepth[:-1, :])
         np.putmask(H[2:-2:2, 1::2], Vsel, np.minimum(tdepth[1:, :], tdepth[:-1, :]))
         Usel = (tdepth[:, 1:] <= critical_depth) | (tdepth[:, :-1] <= critical_depth)
+        Usel &= np.isfinite(tdepth[:, 1:]) & np.isfinite(tdepth[:, :-1])
         np.putmask(H[1::2, 2:-2:2], Usel, np.minimum(tdepth[:, 1:], tdepth[:, :-1]))
         self.logger.info(
             f"limit_velocity_depth has decreased depth in {Usel.sum()} U points"
