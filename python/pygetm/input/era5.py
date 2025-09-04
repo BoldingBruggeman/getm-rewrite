@@ -20,6 +20,9 @@ VARIABLES = {
     "tcc": "total_cloud_cover",
     "tp": "total_precipitation",
     "ssr": "surface_net_solar_radiation",
+    "ssrd": "surface_solar_radiation_downwards",
+    "str": "surface_net_thermal_radiation",
+    "strd": "surface_thermal_radiation_downwards",
     "tco3": "total_column_ozone",
     "tcwv": "total_column_water_vapour",
     "tclw": "total_column_cloud_liquid_water",
@@ -70,9 +73,9 @@ def get(
     logging.basicConfig(level=logging.INFO)
     logger = logger or logging.getLogger()
 
-    assert (
-        minlon >= -360.0 and maxlon <= 360.0
-    ), "Longitude must be between -360 and 360"
+    assert minlon >= -360.0 and maxlon <= 360.0, (
+        "Longitude must be between -360 and 360"
+    )
     assert minlat >= -90.0 and maxlat <= 90.0, "Latitude must be between -360 and 360"
 
     minlon -= minlon % 0.25
