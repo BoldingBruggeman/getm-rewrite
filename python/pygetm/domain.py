@@ -1312,21 +1312,26 @@ class Domain:
                 neighbor (T grid) is shallower than this value, the depth of velocity
                 point (U or V grid) is restricted.
         """
-        # NB this is guaranteed to return a writeable H,
-        # even if self.H was read-only before
-        H = self.H
+        # NB self._H may be read-only; self.H is always writeable
 
-        tdepth = H[1::2, 1::2]
-        Vsel = (tdepth[1:, :] <= critical_depth) | (tdepth[:-1, :] <= critical_depth)
-        Vsel &= np.isfinite(tdepth[1:, :]) & np.isfinite(tdepth[:-1, :])
-        np.putmask(H[2:-2:2, 1::2], Vsel, np.minimum(tdepth[1:, :], tdepth[:-1, :]))
-        Usel = (tdepth[:, 1:] <= critical_depth) | (tdepth[:, :-1] <= critical_depth)
-        Usel &= np.isfinite(tdepth[:, 1:]) & np.isfinite(tdepth[:, :-1])
-        np.putmask(H[1::2, 2:-2:2], Usel, np.minimum(tdepth[:, 1:], tdepth[:, :-1]))
+        # Expand T depths by one row and column in each direction,
+        # respecting periodic boundaries
+        edges_x = EdgeTreatment.PERIODIC if self.periodic_x else EdgeTreatment.MISSING
+        edges_y = EdgeTreatment.PERIODIC if self.periodic_y else EdgeTreatment.MISSING
+        tdepth = expand_2d(self._H[1::2, 1::2], edges_x=edges_x, edges_y=edges_y)
+
+        Vmin = np.minimum(tdepth[1:, 1:-1], tdepth[:-1, 1:-1])
+        Vsel = (Vmin <= critical_depth) & np.isfinite(Vmin)
+        np.putmask(self.H[::2, 1::2], Vsel, Vmin)
+
+        Umin = np.minimum(tdepth[1:-1, 1:], tdepth[1:-1, :-1])
+        Usel = (Umin <= critical_depth) & np.isfinite(Umin)
+        np.putmask(self.H[1::2, ::2], Usel, Umin)
+
         self.logger.info(
             f"limit_velocity_depth has decreased depth in {Usel.sum()} U points"
-            f" ({Usel.sum(where=self._mask[1::2, 2:-2:2] > 0)} currently unmasked),"
-            f" {Vsel.sum()} V points ({Vsel.sum(where=self._mask[2:-2:2, 1::2] > 0)}"
+            f" ({Usel.sum(where=self._mask[1::2, ::2] > 0)} currently unmasked),"
+            f" {Vsel.sum()} V points ({Vsel.sum(where=self._mask[::2, 1::2] > 0)}"
             " currently unmasked)."
         )
 
