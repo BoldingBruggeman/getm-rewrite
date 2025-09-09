@@ -5,6 +5,7 @@ import logging
 
 import numpy as np
 import numpy.typing as npt
+import xarray as xr
 
 from . import core
 from . import parallel
@@ -402,6 +403,56 @@ def _rotation(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 class Domain:
+    @staticmethod
+    def from_xarray(ds: xr.Dataset) -> "Domain":
+        """Create domain from xarray Dataset.
+
+        Args:
+            ds: xarray Dataset with domain data
+
+        Returns:
+            Domain created from the dataset
+        """
+        comm = parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
+        kwargs = dict(coordinate_type=ds.attrs.get("coordinate_type"))
+        if "periodic_x" in ds.attrs:
+            kwargs["periodic_x"] = bool(ds.attrs["periodic_x"])
+        if "periodic_y" in ds.attrs:
+            kwargs["periodic_y"] = bool(ds.attrs["periodic_y"])
+        if comm.rank == 0:
+            for name in ("lon", "lat", "x", "y", "mask", "H", "z0", "f"):
+                if name in ds:
+                    kwargs[name] = ds[name].values
+        assert "H" in ds, "Dataset must contain bathymetric depth H"
+        ny_sup, nx_sup = ds["H"].shape
+        return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, **kwargs)
+
+    @apply_only_on_root
+    def to_xarray(self) -> xr.Dataset:
+        """Convert domain to xarray Dataset.
+
+        Returns:
+            xarray Dataset with domain data
+        """
+
+        def collect(*names, **kwargs) -> dict[str, xr.DataArray]:
+            result = {}
+            for name in names:
+                values = getattr(self, name)
+                if values is not None:
+                    result[name] = xr.DataArray(values, dims=("y", "x"), **kwargs)
+            return result
+
+        coords = collect("x", "lon", attrs={"axis": "X"})
+        coords.update(collect("y", "lat", attrs={"axis": "Y"}))
+        data_vars = collect("mask", "H", "z0", "f")
+        attrs = {"coordinate_type": self.coordinate_type.name}
+        if self.periodic_x:
+            attrs["periodic_x"] = 1
+        if self.periodic_y:
+            attrs["periodic_y"] = 1
+        return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
+
     def __init__(
         self,
         nx: int,
@@ -462,6 +513,8 @@ class Domain:
             )
         if coordinate_type is None:
             coordinate_type = CoordinateType.XY if has_xy else CoordinateType.LONLAT
+        elif isinstance(coordinate_type, str):
+            coordinate_type = CoordinateType[coordinate_type]
         assert (coordinate_type == CoordinateType.XY and has_xy) or (
             coordinate_type == CoordinateType.LONLAT
             and has_lonlat
@@ -1692,95 +1745,6 @@ class Domain:
             )
         return fig
 
-
-# def load(path: str, nz: int, **kwargs) -> "Domain":
-#     """Load domain from file. Typically this is a file created by :meth:`Domain.save`.
-
-#     Args:
-#         path: NetCDF file to load from
-#         nz: number of vertical layers
-#         **kwargs: additional keyword arguments to pass to :class:`Domain`
-#     """
-#     name2kwarg = dict(z0b_min="z0", cor="f")
-#     with netCDF4.Dataset(path) as nc:
-#         for name in ("lon", "lat", "x", "y", "H", "mask", "z0b_min", "cor", "z0", "f"):
-#             if name in nc.variables and name not in kwargs:
-#                 kwargs[name2kwarg.get(name, name)] = nc.variables[name][...]
-#     spherical = kwargs.get("spherical", "lon" in kwargs)
-#     ny, nx = kwargs["lon" if spherical else "x"].shape
-#     nx = (nx - 1) // 2
-#     ny = (ny - 1) // 2
-#     return create(nx, ny, nz, spherical=spherical, **kwargs)
-
-#     def save(self, path: str, full: bool = False, sub: bool = False):
-#         """Save grid to a NetCDF file that can be interpreted by :func:`load`.
-
-#         Args:
-#             path: NetCDF file to save to
-#             full: also save every field including its halos separately
-#                 This can be useful for debugging.
-#             sub: save the local subdomain, not the global domain
-#         """
-#         if self.glob is not self and not sub:
-#             # We need to save the global domain; not the current subdomain.
-#             # If we are the root, divert the plot command to the global domain.
-#             # Otherwise just ignore this and return.
-#             if self.glob:
-#                 self.glob.save(path, full)
-#             return
-
-#         with netCDF4.Dataset(path, "w") as nc:
-
-#             def create(
-#                 name, units, long_name, values, coordinates: str, dimensions=("y", "x")
-#             ):
-#                 fill_value = None
-#                 if np.ma.getmask(values) is not np.ma.nomask:
-#                     fill_value = values.fill_value
-#                 ncvar = nc.createVariable(
-#                     name, values.dtype, dimensions, fill_value=fill_value
-#                 )
-#                 ncvar.units = units
-#                 ncvar.long_name = long_name
-#                 # ncvar.coordinates = coordinates
-#                 ncvar[...] = values
-
-#             def create_var(name, units, long_name, values, values_):
-#                 if values is None:
-#                     return
-#                 create(
-#                     name,
-#                     units,
-#                     long_name,
-#                     values,
-#                     coordinates="lon lat" if self.spherical else "x y",
-#                 )
-#                 if full:
-#                     create(
-#                         name + "_",
-#                         units,
-#                         long_name,
-#                         values_,
-#                         dimensions=("y_", "x_"),
-#                         coordinates="lon_ lat_" if self.spherical else "x_ y_",
-#                     )
-
-#             nc.createDimension("x", self.H.shape[1])
-#             nc.createDimension("y", self.H.shape[0])
-#             if full:
-#                 nc.createDimension("x_", self.H_.shape[1])
-#                 nc.createDimension("y_", self.H_.shape[0])
-#                 create_var("dx", "m", "dx", self.dx, self.dx_)
-#                 create_var("dy", "m", "dy", self.dy, self.dy_)
-#                 create_var("area", "m2", "area", self.dx * self.dy, self.dx_ * self.dy_)
-#             create_var("lat", "degrees_north", "latitude", self.lat, self.lat_)
-#             create_var("lon", "degrees_east", "longitude", self.lon, self.lon_)
-#             create_var("x", "m", "x", self.x, self.x_)
-#             create_var("y", "m", "y", self.y, self.y_)
-#             create_var("H", "m", "undisturbed water depth", self.H, self.H_)
-#             create_var("mask", "", "mask", self.mask, self.mask_)
-#             create_var("z0", "m", "bottom roughness", self.z0b_min, self.z0b_min_)
-#             create_var("f", "", "Coriolis parameter", self.cor, self.cor_)
 
 #     def contains(
 #         self,
