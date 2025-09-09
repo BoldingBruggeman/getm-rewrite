@@ -15,6 +15,7 @@ import logging
 import enum
 import functools
 import itertools
+import re
 
 import numpy as np
 import numpy.typing as npt
@@ -137,10 +138,15 @@ def from_nc(
     kwargs["use_cftime"] = True
     kwargs["cache"] = False
     if isinstance(paths, str):
-        pattern = paths
-        paths = glob.glob(pattern)
-        if not paths:
-            raise Exception(f"No files found matching {pattern!r}")
+        # Check if this is a URL or a pattern
+        # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
+        if not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
+            pattern = paths
+            paths = glob.glob(pattern)
+            if not paths:
+                raise Exception(f"No files found matching {pattern!r}")
+        else:
+            paths = (paths,)
     arrays = []
     for path in paths:
         ds = _open(path, preprocess, **kwargs)
