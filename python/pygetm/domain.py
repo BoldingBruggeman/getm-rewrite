@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Tuple, Union, Iterable, TYPE_CHECKING
+from typing import Mapping, Optional, Tuple, Union, Iterable, Any, TYPE_CHECKING
 import enum
 import functools
 import logging
@@ -405,13 +405,20 @@ def _rotation(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 def from_xarray(
     ds: xr.Dataset, comm: Optional[parallel.MPI.Comm] = None, **kwargs
 ) -> "Domain":
-    """Create domain from xarray Dataset.
+    """Create domain from :class:`xarray.Dataset`.
+    This dataset must represent the arguments to :class:`Domain` by variables
+    (for 2D arrays) or attributes (for scalars) with the same names.
+    Such a dataset is produced by :meth:`Domain.to_xarray`.
 
     Args:
-        ds: xarray Dataset with domain data
+        ds: dataset with domain data
+        comm: MPI communicator that comprises all processes that should get
+            access to the domain
+        **kwargs: additional arguments passed to :class:`Domain`.
+            These override corresponding values in the dataset.
 
     Returns:
-        Domain created from the dataset
+        domain created from the dataset
     """
     comm = comm or parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
     kwargs.setdefault("coordinate_type", ds.attrs.get("coordinate_type"))
@@ -1723,7 +1730,8 @@ class Domain:
 
     @apply_only_on_root
     def to_xarray(self) -> xr.Dataset:
-        """Convert domain to xarray Dataset.
+        """Convert domain to :class:`xarray.Dataset`.
+        The result can be loaded into a domain with :func:`from_xarray`.
 
         Returns:
             xarray Dataset with domain data
@@ -1740,7 +1748,7 @@ class Domain:
         coords = collect("x", "lon", attrs={"axis": "X"})
         coords.update(collect("y", "lat", attrs={"axis": "Y"}))
         data_vars = collect("mask", "H", "z0", "f")
-        attrs = {"coordinate_type": self.coordinate_type.name}
+        attrs: dict[str, Any] = {"coordinate_type": self.coordinate_type.name}
         if self.periodic_x:
             attrs["periodic_x"] = 1
         if self.periodic_y:
