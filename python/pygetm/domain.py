@@ -678,7 +678,7 @@ class Domain:
             assert can_cast(
                 *target_shape
             ), f"Cannot map array with shape {values.shape} to supergrid with shape {target_shape}"
-            mapped_values = np.array(values, dtype=dtype)
+            mapped_values = np.ma.MaskedArray(values, dtype=dtype).filled(missing_value)
         if mapped_values.shape != target_shape:
             mapped_values = np.broadcast_to(mapped_values, target_shape)
         return mapped_values
