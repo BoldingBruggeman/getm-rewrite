@@ -402,31 +402,31 @@ def _rotation(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return np.arctan2(y_dum, x_dum)
 
 
+def from_xarray(ds: xr.Dataset) -> "Domain":
+    """Create domain from xarray Dataset.
+
+    Args:
+        ds: xarray Dataset with domain data
+
+    Returns:
+        Domain created from the dataset
+    """
+    comm = parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
+    kwargs = dict(coordinate_type=ds.attrs.get("coordinate_type"))
+    if "periodic_x" in ds.attrs:
+        kwargs["periodic_x"] = bool(ds.attrs["periodic_x"])
+    if "periodic_y" in ds.attrs:
+        kwargs["periodic_y"] = bool(ds.attrs["periodic_y"])
+    if comm.rank == 0:
+        for name in ("lon", "lat", "x", "y", "mask", "H", "z0", "f"):
+            if name in ds:
+                kwargs[name] = ds[name].values
+    assert "H" in ds, "Dataset must contain bathymetric depth H"
+    ny_sup, nx_sup = ds["H"].shape
+    return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, **kwargs)
+
+
 class Domain:
-    @staticmethod
-    def from_xarray(ds: xr.Dataset) -> "Domain":
-        """Create domain from xarray Dataset.
-
-        Args:
-            ds: xarray Dataset with domain data
-
-        Returns:
-            Domain created from the dataset
-        """
-        comm = parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
-        kwargs = dict(coordinate_type=ds.attrs.get("coordinate_type"))
-        if "periodic_x" in ds.attrs:
-            kwargs["periodic_x"] = bool(ds.attrs["periodic_x"])
-        if "periodic_y" in ds.attrs:
-            kwargs["periodic_y"] = bool(ds.attrs["periodic_y"])
-        if comm.rank == 0:
-            for name in ("lon", "lat", "x", "y", "mask", "H", "z0", "f"):
-                if name in ds:
-                    kwargs[name] = ds[name].values
-        assert "H" in ds, "Dataset must contain bathymetric depth H"
-        ny_sup, nx_sup = ds["H"].shape
-        return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, **kwargs)
-
     @apply_only_on_root
     def to_xarray(self) -> xr.Dataset:
         """Convert domain to xarray Dataset.
