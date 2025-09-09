@@ -402,7 +402,9 @@ def _rotation(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return np.arctan2(y_dum, x_dum)
 
 
-def from_xarray(ds: xr.Dataset) -> "Domain":
+def from_xarray(
+    ds: xr.Dataset, comm: Optional[parallel.MPI.Comm] = None, **kwargs
+) -> "Domain":
     """Create domain from xarray Dataset.
 
     Args:
@@ -411,48 +413,22 @@ def from_xarray(ds: xr.Dataset) -> "Domain":
     Returns:
         Domain created from the dataset
     """
-    comm = parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
-    kwargs = dict(coordinate_type=ds.attrs.get("coordinate_type"))
+    comm = comm or parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
+    kwargs.setdefault("coordinate_type", ds.attrs.get("coordinate_type"))
     if "periodic_x" in ds.attrs:
-        kwargs["periodic_x"] = bool(ds.attrs["periodic_x"])
+        kwargs.setdefault("periodic_x", bool(ds.attrs["periodic_x"]))
     if "periodic_y" in ds.attrs:
-        kwargs["periodic_y"] = bool(ds.attrs["periodic_y"])
+        kwargs.setdefault("periodic_y", bool(ds.attrs["periodic_y"]))
     if comm.rank == 0:
         for name in ("lon", "lat", "x", "y", "mask", "H", "z0", "f"):
-            if name in ds:
+            if name in ds and name not in kwargs:
                 kwargs[name] = ds[name].values
     assert "H" in ds, "Dataset must contain bathymetric depth H"
     ny_sup, nx_sup = ds["H"].shape
-    return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, **kwargs)
+    return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, comm=comm, **kwargs)
 
 
 class Domain:
-    @apply_only_on_root
-    def to_xarray(self) -> xr.Dataset:
-        """Convert domain to xarray Dataset.
-
-        Returns:
-            xarray Dataset with domain data
-        """
-
-        def collect(*names, **kwargs) -> dict[str, xr.DataArray]:
-            result = {}
-            for name in names:
-                values = getattr(self, name)
-                if values is not None:
-                    result[name] = xr.DataArray(values, dims=("y", "x"), **kwargs)
-            return result
-
-        coords = collect("x", "lon", attrs={"axis": "X"})
-        coords.update(collect("y", "lat", attrs={"axis": "Y"}))
-        data_vars = collect("mask", "H", "z0", "f")
-        attrs = {"coordinate_type": self.coordinate_type.name}
-        if self.periodic_x:
-            attrs["periodic_x"] = 1
-        if self.periodic_y:
-            attrs["periodic_y"] = 1
-        return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
-
     def __init__(
         self,
         nx: int,
@@ -1744,6 +1720,32 @@ class Domain:
                 ax, on_select, useblit=True, button=[1], interactive=False
             )
         return fig
+
+    @apply_only_on_root
+    def to_xarray(self) -> xr.Dataset:
+        """Convert domain to xarray Dataset.
+
+        Returns:
+            xarray Dataset with domain data
+        """
+
+        def collect(*names, **kwargs) -> dict[str, xr.DataArray]:
+            result = {}
+            for name in names:
+                values = getattr(self, name)
+                if values is not None:
+                    result[name] = xr.DataArray(values, dims=("y", "x"), **kwargs)
+            return result
+
+        coords = collect("x", "lon", attrs={"axis": "X"})
+        coords.update(collect("y", "lat", attrs={"axis": "Y"}))
+        data_vars = collect("mask", "H", "z0", "f")
+        attrs = {"coordinate_type": self.coordinate_type.name}
+        if self.periodic_x:
+            attrs["periodic_x"] = 1
+        if self.periodic_y:
+            attrs["periodic_y"] = 1
+        return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
 
 
 #     def contains(
