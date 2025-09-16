@@ -15,6 +15,7 @@ import logging
 import enum
 import functools
 import itertools
+import re
 
 import numpy as np
 import numpy.typing as npt
@@ -137,10 +138,15 @@ def from_nc(
     kwargs["use_cftime"] = True
     kwargs["cache"] = False
     if isinstance(paths, str):
-        pattern = paths
-        paths = glob.glob(pattern)
-        if not paths:
-            raise Exception(f"No files found matching {pattern!r}")
+        # Check if this is a URL or a pattern
+        # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
+        if not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
+            pattern = paths
+            paths = glob.glob(pattern)
+            if not paths:
+                raise Exception(f"No files found matching {pattern!r}")
+        else:
+            paths = (paths,)
     arrays = []
     for path in paths:
         ds = _open(path, preprocess, **kwargs)
@@ -824,76 +830,92 @@ def isel(source: xr.DataArray, **indices) -> xr.DataArray:
 
 
 def horizontal_interpolation(
-    source: xr.DataArray, lon: xr.DataArray, lat: xr.DataArray, mask=None
+    source: xr.DataArray,
+    x: xr.DataArray,
+    y: xr.DataArray,
+    *,
+    mask: Optional[npt.ArrayLike] = None,
+    xp: Union[str, xr.DataArray, None] = None,
+    yp: Union[str, xr.DataArray, None] = None,
 ) -> xr.DataArray:
-    source_lon, source_lat = source.getm.longitude, source.getm.latitude
-    if source_lon is None:
-        raise Exception(
-            f"Variable {source.name} does not have a valid longitude coordinate."
-        )
-    if source_lat is None:
-        raise Exception(
-            f"Variable {source.name} does not have a valid latitude coordinate."
-        )
-    assert source_lon.ndim == 1
-    assert source_lat.ndim == 1
-    assert np.isfinite(lon).all(), f"Some longitudes are non-finite: {lon}"
-    assert np.isfinite(lat).all(), f"Some latitudes are non-finite: {lat}"
-    lon, lat = np.broadcast_arrays(lon, lat)
-    ilondim = source.dims.index(source_lon.dims[0])
-    ilatdim = source.dims.index(source_lat.dims[0])
-    assert (
-        abs(ilondim - ilatdim) == 1
-    ), "Longitude and latitude dimensions must be distinct and adjacent"
-    dimensions = {
-        0: (),
-        1: (source_lon.dims[0],),
-        2: (source_lat.dims[0], source_lon.dims[-1]),
-    }[lon.ndim]
+    """Two-dimensional linear interpolation
+
+    For target coordinates that fall into cells with one or more masked corners,
+    nearest-neighbor interpolation is used to find the nearest unmasked point.
+
+    Args:
+        source: source variable
+        x: x-coordinates at which to evaluate the interpolated values
+        y: y-coordinates at which to evaluate the interpolated values
+        mask: mask for the source variable. If None, all points of the source
+            variable are assumed to be valid.
+        xp: x-coordinates of the source variable.
+            If None, the longitudes of the source variable are used.
+        yp: y-coordinates of the source variable.
+            If None, the latitudes of the source variable are used.
+    """
+    if xp is None:
+        xp = source.getm.longitude
+        if xp is None:
+            raise Exception(
+                f"Variable {source.name} does not have a valid longitude coordinate."
+            )
+    elif isinstance(xp, str):
+        xp = source.coords[xp]
+    if yp is None:
+        yp = source.getm.latitude
+        if yp is None:
+            raise Exception(
+                f"Variable {source.name} does not have a valid latitude coordinate."
+            )
+    elif isinstance(yp, str):
+        yp = source.coords[yp]
+    assert xp.ndim == 1
+    assert yp.ndim == 1
+    assert np.isfinite(x).all(), f"Some target x-coordinates are non-finite: {x}"
+    assert np.isfinite(y).all(), f"Some target y-coordinates are non-finite: {y}"
+    x, y = np.broadcast_arrays(x, y)
+    ixdim = source.dims.index(xp.dims[0])
+    iydim = source.dims.index(yp.dims[0])
+    assert abs(ixdim - iydim) == 1, "x and y dimensions must be distinct and adjacent"
+    dimensions = {0: (), 1: (xp.dims[0],), 2: (yp.dims[0], xp.dims[-1])}[x.ndim]
     shape = (
-        source.shape[: min(ilondim, ilatdim)]
-        + lon.shape
-        + source.shape[max(ilondim, ilatdim) + 1 :]
+        source.shape[: min(ixdim, iydim)]
+        + x.shape
+        + source.shape[max(ixdim, iydim) + 1 :]
     )
-    kwargs = {"ndim_trailing": source.ndim - max(ilondim, ilatdim) - 1, "mask": mask}
-    if ilondim > ilatdim:
-        # Dimension order: latitude first, then longitude
-        ip = pygetm.util.interpolate.Linear2DGridInterpolator(
-            lat, lon, source_lat, source_lon, **kwargs
-        )
+    kwargs = {"ndim_trailing": source.ndim - max(ixdim, iydim) - 1, "mask": mask}
+    if ixdim > iydim:
+        # Dimension order: y first, then x
+        ip = pygetm.util.interpolate.Linear2DGridInterpolator(y, x, yp, xp, **kwargs)
     else:
-        # Dimension order: longitude first, then latitude
+        # Dimension order: x first, then y
         dimensions = dimensions[::-1]
-        ip = pygetm.util.interpolate.Linear2DGridInterpolator(
-            lon, lat, source_lon, source_lat, **kwargs
-        )
-    lon_name, lat_name = source_lon.name, source_lat.name
-    if lon_name in dimensions and lon.ndim > 1:
-        lon_name = lon_name + "_"
-    if lat_name in dimensions and lat.ndim > 1:
-        lat_name = lat_name + "_"
-    lon = xr.DataArray(lon, dims=dimensions, name=lon_name, attrs=source_lon.attrs)
-    lat = xr.DataArray(lat, dims=dimensions, name=lat_name, attrs=source_lat.attrs)
-    coords = dict(
-        [
-            (k, v)
-            for k, v in source.coords.items()
-            if k not in {source_lon.name, source_lat.name}
-        ]
-    )
-    coords[lon.name] = lon
-    coords[lat.name] = lat
+        ip = pygetm.util.interpolate.Linear2DGridInterpolator(x, y, xp, yp, **kwargs)
+
+    # Coordinates for the interpolated variable
+    x_name, y_name = xp.name, yp.name
+    if x_name in dimensions and x.ndim > 1:
+        x_name = x_name + "_"
+    if y_name in dimensions and y.ndim > 1:
+        y_name = y_name + "_"
+    coords = {k: v for k, v in source.coords.items() if k not in {xp.name, yp.name}}
+    coords[x_name] = xr.DataArray(x, dims=dimensions, name=x_name, attrs=xp.attrs)
+    coords[y_name] = xr.DataArray(y, dims=dimensions, name=y_name, attrs=yp.attrs)
+
+    # Dimensions of the interpolated variable
     dims = (
-        source.dims[: min(ilondim, ilatdim)]
+        source.dims[: min(ixdim, iydim)]
         + dimensions
-        + source.dims[max(ilondim, ilatdim) + 1 :]
+        + source.dims[max(ixdim, iydim) + 1 :]
     )
+
     lazyvar = HorizontalInterpolation(
         ip,
         _as_lazyarray(source),
         shape,
-        min(ilondim, ilatdim),
-        source.ndim - max(ilondim, ilatdim) - 1,
+        min(ixdim, iydim),
+        source.ndim - max(ixdim, iydim) - 1,
     )
     return xr.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
@@ -1043,8 +1065,10 @@ def temporal_interpolation(
         logger=logger,
     )
     dims = [d for i, d in enumerate(source.dims) if i != lazyvar._itimedim]
-    coords = dict(source.coords.items())
-    coords[time_coord.dims[0]] = lazyvar._timecoord
+    coords = {time_coord.dims[0]: lazyvar._timecoord}
+    for n, c in source.coords.items():
+        if time_coord.dims[0] not in c.dims:
+            coords[n] = c
     return xr.DataArray(
         lazyvar, dims=dims, coords=coords, attrs=source.attrs, name=lazyvar.name
     )
@@ -1123,6 +1147,7 @@ class TemporalInterpolation(UnaryOperator):
             raise Exception(
                 f"{self._source_name} cannot be used as climatology because"
                 " it spans more than one calendar year"
+                f" ({self.times[0]} - {self.times[-1]})."
             )
         if climatology and self.MAX_CACHE_SIZE > 0:
             memory = np.asarray(source.size * (self.dtype.itemsize / 1024 / 1024))
@@ -1466,8 +1491,14 @@ class InputManager:
                         lat_bnd.max(),
                         periodic_lon=periodic_lon,
                     )
+                    ip_mask = None
+                    if value.getm.time is not None and not array.z:
+                        itimedim = value.dims.index(value.getm.time.dims[0])
+                        slc: List[Union[int, slice]] = [slice(None)] * value.ndim
+                        slc[itimedim] = 0
+                        ip_mask = np.isnan(value[tuple(slc)])
                     value = pygetm.input.horizontal_interpolation(
-                        value, lon_bnd, lat_bnd
+                        value, lon_bnd, lat_bnd, mask=ip_mask
                     )
 
             if array.z and value.getm.z is not None and value.getm.z.ndim == 1:

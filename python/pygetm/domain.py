@@ -1,10 +1,11 @@
-from typing import Mapping, Optional, Tuple, Union, TYPE_CHECKING
+from typing import Mapping, Optional, Tuple, Union, Iterable, Any, TYPE_CHECKING
 import enum
 import functools
 import logging
 
 import numpy as np
 import numpy.typing as npt
+import xarray as xr
 
 from . import core
 from . import parallel
@@ -401,6 +402,39 @@ def _rotation(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return np.arctan2(y_dum, x_dum)
 
 
+def from_xarray(
+    ds: xr.Dataset, comm: Optional[parallel.MPI.Comm] = None, **kwargs
+) -> "Domain":
+    """Create domain from :class:`xarray.Dataset`.
+    This dataset must represent the arguments to :class:`Domain` by variables
+    (for 2D arrays) or attributes (for scalars) with the same names.
+    Such a dataset is produced by :meth:`Domain.to_xarray`.
+
+    Args:
+        ds: dataset with domain data
+        comm: MPI communicator that comprises all processes that should get
+            access to the domain
+        **kwargs: additional arguments passed to :class:`Domain`.
+            These override corresponding values in the dataset.
+
+    Returns:
+        domain created from the dataset
+    """
+    comm = comm or parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
+    kwargs.setdefault("coordinate_type", ds.attrs.get("coordinate_type"))
+    if "periodic_x" in ds.attrs:
+        kwargs.setdefault("periodic_x", bool(ds.attrs["periodic_x"]))
+    if "periodic_y" in ds.attrs:
+        kwargs.setdefault("periodic_y", bool(ds.attrs["periodic_y"]))
+    if comm.rank == 0:
+        for name in ("lon", "lat", "x", "y", "mask", "H", "z0", "f"):
+            if name in ds and name not in kwargs:
+                kwargs[name] = ds[name].values
+    assert "H" in ds, "Dataset must contain bathymetric depth H"
+    ny_sup, nx_sup = ds["H"].shape
+    return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, comm=comm, **kwargs)
+
+
 class Domain:
     def __init__(
         self,
@@ -462,6 +496,8 @@ class Domain:
             )
         if coordinate_type is None:
             coordinate_type = CoordinateType.XY if has_xy else CoordinateType.LONLAT
+        elif isinstance(coordinate_type, str):
+            coordinate_type = CoordinateType[coordinate_type]
         assert (coordinate_type == CoordinateType.XY and has_xy) or (
             coordinate_type == CoordinateType.LONLAT
             and has_lonlat
@@ -566,6 +602,14 @@ class Domain:
 
         self._area = self._dx * self._dy
 
+        x_ = None if self._x is None else self._x[1::2, 1::2]
+        y_ = None if self._y is None else self._y[1::2, 1::2]
+        lon_ = None if self._lon is None else self._lon[1::2, 1::2]
+        lat_ = None if self._lat is None else self._lat[1::2, 1::2]
+        self._tlocator = core.Locator(
+            self._mask[1::2, 1::2], x=x_, y=y_, lon=lon_, lat=lat_
+        )
+
     def _map_array(
         self,
         values: Optional[npt.ArrayLike],
@@ -634,7 +678,7 @@ class Domain:
             assert can_cast(
                 *target_shape
             ), f"Cannot map array with shape {values.shape} to supergrid with shape {target_shape}"
-            mapped_values = np.array(values, dtype=dtype)
+            mapped_values = np.ma.MaskedArray(values, dtype=dtype).filled(missing_value)
         if mapped_values.shape != target_shape:
             mapped_values = np.broadcast_to(mapped_values, target_shape)
         return mapped_values
@@ -1304,19 +1348,26 @@ class Domain:
                 neighbor (T grid) is shallower than this value, the depth of velocity
                 point (U or V grid) is restricted.
         """
-        # NB this is guaranteed to return a writeable H,
-        # even if self.H was read-only before
-        H = self.H
+        # NB self._H may be read-only; self.H is always writeable
 
-        tdepth = H[1::2, 1::2]
-        Vsel = (tdepth[1:, :] <= critical_depth) | (tdepth[:-1, :] <= critical_depth)
-        np.putmask(H[2:-2:2, 1::2], Vsel, np.minimum(tdepth[1:, :], tdepth[:-1, :]))
-        Usel = (tdepth[:, 1:] <= critical_depth) | (tdepth[:, :-1] <= critical_depth)
-        np.putmask(H[1::2, 2:-2:2], Usel, np.minimum(tdepth[:, 1:], tdepth[:, :-1]))
+        # Expand T depths by one row and column in each direction,
+        # respecting periodic boundaries
+        edges_x = EdgeTreatment.PERIODIC if self.periodic_x else EdgeTreatment.MISSING
+        edges_y = EdgeTreatment.PERIODIC if self.periodic_y else EdgeTreatment.MISSING
+        tdepth = expand_2d(self._H[1::2, 1::2], edges_x=edges_x, edges_y=edges_y)
+
+        Vmin = np.minimum(tdepth[1:, 1:-1], tdepth[:-1, 1:-1])
+        Vsel = (Vmin <= critical_depth) & np.isfinite(Vmin)
+        np.putmask(self.H[::2, 1::2], Vsel, Vmin)
+
+        Umin = np.minimum(tdepth[1:-1, 1:], tdepth[1:-1, :-1])
+        Usel = (Umin <= critical_depth) & np.isfinite(Umin)
+        np.putmask(self.H[1::2, ::2], Usel, Umin)
+
         self.logger.info(
             f"limit_velocity_depth has decreased depth in {Usel.sum()} U points"
-            f" ({Usel.sum(where=self._mask[1::2, 2:-2:2] > 0)} currently unmasked),"
-            f" {Vsel.sum()} V points ({Vsel.sum(where=self._mask[2:-2:2, 1::2] > 0)}"
+            f" ({Usel.sum(where=self._mask[1::2, ::2] > 0)} currently unmasked),"
+            f" {Vsel.sum()} V points ({Vsel.sum(where=self._mask[::2, 1::2] > 0)}"
             " currently unmasked)."
         )
 
@@ -1437,11 +1488,22 @@ class Domain:
 
     def _map_rivers(self, mask: np.ndarray):
         assert self.comm.rank == 0
-        x_ = None if self._x is None else self._x[1::2, 1::2]
-        y_ = None if self._y is None else self._y[1::2, 1::2]
-        lon_ = None if self._lon is None else self._lon[1::2, 1::2]
-        lat_ = None if self._lat is None else self._lat[1::2, 1::2]
-        self.rivers.map_to_grid(mask[1::2, 1::2], x_, y_, lon_, lat_)
+        self.rivers.map_to_grid(self._tlocator)
+
+    @apply_on_root_and_bcast
+    def nearest_point(
+        self,
+        x: float,
+        y: float,
+        *,
+        coordinate_type: Optional[CoordinateType] = None,
+        allowed_mask: Iterable[int] = (1,),
+    ) -> Tuple[int, int]:
+        if coordinate_type is None:
+            coordinate_type = self.coordinate_type
+        return self._tlocator(
+            x, y, coordinate_type=coordinate_type, allowed_mask=allowed_mask
+        )
 
     def plot(
         self,
@@ -1666,95 +1728,33 @@ class Domain:
             )
         return fig
 
+    @apply_only_on_root
+    def to_xarray(self) -> xr.Dataset:
+        """Convert domain to :class:`xarray.Dataset`.
+        The result can be loaded into a domain with :func:`from_xarray`.
 
-# def load(path: str, nz: int, **kwargs) -> "Domain":
-#     """Load domain from file. Typically this is a file created by :meth:`Domain.save`.
+        Returns:
+            xarray Dataset with domain data
+        """
 
-#     Args:
-#         path: NetCDF file to load from
-#         nz: number of vertical layers
-#         **kwargs: additional keyword arguments to pass to :class:`Domain`
-#     """
-#     name2kwarg = dict(z0b_min="z0", cor="f")
-#     with netCDF4.Dataset(path) as nc:
-#         for name in ("lon", "lat", "x", "y", "H", "mask", "z0b_min", "cor", "z0", "f"):
-#             if name in nc.variables and name not in kwargs:
-#                 kwargs[name2kwarg.get(name, name)] = nc.variables[name][...]
-#     spherical = kwargs.get("spherical", "lon" in kwargs)
-#     ny, nx = kwargs["lon" if spherical else "x"].shape
-#     nx = (nx - 1) // 2
-#     ny = (ny - 1) // 2
-#     return create(nx, ny, nz, spherical=spherical, **kwargs)
+        def collect(*names, **kwargs) -> dict[str, xr.DataArray]:
+            result = {}
+            for name in names:
+                values = getattr(self, name)
+                if values is not None:
+                    result[name] = xr.DataArray(values, dims=("y", "x"), **kwargs)
+            return result
 
-#     def save(self, path: str, full: bool = False, sub: bool = False):
-#         """Save grid to a NetCDF file that can be interpreted by :func:`load`.
+        coords = collect("x", "lon", attrs={"axis": "X"})
+        coords.update(collect("y", "lat", attrs={"axis": "Y"}))
+        data_vars = collect("mask", "H", "z0", "f")
+        attrs: dict[str, Any] = {"coordinate_type": self.coordinate_type.name}
+        if self.periodic_x:
+            attrs["periodic_x"] = 1
+        if self.periodic_y:
+            attrs["periodic_y"] = 1
+        return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
 
-#         Args:
-#             path: NetCDF file to save to
-#             full: also save every field including its halos separately
-#                 This can be useful for debugging.
-#             sub: save the local subdomain, not the global domain
-#         """
-#         if self.glob is not self and not sub:
-#             # We need to save the global domain; not the current subdomain.
-#             # If we are the root, divert the plot command to the global domain.
-#             # Otherwise just ignore this and return.
-#             if self.glob:
-#                 self.glob.save(path, full)
-#             return
-
-#         with netCDF4.Dataset(path, "w") as nc:
-
-#             def create(
-#                 name, units, long_name, values, coordinates: str, dimensions=("y", "x")
-#             ):
-#                 fill_value = None
-#                 if np.ma.getmask(values) is not np.ma.nomask:
-#                     fill_value = values.fill_value
-#                 ncvar = nc.createVariable(
-#                     name, values.dtype, dimensions, fill_value=fill_value
-#                 )
-#                 ncvar.units = units
-#                 ncvar.long_name = long_name
-#                 # ncvar.coordinates = coordinates
-#                 ncvar[...] = values
-
-#             def create_var(name, units, long_name, values, values_):
-#                 if values is None:
-#                     return
-#                 create(
-#                     name,
-#                     units,
-#                     long_name,
-#                     values,
-#                     coordinates="lon lat" if self.spherical else "x y",
-#                 )
-#                 if full:
-#                     create(
-#                         name + "_",
-#                         units,
-#                         long_name,
-#                         values_,
-#                         dimensions=("y_", "x_"),
-#                         coordinates="lon_ lat_" if self.spherical else "x_ y_",
-#                     )
-
-#             nc.createDimension("x", self.H.shape[1])
-#             nc.createDimension("y", self.H.shape[0])
-#             if full:
-#                 nc.createDimension("x_", self.H_.shape[1])
-#                 nc.createDimension("y_", self.H_.shape[0])
-#                 create_var("dx", "m", "dx", self.dx, self.dx_)
-#                 create_var("dy", "m", "dy", self.dy, self.dy_)
-#                 create_var("area", "m2", "area", self.dx * self.dy, self.dx_ * self.dy_)
-#             create_var("lat", "degrees_north", "latitude", self.lat, self.lat_)
-#             create_var("lon", "degrees_east", "longitude", self.lon, self.lon_)
-#             create_var("x", "m", "x", self.x, self.x_)
-#             create_var("y", "m", "y", self.y, self.y_)
-#             create_var("H", "m", "undisturbed water depth", self.H, self.H_)
-#             create_var("mask", "", "mask", self.mask, self.mask_)
-#             create_var("z0", "m", "bottom roughness", self.z0b_min, self.z0b_min_)
-#             create_var("f", "", "Coriolis parameter", self.cor, self.cor_)
 
 #     def contains(
 #         self,

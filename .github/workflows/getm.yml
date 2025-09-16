@@ -4,105 +4,107 @@ jobs:
    gfortran:
       runs-on: ${{ matrix.os }}
       env:
-        RDMAV_FORK_SAFE: 1
-        OMPI_MCA_rmaps_base_oversubscribe: 1                   # enable OpenMPI oversubscribe (old convention)
-        PRTE_MCA_rmaps_default_mapping_policy: :oversubscribe  # enable OpenMPI oversubscribe (new convention)
-        OMPI_MCA_state_base_verbose: 5
-        OMPI_MCA_mca_base_component_show_load_errors: 1
-        TMPDIR: /tmp                                           # workaround too-long-paths for OpenMPI on Mac
-        I_MPI_FABRICS: shm #:ofi
-        FI_PROVIDER: sockets #tcp        
+         RDMAV_FORK_SAFE: 1
+         OMPI_MCA_rmaps_base_oversubscribe: 1 # enable OpenMPI oversubscribe (old convention)
+         PRTE_MCA_rmaps_default_mapping_policy: :oversubscribe # enable OpenMPI oversubscribe (new convention)
+         OMPI_MCA_state_base_verbose: 5
+         OMPI_MCA_mca_base_component_show_load_errors: 1
+         TMPDIR: /tmp # workaround too-long-paths for OpenMPI on Mac
+         I_MPI_FABRICS: shm #:ofi
+         FI_PROVIDER: sockets #tcp
       defaults:
-        run:
-          shell: ${{ matrix.os == 'windows-latest' && 'cmd /C call {0}' || 'bash -el {0}' }}
+         run:
+            shell: ${{ matrix.os == 'windows-latest' && 'cmd /C call {0}' || 'bash -el {0}' }}
       strategy:
-        fail-fast: false
-        matrix:
-          os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-          python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+         fail-fast: false
+         matrix:
+            os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+            #python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+            python-version: ["3.10", "3.11", "3.12", "3.13"]
       steps:
-      - name: Clone
-        uses: actions/checkout@v4
-        with:
-           submodules: recursive
-           ssh-key: ${{ secrets.BB_TESTING_SSH }}
-      - name: Clone getm-setups
-        run: |
-          git clone https://git.code.sf.net/p/getm/getm-setups
-        env:
-          GIT_CLONE_PROTECTION_ACTIVE: false
-      - uses: conda-incubator/setup-miniconda@v3
-        with:
-          auto-update-conda: true
-          python-version: ${{ matrix.python-version }}
-          environment-file: environment.yml
-          activate-environment: pygetm
-      - name: Compile (Linux/Mac)
-        if: matrix.os != 'windows-latest'
-        run: source ./install
-      - name: Compile (Windows)
-        if: matrix.os == 'windows-latest'
-        run: install.bat
-      - name: Verify source directory is clean
-        run: |
-          git status --porcelain
-      - name: Test utilities
-        run: |
-          python -m pygetm.input.glodap -h
-          python -m pygetm.input.woa -h
-          python -m pygetm.input.igotm -h
-      - name: Run test suite
-        run: |
-          cd python/tests
-          python -m unittest -v
-          mpiexec -n 2 python test_domain.py -v
-          mpiexec -n 2 python test_parallel_advection.py -v
-        env:
-          GETM_SETUPS_DIR: ../../getm-setups
-      - name: Test box with spherical coordinates
-        run: |
-          cd python/examples
-          python box_spherical.py ../../getm-setups/box_spherical --start "2004-01-01 00:00:00" --stop "2004-01-03 00:00:00"
-      - name: Test North Sea in 2D barotropic mode
-        run: |
-          cd python/examples
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --runtype 1
-      - name: Test North Sea in 3D baroclinic mode
-        run: |
-          cd python/examples
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
-      - name: Test North Sea restarts
-        run: |
-          cd python/examples
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --no_rivers --debug_output
-          mv -v north_sea_2d.nc north_sea_2d_ref.nc
-          mv -v north_sea_3d.nc north_sea_3d_ref.nc
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-03 00:00:00" --no_boundaries --no_rivers --debug_output --save_restart res.nc
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --no_rivers --debug_output --load_restart res.nc
-          pygetm-compare-nc north_sea_2d.nc north_sea_2d_ref.nc --itime1 -1 --itime2 -1 -v
-          pygetm-compare-nc north_sea_3d.nc north_sea_3d_ref.nc --itime1 -1 --itime2 -1 -v
-      - name: Test North Sea restarts with rivers
-        run: |
-          cd python/examples
-          rm -fv *.nc
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --debug_output
-          mv -v north_sea_2d.nc north_sea_2d_ref.nc
-          mv -v north_sea_3d.nc north_sea_3d_ref.nc
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-03 00:00:00" --no_boundaries --debug_output --save_restart res.nc
-          python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --debug_output --load_restart res.nc
-          pygetm-compare-nc north_sea_2d.nc north_sea_2d_ref.nc --itime1 -1 --itime2 -1 -v
-          pygetm-compare-nc north_sea_3d.nc north_sea_3d_ref.nc --itime1 -1 --itime2 -1 -v
-      - name: Test North Sea scaling
-        run: |
-          cd python/examples
-          pygetm-test-scaling --nmax 4 --compare north_sea_2d.nc --compare north_sea_3d.nc north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
-      - name: Run notebooks
-        run: |
-          conda install -c conda-forge ipython jupyterlab ipympl cmocean matplotlib
-          cd python/examples
-          ipython --matplotlib tk -c "%run grids.ipynb"
-          ipython --matplotlib tk -c "%run test_advection.ipynb"
-          ipython --matplotlib tk -c "%run test_gotm_and_gsw.ipynb"
-          ipython --matplotlib tk -c "%run test_2d_periodic.ipynb"
-          ipython --matplotlib tk -c "%run test_lock_exchange.ipynb"
-          ipython --matplotlib tk -c "%run Kelvin_wave_in_a_channel.ipynb"
+         - name: Clone
+           uses: actions/checkout@v4
+           with:
+              submodules: recursive
+              ssh-key: ${{ secrets.BB_TESTING_SSH }}
+         - name: Clone getm-setups
+           run: |
+              git clone https://git.code.sf.net/p/getm/getm-setups
+           env:
+              GIT_CLONE_PROTECTION_ACTIVE: false
+         - uses: conda-incubator/setup-miniconda@v3
+           with:
+              auto-update-conda: true
+              python-version: ${{ matrix.python-version }}
+              environment-file: environment.yml
+              activate-environment: pygetm
+         - name: Compile (Linux/Mac)
+           if: matrix.os != 'windows-latest'
+           run: source ./install
+         - name: Compile (Windows)
+           if: matrix.os == 'windows-latest'
+           run: install.bat
+         - name: Verify source directory is clean
+           run: |
+              git status --porcelain
+         - name: Test utilities
+           run: |
+              python -m pygetm.input.glodap -h
+              python -m pygetm.input.woa -h
+              python -m pygetm.input.igotm -h
+         - name: Run test suite
+           run: |
+              cd python/tests
+              python -m unittest -v
+              mpiexec -n 2 python test_domain.py -v
+              mpiexec -n 2 python test_parallel_advection.py -v
+           env:
+              GETM_SETUPS_DIR: ../../getm-setups
+         - name: Test box with spherical coordinates
+           run: |
+              cd python/examples
+              python box_spherical.py ../../getm-setups/box_spherical --start "2004-01-01 00:00:00" --stop "2004-01-03 00:00:00"
+         - name: Test North Sea in 2D barotropic mode
+           run: |
+              cd python/examples
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --runtype 1
+         - name: Test North Sea in 3D baroclinic mode
+           run: |
+              cd python/examples
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
+         - name: Test North Sea restarts
+           run: |
+              cd python/examples
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --no_rivers --debug_output
+              mv -v north_sea_2d.nc north_sea_2d_ref.nc
+              mv -v north_sea_3d.nc north_sea_3d_ref.nc
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-03 00:00:00" --no_boundaries --no_rivers --debug_output --save_restart res.nc
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --no_rivers --debug_output --load_restart res.nc
+              pygetm-compare-nc north_sea_2d.nc north_sea_2d_ref.nc --itime1 -1 --itime2 -1 -v
+              pygetm-compare-nc north_sea_3d.nc north_sea_3d_ref.nc --itime1 -1 --itime2 -1 -v
+         - name: Test North Sea restarts with rivers
+           run: |
+              cd python/examples
+              rm -fv *.nc
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --debug_output
+              mv -v north_sea_2d.nc north_sea_2d_ref.nc
+              mv -v north_sea_3d.nc north_sea_3d_ref.nc
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-03 00:00:00" --no_boundaries --debug_output --save_restart res.nc
+              python north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00" --no_boundaries --debug_output --load_restart res.nc
+              pygetm-compare-nc north_sea_2d.nc north_sea_2d_ref.nc --itime1 -1 --itime2 -1 -v
+              pygetm-compare-nc north_sea_3d.nc north_sea_3d_ref.nc --itime1 -1 --itime2 -1 -v
+         - name: Test North Sea scaling
+           run: |
+              cd python/examples
+              pygetm-test-scaling --nmax 4 --compare north_sea_2d.nc --compare north_sea_3d.nc north_sea.py ../../getm-setups/NorthSea --stop "2006-01-04 00:00:00"
+         - name: Install notebook dependencies
+           run: conda install -c conda-forge ipython jupyterlab ipympl cmocean matplotlib
+         - name: Run notebooks
+           run: |
+              cd python/examples
+              ipython --matplotlib tk -c "%run grids.ipynb"
+              ipython --matplotlib tk -c "%run test_advection.ipynb"
+              ipython --matplotlib tk -c "%run test_gotm_and_gsw.ipynb"
+              ipython --matplotlib tk -c "%run test_2d_periodic.ipynb"
+              ipython --matplotlib tk -c "%run test_lock_exchange.ipynb"
+              ipython --matplotlib tk -c "%run Kelvin_wave_in_a_channel.ipynb"

@@ -791,6 +791,9 @@ class Gather:
                         (self.recvbuf[(rank,) + local_slice], global_slice)
                     )
             self.global_shape = global_shape
+            self.glob = tiling._get_work_array(
+                shape[:-2] + self.global_shape, self.dtype, self.fill_value
+            )
 
     def __call__(
         self, field: np.ndarray, out: Optional[np.ndarray] = None, slice_spec=()
@@ -809,7 +812,8 @@ class Gather:
                 f" from expected {self.global_shape}"
             )
             for source, global_slice in self.buffers:
-                out[slice_spec + global_slice] = source
+                self.glob[global_slice] = source
+            out[slice_spec] = self.glob
             return out
         return None
 

@@ -103,6 +103,61 @@ class BoundaryGatherer:
         return self.work2
 
 
+class Locator:
+    def __init__(
+        self,
+        mask: np.ndarray,
+        x: Optional[np.ndarray],
+        y: Optional[np.ndarray],
+        lon: Optional[np.ndarray],
+        lat: Optional[np.ndarray],
+    ):
+        self.mask = mask
+        self.x = x
+        self.y = y
+        self.lon = lon
+        self.lat = lat
+
+    def __call__(
+        self,
+        x: float,
+        y: float,
+        *,
+        coordinate_type: CoordinateType,
+        allowed_mask: Iterable[int] = (1,),
+    ) -> Tuple[int, int]:
+        """Locate the unmasked grid cell nearest to the specified location.
+
+        Args:
+            x: x coordinate of the location
+            y: y coordinate of the location
+            coordinate_type: type of coordinates
+                (LONLAT for spherical, XY for Cartesian coordinates)
+        Returns:
+            (i, j): indices of the nearest unmasked grid cell
+        """
+        if coordinate_type == CoordinateType.LONLAT:
+            allx, ally = self.lon, self.lat
+        elif coordinate_type == CoordinateType.XY:
+            allx, ally = self.x, self.y
+        else:
+            return int(x), int(y)
+        assert allx is not None
+        assert ally is not None
+
+        # Location is specified by x, y coordinate.
+        # Look up nearest unmasked grid cell.
+        dist = (allx - x) ** 2 + (ally - y) ** 2
+        valid = np.zeros(dist.shape, dtype=bool)
+        for m in allowed_mask:
+            valid |= self.mask == m
+        dist[~valid] = np.inf
+        idx = np.nanargmin(dist)
+        j, i = map(int, np.unravel_index(idx, dist.shape))
+        assert self.mask[j, i] == 1
+        return i, j
+
+
 class Grid(_pygetm.Grid):
     _domain_arrays = (
         "x",
@@ -528,44 +583,21 @@ class Grid(_pygetm.Grid):
         save("area", "m2")
         save("cor", "s-1", "Coriolis parameter")
 
-    def nearest_point(
-        self,
-        x: float,
-        y: float,
-        mask: Optional[Tuple[int]] = None,
-        include_halos: bool = False,
-        coordinate_type: Optional[CoordinateType] = None,
-    ) -> Optional[Tuple[int, int]]:
-        """Return index (i,j) of point nearest to specified coordinate."""
-        if coordinate_type is None:
-            coordinate_type = self.domain.coordinate_type
-        if not self.domain.contains(
-            x, y, include_halos=include_halos, coordinate_type=coordinate_type
-        ):
-            return None
-        local_slice, _, _, _ = self.tiling.subdomain2slices(
-            halox_sub=self.halox,
-            haloy_sub=self.haloy,
-            halox_glob=self.halox,
-            haloy_glob=self.haloy,
-            share=self.overlap,
-            exclude_halos=not include_halos,
-            exclude_global_halos=True,
-        )
-        spherical = coordinate_type == CoordinateType.LONLAT
-        allx, ally = (self.lon, self.lat) if spherical else (self.x, self.y)
-        actx, acty = allx.all_values[local_slice], ally.all_values[local_slice]
-        dist = (actx - x) ** 2 + (acty - y) ** 2
-        if mask is not None:
-            if isinstance(mask, int):
-                mask = (mask,)
-            invalid = np.ones(dist.shape, dtype=bool)
-            for mask_value in mask:
-                invalid &= self.mask.all_values[local_slice] != mask_value
-            dist[invalid] = np.inf
-        idx = np.nanargmin(dist)
-        j, i = np.unravel_index(idx, dist.shape)
-        return j + local_slice[-2].start, i + local_slice[-1].start
+    def global_to_local(
+        self, i: int, j: int, *, include_halos: bool = False
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """Convert global indices (i, j) to local indices in the subdomain."""
+        xoffset = 0 if self.tiling is None else self.tiling.xoffset
+        yoffset = 0 if self.tiling is None else self.tiling.yoffset
+        halox = self.halox if include_halos else 0
+        haloy = self.haloy if include_halos else 0
+        i_loc = i - xoffset + halox
+        j_loc = j - yoffset + haloy
+        nx = self.nx + 2 * halox
+        ny = self.ny + 2 * halox
+        if i_loc < 0 or j_loc < 0 or i_loc >= nx or j_loc >= ny:
+            return None, None
+        return i_loc, j_loc
 
     def get_gather_info(
         self,

@@ -73,49 +73,26 @@ class River:
         self.coordinate_type = coordinate_type
         self.zl = zl
         self.zu = zu
-        self.i_loc = None
-        self.j_loc = None
+        self.i_loc: Optional[int] = None
+        self.j_loc: Optional[int] = None
         self._tracers: Mapping[str, RiverTracer] = {}
 
-    def locate(
-        self,
-        mask: np.ndarray,
-        x: Optional[np.ndarray],
-        y: Optional[np.ndarray],
-        lon: Optional[np.ndarray],
-        lat: Optional[np.ndarray],
-    ):
+    def locate(self, locator: core.Locator):
         """If this river position is specified by (lon, lat) or (x, y), map it
         to the nearest non-masked grid cell."""
-        if self.coordinate_type == CoordinateType.LONLAT:
-            allx, ally = lon, lat
-        elif self.coordinate_type == CoordinateType.XY:
-            allx, ally = x, y
-        else:
-            return
-        assert allx is not None
-        assert ally is not None
-
-        # Location is specified by x, y coordinate.
-        # Look up nearest unmasked grid cell.
-        dist = (allx - self.x) ** 2 + (ally - self.y) ** 2
-        dist[mask != 1] = np.inf
-        idx = np.nanargmin(dist)
-        self.j_glob, self.i_glob = map(int, np.unravel_index(idx, dist.shape))
-        assert mask[self.j_glob, self.i_glob] == 1
+        if self.x is not None and self.y is not None:
+            self.i_glob, self.j_glob = locator(
+                self.x, self.y, coordinate_type=self.coordinate_type
+            )
 
     def to_local_grid(self, grid: core.Grid, logger: logging.Logger) -> bool:
         """Map global river position (i,j) to local subdomain."""
-        # Map global i, j to local subdomain.
-        # These are indices into local arrays that INclude halos
-        i_loc = self.i_glob - grid.tiling.xoffset + grid.halox
-        j_loc = self.j_glob - grid.tiling.yoffset + grid.haloy
-
-        if i_loc < 0 or j_loc < 0 or i_loc >= grid.nx_ or j_loc >= grid.ny_:
+        self.i_loc, self.j_loc = grid.global_to_local(
+            self.i_glob, self.j_glob, include_halos=True
+        )
+        if self.i_loc is None or self.j_loc is None:
             logger.info(f"{self.name} falls outside this subdomain")
             return False
-
-        self.i_loc, self.j_loc = i_loc, j_loc
         logger.info(f"{self.name} at is located at i={self.i_loc}, j={self.j_loc}")
 
         mask = grid.mask.all_values[self.j_loc, self.i_loc]
@@ -209,20 +186,13 @@ class Rivers(Mapping[str, River]):
         self._rivers.append(river)
         return river
 
-    def map_to_grid(
-        self,
-        mask: np.ndarray,
-        x: Optional[np.ndarray],
-        y: Optional[np.ndarray],
-        lon: Optional[np.ndarray],
-        lat: Optional[np.ndarray],
-    ):
+    def map_to_grid(self, locator: core.Locator):
         """Map rivers to cell centers.
         This can only be called on MPI nodes that have the full domain
         (typically the root node only).
         """
         for river in self._rivers:
-            river.locate(mask, x, y, lon, lat)
+            river.locate(locator)
 
     def _broadcast_locations(self, comm: parallel.MPI.Comm):
         """Broadcast global river locations (i,j) to all non-root MPI nodes."""
