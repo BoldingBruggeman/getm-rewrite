@@ -870,7 +870,7 @@ class Domain:
 
         This attribute is None on non-root MPI nodes
         """
-        if not self._z0.flags.writeable:
+        if self._z0 is not None and not self._z0.flags.writeable:
             self._z0 = self._z0.copy()
         return self._z0
 
