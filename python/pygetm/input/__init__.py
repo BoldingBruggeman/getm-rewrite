@@ -85,7 +85,11 @@ class GETMAccessor:
             standard_name = coord.attrs.get("standard_name")
             if standard_name in ("latitude", "longitude"):
                 _coordinates[standard_name] = coord
-            elif coord.attrs.get("positive") or standard_name in Z_STANDARD_NAMES:
+            elif (
+                coord.attrs.get("positive")
+                or standard_name in Z_STANDARD_NAMES
+                or coord.attrs.get("axis") == "Z"
+            ):
                 _coordinates["z"] = coord
             elif units in LATITUDE_UNITS:
                 _coordinates["latitude"] = coord
