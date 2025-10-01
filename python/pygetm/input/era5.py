@@ -5,6 +5,7 @@ import argparse
 import logging
 
 import yaml
+import xarray as xr
 
 try:
     import cdsapi
@@ -37,6 +38,7 @@ def _download_year(
     variables: List[str],
     fmt: str,
     path: str,
+    decompress: bool = False,
     **cds_settings,
 ):
     c = cdsapi.Client(verify=1, progress=False, **cds_settings)
@@ -54,7 +56,27 @@ def _download_year(
     }
     r = c.retrieve("reanalysis-era5-single-levels", request)
     r.download(path)
+    if fmt == "netcdf":
+        _postprocess(path, decompress=decompress)
     return path
+
+
+def _postprocess(fname: str, decompress: bool = False):
+    tmpname = fname + ".tmp"
+    with xr.open_dataset(fname) as ds:
+        for v in ds.data_vars.values():
+            if decompress:
+                # Decompress variables (no chunking at all)
+                v.encoding.update(complevel=0, contiguous=True)
+                v.encoding.pop("chunksizes", None)
+            else:
+                # Set chunk size for time dimension to 1 to allow
+                # efficient access to values @ single time points
+                v.encoding["chunksizes"] = list(v.shape)
+                v.encoding["chunksizes"][0] = 1
+                v.encoding.pop("contiguous", None)
+        ds.to_netcdf(tmpname, mode="w")
+    os.replace(tmpname, fname)
 
 
 def get(
@@ -66,6 +88,7 @@ def get(
     stop_year: Optional[int] = None,
     variables: Iterable[str] = DEFAULT_VARIABLES,
     fmt: str = "netcdf",
+    decompress: bool = False,
     target_dir: str = ".",
     cdsapirc: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
@@ -73,9 +96,9 @@ def get(
     logging.basicConfig(level=logging.INFO)
     logger = logger or logging.getLogger()
 
-    assert minlon >= -360.0 and maxlon <= 360.0, (
-        "Longitude must be between -360 and 360"
-    )
+    assert (
+        minlon >= -360.0 and maxlon <= 360.0
+    ), "Longitude must be between -360 and 360"
     assert minlat >= -90.0 and maxlat <= 90.0, "Latitude must be between -360 and 360"
 
     minlon -= minlon % 0.25
@@ -93,10 +116,10 @@ def get(
     logger.info(f"Downloading {', '.join(variables)} for {start_year} - {stop_year}")
 
     area = [maxlat, minlon, minlat, maxlon]
-    cds_settings = {}
+    kwargs = {"decompress": decompress}
     if cdsapirc:
         with open(cdsapirc, "r") as f:
-            cds_settings.update(yaml.safe_load(f))
+            kwargs.update(yaml.safe_load(f))
 
     results = []
     years = list(range(start_year, stop_year + 1))
@@ -114,7 +137,7 @@ def get(
                 pool.apply_async(
                     _download_year,
                     args=(year, area, (full_name,), fmt, path),
-                    kwds=cds_settings,
+                    kwds=kwargs,
                 )
             )
             keys.append((year, variable))
@@ -159,6 +182,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--grib", action="store_const", const="grib", dest="fmt", default="netcdf"
     )
+    parser.add_argument(
+        "--decompress",
+        help="remove NetCDF compression for faster spatial slicing",
+        action="store_true",
+    )
     args = parser.parse_args()
     vars = set(args.variables)
     if args.default_variables:
@@ -174,4 +202,5 @@ if __name__ == "__main__":
         variables=vars,
         cdsapirc=args.cdsapirc,
         fmt=args.fmt,
+        decompress=args.decompress,
     )
