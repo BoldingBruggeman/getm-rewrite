@@ -604,12 +604,12 @@ class Domain:
 
     def _tlocator(self, mask: Optional[np.ndarray] = None) -> core.Locator:
         """Locator for T points (cell centers)"""
-        x_ = None if self._x is None else self._x[1::2, 1::2]
-        y_ = None if self._y is None else self._y[1::2, 1::2]
-        lon_ = None if self._lon is None else self._lon[1::2, 1::2]
-        lat_ = None if self._lat is None else self._lat[1::2, 1::2]
+        x = None if self._x is None else self._x[1::2, 1::2]
+        y = None if self._y is None else self._y[1::2, 1::2]
+        lon = None if self._lon is None else self._lon[1::2, 1::2]
+        lat = None if self._lat is None else self._lat[1::2, 1::2]
         tmask = (self._mask if mask is None else mask)[1::2, 1::2]
-        return core.Locator(mask=tmask, x=x_, y=y_, lon=lon_, lat=lat_)
+        return core.Locator(mask=tmask, x=x, y=y, lon=lon, lat=lat)
 
     def _map_array(
         self,
