@@ -602,13 +602,14 @@ class Domain:
 
         self._area = self._dx * self._dy
 
+    def _tlocator(self, mask: Optional[np.ndarray] = None) -> core.Locator:
+        """Locator for T points (cell centers)"""
         x_ = None if self._x is None else self._x[1::2, 1::2]
         y_ = None if self._y is None else self._y[1::2, 1::2]
         lon_ = None if self._lon is None else self._lon[1::2, 1::2]
         lat_ = None if self._lat is None else self._lat[1::2, 1::2]
-        self._tlocator = core.Locator(
-            self._mask[1::2, 1::2], x=x_, y=y_, lon=lon_, lat=lat_
-        )
+        tmask = (self._mask if mask is None else mask)[1::2, 1::2]
+        return core.Locator(mask=tmask, x=x_, y=y_, lon=lon_, lat=lat_)
 
     def _map_array(
         self,
@@ -1488,7 +1489,7 @@ class Domain:
 
     def _map_rivers(self, mask: np.ndarray):
         assert self.comm.rank == 0
-        self.rivers.map_to_grid(self._tlocator)
+        self.rivers.map_to_grid(self._tlocator(mask))
 
     @apply_on_root_and_bcast
     def nearest_point(
@@ -1501,7 +1502,7 @@ class Domain:
     ) -> Tuple[int, int]:
         if coordinate_type is None:
             coordinate_type = self.coordinate_type
-        return self._tlocator(
+        return self._tlocator()(
             x, y, coordinate_type=coordinate_type, allowed_mask=allowed_mask
         )
 
