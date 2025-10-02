@@ -99,7 +99,7 @@ class River:
         if mask != 1:
             raise Exception(
                 f"{self.name} has been mapped to non-water grid cell"
-                " (with mask value {mask})."
+                f" (with mask value {mask})."
             )
 
         return True
