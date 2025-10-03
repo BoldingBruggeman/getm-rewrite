@@ -907,7 +907,7 @@ class Domain:
                 raise Exception("Water depth at rest (H) has not been provided")
 
             # Map river coordinates to global grid indices
-            self._map_rivers(final_mask)
+            self.rivers.map_to_grid(self._tlocator(final_mask))
 
         if tiling is None:
             tiling = self.create_tiling()
@@ -1487,10 +1487,6 @@ class Domain:
         rotated_domain.open_boundaries.sponge.tmrlx = self.open_boundaries.sponge.tmrlx
         return rotated_domain
 
-    def _map_rivers(self, mask: np.ndarray):
-        assert self.comm.rank == 0
-        self.rivers.map_to_grid(self._tlocator(mask))
-
     @apply_on_root_and_bcast
     def nearest_point(
         self,
@@ -1604,7 +1600,7 @@ class Domain:
             cb.set_label(label)
 
         if show_rivers and self.rivers:
-            self._map_rivers(mask)
+            self.rivers.map_to_grid(self._tlocator(mask))
             for river in self.rivers.global_rivers:
                 i_sup, j_sup = 1 + river.i_glob * 2, 1 + river.j_glob * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]
