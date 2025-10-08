@@ -37,7 +37,7 @@ class NetCDFFile(File):
                 file. Otherwise the rank will be used as suffix for the
                 subdomain-specific files.
             sync_interval: frequency to call NetCDF sync, which forces all output to
-                be written to disk. If set to None, syncronization will happen only
+                be written to disk. If set to None, synchronization will happen only
                 when the file is closed as the end of a simulation.
             time_reference: time reference (epoch) to use as offset for the time
                 coordinate.
