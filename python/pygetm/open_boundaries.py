@@ -1070,18 +1070,14 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         tmask = grid.mask.all_values
         umask = grid.ugrid.mask.all_values
         vmask = grid.vgrid.mask.all_values
-        for boundary in self._boundaries:
-            if boundary.l is None:
-                # Boundary outside current subdomain
-                continue
-
-            # Select T points along an open boundary that are actually wet
+        for boundary in self.active:
+            # Select the T points from the open boundary that are actually wet
             # (some may be on land with mask = 0)
             tsel = tmask[boundary.j, boundary.i] == 2
 
             # Velocity points that lie WITHIN the open boundary (mask=3),
             # that is, they lie in between tracer points with mask=2.
-            # Values at these points will be mirrored from the interior velocity point
+            # Values at these points will be mirrored from the interior velocity point.
             # We look 1 point beyond the start and stop of the boundary within the
             # current subdomain to catch cases where (a) the boundary extends into the
             # next subdomain and (b) the current boundary neighbors another boundary
@@ -1100,8 +1096,8 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
             # Velocity points OUTSIDE AND ALONG the open boundary (mask=4)
             # Values at these points will be mirrored from either the neighboring
-            # inner T point (boundary.i, boundary.j) [e.g., elevations at mask=2]
-            # or the neighboring inner velocity point.
+            # inner velocity point, or from inner T point (boundary.i, boundary.j)
+            # [e.g., elevations at mask=2]
             if boundary.side in (Side.WEST, Side.EAST):
                 j = boundary.j
                 i_in = boundary.i[0] + {Side.WEST: 0, Side.EAST: -1}[boundary.side]
