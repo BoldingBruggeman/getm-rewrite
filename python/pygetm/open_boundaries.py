@@ -118,7 +118,7 @@ class OpenBoundary:
         ms = np.arange(self.mstart, self.mstop, self.mstep)
         self.np = ms.size
         l = self.l
-        ls = np.full_like(ms, l)
+        ls = np.broadcast_to(l, ms.shape)
         if side in (Side.WEST, Side.EAST):
             self.i, self.j = ls, ms
             self.slice_t = (Ellipsis, mslice, l)
@@ -943,8 +943,8 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
         # Local indices of open boundary points within local subdomain
         # (T grid, for arrays that INclude halos)
-        self.i = np.concatenate(bdy_i, dtype=np.intc)
-        self.j = np.concatenate(bdy_j, dtype=np.intc)
+        self.i = np.concatenate(bdy_i, dtype=np.intp)
+        self.j = np.concatenate(bdy_j, dtype=np.intp)
         assert self.allow_on_land or (grid.mask.all_values[self.j, self.i] == 2).all()
 
         # Global indices of open boundary points within local subdomain
@@ -1032,77 +1032,93 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
     def _configure_mirroring(self, grid: core.Grid):
         """Set up indices for mirroring across boundaries on U and V grids"""
-        mirror_U = []
-        mirror_V = []
-        mirror_TU = []
-        mirror_TV = []
+
+        nx, ny = grid.nx_, grid.ny_
+
+        class Mirror:
+            def __init__(self):
+                self.i_in = []
+                self.j_in = []
+                self.i_out = []
+                self.j_out = []
+
+            def append(self, i_in, j_in, i_out, j_out, where, check=None, value=None):
+                i_in, j_in, i_out, j_out = np.broadcast_arrays(i_in, j_in, i_out, j_out)
+                keep = (i_in >= 0) & (j_in >= 0) & (i_in < nx) & (j_in < ny)
+                keep &= (i_out >= 0) & (j_out >= 0) & (i_out < nx) & (j_out < ny)
+                keep &= where
+                if keep.any():
+                    self.i_in.append(i_in[keep])
+                    self.j_in.append(j_in[keep])
+                    self.i_out.append(i_out[keep])
+                    self.j_out.append(j_out[keep])
+                    if check is not None:
+                        assert (check[self.j_out[-1], self.i_out[-1]] == value).all()
+
+            def get_slices(self) -> Optional[Tuple[Tuple, Tuple]]:
+                if self.i_in:
+                    i_in = np.concatenate(self.i_in, dtype=np.intp)
+                    j_in = np.concatenate(self.j_in, dtype=np.intp)
+                    i_out = np.concatenate(self.i_out, dtype=np.intp)
+                    j_out = np.concatenate(self.j_out, dtype=np.intp)
+                    return (Ellipsis, j_in, i_in), (Ellipsis, j_out, i_out)
+
+        mirror_U = Mirror()
+        mirror_V = Mirror()
+        mirror_TU = Mirror()
+        mirror_TV = Mirror()
         tmask = grid.mask.all_values
         umask = grid.ugrid.mask.all_values
         vmask = grid.vgrid.mask.all_values
         for boundary in self._boundaries:
             if boundary.l is None:
+                # Boundary outside current subdomain
                 continue
 
+            # Select T points along an open boundary that are actually wet
+            # (some may be on land with mask = 0)
             tsel = tmask[boundary.j, boundary.i] == 2
-            # Identify velocity points that lie within the open boundary in between
-            # tracer points with mask=2. Their indices will be (i_velout, j_velout)
-            # on the corresponding velocity grid (U or V). Values at these points
-            # will be mirrored from the interior velocity point (i_velin, j_velin)
+
+            # Velocity points that lie WITHIN the open boundary (mask=3),
+            # that is, they lie in between tracer points with mask=2.
+            # Values at these points will be mirrored from the interior velocity point
             # We look 1 point beyond the start and stop of the boundary within the
             # current subdomain to catch cases where (a) the boundary extends into the
             # next subdomain and (b) the current boundary neighbors another boundary
-            # We then only include points with mask value 3 (see "select" below).
+            # Note that the values in boundary.{i,j} may have stride -1, which is why
+            # we use min()/max() to determine the range.
             if boundary.side in (Side.WEST, Side.EAST):
-                j_velout = np.arange(max(boundary.j.min() - 1, 0), boundary.j.max() + 1)
-                i_velout = np.full_like(j_velout, boundary.i[0])
-                mirror_mask = vmask[j_velout, i_velout]
+                j = np.arange(max(boundary.j.min() - 1, 0), boundary.j.max() + 1)
+                i_out = boundary.i[0]
+                i_in = i_out + {Side.EAST: -1, Side.WEST: 1}[boundary.side]
+                mirror_V.append(i_in, j, i_out, j, vmask[j, i_out] == 3)
             else:
-                i_velout = np.arange(max(boundary.i.min() - 1, 0), boundary.i.max() + 1)
-                j_velout = np.full_like(i_velout, boundary.j[0])
-                mirror_mask = umask[j_velout, i_velout]
-            select = mirror_mask == 3
-            i_velout = i_velout[select]
-            j_velout = j_velout[select]
-            i_velin = i_velout + {Side.EAST: -1, Side.WEST: 1}.get(boundary.side, 0)
-            j_velin = j_velout + {Side.NORTH: -1, Side.SOUTH: 1}.get(boundary.side, 0)
+                i = np.arange(max(boundary.i.min() - 1, 0), boundary.i.max() + 1)
+                j_out = boundary.j[0]
+                j_in = j_out + {Side.NORTH: -1, Side.SOUTH: 1}[boundary.side]
+                mirror_U.append(i, j_in, i, j_out, umask[j_out, i] == 3)
 
-            # Identify velocity points along an open boundary
-            # The indices of inner points will be (i_in, j_in);
-            # those indices of outer points will be (i_out, j_out).
-            # Values at outer points will be mirrored from either the neighboring
+            # Velocity points OUTSIDE AND ALONG the open boundary (mask=4)
+            # Values at these points will be mirrored from either the neighboring
             # inner T point (boundary.i, boundary.j) [e.g., elevations at mask=2]
             # or the neighboring inner velocity point.
-            i_in = boundary.i + {Side.EAST: -1}.get(boundary.side, 0)
-            j_in = boundary.j + {Side.NORTH: -1}.get(boundary.side, 0)
-            i_out = boundary.i + {Side.WEST: -1}.get(boundary.side, 0)
-            j_out = boundary.j + {Side.SOUTH: -1}.get(boundary.side, 0)
-            select = (i_in >= 0) & (j_in >= 0) & (i_out >= 0) & (j_out >= 0)
-            select &= tsel
-            i_in, i_out, j_in, j_out = (a[select] for a in (i_in, i_out, j_in, j_out))
-
             if boundary.side in (Side.WEST, Side.EAST):
-                assert (grid.ugrid.mask.all_values[j_out, i_out] == 4).all()
-                mirror_U.append([i_in, j_in, i_out, j_out])
-                mirror_V.append([i_velin, j_velin, i_velout, j_velout])
-                mirror_TU.append([boundary.i[tsel], boundary.j[tsel], i_out, j_out])
+                j = boundary.j
+                i_in = boundary.i[0] + {Side.WEST: 0, Side.EAST: -1}[boundary.side]
+                i_out = boundary.i[0] + {Side.WEST: -1, Side.EAST: 0}[boundary.side]
+                mirror_U.append(i_in, j, i_out, j, tsel, umask, 4)
+                mirror_TU.append(boundary.i, j, i_out, j, tsel, umask, 4)
             else:
-                assert (grid.vgrid.mask.all_values[j_out, i_out] == 4).all()
-                mirror_V.append([i_in, j_in, i_out, j_out])
-                mirror_U.append([i_velin, j_velin, i_velout, j_velout])
-                mirror_TV.append([boundary.i[tsel], boundary.j[tsel], i_out, j_out])
+                i = boundary.i
+                j_in = boundary.j[0] + {Side.SOUTH: 0, Side.NORTH: -1}[boundary.side]
+                j_out = boundary.j[0] + {Side.SOUTH: -1, Side.NORTH: 0}[boundary.side]
+                mirror_V.append(i, j_in, i, j_out, tsel, vmask, 4)
+                mirror_TV.append(i, boundary.j, i, j_out, tsel, vmask, 4)
 
-        def pack_mirror(indices: Sequence[Sequence[np.ndarray]]):
-            if indices:
-                i_in = np.concatenate([i[0] for i in indices], dtype=np.intp)
-                j_in = np.concatenate([i[1] for i in indices], dtype=np.intp)
-                i_out = np.concatenate([i[2] for i in indices], dtype=np.intp)
-                j_out = np.concatenate([i[3] for i in indices], dtype=np.intp)
-                return ((Ellipsis, j_in, i_in), (Ellipsis, j_out, i_out))
-
-        grid.ugrid._mirrors[grid.ugrid] = pack_mirror(mirror_U)
-        grid.vgrid._mirrors[grid.vgrid] = pack_mirror(mirror_V)
-        grid._mirrors[grid.ugrid] = pack_mirror(mirror_TU)
-        grid._mirrors[grid.vgrid] = pack_mirror(mirror_TV)
+        grid.ugrid._mirrors[grid.ugrid] = mirror_U.get_slices()
+        grid.vgrid._mirrors[grid.vgrid] = mirror_V.get_slices()
+        grid._mirrors[grid.ugrid] = mirror_TU.get_slices()
+        grid._mirrors[grid.vgrid] = mirror_TV.get_slices()
 
     def start(
         self,
