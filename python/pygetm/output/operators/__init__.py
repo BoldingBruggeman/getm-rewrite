@@ -19,8 +19,6 @@ import numpy as np
 from numpy.typing import DTypeLike, ArrayLike
 
 import pygetm.core
-import pygetm.parallel
-import pygetm.domain
 import pygetm._pygetm
 import pygetm.util.interpolate
 from pygetm.constants import CENTERS, INTERFACES, TimeVarying
