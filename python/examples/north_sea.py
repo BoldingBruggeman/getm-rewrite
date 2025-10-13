@@ -24,7 +24,6 @@ def create_domain(
 
     if use_boundaries:
         pygetm.legacy.load_bdyinfo(domain, os.path.join(setup_dir, "bdyinfo.dat"))
-        domain.open_boundaries.sponge.tmrlx = True
     if use_rivers:
         pygetm.legacy.load_riverinfo(domain, os.path.join(setup_dir, "riverinfo.dat"))
 
@@ -66,21 +65,22 @@ def create_simulation(
     sim = pygetm.Simulation(domain, runtype=runtype, **final_kwargs)
 
     if domain.open_boundaries:
+        sim.open_boundaries.sponge.tmrlx = True
         if not tpxo9_dir:
             sim.logger.info("Reading 2D boundary data from file")
             bdy_2d_path = os.path.join(setup_dir, "Forcing/2D/bdy.2d.2006.nc")
-            domain.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
-            domain.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
-            domain.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
+            sim.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
+            sim.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
+            sim.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
         else:
             sim.logger.info("Getting 2D boundary data from TPXO9")
-            bdy_lon = domain.open_boundaries.lon
-            bdy_lat = domain.open_boundaries.lat
-            domain.open_boundaries.z.set(tpxo.get(bdy_lon, bdy_lat, root=tpxo9_dir))
-            domain.open_boundaries.u.set(
+            bdy_lon = sim.open_boundaries.lon
+            bdy_lat = sim.open_boundaries.lat
+            sim.open_boundaries.z.set(tpxo.get(bdy_lon, bdy_lat, root=tpxo9_dir))
+            sim.open_boundaries.u.set(
                 tpxo.get(bdy_lon, bdy_lat, variable="u", root=tpxo9_dir)
             )
-            domain.open_boundaries.v.set(
+            sim.open_boundaries.v.set(
                 tpxo.get(bdy_lon, bdy_lat, variable="v", root=tpxo9_dir)
             )
 

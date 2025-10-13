@@ -38,12 +38,12 @@ sim = pygetm.Simulation(
 
 sim.logger.info("Reading 2D boundary data from file")
 bdy_2d_path = os.path.join(args.setup_dir, "Forcing/2D/bdy.2d.2006.nc")
-domain.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
-domain.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
-domain.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
+sim.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
+sim.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
+sim.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
 
 bdy_3d_path = os.path.join(args.setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc")
-domain.open_boundaries.sponge.tmrlx = True
+sim.open_boundaries.sponge.tmrlx = True
 sim.temp.open_boundaries.type = pygetm.SPONGE
 sim.temp.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "temp"))
 sim.salt.open_boundaries.type = pygetm.SPONGE

@@ -71,54 +71,71 @@ class OpenBoundary:
 
         self.name = name
         self.side = side
-        self.l_glob = l
-        self.mstart_glob = mstart
-        self.mstop_glob = mstop
+        self.l = l
+        self.mstart = mstart
+        self.mstop = mstop
         self.mstep = 1 if mstop > mstart else -1
         self.type_2d = type_2d
         self.type_3d = type_3d
         self.inflow_sign = 1.0 if side in (Side.WEST, Side.SOUTH) else -1.0
+        self.np = (mstop - mstart) // self.mstep
 
     def __repr__(self) -> str:
         return (
             f"{__class__.__name__}({self.name!r}, {self.side.name},"
-            f" {self.l_glob}, {self.mstart_glob}, {self.mstop_glob})"
+            f" {self.l}, {self.mstart}, {self.mstop})"
         )
 
-    def to_local_grid(self, grid: core.Grid):
+    def to_local_grid(self, grid: core.Grid) -> Optional["LocalOpenBoundary"]:
         """Convert global indices to local indices of the current subdomain."""
-        # NB below we convert to indices in the T grid of the current subdomain
-        # INCLUDING halos
-        # We also limit the indices to the range valid for the current subdomain.
-        side = self.side
+        # Convert to indices in the T grid of the current subdomain INCLUDING halos
         xoffset = grid.tiling.xoffset - grid.halox
         yoffset = grid.tiling.yoffset - grid.haloy
-        if side in (Side.WEST, Side.EAST):
+        if self.side in (Side.WEST, Side.EAST):
             l_offset, m_offset, l_max, m_max = (xoffset, yoffset, grid.nx_, grid.ny_)
         else:
             l_offset, m_offset, l_max, m_max = (yoffset, xoffset, grid.ny_, grid.nx_)
-        self.l = self.l_glob - l_offset
-        self.mstart_ = self.mstart_glob - m_offset
-        self.mstop_ = self.mstop_glob - m_offset
-        mlast = self.mstop_ - self.mstep
-        if (
-            self.l < 0
-            or self.l >= l_max
-            or max(self.mstart_, mlast) < 0
-            or min(self.mstart_, mlast) >= m_max
-        ):
-            # Boundary lies completely outside current subdomain. Record it anyway,
-            # so we can later set up a global -> local map of open boundary points
-            self.l, self.mstart, self.mstop = None, None, None
-            return
-        self.mstart = min(max(0, self.mstart_), m_max - 1)
-        self.mstop = min(max(0, mlast), m_max - 1) + self.mstep
+        l = self.l - l_offset
+        mstart_ = self.mstart - m_offset
+        mstop_ = self.mstop - m_offset
 
-        mslice = slice(self.mstart, self.mstop, self.mstep)
-        ms = np.arange(self.mstart, self.mstop, self.mstep)
-        self.np = ms.size
-        l = self.l
-        ls = np.broadcast_to(l, ms.shape)
+        # Determine the part of the boundary that lies within the current subdomain
+        mlast = mstop_ - self.mstep
+        if (
+            l < 0
+            or l >= l_max
+            or max(mstart_, mlast) < 0
+            or min(mstart_, mlast) >= m_max
+        ):
+            # Boundary lies completely outside current subdomain
+            return None
+        mstart = min(max(0, mstart_), m_max - 1)
+        mstop = min(max(0, mlast), m_max - 1) + self.mstep
+        mskip = (mstart - mstart_) // self.mstep
+        assert mskip >= 0
+
+        return LocalOpenBoundary(
+            self.name, self.side, l, mstart, mstop, mskip, self.type_2d, self.type_3d
+        )
+
+
+class LocalOpenBoundary(OpenBoundary):
+    def __init__(
+        self,
+        name: str,
+        side: Side,
+        l: int,
+        mstart: int,
+        mstop: int,
+        mskip: int,
+        type_2d: int,
+        type_3d: int,
+    ):
+        super().__init__(name, side, l, mstart, mstop, type_2d, type_3d)
+        self.mskip = mskip
+        mslice = slice(mstart, mstop, self.mstep)
+        ms = np.arange(mstart, mstop, self.mstep, dtype=np.intp)
+        ls = np.broadcast_to(np.array(l, dtype=np.intp), ms.shape)
         if side in (Side.WEST, Side.EAST):
             self.i, self.j = ls, ms
             self.slice_t = (Ellipsis, mslice, l)
@@ -127,8 +144,6 @@ class OpenBoundary:
             self.i, self.j = ms, ls
             self.slice_t = (Ellipsis, l, mslice)
             self.slice_uv_in = (Ellipsis, l if side == Side.SOUTH else l - 1, mslice)
-        assert (self.i >= 0).all() and (self.i < grid.nx_).all()
-        assert (self.j >= 0).all() and (self.j < grid.ny_).all()
 
     def extract_inward(
         self, values: np.ndarray, start: int, stop: Optional[int] = None
@@ -138,15 +153,18 @@ class OpenBoundary:
         Args:
             values: 2D or 3D array of values on the T grid
             start: index of the first row/column to extract
-            stop: index of the last row/column to extract (exclusive)
+            stop: index of the last row/column to extract (exclusive).
+                If not given, only a single row/column is extracted.
 
         Returns:
-            Extracted of values on the T grid.
+            Extracted of values. This is a view into the input array.
             If a single row/column is extracted, the shape of the extracted
             values will be ``(..., np)``, where ``np`` is the number of points of the
             open boundary, and ``...`` represents any non-xy dimensions of the
-            input array. If ``n  = stop - start`` rows/columns are extracted,
-            the shape will be ``(..., np, n)``
+            input array.
+            If ``n  = stop - start`` rows/columns are extracted, the shape will be
+            ``(..., np, n)``. The last dimension then runs from the row/column closest
+            to the boundary to the one furthest away.
         """
         l_inward = {Side.WEST: 1, Side.EAST: -1, Side.SOUTH: 1, Side.NORTH: -1}[
             self.side
@@ -161,7 +179,8 @@ class OpenBoundary:
         else:
             # Extract a range of rows/columns
             llast = self.l + l_inward * (stop - 1)
-            lstop = None if llast == 0 else llast + l_inward
+            assert llast >= 0 and llast < values.shape[ldim]
+            lstop = None if llast == 0 and l_inward == -1 else llast + l_inward
             lslice = slice(lstart, lstop, l_inward)
         if self.side in (Side.WEST, Side.EAST):
             return values[Ellipsis, mslice, lslice]
@@ -543,7 +562,7 @@ class ArrayOpenBoundary:
 
     def __init__(
         self,
-        open_boundaries: "OpenBoundaries",
+        open_boundaries: "LocalOpenBoundaryCollection",
         boundary: OpenBoundary,
         prescribed_values: np.ndarray,
         model_values: np.ndarray,
@@ -598,7 +617,7 @@ class ArrayOpenBoundaries:
         if type is not None:
             type = array.grid.open_boundaries._make_bc(type)
         self._bdy: List[ArrayOpenBoundary] = []
-        for bdy in array.grid.open_boundaries.active:
+        for bdy in array.grid.open_boundaries:
             self._bdy.append(
                 ArrayOpenBoundary(
                     array.grid.open_boundaries,
@@ -675,69 +694,13 @@ class ArrayOpenBoundaries:
             relax.local[...] += relax.weights * (relax.target - old)
 
 
-class OpenBoundaries(Sequence[OpenBoundary]):
-    __slots__ = (
-        "nx",
-        "ny",
-        "logger",
-        "np",
-        "np_glob",
-        "i",
-        "j",
-        "i_glob",
-        "j_glob",
-        "z",
-        "u",
-        "v",
-        "u_rot",
-        "v_rot",
-        "lon",
-        "lat",
-        "zc",
-        "zf",
-        "local_to_global",
-        "_boundaries",
-        "_frozen",
-        "_rotator",
-        "sponge",
-        "zero_gradient",
-        "active",
-        "mirror_U",
-        "mirror_V",
-        "mirror_TU",
-        "mirror_TV",
-        "uv_in",
-        "bcs",
-        "allow_on_land",
-    )
-
+class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
     def __init__(self, nx: int, ny: int, logger: logging.Logger):
         self.nx = nx
         self.ny = ny
         self.logger = logger
-        self._boundaries: List[OpenBoundary] = []
-        self.sponge = Sponge()
-        self.zero_gradient = ZeroGradient()
-        self.active: List[OpenBoundary] = []
-        self._frozen = False
-        self.bcs: Set[BoundaryCondition] = set()
         self.allow_on_land = False
-
-    def _make_bc(self, value: Union[int, BoundaryCondition]) -> BoundaryCondition:
-        if isinstance(value, BoundaryCondition):
-            return value
-        if value == ZERO_GRADIENT:
-            return self.zero_gradient
-        elif value == SPONGE:
-            return self.sponge
-        elif value == CLAMPED:
-            return Clamped()
-        elif value == FLATHER_ELEV:
-            return Flather()
-        elif value == FLATHER_TRANSPORT:
-            return Flather(transport=True)
-        else:
-            raise Exception(f"Unknown boundary type {value} specified")
+        self._boundaries: List[OpenBoundary] = []
 
     def add_by_index(
         self,
@@ -753,33 +716,30 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         mstop indicates the upper limit of the boundary - it is the first index that is
         EXcluded.
         """
-
-        assert (
-            not self._frozen
-        ), "The open boundary collection has already been initialized"
         along_y = side in (Side.WEST, Side.EAST)
         if along_y:
             l_max, m_max = (self.nx, self.ny)
         else:
             l_max, m_max = (self.ny, self.nx)
 
-        mstep = 1 if mstop > mstart else -1
-        assert mstart >= 0 and mstart < m_max
-        assert mstop - mstep > 0 and mstop - mstep < m_max
         assert mstart != mstop
+        mstep = 1 if mstop > mstart else -1
+        mlast = mstop - mstep
+        assert mstart >= 0 and mstart < m_max
+        assert mlast >= 0 and mlast < m_max
         assert l >= 0 and l < l_max
 
         if name is None:
             name = str(len(self._boundaries))
 
-        mmin = min(mstart, mstop - mstep)
-        mmax = max(mstart, mstop - mstep)
+        mmin = min(mstart, mlast)
+        mmax = max(mstart, mlast)
         for b in self._boundaries:
             current_along_y = b.side in (Side.WEST, Side.EAST)
             if along_y == current_along_y:
-                if l == b.l_glob:
-                    ostart = max(mmin, min(b.mstart_glob, b.mstop_glob - b.mstep))
-                    ostop = min(mmax, max(b.mstart_glob, b.mstop_glob - b.mstep)) + 1
+                if l == b.l:
+                    ostart = max(mmin, min(b.mstart, b.mstop - b.mstep))
+                    ostop = min(mmax, max(b.mstart, b.mstop - b.mstep)) + 1
                     overlap = ostop - ostart
                     if overlap > 0:
                         raise Exception(
@@ -788,13 +748,13 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                         )
             else:
                 cross = (
-                    l >= min(b.mstart_glob, b.mstop_glob - b.mstep)
-                    and l <= max(b.mstart_glob, b.mstop_glob - b.mstep)
-                    and b.l_glob >= mmin
-                    and b.l_glob <= mmax
+                    l >= min(b.mstart, b.mstop - b.mstep)
+                    and l <= max(b.mstart, b.mstop - b.mstep)
+                    and b.l >= mmin
+                    and b.l <= mmax
                 )
                 if cross:
-                    i, j = (l, b.l_glob) if along_y else (b.l_glob, l)
+                    i, j = (l, b.l) if along_y else (b.l, l)
                     raise Exception(
                         f"New boundary {name} crosses existing boundary {b.name}"
                         f" at i={i}, j={j}"
@@ -855,8 +815,8 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         vmask = mask[0::2, 1::2]
         tmask = mask[1::2, 1::2]
         for boundary in self._boundaries:
-            l = boundary.l_glob
-            mslice = slice(boundary.mstart_glob, boundary.mstop_glob, boundary.mstep)
+            l = boundary.l
+            mslice = slice(boundary.mstart, boundary.mstop, boundary.mstep)
             if boundary.side in (Side.WEST, Side.EAST):
                 bdy_tmask = tmask[mslice, l]
                 bdy_uvmask = umask[mslice, l if boundary.side == Side.WEST else l + 1]
@@ -885,16 +845,35 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         umask[:, 1:-1][(tmask[:, :-1] == 2) & (tmask[:, 1:] == 2)] = 3
         vmask[1:-1, :][(tmask[:-1, :] == 2) & (tmask[1:, :] == 2)] = 3
 
-    def initialize(self, grid: core.Grid):
+    def __getitem__(self, key: int) -> OpenBoundary:
+        return self._boundaries[key]
+
+    def __len__(self) -> int:
+        return len(self._boundaries)
+
+    def __iter__(self):
+        return iter(self._boundaries)
+
+
+class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
+
+    def __init__(
+        self,
+        global_collection: GlobalOpenBoundaryCollection,
+        grid: core.Grid,
+        logger: logging.Logger,
+    ):
         """Freeze the open boundary collection. Drop those outside the current
         subdomain.
         """
-        assert (
-            not self._frozen
-        ), "The open boundary collection has already been initialized"
-
+        self.logger = logger
         self.np = 0
         self.np_glob = 0
+        self._boundaries: List[LocalOpenBoundary] = []
+
+        self.sponge = Sponge()
+        self.zero_gradient = ZeroGradient()
+        self.bcs: Set[BoundaryCondition] = set()
 
         # Indices of T point in open boundary into arrays that INCLUDE halos.
         # We start with an empty array to support later concatenation in
@@ -904,23 +883,21 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         side2count = {Side.WEST: 0, Side.NORTH: 0, Side.EAST: 0, Side.SOUTH: 0}
         self.local_to_global: List[slice] = []
         bdy_types_2d = {}
-        for boundary in self._boundaries:
-            boundary.to_local_grid(grid)
+        for global_boundary in global_collection._boundaries:
+            boundary = global_boundary.to_local_grid(grid)
 
-            if boundary.l is not None:
+            if boundary is not None:
                 # This boundary falls at least partially in the local subdomain
-                self.active.append(boundary)
+                self._boundaries.append(boundary)
                 side2count[boundary.side] += 1
 
                 # Determine start/stop indices in arrays with all local boundary points
-                mskip = (boundary.mstart - boundary.mstart_) // boundary.mstep
-                assert mskip >= 0
                 boundary.start = self.np
                 boundary.stop = self.np + boundary.np
                 boundary.slice_bdy = (slice(boundary.start, boundary.stop), Ellipsis)
 
                 # Determine start/stop indices in arrays with all global boundary points
-                start_glob = self.np_glob + mskip
+                start_glob = self.np_glob + boundary.mskip
                 stop_glob = start_glob + boundary.np
                 if self.local_to_global and self.local_to_global[-1].stop == start_glob:
                     # Attach to previous boundary by dropping previous slice
@@ -937,7 +914,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
                 self.np += boundary.np
 
-            self.np_glob += (boundary.mstop_ - boundary.mstart_) // boundary.mstep
+            self.np_glob += global_boundary.np
 
         # Number of open boundary points (local and global)
         grid.open_boundaries = self
@@ -946,7 +923,10 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         # (T grid, for arrays that INclude halos)
         self.i = np.concatenate(all_i, dtype=np.intp)
         self.j = np.concatenate(all_j, dtype=np.intp)
-        assert self.allow_on_land or (grid.mask.all_values[self.j, self.i] == 2).all()
+        assert (
+            global_collection.allow_on_land
+            or (grid.mask.all_values[self.j, self.i] == 2).all()
+        )
 
         # Global indices of open boundary points within local subdomain
         # (T grid, for arrays that EXclude halos)
@@ -1033,7 +1013,21 @@ class OpenBoundaries(Sequence[OpenBoundary]):
             self.u_rot = self.u
             self.v_rot = self.v
 
-        self._frozen = True
+    def _make_bc(self, value: Union[int, BoundaryCondition]) -> BoundaryCondition:
+        if isinstance(value, BoundaryCondition):
+            return value
+        if value == ZERO_GRADIENT:
+            return self.zero_gradient
+        elif value == SPONGE:
+            return self.sponge
+        elif value == CLAMPED:
+            return Clamped()
+        elif value == FLATHER_ELEV:
+            return Flather()
+        elif value == FLATHER_TRANSPORT:
+            return Flather(transport=True)
+        else:
+            raise Exception(f"Unknown boundary type {value} specified")
 
     def _configure_mirroring(self, grid: core.Grid):
         """Set up indices for mirroring across boundaries on U and V grids"""
@@ -1076,7 +1070,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         tmask = grid.mask.all_values
         umask = grid.ugrid.mask.all_values
         vmask = grid.vgrid.mask.all_values
-        for boundary in self.active:
+        for boundary in self._boundaries:
             # Select the T points from the open boundary that are actually wet
             # (some may be on land with mask = 0)
             tsel = tmask[boundary.j, boundary.i] == 2
@@ -1130,7 +1124,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         vk: Optional[core.Array],
         fields: Mapping[str, core.Array],
     ):
-        for boundary in self.active:
+        for boundary in self._boundaries:
             # Set up depth-integrated/depth-averaged velocity perpendicular
             # to the open boundary for Flather boundary conditions
 
@@ -1156,7 +1150,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
             if hasattr(field, "open_boundaries"):
                 self.bcs.update(field.open_boundaries.initialize())
 
-    def __getitem__(self, key: int) -> OpenBoundary:
+    def __getitem__(self, key: int) -> LocalOpenBoundary:
         return self._boundaries[key]
 
     def __len__(self) -> int:
@@ -1193,7 +1187,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                 # Set modelled depth-explicit inward velocity for all boundaries
                 # combined by looping over individual boundaries and assigning
                 # to their velocity slices
-                for boundary in self.active:
+                for boundary in self._boundaries:
                     np.multiply(boundary.uv, boundary.inflow_sign, out=boundary.uv_in)
 
             for bc in self.bcs:
