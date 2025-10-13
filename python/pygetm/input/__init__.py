@@ -85,7 +85,11 @@ class GETMAccessor:
             standard_name = coord.attrs.get("standard_name")
             if standard_name in ("latitude", "longitude"):
                 _coordinates[standard_name] = coord
-            elif coord.attrs.get("positive") or standard_name in Z_STANDARD_NAMES:
+            elif (
+                coord.attrs.get("positive")
+                or standard_name in Z_STANDARD_NAMES
+                or coord.attrs.get("axis") == "Z"
+            ):
                 _coordinates["z"] = coord
             elif units in LATITUDE_UNITS:
                 _coordinates["latitude"] = coord
@@ -490,33 +494,41 @@ class Concatenate(Operator):
         return np.concatenate(arrays, axis=self.axis)
 
     def __getitem__(self, slices) -> np.ndarray:
-        slices = self._finalize_slices(slices)
+        slices = list(self._finalize_slices(slices))
         axis = self.axis
-        if (
-            isinstance(slices[axis], slice)
-            and slices[axis].start is None
-            and slices[axis].stop is None
-        ):
-            arrays = [np.asarray(array[slices]) for array in self.args]
+        if isinstance(slices[axis], (int, np.integer)):
+            if slices[axis] < 0:
+                slices[axis] += self.shape[axis]
+                assert slices[axis] >= 0
+            for array in self.args:
+                if slices[axis] < array.shape[axis]:
+                    return np.asarray(array[tuple(slices)])
+                slices[axis] -= array.shape[axis]
+            raise IndexError
+        else:
+            assert isinstance(slices[axis], slice)
+            outaxis = axis
             for s in slices[:axis]:
                 if isinstance(s, (int, np.integer)):
                     # This dimension precedes the axis over which we concatenate
                     # and it will be sliced out from the source arrays
                     # Therefore, the axis over which we concatenate decreases by 1
-                    axis -= 1
-            return np.concatenate(arrays, axis=axis)
-        assert isinstance(
-            slices[axis], (int, np.integer)
-        ), f"Unsupported slice for concatenated dimension: {slices[axis]!r}"
-        slices = list(slices)
-        if slices[axis] < 0:
-            slices[axis] += self.shape[axis]
-        assert slices[axis] >= 0 and slices[axis] < self.shape[axis]
-        for array in self.args:
-            if slices[axis] < array.shape[axis]:
-                return np.asarray(array[tuple(slices)])
-            slices[axis] -= array.shape[axis]
-        assert False, "Index out of bounds?"
+                    outaxis -= 1
+
+            start, stop, step = slices[axis].indices(self.shape[axis])
+            assert step > 0
+            arrays = []
+            for array in self.args:
+                if start < array.shape[axis]:
+                    slices[axis] = slice(start, stop, step)
+                    current = np.asarray(array[tuple(slices)])
+                    start += current.shape[outaxis] * step
+                    arrays.append(current)
+                start -= array.shape[axis]
+                stop -= array.shape[axis]
+                if stop <= 0:
+                    break
+            return np.concatenate(arrays, axis=outaxis)
 
 
 def limit_region(

@@ -123,7 +123,6 @@ class TwoBand(Radiation):
             name="rad",
             units="W m-2",
             long_name="shortwave radiation",
-            fabm_standard_name="downwelling_shortwave_flux",
             z=INTERFACES,
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="downwelling_shortwave_flux_in_sea_water"),

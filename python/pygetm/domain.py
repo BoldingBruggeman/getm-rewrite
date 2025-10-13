@@ -602,13 +602,14 @@ class Domain:
 
         self._area = self._dx * self._dy
 
-        x_ = None if self._x is None else self._x[1::2, 1::2]
-        y_ = None if self._y is None else self._y[1::2, 1::2]
-        lon_ = None if self._lon is None else self._lon[1::2, 1::2]
-        lat_ = None if self._lat is None else self._lat[1::2, 1::2]
-        self._tlocator = core.Locator(
-            self._mask[1::2, 1::2], x=x_, y=y_, lon=lon_, lat=lat_
-        )
+    def _tlocator(self, mask: Optional[np.ndarray] = None) -> core.Locator:
+        """Locator for T points (cell centers)"""
+        x = None if self._x is None else self._x[1::2, 1::2]
+        y = None if self._y is None else self._y[1::2, 1::2]
+        lon = None if self._lon is None else self._lon[1::2, 1::2]
+        lat = None if self._lat is None else self._lat[1::2, 1::2]
+        tmask = (self._mask if mask is None else mask)[1::2, 1::2]
+        return core.Locator(mask=tmask, x=x, y=y, lon=lon, lat=lat)
 
     def _map_array(
         self,
@@ -870,7 +871,7 @@ class Domain:
 
         This attribute is None on non-root MPI nodes
         """
-        if not self._z0.flags.writeable:
+        if self._z0 is not None and not self._z0.flags.writeable:
             self._z0 = self._z0.copy()
         return self._z0
 
@@ -906,7 +907,7 @@ class Domain:
                 raise Exception("Water depth at rest (H) has not been provided")
 
             # Map river coordinates to global grid indices
-            self._map_rivers(final_mask)
+            self.rivers.map_to_grid(self._tlocator(final_mask))
 
         if tiling is None:
             tiling = self.create_tiling()
@@ -1486,10 +1487,6 @@ class Domain:
         rotated_domain.open_boundaries.sponge.tmrlx = self.open_boundaries.sponge.tmrlx
         return rotated_domain
 
-    def _map_rivers(self, mask: np.ndarray):
-        assert self.comm.rank == 0
-        self.rivers.map_to_grid(self._tlocator)
-
     @apply_on_root_and_bcast
     def nearest_point(
         self,
@@ -1501,7 +1498,7 @@ class Domain:
     ) -> Tuple[int, int]:
         if coordinate_type is None:
             coordinate_type = self.coordinate_type
-        return self._tlocator(
+        return self._tlocator()(
             x, y, coordinate_type=coordinate_type, allowed_mask=allowed_mask
         )
 
@@ -1603,7 +1600,7 @@ class Domain:
             cb.set_label(label)
 
         if show_rivers and self.rivers:
-            self._map_rivers(mask)
+            self.rivers.map_to_grid(self._tlocator(mask))
             for river in self.rivers.global_rivers:
                 i_sup, j_sup = 1 + river.i_glob * 2, 1 + river.j_glob * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]

@@ -915,7 +915,7 @@ def find_optimal_divison(
         }
 
     # If we have a 1D grid with only unmasked (water) points,
-    # return simple equal subdomian division
+    # return simple equal subdomain division
     if ny == 1 and mask.all():
         return {
             "ncpus": ncpus,

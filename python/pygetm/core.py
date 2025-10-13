@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Iterable,
     TYPE_CHECKING,
+    Dict,
 )
 import logging
 import functools
@@ -65,7 +66,13 @@ class Rotator:
 
 class BoundaryGatherer:
     def __init__(
-        self, comm: "mpi4py.MPI.Comm", open_boundaries, shape: Tuple[int, ...], dtype
+        self,
+        comm: "mpi4py.MPI.Comm",
+        open_boundaries,
+        shape: Tuple[int, ...],
+        dtype,
+        *,
+        fill_value=None,
     ):
         self.np_bdy = self.indices = self.work1 = self.work2 = self.count = None
 
@@ -77,14 +84,16 @@ class BoundaryGatherer:
 
         # Gather the global indices of open boundary points from each subdomain
         if comm.rank == 0:
-            self.indices = np.empty((self.np_bdy.sum(),), dtype=int)
+            self.indices = np.empty((self.np_bdy.sum(),), dtype=np.intp)
         comm.Gatherv(
             open_boundaries.local_to_global_indices, (self.indices, self.np_bdy)
         )
         if comm.rank == 0:
-            assert frozenset(self.indices) == frozenset(range(open_boundaries.np_glob))
+            assert (self.indices < open_boundaries.np_glob).all()
             self.work1 = np.empty((self.np_bdy.sum(),) + shape, dtype=dtype)
             self.work2 = np.empty((open_boundaries.np_glob,) + shape, dtype=dtype)
+            if fill_value is not None:
+                self.work2.fill(fill_value)
             self.count = self.np_bdy * np.prod(shape, dtype=int)
 
         self._Gatherv = comm.Gatherv
@@ -357,7 +366,9 @@ class Grid(_pygetm.Grid):
 
         self._interior = (Ellipsis, slice(haloy, haloy + ny), slice(halox, halox + nx))
         self._interpolators = {}
-        self._mirrors: Mapping["Grid", Tuple[slice, slice]] = {}
+        self._mirrors: Dict[
+            "Grid", Optional[Tuple[Tuple[slice, ...], Tuple[slice, ...]]]
+        ] = {}
         self.horizontal_coordinates: List["Array"] = []
         self.extra_output_coordinates = []
 
@@ -639,7 +650,11 @@ class Grid(_pygetm.Grid):
         elif on_boundary:
             # boundary field
             gatherer = BoundaryGatherer(
-                self.tiling.comm, self.open_boundaries, shape[1:], dtype
+                self.tiling.comm,
+                self.open_boundaries,
+                shape[1:],
+                dtype,
+                fill_value=fill_value,
             )
         else:
             gatherer = parallel.Gather(
