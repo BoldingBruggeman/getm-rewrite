@@ -379,8 +379,8 @@ class Sponge(Clamped):
         """
         if self.tmrlx and self.rlxcoef is None:
             self.rlxcoef = grid.array(z=CENTERS, on_boundary=True)
-            grid.open_boundaries.velocity_3d_in.saved = True
-            self.inflow = grid.open_boundaries.velocity_3d_in.all_values
+            grid.open_boundaries.uv_in.saved = True
+            self.inflow = grid.open_boundaries.uv_in.all_values
 
     def prepare_depth_explicit(self):
         """Update the relaxation coefficient based on the current flow velocity.
@@ -505,7 +505,7 @@ class Flather(BoundaryCondition):
         return functools.partial(
             self.update_transport if self.transport else self.update_velocity,
             bdy,
-            boundary.tp,
+            boundary.UV,
             boundary.flow_ext,
             array.grid.Dclip.all_values[boundary.slice_t],
             boundary.inflow_sign,
@@ -706,7 +706,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         "mirror_V",
         "mirror_TU",
         "mirror_TV",
-        "velocity_3d_in",
+        "uv_in",
         "bcs",
         "allow_on_land",
     )
@@ -848,7 +848,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         outside the open boundary)
 
         Args:
-            mask: writeable mask defined on the supergrid, with shape (1+2\*ny, 1+2\*nx)
+            mask: writeable mask defined on the supergrid, with shape (1+2*ny, 1+2*nx)
         """
         assert mask.shape == (1 + 2 * self.ny, 1 + 2 * self.nx)
         umask = mask[1::2, 0::2]
@@ -893,58 +893,59 @@ class OpenBoundaries(Sequence[OpenBoundary]):
             not self._frozen
         ), "The open boundary collection has already been initialized"
 
-        for boundary in self._boundaries:
-            boundary.to_local_grid(grid)
-
-        nbdyp = 0
-        nbdyp_glob = 0
+        self.np = 0
+        self.np_glob = 0
 
         # Indices of T point in open boundary into arrays that INCLUDE halos.
         # We start with an empty array to support later concatenation in
         # subdomains without any open boundary
-        bdy_i = [np.empty((0,), dtype=np.intc)]
-        bdy_j = [np.empty((0,), dtype=np.intc)]
+        all_i = [np.empty((0,), dtype=np.intp)]
+        all_j = [np.empty((0,), dtype=np.intp)]
         side2count = {Side.WEST: 0, Side.NORTH: 0, Side.EAST: 0, Side.SOUTH: 0}
         self.local_to_global: List[slice] = []
         bdy_types_2d = {}
         for boundary in self._boundaries:
+            boundary.to_local_grid(grid)
+
             if boundary.l is not None:
+                # This boundary falls at least partially in the local subdomain
+                self.active.append(boundary)
+                side2count[boundary.side] += 1
+
+                # Determine start/stop indices in arrays with all local boundary points
                 mskip = (boundary.mstart - boundary.mstart_) // boundary.mstep
                 assert mskip >= 0
-                boundary.start = nbdyp
-                boundary.stop = nbdyp + boundary.np
-                boundary.slice_bdy = (
-                    slice(boundary.start, boundary.stop),
-                    Ellipsis,
-                )
-                if boundary.type_2d not in bdy_types_2d:
-                    bdy_types_2d[boundary.type_2d] = self._make_bc(boundary.type_2d)
-                boundary.type_2d = bdy_types_2d[boundary.type_2d]
-                nbdyp += boundary.np
+                boundary.start = self.np
+                boundary.stop = self.np + boundary.np
+                boundary.slice_bdy = (slice(boundary.start, boundary.stop), Ellipsis)
 
-                bdy_i.append(boundary.i)
-                bdy_j.append(boundary.j)
-
-                start_glob = nbdyp_glob + mskip
+                # Determine start/stop indices in arrays with all global boundary points
+                start_glob = self.np_glob + mskip
                 stop_glob = start_glob + boundary.np
                 if self.local_to_global and self.local_to_global[-1].stop == start_glob:
                     # Attach to previous boundary by dropping previous slice
                     # and adopting its start index
                     start_glob = self.local_to_global.pop().start
                 self.local_to_global.append(slice(start_glob, stop_glob))
-                side2count[boundary.side] += 1
-                self.active.append(boundary)
-            nbdyp_glob += (boundary.mstop_ - boundary.mstart_) // boundary.mstep
+
+                all_i.append(boundary.i)
+                all_j.append(boundary.j)
+
+                if boundary.type_2d not in bdy_types_2d:
+                    bdy_types_2d[boundary.type_2d] = self._make_bc(boundary.type_2d)
+                boundary.type_2d = bdy_types_2d[boundary.type_2d]
+
+                self.np += boundary.np
+
+            self.np_glob += (boundary.mstop_ - boundary.mstart_) // boundary.mstep
 
         # Number of open boundary points (local and global)
-        self.np = nbdyp
-        self.np_glob = nbdyp_glob
         grid.open_boundaries = self
 
         # Local indices of open boundary points within local subdomain
         # (T grid, for arrays that INclude halos)
-        self.i = np.concatenate(bdy_i, dtype=np.intp)
-        self.j = np.concatenate(bdy_j, dtype=np.intp)
+        self.i = np.concatenate(all_i, dtype=np.intp)
+        self.j = np.concatenate(all_j, dtype=np.intp)
         assert self.allow_on_land or (grid.mask.all_values[self.j, self.i] == 2).all()
 
         # Global indices of open boundary points within local subdomain
@@ -977,7 +978,7 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         if grid.ugrid:
             self._configure_mirroring(grid)
 
-        # Horizontal coordinates of open boundary points
+        # Longitude/latitude of open boundary points
         if grid.lon is not None:
             self.lon = grid.array(
                 name="lon_bdy",
@@ -1013,26 +1014,31 @@ class OpenBoundaries(Sequence[OpenBoundary]):
                 **kwargs,
             )
 
+            # Depth-explicit inward velocity at the open boundaries
+            self.uv_in = grid.array(z=CENTERS, on_boundary=True)
+
         # Prescribed depth-averaged or depth-integrated velocity at the open boundaries
         self.u = grid.array(name="u_bdy", on_boundary=True)
         self.v = grid.array(name="v_bdy", on_boundary=True)
 
         if grid.rotation is not None and self.np > 0:
+            # Prescribed geocentric velocity (eastwards/northwards) needs to be rotated
+            # to model grid. Create rotator and arrays to hold the rotated velocity.
             self._rotator = core.Rotator(grid.rotation.all_values[self.j, self.i])
             self.u_rot = grid.array(name="u_rot_bdy", on_boundary=True)
             self.v_rot = grid.array(name="v_rot_bdy", on_boundary=True)
         else:
+            # Model grid is geocentric - no rotation of prescribed velocities necessary
             self._rotator = None
             self.u_rot = self.u
             self.v_rot = self.v
-
-        self.velocity_3d_in = grid.array(z=CENTERS, on_boundary=True)
 
         self._frozen = True
 
     def _configure_mirroring(self, grid: core.Grid):
         """Set up indices for mirroring across boundaries on U and V grids"""
 
+        assert grid.ugrid is not None and grid.vgrid is not None
         nx, ny = grid.nx_, grid.ny_
 
         class Mirror:
@@ -1125,14 +1131,27 @@ class OpenBoundaries(Sequence[OpenBoundary]):
         fields: Mapping[str, core.Array],
     ):
         for boundary in self.active:
-            boundary.tp = boundary.extract_uv_in(U.all_values, V.all_values)
-            if uk is not None:
-                boundary.vel = boundary.extract_uv_in(uk.all_values, vk.all_values)
+            # Set up depth-integrated/depth-averaged velocity perpendicular
+            # to the open boundary for Flather boundary conditions
+
+            # Modelled depth-integrated velocity (slice from full U/V)
+            boundary.UV = boundary.extract_uv_in(U.all_values, V.all_values)
+
+            # Prescribed depth-integrated or depth-averaged velocity
             if boundary.side in (Side.EAST, Side.WEST):
                 boundary.flow_ext = self.u_rot[boundary.slice_bdy]
             else:
                 boundary.flow_ext = self.v_rot[boundary.slice_bdy]
-            boundary.velocity_3d_in = self.velocity_3d_in.all_values[boundary.slice_bdy]
+
+            if uk is not None:
+                # Depth-explicit horizontal model velocities for sponge BCs
+
+                # Velocity perpendicular to the open boundary (slice from full u/v)
+                boundary.uv = boundary.extract_uv_in(uk.all_values, vk.all_values).T
+
+                # Inward velocity (to be calculated from uv and inward sign)
+                boundary.uv_in = self.uv_in.all_values[boundary.slice_bdy]
+
         for field in fields.values():
             if hasattr(field, "open_boundaries"):
                 self.bcs.update(field.open_boundaries.initialize())
@@ -1148,7 +1167,8 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
     @property
     def local_to_global_indices(self) -> np.ndarray:
-        indices = np.arange(self.np, dtype=int)
+        """Indices of local open boundary points in a global open boundary array."""
+        indices = np.arange(self.np, dtype=np.intp)
         if self.local_to_global is not None:
             i = 0
             for s in self.local_to_global:
@@ -1159,18 +1179,22 @@ class OpenBoundaries(Sequence[OpenBoundary]):
 
     def prepare(self, macro_active: bool):
         """Prepare open boundary forcing. This includes rotating prescribed velocity
-        fields, as well as extracting 3D velocities from which each class of
-        open boundary condition can calculate derived metrics."""
+        fields, as well as extracting depth-explicit horizontal velocities from which
+        each class of open boundary condition can calculate derived metrics."""
+
         if self._rotator:
+            # Rotate prescribed geocentric velocity to model grid
             u_rot, v_rot = self._rotator(self.u.all_values, self.v.all_values)
             self.u_rot.all_values[:] = u_rot
             self.v_rot.all_values[:] = v_rot
+
         if macro_active:
-            if self.velocity_3d_in.saved:
-                # Set modelled inward 3D velocity for all boundaries combined
-                # by looping over individual boundaries and assigning to their
-                # velocity slices
+            if self.uv_in.saved:
+                # Set modelled depth-explicit inward velocity for all boundaries
+                # combined by looping over individual boundaries and assigning
+                # to their velocity slices
                 for boundary in self.active:
-                    boundary.velocity_3d_in[:] = boundary.inflow_sign * boundary.vel.T
+                    np.multiply(boundary.uv, boundary.inflow_sign, out=boundary.uv_in)
+
             for bc in self.bcs:
                 bc.prepare_depth_explicit()
