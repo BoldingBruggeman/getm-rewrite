@@ -21,7 +21,8 @@ from numpy.typing import DTypeLike, ArrayLike
 import pygetm.core
 import pygetm._pygetm
 import pygetm.util.interpolate
-from pygetm.constants import CENTERS, INTERFACES, TimeVarying
+import pygetm.parallel
+from pygetm.constants import CENTERS, INTERFACES, TimeVarying, CoordinateType
 
 
 class GridInfo(NamedTuple):
@@ -31,13 +32,14 @@ class GridInfo(NamedTuple):
 
     def _get_gather_info(
         self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
-    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
-        return self.grid.get_gather_info(
+    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
+        gatherer, local_slice, global_shape = self.grid.get_gather_info(
             shape=shape,
             on_boundary=self.on_boundary,
             dtype=dtype,
             fill_value=fill_value,
         )
+        return gatherer, local_slice, dict(shape=global_shape)
 
     def get_mask(self) -> np.ndarray:
         att = "_land"
@@ -62,6 +64,7 @@ class Base:
         "attrs",
         "time_varying",
         "coordinates",
+        "_global_values",
     )
 
     def __init__(
@@ -113,7 +116,7 @@ class Base:
 
     def _get_gather_info(
         self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
-    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
+    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
         return self.grid_info._get_gather_info(shape, dtype, fill_value)
 
     @property
@@ -328,6 +331,8 @@ class Field(Base):
         for key, value in array.attrs.items():
             if not key.startswith("_"):
                 attrs[key] = value
+        if "_global_values" in array.attrs:
+            self._global_values = array.attrs["_global_values"]
 
         self.array = array
         default_time_varying = TimeVarying.MACRO if array.z else TimeVarying.MICRO
@@ -416,7 +421,7 @@ class UnivariateTransform(Base):
 
     def _get_gather_info(
         self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
-    ) -> Tuple[Callable, Tuple, Tuple[int, ...]]:
+    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
         return self._grid_info_provider._get_gather_info(shape, dtype, fill_value)
 
 
@@ -441,13 +446,11 @@ class Gather(UnivariateTransform):
     __slots__ = "root_has_global_values", "_slice", "_gather"
 
     def __init__(self, source: Base):
-        gatherer, local_slice, global_shape = source._get_gather_info(
+        gatherer, local_slice, kwargs = source._get_gather_info(
             source.shape, source.dtype, source.fill_value
         )
-        super().__init__(source, shape=global_shape, expression=source.expression)
-        self.root_has_global_values = (
-            isinstance(source, Field) and "_global_values" in source.array.attrs
-        )
+        super().__init__(source, expression=source.expression, **kwargs)
+        self.root_has_global_values = hasattr(source, "_global_values")
         self._slice = local_slice
         self._gather = gatherer
 
@@ -455,8 +458,9 @@ class Gather(UnivariateTransform):
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
     ) -> ArrayLike:
         if self.root_has_global_values:
-            global_values = self._source.array.attrs["_global_values"]
+            global_values = self._source._global_values
             if global_values is not None:
+                assert global_values.shape == self.shape
                 if out is None:
                     return global_values
                 out[slice_spec] = global_values
@@ -631,3 +635,114 @@ class InterpZ(UnivariateTransformWithData):
         if grid_info is not None:
             grid_info = GridInfo(grid_info.grid, None, grid_info.on_boundary)
         return grid_info.get_mask()
+
+
+class IndexXY(UnivariateTransform):
+    __slots__ = "_i", "_j", "_slice", "_index_dims", "_local2global"
+
+    def __init__(
+        self,
+        source: Base,
+        x: ArrayLike,
+        y: ArrayLike,
+        coordinate_type: CoordinateType = CoordinateType.IJ,
+        dims: Tuple[str, ...] = (),
+    ):
+        index_shape = np.broadcast_shapes(np.shape(x), np.shape(y))
+        assert len(dims) == len(index_shape)
+        self._index_dims = dims
+
+        source_grid_info = source.grid_info
+        assert source_grid_info is not None and not source_grid_info.on_boundary
+        grid = source_grid_info.grid
+        self._i = np.empty(index_shape, dtype=np.intp)
+        self._j = np.empty(index_shape, dtype=np.intp)
+        if grid.tiling.rank == 0:
+            all_mask = grid.mask.attrs["_global_values"]
+            all_x = None if grid.x is None else grid.x.attrs["_global_values"]
+            all_y = None if grid.y is None else grid.y.attrs["_global_values"]
+            all_lon = None if grid.lon is None else grid.lon.attrs["_global_values"]
+            all_lat = None if grid.lat is None else grid.lat.attrs["_global_values"]
+            loc = pygetm.core.Locator(all_mask, all_x, all_y, all_lon, all_lat)
+            self._i[...], self._j[...] = loc(x, y, coordinate_type=coordinate_type)
+        grid.tiling.comm.Bcast(self._i)
+        grid.tiling.comm.Bcast(self._j)
+
+        if hasattr(source, "_global_values"):
+            # The root (rank=0) has the global values of the source array
+            if source._global_values is not None:
+                # We are the root - extract the values at the desired indices
+                self._global_values = source._global_values[..., self._j, self._i]
+            else:
+                # We are not the root - just set the attribute to flag that the root
+                # does have the global values
+                self._global_values = None
+
+        # Determine which of the desired indices fall within the local subdomain
+        # (excluding halos)
+        i = self._i - grid.tiling.xoffset
+        j = self._j - grid.tiling.yoffset
+        inside = (i >= 0) & (i < grid.nx) & (j >= 0) & (j < grid.ny)
+
+        # Determine slice needed to extract local values of interest, and mapping from
+        # the resulting local values to the global array with desired indices.
+        # At this point both local and global arrays are flattened (1D).
+        i_in = i[inside] + grid.halox
+        j_in = j[inside] + grid.haloy
+        self._slice = (Ellipsis, j_in, i_in)
+        self._local2global = np.flatnonzero(inside)
+
+        flat_shape = source.shape[:-2] + self._local2global.shape
+        flat_dim_name = "_".join(dims) if dims else "station"
+        flat_dims = source.dims[:-2] + (flat_dim_name,)
+        super().__init__(
+            source, shape=flat_shape, dims=flat_dims, inherit_grid_info=False
+        )
+
+    def get(
+        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+    ) -> ArrayLike:
+        values = self._source.get()[self._slice]
+        if out is None:
+            return values
+        else:
+            out[slice_spec] = values
+            return out
+
+    @property
+    def coords(self) -> Iterable[Base]:
+        for c in self._source.coords:
+            if c.dims[-2:] == self._source.dims[-2:]:
+                c = IndexXY(c, self._i, self._j, dims=self._index_dims)
+            yield c
+
+    def _get_gather_info(self, shape, dtype, fill_value):
+        class gather_serial:
+            def __init__(self, final_shape):
+                self.final_shape = final_shape
+
+            def __call__(
+                self, locvalues, globvalues: Optional[np.ndarray] = None, globslice=()
+            ):
+                locvalues = np.reshape(locvalues, self.final_shape)
+                if globvalues is not None:
+                    globvalues[globslice] = locvalues
+                    return globvalues
+                return locvalues
+
+        tiling = self._source.grid_info.grid.tiling
+        final_shape = self._source.shape[:-2] + self._i.shape
+        final_dims = self._source.dims[:-2] + self._index_dims
+        if tiling.n == 1:
+            gatherer = gather_serial(final_shape)
+        else:
+            gatherer = pygetm.parallel.GatherFromIndices(
+                tiling.comm,
+                self._local2global,
+                self._i.shape,
+                self._source.shape[:-2],
+                self.dtype,
+                fill_value=self.fill_value,
+            )
+
+        return gatherer, (Ellipsis,), dict(shape=final_shape, dims=final_dims)
