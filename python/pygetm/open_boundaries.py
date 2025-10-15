@@ -183,11 +183,11 @@ class LocalOpenBoundary(OpenBoundary):
             lstop = None if llast == 0 and l_inward == -1 else llast + l_inward
             lslice = slice(lstart, lstop, l_inward)
         if self.side in (Side.WEST, Side.EAST):
-            return values[Ellipsis, mslice, lslice]
+            return values[..., mslice, lslice]
         else:
             if stop is not None:
-                return np.swapaxes(values[Ellipsis, lslice, mslice], -1, -2)
-            return values[Ellipsis, lslice, mslice]
+                return np.swapaxes(values[..., lslice, mslice], -1, -2)
+            return values[..., lslice, mslice]
 
     def extract_uv_in(self, u: np.ndarray, v: np.ndarray) -> np.ndarray:
         """Extract velocity or transport across the boundary from components at

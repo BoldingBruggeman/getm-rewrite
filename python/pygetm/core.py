@@ -159,8 +159,8 @@ class Locator:
         # Location is specified by x, y coordinate.
         # Look up nearest unmasked grid cell.
         x, y = np.broadcast_arrays(x, y)
-        dist = (allx - x[Ellipsis, np.newaxis, np.newaxis]) ** 2 + (
-            ally - y[Ellipsis, np.newaxis, np.newaxis]
+        dist = (allx - x[..., np.newaxis, np.newaxis]) ** 2 + (
+            ally - y[..., np.newaxis, np.newaxis]
         ) ** 2
         if allowed_mask is not None:
             valid = np.zeros(self.mask.shape, dtype=bool)
