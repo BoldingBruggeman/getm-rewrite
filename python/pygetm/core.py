@@ -27,7 +27,6 @@ from .constants import CENTERS, INTERFACES, FILL_VALUE, CoordinateType
 
 if TYPE_CHECKING:
     import netCDF4
-    import mpi4py
 
 
 def _noop(*args, **kwargs):
@@ -62,54 +61,6 @@ class Rotator:
             u_new = u * self._cos - v * self._sin
             v_new = u * self._sin + v * self._cos
         return u_new, v_new
-
-
-class BoundaryGatherer:
-    def __init__(
-        self,
-        comm: "mpi4py.MPI.Comm",
-        open_boundaries,
-        shape: Tuple[int, ...],
-        dtype,
-        *,
-        fill_value=None,
-    ):
-        self.np_bdy = self.indices = self.work1 = self.work2 = self.count = None
-
-        # Gather the number of open boundary points in each subdomain
-        np_local = np.array(open_boundaries.np, dtype=int)
-        if comm.rank == 0:
-            self.np_bdy = np.empty((comm.size,), dtype=int)
-        comm.Gather(np_local, self.np_bdy)
-
-        # Gather the global indices of open boundary points from each subdomain
-        if comm.rank == 0:
-            self.indices = np.empty((self.np_bdy.sum(),), dtype=np.intp)
-        comm.Gatherv(
-            open_boundaries.local_to_global_indices, (self.indices, self.np_bdy)
-        )
-        if comm.rank == 0:
-            assert (self.indices < open_boundaries.np_glob).all()
-            self.work1 = np.empty((self.np_bdy.sum(),) + shape, dtype=dtype)
-            self.work2 = np.empty((open_boundaries.np_glob,) + shape, dtype=dtype)
-            if fill_value is not None:
-                self.work2.fill(fill_value)
-            self.count = self.np_bdy * np.prod(shape, dtype=int)
-
-        self._Gatherv = comm.Gatherv
-
-    def __call__(
-        self, locvalues, globvalues: Optional[np.ndarray] = None, globslice=()
-    ):
-        # Gather the values at the open boundary points from each subdomain
-        self._Gatherv(locvalues, (self.work1, self.count))
-
-        if self.work1 is not None:
-            self.work2[self.indices, ...] = self.work1
-            if globvalues is not None:
-                globvalues[globslice] = self.work2
-                return globvalues
-        return self.work2
 
 
 class Locator:
@@ -658,12 +609,14 @@ class Grid(_pygetm.Grid):
             raise NotImplementedError()
         elif on_boundary:
             # boundary field
-            gatherer = BoundaryGatherer(
+            gatherer = parallel.GatherFromIndices(
                 self.tiling.comm,
-                self.open_boundaries,
+                self.open_boundaries.local_to_global_indices,
+                (self.open_boundaries.np_glob,),
                 shape[1:],
                 dtype,
                 fill_value=fill_value,
+                trailing_index=False,
             )
         else:
             gatherer = parallel.Gather(
