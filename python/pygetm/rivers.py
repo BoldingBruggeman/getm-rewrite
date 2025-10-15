@@ -82,7 +82,7 @@ class River:
         to the nearest non-masked grid cell."""
         if self.x is not None and self.y is not None:
             self.i_glob, self.j_glob = locator(
-                self.x, self.y, coordinate_type=self.coordinate_type
+                self.x, self.y, coordinate_type=self.coordinate_type, allowed_mask=(1,)
             )
 
     def to_local_grid(self, grid: core.Grid, logger: logging.Logger) -> bool:

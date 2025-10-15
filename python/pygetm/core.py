@@ -121,6 +121,7 @@ class Locator:
         lon: Optional[np.ndarray],
         lat: Optional[np.ndarray],
     ):
+        assert mask.ndim == 2
         self.mask = mask
         self.x = x
         self.y = y
@@ -129,11 +130,11 @@ class Locator:
 
     def __call__(
         self,
-        x: float,
-        y: float,
+        x: npt.ArrayLike,
+        y: npt.ArrayLike,
         *,
         coordinate_type: CoordinateType,
-        allowed_mask: Iterable[int] = (1,),
+        allowed_mask: Optional[Iterable[int]] = None,
     ) -> Tuple[int, int]:
         """Locate the unmasked grid cell nearest to the specified location.
 
@@ -146,24 +147,32 @@ class Locator:
             (i, j): indices of the nearest unmasked grid cell
         """
         if coordinate_type == CoordinateType.LONLAT:
+            assert self.lon is not None and self.lat is not None
             allx, ally = self.lon, self.lat
         elif coordinate_type == CoordinateType.XY:
+            assert self.x is not None and self.y is not None
             allx, ally = self.x, self.y
         else:
-            return int(x), int(y)
-        assert allx is not None
-        assert ally is not None
+            allx = np.arange(self.mask.shape[-1], dtype=float)[np.newaxis, :]
+            ally = np.arange(self.mask.shape[-2], dtype=float)[:, np.newaxis]
 
         # Location is specified by x, y coordinate.
         # Look up nearest unmasked grid cell.
-        dist = (allx - x) ** 2 + (ally - y) ** 2
-        valid = np.zeros(dist.shape, dtype=bool)
-        for m in allowed_mask:
-            valid |= self.mask == m
-        dist[~valid] = np.inf
-        idx = np.nanargmin(dist)
-        j, i = map(int, np.unravel_index(idx, dist.shape))
-        assert self.mask[j, i] == 1
+        x, y = np.broadcast_arrays(x, y)
+        dist = (allx - x[Ellipsis, np.newaxis, np.newaxis]) ** 2 + (
+            ally - y[Ellipsis, np.newaxis, np.newaxis]
+        ) ** 2
+        if allowed_mask is not None:
+            valid = np.zeros(self.mask.shape, dtype=bool)
+            for m in allowed_mask:
+                valid |= self.mask == m
+            dist[(slice(None),) * x.ndim + (~valid,)] = np.inf
+        flat_dist = np.reshape(dist, x.shape + (-1,))
+        idx = np.nanargmin(flat_dist, axis=-1)
+        j, i = np.unravel_index(idx, self.mask.shape)
+        assert allowed_mask is None or np.isin(self.mask[j, i], allowed_mask).all()
+        if i.ndim == 0:
+            return int(i), int(j)
         return i, j
 
 
