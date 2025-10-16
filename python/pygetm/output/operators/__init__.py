@@ -10,6 +10,8 @@ from typing import (
     List,
     Any,
     NamedTuple,
+    Type,
+    TypeVar,
 )
 import collections
 import enum
@@ -31,13 +33,13 @@ class GridInfo(NamedTuple):
     on_boundary: bool
 
     def _get_gather_info(
-        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
+        self, source: "Base"
     ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
         gatherer, local_slice, global_shape = self.grid.get_gather_info(
-            shape=shape,
+            shape=source.shape,
             on_boundary=self.on_boundary,
-            dtype=dtype,
-            fill_value=fill_value,
+            dtype=source.dtype,
+            fill_value=source.fill_value,
         )
         return gatherer, local_slice, dict(shape=global_shape)
 
@@ -53,6 +55,9 @@ class GridInfo(NamedTuple):
         yield from self.grid.extra_output_coordinates
 
 
+T = TypeVar("T")
+
+
 class Base:
     __slots__ = (
         "expression",
@@ -66,6 +71,10 @@ class Base:
         "coordinates",
         "_global_values",
     )
+
+    @classmethod
+    def parameterize(cls: Type[T], **kwargs) -> T:
+        return functools.partial(cls, **kwargs)
 
     def __init__(
         self,
@@ -115,9 +124,9 @@ class Base:
         return None
 
     def _get_gather_info(
-        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
+        self, source: "Base"
     ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
-        return self.grid_info._get_gather_info(shape, dtype, fill_value)
+        return self.grid_info._get_gather_info(source)
 
     @property
     def mask(self) -> np.ndarray:
@@ -188,6 +197,7 @@ class FieldCollection:
         grid: Optional[pygetm.core.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
         generate_unique_name: bool = False,
+        transforms: Iterable[Type["UnivariateTransform"]] = (),
     ) -> Tuple[str, ...]:
         """Add one or more arrays to this field collection.
 
@@ -263,6 +273,8 @@ class FieldCollection:
             if dtype is None and array.dtype == float:
                 dtype = self.default_dtype
             field = Field(array, dtype=dtype)
+            for tf in transforms:
+                field = tf(field)
             if time_average and field.time_varying:
                 field = TimeAverage(field)
             if grid and array.grid is not grid:
@@ -420,9 +432,9 @@ class UnivariateTransform(Base):
         yield from self._grid_info_provider.coords
 
     def _get_gather_info(
-        self, shape: Tuple[int, ...], dtype: np.dtype, fill_value: np.ndarray
+        self, source: "Base"
     ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
-        return self._grid_info_provider._get_gather_info(shape, dtype, fill_value)
+        return self._grid_info_provider._get_gather_info(source)
 
 
 class UnivariateTransformWithData(UnivariateTransform):
@@ -446,9 +458,7 @@ class Gather(UnivariateTransform):
     __slots__ = "root_has_global_values", "_slice", "_gather"
 
     def __init__(self, source: Base):
-        gatherer, local_slice, kwargs = source._get_gather_info(
-            source.shape, source.dtype, source.fill_value
-        )
+        gatherer, local_slice, kwargs = source._get_gather_info(source)
         super().__init__(source, expression=source.expression, **kwargs)
         self.root_has_global_values = hasattr(source, "_global_values")
         self._slice = local_slice
@@ -596,12 +606,17 @@ class Regrid(UnivariateTransformWithData):
 
 
 class InterpZ(UnivariateTransformWithData):
+    """Interpolate in the vertical.
+    The vertical dimension must be the first dimension of the source array.
+    The source array must have a vertical coordinate with ``axis`` attribute equal
+    to ``Z``. This coordinate must have the same shape as the source array.
+    """
+
     __slots__ = ("z_src", "z_tgt", "z_dim")
 
     def __init__(self, source: Base, z: ArrayLike, dim: str):
-        assert source.ndim == 3
         self.z_tgt = np.asarray(z, dtype=float)
-        shape = (self.z_tgt.size,) + source.shape[-2:]
+        shape = (self.z_tgt.size,) + source.shape[1:]
         dims = (dim,) + source.dims[1:]
         self.z_dim = dim
         expression = f"{self.__class__.__name__}({source.expression}, z={self.z_tgt})"
@@ -716,7 +731,16 @@ class IndexXY(UnivariateTransform):
                 c = IndexXY(c, self._i, self._j, dims=self._index_dims)
             yield c
 
-    def _get_gather_info(self, shape, dtype, fill_value):
+    @property
+    def mask(self) -> np.ndarray:
+        return self._source.mask[self._slice]
+
+    def _get_gather_info(
+        self, source: Base
+    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
+        """Gather across all processes and reshape the flattened
+        data to the original index shape"""
+
         class gather_serial:
             def __init__(self, final_shape):
                 self.final_shape = final_shape
@@ -731,8 +755,8 @@ class IndexXY(UnivariateTransform):
                 return locvalues
 
         tiling = self._source.grid_info.grid.tiling
-        final_shape = self._source.shape[:-2] + self._i.shape
-        final_dims = self._source.dims[:-2] + self._index_dims
+        final_shape = source.shape[:-1] + self._i.shape
+        final_dims = source.dims[:-1] + self._index_dims
         if tiling.n == 1:
             gatherer = gather_serial(final_shape)
         else:
@@ -740,9 +764,13 @@ class IndexXY(UnivariateTransform):
                 tiling.comm,
                 self._local2global,
                 self._i.shape,
-                self._source.shape[:-2],
-                self.dtype,
-                fill_value=self.fill_value,
+                source.shape[:-1],
+                source.dtype,
+                fill_value=source.fill_value,
             )
 
         return gatherer, (Ellipsis,), dict(shape=final_shape, dims=final_dims)
+
+    @property
+    def grid_info(self) -> None:
+        return None

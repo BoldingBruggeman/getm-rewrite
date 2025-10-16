@@ -891,10 +891,10 @@ class GatherFromIndices:
         local2global: np.ndarray,
         index_shape: Tuple[int, ...],
         nonindexed_shape: Tuple[int, ...],
-        dtype,
+        dtype: DTypeLike,
         *,
         fill_value=None,
-        trailing_index=True,
+        trailing_index: bool = True,
     ):
         """Gather values at specific indices from all ranks to rank 0.
 
@@ -950,12 +950,15 @@ class GatherFromIndices:
         self.trailing_index = trailing_index
 
     def __call__(
-        self, locvalues, globvalues: Optional[np.ndarray] = None, globslice=()
+        self,
+        locvalues: np.ndarray,
+        globvalues: Optional[np.ndarray] = None,
+        globslice=(),
     ) -> np.ndarray:
         """Gather values from each subdomain."""
         if self.trailing_index:
             locvalues = locvalues.T
-        self._Gatherv(locvalues, (self.recvbuf, self.counts))
+        self._Gatherv(np.ascontiguousarray(locvalues), (self.recvbuf, self.counts))
 
         if self.recvbuf is not None:
             if self.trailing_index:
