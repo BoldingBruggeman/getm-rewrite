@@ -512,7 +512,7 @@ class Domain:
         self.root_logger = logger or parallel.get_logger()
         self.logger = self.root_logger.getChild("domain")
 
-        self.open_boundaries = open_boundaries.OpenBoundaries(
+        self.open_boundaries = open_boundaries.GlobalOpenBoundaryCollection(
             nx, ny, self.logger.getChild("open_boundaries")
         )
         self.rivers = rivers.Rivers(
@@ -892,7 +892,7 @@ class Domain:
 
     def create_grids(
         self,
-        nz: int,
+        nz: Optional[int],
         halox: int,
         haloy: int,
         fields: Optional[Mapping[str, core.Array]] = None,
@@ -1000,7 +1000,6 @@ class Domain:
 
         T.freeze()
 
-        self.open_boundaries.initialize(T)
         self.rivers.initialize(T)
 
         return T
@@ -1468,7 +1467,7 @@ class Domain:
             open_boundaries.Side.SOUTH: open_boundaries.Side.WEST,
         }
         for b in self.open_boundaries:
-            mstart, mstop, l = b.mstart_glob, b.mstop_glob, b.l_glob
+            mstart, mstop, l = b.mstart, b.mstop, b.l
             if b.side in (open_boundaries.Side.NORTH, open_boundaries.Side.SOUTH):
                 mstart, mstop = (self.nx - 1 - mstart, self.nx - 1 - mstop)
             else:
@@ -1611,13 +1610,13 @@ class Domain:
             x_X, y_X = x[::2, ::2], y[::2, ::2]
             for b in self.open_boundaries:
                 if b.side in (open_boundaries.Side.WEST, open_boundaries.Side.EAST):
-                    imin, imax = b.l_glob, b.l_glob + 1
-                    jmin = min(b.mstart_glob, b.mstop_glob - b.mstep)
-                    jmax = max(b.mstart_glob, b.mstop_glob - b.mstep) + 1
+                    imin, imax = b.l, b.l + 1
+                    jmin = min(b.mstart, b.mstop - b.mstep)
+                    jmax = max(b.mstart, b.mstop - b.mstep) + 1
                 else:
-                    jmin, jmax = b.l_glob, b.l_glob + 1
-                    imin = min(b.mstart_glob, b.mstop_glob - b.mstep)
-                    imax = max(b.mstart_glob, b.mstop_glob - b.mstep) + 1
+                    jmin, jmax = b.l, b.l + 1
+                    imin = min(b.mstart, b.mstop - b.mstep)
+                    imax = max(b.mstart, b.mstop - b.mstep) + 1
                 x_b = x_X[jmin : jmax + 1, imin : imax + 1]
                 y_b = y_X[jmin : jmax + 1, imin : imax + 1]
                 if x_b.shape[1] == 2:

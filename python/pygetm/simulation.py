@@ -525,7 +525,6 @@ class Simulation(BaseSimulation):
             raise Exception("Dcrit < 2.5*Dmin")
 
         self.rivers = domain.rivers
-        self.open_boundaries = domain.open_boundaries
 
         HALO = 2
 
@@ -557,6 +556,12 @@ class Simulation(BaseSimulation):
             input_manager=self.input_manager,
             velocity_grids=2,
             t_postfix="t",
+        )
+
+        self.open_boundaries = pygetm.open_boundaries.LocalOpenBoundaryCollection(
+            domain.open_boundaries,
+            self.T,
+            logger=self.logger.getChild("open_boundaries"),
         )
 
         self.U = self.T.ugrid

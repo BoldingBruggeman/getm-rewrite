@@ -27,7 +27,6 @@ from .constants import CENTERS, INTERFACES, FILL_VALUE, CoordinateType
 
 if TYPE_CHECKING:
     import netCDF4
-    import mpi4py
 
 
 def _noop(*args, **kwargs):
@@ -64,54 +63,6 @@ class Rotator:
         return u_new, v_new
 
 
-class BoundaryGatherer:
-    def __init__(
-        self,
-        comm: "mpi4py.MPI.Comm",
-        open_boundaries,
-        shape: Tuple[int, ...],
-        dtype,
-        *,
-        fill_value=None,
-    ):
-        self.np_bdy = self.indices = self.work1 = self.work2 = self.count = None
-
-        # Gather the number of open boundary points in each subdomain
-        np_local = np.array(open_boundaries.np, dtype=int)
-        if comm.rank == 0:
-            self.np_bdy = np.empty((comm.size,), dtype=int)
-        comm.Gather(np_local, self.np_bdy)
-
-        # Gather the global indices of open boundary points from each subdomain
-        if comm.rank == 0:
-            self.indices = np.empty((self.np_bdy.sum(),), dtype=np.intp)
-        comm.Gatherv(
-            open_boundaries.local_to_global_indices, (self.indices, self.np_bdy)
-        )
-        if comm.rank == 0:
-            assert (self.indices < open_boundaries.np_glob).all()
-            self.work1 = np.empty((self.np_bdy.sum(),) + shape, dtype=dtype)
-            self.work2 = np.empty((open_boundaries.np_glob,) + shape, dtype=dtype)
-            if fill_value is not None:
-                self.work2.fill(fill_value)
-            self.count = self.np_bdy * np.prod(shape, dtype=int)
-
-        self._Gatherv = comm.Gatherv
-
-    def __call__(
-        self, locvalues, globvalues: Optional[np.ndarray] = None, globslice=()
-    ):
-        # Gather the values at the open boundary points from each subdomain
-        self._Gatherv(locvalues, (self.work1, self.count))
-
-        if self.work1 is not None:
-            self.work2[self.indices, ...] = self.work1
-            if globvalues is not None:
-                globvalues[globslice] = self.work2
-                return globvalues
-        return self.work2
-
-
 class Locator:
     def __init__(
         self,
@@ -121,6 +72,7 @@ class Locator:
         lon: Optional[np.ndarray],
         lat: Optional[np.ndarray],
     ):
+        assert mask.ndim == 2
         self.mask = mask
         self.x = x
         self.y = y
@@ -129,11 +81,11 @@ class Locator:
 
     def __call__(
         self,
-        x: float,
-        y: float,
+        x: npt.ArrayLike,
+        y: npt.ArrayLike,
         *,
         coordinate_type: CoordinateType,
-        allowed_mask: Iterable[int] = (1,),
+        allowed_mask: Optional[Iterable[int]] = None,
     ) -> Tuple[int, int]:
         """Locate the unmasked grid cell nearest to the specified location.
 
@@ -146,24 +98,32 @@ class Locator:
             (i, j): indices of the nearest unmasked grid cell
         """
         if coordinate_type == CoordinateType.LONLAT:
+            assert self.lon is not None and self.lat is not None
             allx, ally = self.lon, self.lat
         elif coordinate_type == CoordinateType.XY:
+            assert self.x is not None and self.y is not None
             allx, ally = self.x, self.y
         else:
-            return int(x), int(y)
-        assert allx is not None
-        assert ally is not None
+            allx = np.arange(self.mask.shape[-1], dtype=float)[np.newaxis, :]
+            ally = np.arange(self.mask.shape[-2], dtype=float)[:, np.newaxis]
 
         # Location is specified by x, y coordinate.
         # Look up nearest unmasked grid cell.
-        dist = (allx - x) ** 2 + (ally - y) ** 2
-        valid = np.zeros(dist.shape, dtype=bool)
-        for m in allowed_mask:
-            valid |= self.mask == m
-        dist[~valid] = np.inf
-        idx = np.nanargmin(dist)
-        j, i = map(int, np.unravel_index(idx, dist.shape))
-        assert self.mask[j, i] == 1
+        x, y = np.broadcast_arrays(x, y)
+        dist = (allx - x[..., np.newaxis, np.newaxis]) ** 2 + (
+            ally - y[..., np.newaxis, np.newaxis]
+        ) ** 2
+        if allowed_mask is not None:
+            valid = np.zeros(self.mask.shape, dtype=bool)
+            for m in allowed_mask:
+                valid |= self.mask == m
+            dist[(slice(None),) * x.ndim + (~valid,)] = np.inf
+        flat_dist = np.reshape(dist, x.shape + (-1,))
+        idx = np.nanargmin(flat_dist, axis=-1)
+        j, i = np.unravel_index(idx, self.mask.shape)
+        assert allowed_mask is None or np.isin(self.mask[j, i], allowed_mask).all()
+        if i.ndim == 0:
+            return int(i), int(j)
         return i, j
 
 
@@ -649,12 +609,14 @@ class Grid(_pygetm.Grid):
             raise NotImplementedError()
         elif on_boundary:
             # boundary field
-            gatherer = BoundaryGatherer(
+            gatherer = parallel.GatherFromIndices(
                 self.tiling.comm,
-                self.open_boundaries,
+                self.open_boundaries.local_to_global_indices,
+                (self.open_boundaries.np_glob,),
                 shape[1:],
                 dtype,
                 fill_value=fill_value,
+                trailing_index=False,
             )
         else:
             gatherer = parallel.Gather(

@@ -884,6 +884,93 @@ class Scatter:
             self.field[...] = self.recvbuf
 
 
+class GatherFromIndices:
+    def __init__(
+        self,
+        comm: MPI.Comm,
+        local2global: np.ndarray,
+        index_shape: Tuple[int, ...],
+        nonindexed_shape: Tuple[int, ...],
+        dtype: DTypeLike,
+        *,
+        fill_value=None,
+        trailing_index: bool = True,
+    ):
+        """Gather values at specific indices from all ranks to rank 0.
+
+        The target indices can have any shape (0D for a station, 1D for a transect).
+        Any remaining (non-indexed) dimensions can be present too.
+        The values contained in the local subdomain are specified by `local2global`.
+
+        Args:
+            comm: MPI communicator
+            local2global: 1D array specifying the location of points from the local
+                subdomain in the global index. This is 1D array of indices into the
+                flattened target index array. Values therefore must lie between ``0``
+                and ``index_shape.prod()``.
+            index_shape: shape of the target indices in the global domain
+            nonindexed_shape: shape of any non-indexed dimensions
+            dtype: data type of the values to be gathered
+            fill_value: value to use for indexed points that are not present in any
+                subdomain
+            trailing_index: whether the indexed dimensions come last (default).
+                If ``False``, they are assumed to come first."""
+        self.ns = self.local2global = self.recvbuf = self.output = self.counts = None
+
+        # Gather the number of points in each subdomain
+        n_local = np.array(local2global.size, dtype=int)
+        if comm.rank == 0:
+            self.ns = np.empty((comm.size,), dtype=int)
+        comm.Gather(n_local, self.ns)
+
+        # Gather the indices of points from each subdomain into the global
+        # flattened index array
+        if comm.rank == 0:
+            self.local2global = np.empty((self.ns.sum(),), dtype=np.intp)
+        comm.Gatherv(local2global, (self.local2global, self.ns))
+
+        if comm.rank == 0:
+            self.recvbuf = np.empty((self.ns.sum(),) + nonindexed_shape, dtype=dtype)
+            self.counts = self.ns * int(np.prod(nonindexed_shape))
+            n_global = int(np.prod(index_shape))
+            if trailing_index:
+                # Indices are the last dimension(s)
+                output_shape = nonindexed_shape + index_shape
+                flat_output_shape = nonindexed_shape + (n_global,)
+            else:
+                # Indices are the first dimension(s)
+                output_shape = index_shape + nonindexed_shape
+                flat_output_shape = (n_global,) + nonindexed_shape
+            self.output = np.empty(output_shape, dtype=dtype)
+            self.output_flat = np.reshape(self.output, flat_output_shape)
+            if fill_value is not None:
+                self.output.fill(fill_value)
+
+        self._Gatherv = comm.Gatherv
+        self.trailing_index = trailing_index
+
+    def __call__(
+        self,
+        locvalues: np.ndarray,
+        globvalues: Optional[np.ndarray] = None,
+        globslice=(),
+    ) -> np.ndarray:
+        """Gather values from each subdomain."""
+        if self.trailing_index:
+            locvalues = locvalues.T
+        self._Gatherv(np.ascontiguousarray(locvalues), (self.recvbuf, self.counts))
+
+        if self.recvbuf is not None:
+            if self.trailing_index:
+                self.output_flat[..., self.local2global] = self.recvbuf.T
+            else:
+                self.output_flat[self.local2global, ...] = self.recvbuf
+            if globvalues is not None:
+                globvalues[globslice] = self.output
+                return globvalues
+        return self.output
+
+
 def find_optimal_divison(
     mask: ArrayLike,
     *,
