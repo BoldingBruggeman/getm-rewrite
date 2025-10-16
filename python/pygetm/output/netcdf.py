@@ -80,10 +80,13 @@ class NetCDFFile(File):
             cmdline = " ".join(sys.argv)
             self.nc.history = f"{now:%Y-%m-%d %H:%M:%S} {cmdline}"
             self.nc.source = f"pygetm {pygetm._pygetm.get_version()}"
+
+            # Add dimensions
             for output_name, field in self.fields.items():
                 for dim, length in zip(field.dims, field.shape):
                     if dim not in self.nc.dimensions:
-                        self.nc.createDimension(dim, length)
+                        if length > 0:
+                            self.nc.createDimension(dim, length)
                     elif length != self.nc.dimensions[dim].size:
                         raise Exception(
                             f"Error adding {output_name} with shape {field.shape}:"
@@ -91,6 +94,8 @@ class NetCDFFile(File):
                             f" {self.nc.dimensions[dim].size} (need {length})"
                         )
             self.nc.createDimension("time", None)
+
+            # Add time coordinate
             self.nctime = self.nc.createVariable("time", float, ("time",))
             self.nctime.axis = "T"
             if time is not None:
@@ -103,8 +108,16 @@ class NetCDFFile(File):
             else:
                 self.nctime.units = "s"
                 self.nctime.standard_name = "time"
+
+            # Create variables for all requested fields
             needs_time_bounds = False
             for output_name, field in self.fields.items():
+                if 0 in field.shape:
+                    self._logger.warning(
+                        f"Skipping output of {output_name} because it contains no data"
+                        f"(shape {field.shape})"
+                    )
+                    continue
                 dims = field.dims
                 if field.time_varying:
                     dims = ("time",) + dims
@@ -115,19 +128,25 @@ class NetCDFFile(File):
                     fill_value=field.fill_value,
                     compression=self.compression,
                 )
+
                 # Use try-except for set_auto_maskandscale because only some NetCDF
                 # engines support it (netCDF4 does, h5netcdf.legacyapi does not)
                 try:
                     ncvar.set_auto_maskandscale(False)
                 except AttributeError:
                     pass
+
+                # Variable attributes
                 ncvar.expression = field.expression
                 for att, value in field.attrs.items():
                     setattr(ncvar, att, value)
                 if field.coordinates:
                     ncvar.coordinates = " ".join(field.coordinates)
                 needs_time_bounds |= "time: mean" in field.attrs.get("cell_methods", "")
+
                 self._field2nc[field] = ncvar
+
+            # Add coordinate variable for time bounds if needed
             if needs_time_bounds:
                 self.nc.createDimension("nv", 2)
                 self.nctime_bnds = self.nc.createVariable(
@@ -141,19 +160,26 @@ class NetCDFFile(File):
 
         for field in self.fields.values():
             if field.time_varying:
+                # Store field for update at each time step
                 self._varying_fields.append(field)
             else:
+                # Write static field now
                 field.get(self._field2nc.get(field))
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
+        # Update time coordinate(s)
         if self.nc is not None:
             time_coord = self.time_offset + seconds_passed
             self.nctime[self.itime] = time_coord
             if self.nctime_bnds is not None:
                 self.nctime_bnds[self.itime, :] = [self.previous_time_coord, time_coord]
                 self.previous_time_coord = time_coord
+
+        # Update all time-varying fields
         for field in self._varying_fields:
             field.get(self._field2nc.get(field), slice_spec=(self.itime,))
+
+        # Increment time index and sync to disk if needed
         self.itime += 1
         if (
             self.nc is not None

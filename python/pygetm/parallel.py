@@ -896,6 +896,25 @@ class GatherFromIndices:
         fill_value=None,
         trailing_index=True,
     ):
+        """Gather values at specific indices from all ranks to rank 0.
+
+        The target indices can have any shape (0D for a station, 1D for a transect).
+        Any remaining (non-indexed) dimensions can be present too.
+        The values contained in the local subdomain are specified by `local2global`.
+
+        Args:
+            comm: MPI communicator
+            local2global: 1D array specifying the location of points from the local
+                subdomain in the global index. This is 1D array of indices into the
+                flattened target index array. Values therefore must lie between ``0``
+                and ``index_shape.prod()``.
+            index_shape: shape of the target indices in the global domain
+            nonindexed_shape: shape of any non-indexed dimensions
+            dtype: data type of the values to be gathered
+            fill_value: value to use for indexed points that are not present in any
+                subdomain
+            trailing_index: whether the indexed dimensions come last (default).
+                If ``False``, they are assumed to come first."""
         self.ns = self.local2global = self.recvbuf = self.output = self.counts = None
 
         # Gather the number of points in each subdomain
@@ -904,7 +923,8 @@ class GatherFromIndices:
             self.ns = np.empty((comm.size,), dtype=int)
         comm.Gather(n_local, self.ns)
 
-        # Gather the global indices ofpoints from each subdomain
+        # Gather the indices of points from each subdomain into the global
+        # flattened index array
         if comm.rank == 0:
             self.local2global = np.empty((self.ns.sum(),), dtype=np.intp)
         comm.Gatherv(local2global, (self.local2global, self.ns))
@@ -931,8 +951,8 @@ class GatherFromIndices:
 
     def __call__(
         self, locvalues, globvalues: Optional[np.ndarray] = None, globslice=()
-    ):
-        # Gather the values at the open boundary points from each subdomain
+    ) -> np.ndarray:
+        """Gather values from each subdomain."""
         if self.trailing_index:
             locvalues = locvalues.T
         self._Gatherv(locvalues, (self.recvbuf, self.counts))
