@@ -115,7 +115,7 @@ class NetCDFFile(File):
                 if 0 in field.shape:
                     self._logger.warning(
                         f"Skipping output of {output_name} because it contains no data"
-                        f"(shape {field.shape})"
+                        f" (shape={field.shape})"
                     )
                     continue
                 dims = field.dims
