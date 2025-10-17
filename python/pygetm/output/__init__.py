@@ -105,7 +105,7 @@ class File(operators.FieldCollection):
         itimestep: int,
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime] = None,
-    ):
+    ) -> bool:
         if (
             self.interval_units not in time_unit2seconds
             and self.interval_units != TimeUnit.TIMESTEPS
@@ -116,11 +116,12 @@ class File(operators.FieldCollection):
                 " called with an actual cftime.datetime object."
             )
         self.add_coordinates()
-        self.start_now(seconds_passed, time, default_time_reference or time)
+        active = self.start_now(seconds_passed, time, default_time_reference or time)
         if self.save_initial:
             self._logger.debug("Saving initial state")
             self.save_now(seconds_passed, time)
         self.next = self._next_time(seconds_passed, itimestep, time)
+        return active
 
     def save(
         self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime]
@@ -145,7 +146,7 @@ class File(operators.FieldCollection):
         seconds_passed: float,
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
-    ):
+    ) -> bool:
         pass
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
@@ -279,10 +280,12 @@ class OutputManager:
         for i in range(len(self._startable_files) - 1, -1, -1):
             file = self._startable_files[i]
             if file._start_seconds <= seconds_passed:
-                file.start(seconds_passed, itimestep, time, self._time_reference)
-                self._active_files.append(file)
-                if file._stop_seconds is not None:
-                    self._stoppable_files.append(file)
+                if file.start(seconds_passed, itimestep, time, self._time_reference):
+                    self._active_files.append(file)
+                    if file._stop_seconds is not None:
+                        self._stoppable_files.append(file)
+                else:
+                    file.close(seconds_passed, time)
                 del self._startable_files[i]
 
     def _stop_files(self, seconds_passed: float, time: Optional[cftime.datetime]):

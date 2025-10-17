@@ -164,7 +164,7 @@ class NetCDFFile(File):
         seconds_passed: float,
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
-    ):
+    ) -> bool:
         if self.is_root or self.sub:
             included_fields = {}
             for output_name, field in self.fields.items():
@@ -199,6 +199,8 @@ class NetCDFFile(File):
             else:
                 # Write static field now
                 field.get(self._field2nc.get(field))
+
+        return len(self._varying_fields) > 0
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         # Update time coordinate(s), if used
