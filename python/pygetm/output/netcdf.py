@@ -1,8 +1,9 @@
-from typing import Optional, Mapping, Dict, List, Tuple
-import os.path
+from typing import Optional, Mapping, Dict, List, Tuple, Union
+import os
 import logging
 import datetime
 import sys
+from pathlib import Path
 
 import cftime
 import netCDF4
@@ -13,10 +14,8 @@ import pygetm.core
 import pygetm._pygetm
 
 
-def _create_file(path: str, format: str) -> netCDF4.Dataset:
-    # Create the NetCDF file (note: some NetCDF engines such as h5netcdf
-    # do not support the format argument)
-    nc = netCDF4.Dataset(path, "w", format=format)
+def _create_file(path: Union[os.PathLike, str], **kwargs) -> netCDF4.Dataset:
+    nc = netCDF4.Dataset(path, "w", **kwargs)
     now = datetime.datetime.now()
     cmdline = " ".join(sys.argv)
     nc.history = f"{now:%Y-%m-%d %H:%M:%S} {cmdline}"
@@ -110,7 +109,7 @@ class NetCDFFile(File):
         self,
         available_fields: Mapping[str, pygetm.core.Array],
         logger: logging.Logger,
-        path: str,
+        path: Union[os.PathLike[str], str],
         rank: int,
         sync_interval: Optional[int] = 1,
         time_reference: Optional[cftime.datetime] = None,
@@ -138,11 +137,11 @@ class NetCDFFile(File):
                 (see :meth:`netCDF4.Dataset.createVariable` documentation)
             **kwargs: additional keyword arguments passed to :class:`pygetm.output.File`
         """
-        super().__init__(available_fields, logger, path=path, **kwargs)
-        name, ext = os.path.splitext(path)
+        super().__init__(available_fields, logger, **kwargs)
+        path = Path(path)
         if self.sub:
-            name += f"_{rank:05}"
-        self.path = name + ext
+            path = path.with_stem(f"{path.stem}_{rank:05}")
+        self.path = path
         self.nc: Optional[netCDF4.Dataset] = None
         self.itime = 0
         self.is_root = rank == 0
@@ -157,7 +156,7 @@ class NetCDFFile(File):
         self.nctime_bnds: Optional[netCDF4.Variable] = None
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.path!r})"
+        return f"{self.__class__.__name__}('{self.path}')"
 
     def start_now(
         self,
@@ -177,7 +176,7 @@ class NetCDFFile(File):
                     included_fields[output_name] = field
 
             if included_fields:
-                self.nc = _create_file(self.path, self.format)
+                self.nc = _create_file(self.path, format=self.format)
                 has_time, has_time_bounds = _create_dimensions(self.nc, included_fields)
                 if has_time:
                     time_reference = self.time_reference or default_time_reference
