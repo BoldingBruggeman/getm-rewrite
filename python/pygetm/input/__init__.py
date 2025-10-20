@@ -16,6 +16,8 @@ import enum
 import functools
 import itertools
 import re
+import os
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -118,7 +120,7 @@ def _open(path, preprocess=None, **kwargs):
 
 
 def from_nc(
-    paths: Union[str, Sequence[str]],
+    paths: Union[str, os.PathLike[str], Sequence[Union[str, os.PathLike[str]]]],
     name: str,
     preprocess: Optional[Callable[[xr.Dataset], xr.Dataset]] = None,
     **kwargs,
@@ -141,23 +143,23 @@ def from_nc(
     kwargs.setdefault("decode_times", True)
     kwargs["use_cftime"] = True
     kwargs["cache"] = False
-    if isinstance(paths, str):
+    if isinstance(paths, (str, os.PathLike)):
         # Check if this is a URL or a pattern
         # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
-        if not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
-            pattern = paths
-            paths = glob.glob(pattern)
+        if not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", str(paths)):
+            pattern = str(paths)
+            paths = Path(".").glob(pattern)
             if not paths:
                 raise Exception(f"No files found matching {pattern!r}")
         else:
-            paths = (paths,)
+            paths = (Path(paths),)
     arrays = []
     for path in paths:
         ds = _open(path, preprocess, **kwargs)
         array = ds[name]
         # Note: we wrap the netCDF array ourselves, in order to support lazy operators
         # (e.g., add, multiply)
-        lazyvar = Wrap(array.variable, name=f"from_nc({path!r}, {name!r})")
+        lazyvar = Wrap(array.variable, name=f'from_nc("{path}", {name!r})')
         array = xr.DataArray(
             lazyvar,
             dims=array.dims,
