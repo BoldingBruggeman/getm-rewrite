@@ -916,7 +916,6 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
 
             self.np_glob += global_boundary.np
 
-        # Number of open boundary points (local and global)
         grid.open_boundaries = self
 
         # Local indices of open boundary points within local subdomain
