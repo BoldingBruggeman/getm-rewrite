@@ -392,11 +392,11 @@ class BaseSimulation:
         self.tiling.comm.Allgather(parallel.MPI.IN_PLACE, nsub)
         fail = nsub.any()
         if fail:
-            sublist = ", ".join(f"{i} ({n})" for i, n in enumerate(nsub) if n > 0)
+            sublist = (f"{i} ({n} fields)" for i, n in enumerate(nsub) if n > 0)
             self.logger.error(
                 f"Non-finite values found in {(nsub > 0).sum()} subdomains"
                 f" at istep={self.istep}, time={self.time}."
-                f" Affected subdomains: {sublist}"
+                f" Affected subdomains: {', '.join(sublist)}"
             )
             if dump:
                 all_bad_fields = self.tiling.comm.allreduce(bad_fields)
