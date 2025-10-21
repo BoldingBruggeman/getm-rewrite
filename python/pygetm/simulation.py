@@ -558,11 +558,7 @@ class Simulation(BaseSimulation):
             t_postfix="t",
         )
 
-        self.open_boundaries = pygetm.open_boundaries.LocalOpenBoundaryCollection(
-            domain.open_boundaries,
-            self.T,
-            logger=self.logger.getChild("open_boundaries"),
-        )
+        self.open_boundaries = self.T.open_boundaries
 
         self.U = self.T.ugrid
         self.V = self.T.vgrid

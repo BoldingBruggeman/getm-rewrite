@@ -1000,6 +1000,10 @@ class Domain:
 
         T.freeze()
 
+        open_boundaries.LocalOpenBoundaryCollection(
+            self.open_boundaries, T, logger=self.logger
+        )
+
         self.rivers.initialize(T)
 
         return T
