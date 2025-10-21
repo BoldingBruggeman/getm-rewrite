@@ -107,7 +107,7 @@ class GETMAccessor:
 open_nc_files = []
 
 
-def _open(path, preprocess=None, **kwargs):
+def _open(path: Union[str, os.PathLike[str]], preprocess=None, **kwargs):
     key = (path, preprocess, kwargs.copy())
     for k, ds in open_nc_files:
         if k == key:
@@ -146,13 +146,15 @@ def from_nc(
     if isinstance(paths, (str, os.PathLike)):
         # Check if this is a URL or a pattern
         # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
-        if not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", str(paths)):
-            pattern = str(paths)
-            paths = Path(".").glob(pattern)
+        if isinstance(paths, str) and not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
+            # Not a URL, but a file path or glob pattern. Cast to iterable of Paths
+            pattern = paths
+            paths = map(Path, glob.glob(pattern))
             if not paths:
                 raise Exception(f"No files found matching {pattern!r}")
         else:
-            paths = (Path(paths),)
+            # A URL or a single file path (PathLike)
+            paths = (paths,)
     arrays = []
     for path in paths:
         ds = _open(path, preprocess, **kwargs)
