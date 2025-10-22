@@ -956,7 +956,6 @@ class Simulation(BaseSimulation):
             self.momentum.V,
             self.momentum.uk if self.runtype > RunType.BAROTROPIC_2D else None,
             self.momentum.vk if self.runtype > RunType.BAROTROPIC_2D else None,
-            self._fields,
         )
         # Ensure U and V points at the land-water interface have non-zero water depth
         # and layer thickness, as (zero) transports at these points will be divided by
