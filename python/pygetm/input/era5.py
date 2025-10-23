@@ -1,8 +1,10 @@
-from typing import Iterable, Optional, List, Mapping
+from typing import Iterable, Optional, List, Mapping, Tuple, Union
 import multiprocessing
 import os
 import argparse
 import logging
+from pathlib import Path
+
 
 import yaml
 import xarray as xr
@@ -11,6 +13,8 @@ try:
     import cdsapi
 except ImportError:
     raise Exception("You need cdsapi. See https://cds.climate.copernicus.eu/how-to-api")
+
+from . import util
 
 VARIABLES = {
     "u10": "10m_u_component_of_wind",
@@ -37,10 +41,10 @@ def _download_year(
     area: List[float],
     variables: List[str],
     fmt: str,
-    path: str,
-    decompress: bool = False,
+    path: Path,
+    complevel: int = 0,
     **cds_settings,
-):
+) -> Path:
     c = cdsapi.Client(verify=1, progress=False, **cds_settings)
     request = {
         "product_type": ["reanalysis"],
@@ -57,26 +61,12 @@ def _download_year(
     r = c.retrieve("reanalysis-era5-single-levels", request)
     r.download(path)
     if fmt == "netcdf":
-        _postprocess(path, decompress=decompress)
+        tmpname = path.with_suffix(".tmp")
+        with xr.open_dataset(path) as ds:
+            util.configure_chunking_and_compression(ds, complevel=complevel)
+            ds.to_netcdf(tmpname)
+        tmpname.replace(path)
     return path
-
-
-def _postprocess(fname: str, decompress: bool = False):
-    tmpname = fname + ".tmp"
-    with xr.open_dataset(fname) as ds:
-        for v in ds.data_vars.values():
-            if decompress:
-                # Decompress variables (no chunking at all)
-                v.encoding.update(complevel=0, contiguous=True)
-                v.encoding.pop("chunksizes", None)
-            else:
-                # Set chunk size for time dimension to 1 to allow
-                # efficient access to values @ single time points
-                v.encoding["chunksizes"] = list(v.shape)
-                v.encoding["chunksizes"][0] = 1
-                v.encoding.pop("contiguous", None)
-        ds.to_netcdf(tmpname, mode="w")
-    os.replace(tmpname, fname)
 
 
 def get(
@@ -88,18 +78,30 @@ def get(
     stop_year: Optional[int] = None,
     variables: Iterable[str] = DEFAULT_VARIABLES,
     fmt: str = "netcdf",
-    decompress: bool = False,
-    target_dir: str = ".",
-    cdsapirc: Optional[str] = None,
+    target_dir: Union[os.PathLike[str], str] = ".",
+    cdsapirc: Union[os.PathLike, str, bytes, None] = None,
     logger: Optional[logging.Logger] = None,
-) -> Mapping[int, str]:
+    **kwargs,
+) -> Mapping[Tuple[int, str], Path]:
     logging.basicConfig(level=logging.INFO)
     logger = logger or logging.getLogger()
 
-    assert (
-        minlon >= -360.0 and maxlon <= 360.0
-    ), "Longitude must be between -360 and 360"
-    assert minlat >= -90.0 and maxlat <= 90.0, "Latitude must be between -360 and 360"
+    if minlon >= maxlon:
+        raise ValueError(
+            f"Maximum longitude {maxlon} must exceed minimum longitude {minlon}"
+        )
+    if minlat >= maxlat:
+        raise ValueError(
+            f"Maximum latitude {maxlat} must exceed minimum latitude {minlat}"
+        )
+    if minlon < -360.0 or maxlon > 360.0:
+        raise ValueError(
+            f"Longitude range {minlon} - {maxlon} must fall within -360 - 360°"
+        )
+    if minlat < -90.0 or maxlat > 90.0:
+        raise ValueError(
+            f"Latitude range {minlat} - {maxlat} must fall within -90 - 90°"
+        )
 
     minlon -= minlon % 0.25
     maxlon += -maxlon % 0.25
@@ -107,54 +109,52 @@ def get(
     maxlat += -maxlat % 0.25
     minlon = max(-360.0, minlon)
     maxlon = min(360.0, maxlon)
-    logger.info(
-        f"Final area: longitude = {minlon} - {maxlon}, latitude = {minlat} - {maxlat}"
-    )
+    logger.info(f"Final area:")
+    logger.info(f"  longitude: {minlon} - {maxlon} °East")
+    logger.info(f"  latitude: {minlat} - {maxlat} °North")
 
     if stop_year is None:
         stop_year = start_year
-    logger.info(f"Downloading {', '.join(variables)} for {start_year} - {stop_year}")
+    logger.info(f"Period: {start_year} - {stop_year}")
+    logger.info(f"Selected variables: {', '.join(variables)}")
 
     area = [maxlat, minlon, minlat, maxlon]
-    kwargs = {"decompress": decompress}
     if cdsapirc:
         with open(cdsapirc, "r") as f:
             kwargs.update(yaml.safe_load(f))
 
-    results = []
-    years = list(range(start_year, stop_year + 1))
+    target_dir = Path(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    years = range(start_year, stop_year + 1)
     pool = multiprocessing.Pool(processes=len(years) * len(variables))
-    os.makedirs(target_dir, exist_ok=True)
     ext = "nc" if fmt == "netcdf" else "grib"
-    keys = []
+    tasks: List[Tuple[int, str, multiprocessing.pool.AsyncResult]] = []
     for year in years:
         logger.info(f"  {year}:")
         for variable in variables:
-            path = os.path.join(target_dir, f"era5_{variable}_{year}.{ext}")
+            path = target_dir / f"era5_{variable}_{year}.{ext}"
             full_name = VARIABLES[variable]
             logger.info(f"    {full_name}: {path}")
-            results.append(
-                pool.apply_async(
-                    _download_year,
-                    args=(year, area, (full_name,), fmt, path),
-                    kwds=kwargs,
-                )
+            result = pool.apply_async(
+                _download_year,
+                args=(year, area, (full_name,), fmt, path),
+                kwds=kwargs,
             )
-            keys.append((year, variable))
-    key2path = {}
-    for key, res in zip(keys, results):
-        key2path[key] = res.get()
-    return key2path
+            tasks.append((year, variable, result))
+    return {(year, variable): res.get() for year, variable, res in tasks}
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("minlon", help="minimum longitude (degrees East)", type=float)
-    parser.add_argument("maxlon", help="maximum longitude (degrees East)", type=float)
-    parser.add_argument("minlat", help="minimum latitude (degrees North)", type=float)
-    parser.add_argument("maxlat", help="maximum latitude (degrees North)", type=float)
-    parser.add_argument("start_year", help="start year", type=int)
-    parser.add_argument("stop_year", help="stop year", type=int)
+    parser.add_argument("minlon", help="minimum longitude (°East)", type=float)
+    parser.add_argument("maxlon", help="maximum longitude (°East)", type=float)
+    parser.add_argument("minlat", help="minimum latitude (°North)", type=float)
+    parser.add_argument("maxlat", help="maximum latitude (°North)", type=float)
+    parser.add_argument("start_year", help="first year to download", type=int)
+    parser.add_argument(
+        "stop_year", help="last year to download", type=int, nargs="?", default=None
+    )
     parser.add_argument(
         "-v",
         help=f"extra variable to download ({', '.join(VARIABLES)})",
@@ -183,9 +183,10 @@ if __name__ == "__main__":
         "--grib", action="store_const", const="grib", dest="fmt", default="netcdf"
     )
     parser.add_argument(
-        "--decompress",
-        help="remove NetCDF compression for faster spatial slicing",
-        action="store_true",
+        "--complevel",
+        help="NetCDF compression level (0-9). Default = 0 = no compression",
+        type=int,
+        default=0,
     )
     args = parser.parse_args()
     vars = set(args.variables)
@@ -202,5 +203,5 @@ if __name__ == "__main__":
         variables=vars,
         cdsapirc=args.cdsapirc,
         fmt=args.fmt,
-        decompress=args.decompress,
+        complevel=args.complevel,
     )
