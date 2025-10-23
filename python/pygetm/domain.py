@@ -1401,7 +1401,6 @@ class Domain:
         configured as spherical; otherwise they will be interpreted as Cartesian
         x and y (m).
         """
-        selected = np.ones(self.mask.shape, dtype=bool)
         coordinate_type = coordinate_type or self.coordinate_type
         if coordinate_type == CoordinateType.LONLAT:
             x, y = (self._lon, self._lat)
@@ -1411,6 +1410,7 @@ class Domain:
             x = np.linspace(-0.5, self.nx + 0.5, 1 + 2 * self.nx)
             y = np.linspace(-0.5, self.ny + 0.5, 1 + 2 * self.ny)
             x, y = np.broadcast_arrays(x[np.newaxis, :], y[:, np.newaxis])
+        selected = True
         if xmin is not None:
             selected &= x >= xmin
         if xmax is not None:
@@ -1487,7 +1487,6 @@ class Domain:
             for att in ("original_name", "split", "zl", "zu"):
                 if hasattr(r, att):
                     setattr(rot_r, att, getattr(r, att))
-        rotated_domain.open_boundaries.sponge.tmrlx = self.open_boundaries.sponge.tmrlx
         return rotated_domain
 
     @apply_on_root_and_bcast
