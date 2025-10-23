@@ -69,12 +69,16 @@ def _add_time_coordinate(
 
 
 def _add_time_bounds(nc: netCDF4.Dataset, nctime: netCDF4.Variable) -> netCDF4.Variable:
+    nctime_ave = nc.createVariable("time_ave", float, ("time",))
+    nctime_ave.coordinates = nctime_ave.name
     nctime_bnds = nc.createVariable("time_bnds", float, ("time", "nv"))
-    nctime.bounds = "time_bnds"
+    nctime_ave.bounds = nctime_bnds.name
     for att in ("units", "calendar"):
         if hasattr(nctime, att):
-            setattr(nctime_bnds, att, getattr(nctime, att))
-    return nctime_bnds
+            value = getattr(nctime, att)
+            setattr(nctime_ave, att, value)
+            setattr(nctime_bnds, att, value)
+    return nctime_ave, nctime_bnds
 
 
 def _add_variable(
@@ -98,8 +102,11 @@ def _add_variable(
     ncvar.expression = field.expression
     for att, value in field.attrs.items():
         setattr(ncvar, att, value)
-    if field.coordinates:
-        ncvar.coordinates = " ".join(field.coordinates)
+    coords = field.coordinates
+    if "time: mean" in field.attrs.get("cell_methods", ""):
+        coords = coords + ["time_ave"]
+    if coords:
+        ncvar.coordinates = " ".join(coords)
 
     return ncvar
 
@@ -184,7 +191,9 @@ class NetCDFFile(File):
                         self.nc, time, seconds_passed, time_reference
                     )
                     if has_time_bounds:
-                        self.nctime_bnds = _add_time_bounds(self.nc, self.nctime)
+                        self.nctime_ave, self.nctime_bnds = _add_time_bounds(
+                            self.nc, self.nctime
+                        )
                         self.previous_time_coord = self.time_offset + seconds_passed
                 for output_name, field in included_fields.items():
                     self._field2nc[field] = _add_variable(
@@ -207,6 +216,9 @@ class NetCDFFile(File):
             time_coord = self.time_offset + seconds_passed
             self.nctime[self.itime] = time_coord
             if self.nctime_bnds is not None:
+                self.nctime_ave[self.itime] = 0.5 * (
+                    self.previous_time_coord + time_coord
+                )
                 self.nctime_bnds[self.itime, :] = [self.previous_time_coord, time_coord]
                 self.previous_time_coord = time_coord
 
