@@ -66,7 +66,7 @@ class Base:
         )
         self.swr = grid.array(
             name="swr",
-            long_name="surface net downwelling shortwave radiation",
+            long_name="surface net downward shortwave radiation",
             units="W m-2",
             fill_value=FILL_VALUE,
             fabm_standard_name="surface_downwelling_shortwave_flux",
@@ -388,19 +388,19 @@ class FluxesFromMeteo(Fluxes):
         if self.shortwave_method == DOWNWARD_FLUX:
             self.swr_downwards = grid.array(
                 name="swr_downwards",
-                long_name="surface gross downwelling shortwave radiation",
+                long_name="surface downwelling shortwave radiation",
                 units="W m-2",
                 fill_value=FILL_VALUE,
                 fabm_standard_name="surface_gross_downwelling_shortwave_flux",
                 attrs=dict(
                     _time_varying=TimeVarying.MACRO,
-                    standard_name="downward_shortwave_flux_at_sea_water_surface",
+                    standard_name="surface_downwelling_shortwave_flux_in_air",
                 ),
             )
 
         self.ql = grid.array(
             name="ql",
-            long_name="net downwelling longwave radiation",
+            long_name="net downward longwave radiation",
             units="W m-2",
             fill_value=FILL_VALUE,
             attrs=dict(
@@ -412,12 +412,12 @@ class FluxesFromMeteo(Fluxes):
         if self.longwave_method == DOWNWARD_FLUX:
             self.ql_downwards = grid.array(
                 name="ql_downwards",
-                long_name="gross downwelling longwave radiation",
+                long_name="downwelling longwave radiation",
                 units="W m-2",
                 fill_value=FILL_VALUE,
                 attrs=dict(
                     _time_varying=TimeVarying.MACRO,
-                    standard_name="surface_gross_downward_longwave_flux",
+                    standard_name="surface_downwelling_longwave_flux_in_air",
                     _mask_output=True,
                 ),
             )
