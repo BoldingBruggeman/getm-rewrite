@@ -23,7 +23,7 @@ import xarray as xr
 
 from . import _pygetm
 from . import parallel
-from .constants import CENTERS, INTERFACES, FILL_VALUE, CoordinateType
+from .constants import CENTERS, INTERFACES, FILL_VALUE, CoordinateType, CellType
 
 if TYPE_CHECKING:
     import netCDF4
@@ -85,7 +85,7 @@ class Locator:
         y: npt.ArrayLike,
         *,
         coordinate_type: CoordinateType,
-        allowed_mask: Optional[Iterable[int]] = None,
+        valid_cell_types: Optional[Iterable[CellType]] = None,
     ) -> Tuple[int, int]:
         """Locate the unmasked grid cell nearest to the specified location.
 
@@ -113,15 +113,18 @@ class Locator:
         dist = (allx - x[..., np.newaxis, np.newaxis]) ** 2 + (
             ally - y[..., np.newaxis, np.newaxis]
         ) ** 2
-        if allowed_mask is not None:
-            valid = False
-            for m in allowed_mask:
-                valid |= self.mask == m
-            dist[(slice(None),) * x.ndim + (~valid,)] = np.inf
+        if valid_cell_types is not None:
+            invalid = True
+            for cell_type in valid_cell_types:
+                invalid &= self.mask != cell_type
+            dist[..., invalid] = np.inf
         flat_dist = np.reshape(dist, x.shape + (-1,))
         idx = np.nanargmin(flat_dist, axis=-1)
         j, i = np.unravel_index(idx, self.mask.shape)
-        assert allowed_mask is None or np.isin(self.mask[j, i], allowed_mask).all()
+        assert (
+            valid_cell_types is None
+            or np.isin(self.mask[j, i], list(valid_cell_types)).all()
+        )
         if i.ndim == 0:
             return int(i), int(j)
         return i, j
@@ -175,12 +178,16 @@ class Grid(_pygetm.Grid):
         "dx": dict(
             units="m",
             long_name="cell length in x-direction",
-            attrs=dict(_time_varying=False),
+            attrs=dict(
+                _time_varying=False, _valid_at=(CellType.BOUNDARY, CellType.EDGE_X)
+            ),
         ),
         "dy": dict(
             units="m",
             long_name="cell length in y-direction",
-            attrs=dict(_time_varying=False),
+            attrs=dict(
+                _time_varying=False, _valid_at=(CellType.BOUNDARY, CellType.EDGE_Y)
+            ),
         ),
         "idx": dict(
             units="m-1",
@@ -197,15 +204,42 @@ class Grid(_pygetm.Grid):
             long_name="water depth at rest",
             attrs=dict(
                 _time_varying=False,
-                standard_name="sea_floor_depth_below_ geopotential_datum",
+                standard_name="sea_floor_depth_below_geopotential_datum",
+                _valid_at=(
+                    CellType.BOUNDARY,
+                    CellType.MIRROR_INT,
+                    CellType.MIRROR_EXT,
+                ),
             ),
         ),
         "D": dict(
             units="m",
             long_name="water depth",
-            attrs=dict(standard_name="sea_floor_depth_below_sea_surface"),
+            attrs=dict(
+                standard_name="sea_floor_depth_below_sea_surface",
+                _valid_at=(
+                    CellType.BOUNDARY,
+                    CellType.MIRROR_INT,
+                    CellType.MIRROR_EXT,
+                    CellType.EDGE_X,  # must be non-zero for vel=transport/D
+                    CellType.EDGE_Y,  # must be non-zero for vel=transport/D
+                ),
+            ),
         ),
-        "mask": dict(long_name="mask", attrs=dict(_time_varying=False), fill_value=0),
+        "mask": dict(
+            long_name="mask",
+            attrs=dict(
+                _time_varying=False,
+                _valid_at=(
+                    CellType.BOUNDARY,
+                    CellType.MIRROR_INT,
+                    CellType.MIRROR_EXT,
+                    CellType.EDGE_X,
+                    CellType.EDGE_Y,
+                ),
+            ),
+            fill_value=0,
+        ),
         "area": dict(
             units="m2",
             long_name="cell area",
@@ -224,7 +258,16 @@ class Grid(_pygetm.Grid):
         "hn": dict(
             units="m",
             long_name="cell thickness",
-            attrs=dict(standard_name="cell_thickness"),
+            attrs=dict(
+                standard_name="cell_thickness",
+                _valid_at=(
+                    CellType.BOUNDARY,
+                    CellType.MIRROR_INT,
+                    CellType.MIRROR_EXT,
+                    CellType.EDGE_X,  # must be non-zero for vel=transport/D
+                    CellType.EDGE_Y,  # must be non-zero for vel=transport/D
+                ),
+            ),
         ),
         "zc": dict(
             units="m",
@@ -277,7 +320,8 @@ class Grid(_pygetm.Grid):
         "overlap",
         "_interpolators",
         "_interior",
-        "_water_contact",
+        "_edge_x",
+        "_edge_y",
         "_land",
         "_land3d",
         "_land3d_if",
@@ -291,6 +335,7 @@ class Grid(_pygetm.Grid):
         "mask3d",
         "bottom_indices",
         "_work",
+        "_masks",
     )
 
     def __init__(
@@ -321,11 +366,11 @@ class Grid(_pygetm.Grid):
         self.ugrid = ugrid
         self.vgrid = vgrid
         self.xgrid = xgrid
-        self.fields = {} if fields is None else fields
+        self.fields: Mapping[str, "Array"] = {} if fields is None else fields
         self.tiling = tiling
 
         self._interior = (Ellipsis, slice(haloy, haloy + ny), slice(halox, halox + nx))
-        self._interpolators = {}
+        self._interpolators: dict["Grid", Callable[[np.ndarray, np.ndarray], None]] = {}
         self._mirrors: Dict[
             "Grid", Optional[Tuple[Tuple[slice, ...], Tuple[slice, ...]]]
         ] = {}
@@ -333,6 +378,9 @@ class Grid(_pygetm.Grid):
         self.extra_output_coordinates = []
 
         self._work = self.array(fill_value=np.nan)
+        self._masks: dict[frozenset[CellType], np.ndarray] = {}
+        self._edge_x = False
+        self._edge_y = False
 
     def create_array(self, name: str) -> Optional["Array"]:
         assert name in self._array_args
@@ -340,6 +388,7 @@ class Grid(_pygetm.Grid):
             return None
         kwargs = dict(fill_value=FILL_VALUE)
         kwargs.update(self._array_args[name])
+        kwargs.setdefault("attrs", {}).setdefault("_valid_at", (CellType.BOUNDARY,))
         if name in self._fortran_arrays:
             array = Array(name=name + self.postfix, **kwargs)
             self.wrap(array, name.encode("ascii"))
@@ -368,12 +417,17 @@ class Grid(_pygetm.Grid):
         else:
             self._rotator = None
 
-        self._land = self.mask.all_values == 0
-        self._water = ~self._land
+        self._land = self.get_mask(
+            (
+                CellType.ACTIVE,
+                CellType.BOUNDARY,
+                CellType.MIRROR_INT,
+                CellType.MIRROR_EXT,
+            )
+        )
+        self._water = self.get_mask((CellType.UNRESOLVED,))
         self._water_nohalo = np.full_like(self._water, False)
         self._water_nohalo[self._interior] = self._water[self._interior]
-        if not hasattr(self, "_water_contact"):
-            self._water_contact = self._water
 
         if self.nz:
             # Initialize center and interface depth coordinates to coincide with
@@ -384,9 +438,9 @@ class Grid(_pygetm.Grid):
             self.zc.all_values[...] = -self.H.all_values
             self.zf.all_values[...] = -self.H.all_values
 
-        self.H.all_values[self._land] = FILL_VALUE
-        assert np.isfinite(self.H.all_values[self._water]).all()
-        self.z0b_min.all_values[self._land] = FILL_VALUE
+        self.H.all_values[self.H.all_mask] = FILL_VALUE
+        assert np.isfinite(self.H.all_values).all(where=~self.H.all_mask)
+        self.z0b_min.all_values[self.z0b_min.all_mask] = FILL_VALUE
 
         for name in self._readonly_arrays:
             array = getattr(self, name, None)
@@ -406,13 +460,13 @@ class Grid(_pygetm.Grid):
 
     def close_flux_interfaces(self):
         """Mask U and V points that do not have two bordering wet T points"""
-        tmask = self.mask.all_values
-        umask = (tmask[:, :-1] == 0) | (tmask[:, 1:] == 0)
-        vmask = (tmask[:-1, :] == 0) | (tmask[1:, :] == 0)
-        umask &= self.ugrid.mask.all_values[:, :-1] == 1
-        vmask &= self.vgrid.mask.all_values[:-1, :] == 1
-        self.ugrid.mask.all_values[:, :-1][umask] = 0
-        self.vgrid.mask.all_values[:-1, :][vmask] = 0
+        tdry = self.mask.all_values == CellType.UNRESOLVED
+        umask = tdry[:, :-1] | tdry[:, 1:]
+        vmask = tdry[:-1, :] | tdry[1:, :]
+        umask &= self.ugrid.mask.all_values[:, :-1] == CellType.ACTIVE
+        vmask &= self.vgrid.mask.all_values[:-1, :] == CellType.ACTIVE
+        self.ugrid.mask.all_values[:, :-1][umask] = CellType.UNRESOLVED
+        self.vgrid.mask.all_values[:-1, :][vmask] = CellType.UNRESOLVED
         self.ugrid.mask.update_halos()
         self.vgrid.mask.update_halos()
 
@@ -421,15 +475,43 @@ class Grid(_pygetm.Grid):
         vmask = self.vgrid.mask
         umask_backup = umask.all_values.copy()
         vmask_backup = vmask.all_values.copy()
-        tmask = self.mask.all_values
-        umask.all_values[:, :-1] = (tmask[:, :-1] != 0) | (tmask[:, 1:] != 0)
-        vmask.all_values[:-1, :] = (tmask[:-1, :] != 0) | (tmask[1:, :] != 0)
+        twet = self.mask.all_values != CellType.UNRESOLVED
+        umask.all_values[:, :-1] = twet[:, :-1] | twet[:, 1:]
+        vmask.all_values[:-1, :] = twet[:-1, :] | twet[1:, :]
         umask.update_halos()
         vmask.update_halos()
-        self.ugrid._water_contact = umask.all_values != 0
-        self.vgrid._water_contact = vmask.all_values != 0
+        self.ugrid._edge_y = (umask.all_values != 0) & (
+            umask_backup == CellType.UNRESOLVED
+        )
+        self.vgrid._edge_x = (vmask.all_values != 0) & (
+            vmask_backup == CellType.UNRESOLVED
+        )
         umask.all_values[:, :] = umask_backup
         vmask.all_values[:, :] = vmask_backup
+
+    def get_mask(
+        self, values: Iterable[CellType], z: Literal[None, CENTERS, INTERFACES] = None
+    ) -> np.ndarray:
+        """Get a boolean mask for the specified mask values.
+
+        Args:
+            mask: mask values to include
+        """
+        valid_mask_values = frozenset(values)
+        key = (valid_mask_values, z)
+        if key not in self._masks:
+            valid = np.isin(self.mask.all_values, list(valid_mask_values))
+            if CellType.EDGE_X in valid_mask_values:
+                valid |= self._edge_x
+            if CellType.EDGE_Y in valid_mask_values:
+                valid |= self._edge_y
+            mask = ~valid
+            if z and hasattr(self, "_land3d"):
+                att = "_land3d_if" if z == INTERFACES else "_land3d"
+                mask = mask | getattr(self, att)
+            mask.flags.writeable = False
+            self._masks[key] = mask
+        return self._masks[key]
 
     def interpolator(self, target: "Grid") -> Callable[[np.ndarray, np.ndarray], None]:
         ip = self._interpolators.get(target)
@@ -670,7 +752,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "_name",
         "attrs",
         "_fill_value",
-        "_ma",
         "saved",
         "_shape",
         "_ndim",
@@ -717,7 +798,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             if fill_value is None or dtype is None
             else np.array(fill_value, dtype=dtype)
         )
-        self._ma = None
         self.saved = False  #: to be set if this variable is requested for output
         self._shape = shape
         self._ndim = None if shape is None else len(shape)
@@ -908,6 +988,18 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         ar.wrap_ndarray(data, on_boundary=on_boundary, register=register)
         return ar
 
+    @property
+    def all_shape(self) -> Tuple[int, ...]:
+        shape = (
+            [self.grid.open_boundaries.np]
+            if self.on_boundary
+            else [self.grid.ny_, self.grid.nx_]
+        )
+        if self.z:
+            nz = self.grid.nz_ + 1 if self.z == INTERFACES else self.grid.nz_
+            shape.insert(1 if self.on_boundary else 0, nz)
+        return tuple(shape)
+
     def fill(self, value):
         """Set array to specified value, while respecting the mask: masked points are
         set to :attr:`fill_value`
@@ -917,21 +1009,32 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         except ValueError:
             self.values[...] = value
             self.update_halos()
-        if self.fill_value is not None and not (self.ndim == 0 or self.on_boundary):
-            self.all_values[..., self.grid._land] = self.fill_value
+        if self.fill_value is not None:
+            self.all_values[self.all_mask] = self.fill_value
+
+    @property
+    def all_mask(self) -> np.ndarray:
+        """Boolean array indicating invalid data points, including halos"""
+        if self._ndim == 0 or self.on_boundary:
+            return np.broadcast_to(False, self.all_values.shape)
+        valid_mask_values = self.attrs.get("_valid_at", ()) + (CellType.ACTIVE,)
+        mask = self.grid.get_mask(valid_mask_values, self.z)
+        return np.broadcast_to(mask, self.all_shape)
+
+    @property
+    def mask(self) -> np.ndarray:
+        """Boolean array indicating invalid data points, excluding halos"""
+        if self.on_boundary or self._ndim == 0:
+            return self.all_mask
+        else:
+            return self.all_mask[self.grid._interior]
 
     @property
     def ma(self) -> np.ma.MaskedArray:
         """Masked array representation that combines the data and the mask associated
         with the array's native grid
         """
-        if self._ma is None:
-            if self.size == 0 or self.on_boundary:
-                mask = False
-            else:
-                mask = np.isin(self.grid.mask.values, (1, 2), invert=True)
-            self._ma = np.ma.array(self.values, mask=np.broadcast_to(mask, self._shape))
-        return self._ma
+        return np.ma.array(self.values, mask=self.mask)
 
     def plot(self, mask: bool = True, **kwargs):
         """Plot the array with :meth:`xarray.DataArray.plot`
@@ -1017,7 +1120,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         if self.long_name is not None:
             kwargs.setdefault("long_name", f"{self.long_name} @ k={z}")
         kwargs["attrs"] = kwargs.get("attrs", {}).copy()
-        for att in ("_mask_output",):
+        for att in ("_mask_output", "_valid_at"):
             if att in self.attrs:
                 kwargs["attrs"][att] = self.attrs[att]
         ar = Array(grid=self.grid, fill_value=self.fill_value, **kwargs)

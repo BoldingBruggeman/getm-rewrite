@@ -2,10 +2,9 @@ import logging
 
 import numpy as np
 
-import pygetm.domain
 import pygetm.core
 import pygetm.airsea
-from pygetm.constants import FILL_VALUE
+from pygetm.constants import FILL_VALUE, CellType
 
 
 class Base:
@@ -22,7 +21,9 @@ class Base:
             long_name="ice cover",
             units="1",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="sea_ice_area_fraction"),
+            attrs=dict(
+                standard_name="sea_ice_area_fraction", _valid_at=(CellType.BOUNDARY,)
+            ),
             fabm_standard_name="ice_area_fraction",
         )
         self.ice.fill(0.0)
@@ -42,7 +43,7 @@ class Prescribed(Base):
         airsea: pygetm.airsea.Fluxes,
     ):
         if macro:
-            f = np.where(self.grid._water, self.ice.all_values, 0.0)
+            f = np.where(self.ice.all_mask, 0.0, self.ice.all_values)
             self.has_ice = f.any()
 
             # 1st order freezing point approximation based on
@@ -50,7 +51,7 @@ class Prescribed(Base):
             ct_freezing = 0.017947064327968736 - 0.06076099099929818 * sa_sf.all_values
 
             if self.has_ice:
-                self.ice_free = 1.0 - f
+                self.ice_free[...] = 1.0 - f
 
                 # Set temperature in ice-covered fraction to freezing temperature
                 ct_sf.all_values += f * (ct_freezing - ct_sf.all_values)
@@ -59,7 +60,7 @@ class Prescribed(Base):
                 ct_sf.all_values,
                 ct_freezing,
                 out=ct_sf.all_values,
-                where=self.grid._water,
+                where=ct_sf.all_mask,
             )
 
             # Allow outward surface heat flux [cooling] only in ice-free area
@@ -93,10 +94,12 @@ class Ice(Base):
             # 1st order freezing point approximation based on
             # gsw_mod_freezing_poly_coefficients
             ct_freezing = 0.017947064327968736 - 0.06076099099929818 * sa_sf.all_values
-            unmasked = self.grid._water
-            np.logical_and(ct_sf.all_values <= ct_freezing, unmasked, out=self.covered)
+            unmasked = ~ct_sf.all_mask
+            np.less_equal(
+                ct_sf.all_values, ct_freezing, out=self.covered, where=unmasked
+            )
             self.has_ice = self.covered.any()
-            self.ice.all_values[unmasked] = np.where(self.covered[unmasked], 1.0, 0.0)
+            np.putmask(self.ice.all_values, unmasked, np.where(self.covered, 1.0, 0.0))
             if self.has_ice:
                 np.putmask(ct_sf.all_values, self.covered, ct_freezing)
                 airsea.shf.all_values[self.covered & (airsea.shf.all_values < 0)] = 0.0

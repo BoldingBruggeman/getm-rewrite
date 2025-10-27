@@ -7,10 +7,29 @@ import numpy as np
 
 import pygetm
 import pygetm.util.compare_nc
+from pygetm.constants import CellType
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../examples"))
 
 import north_sea
+
+
+def _invalidate(sim: pygetm.Simulation, startup: bool):
+    """Set unused points (e.g. land) of every variable to NaN"""
+    for array in sim._fields.values():
+        if array.all_values.dtype != float:
+            continue
+        all_values = array.all_values.view()
+        all_values.flags.writeable = True
+        mask = array.all_mask
+        if (
+            startup
+            and array.all_values.flags.writeable
+            and not array.on_boundary
+            and array.ndim > 0
+        ):
+            mask = mask | array.grid.get_mask((CellType.ACTIVE, CellType.BOUNDARY))
+        all_values[mask] = np.nan
 
 
 class TestLandMask(unittest.TestCase):
@@ -25,39 +44,17 @@ class TestLandMask(unittest.TestCase):
 
     def test_nan(self):
         start = cftime.datetime(2006, 1, 2)
-        stop = cftime.datetime(2006, 1, 3)
+        stop = cftime.datetime(2006, 1, 2, 2)
 
         sim = north_sea.create_simulation(
             self.domain, pygetm.RunType.BAROCLINIC, self.setup_dir
         )
 
-        # Set land points (mask==0) of every variable to NaN
-        U, V = sim.U, sim.V
-        for array in sim._fields.values():
-            grid = array.grid
-            readonly = not array.all_values.flags.writeable
-            if readonly:
-                array.all_values.flags.writeable = True
-            if (
-                array.all_values.dtype == float
-                and not array.on_boundary
-                and array.ndim > 0
-            ):
-                array.all_values[..., grid._land] = np.nan
-            if readonly:
-                if grid in (U, V) and array in (grid.dx, grid.dy):
-                    # dx and dy at land-water interface need to be finite
-                    # for u,v advection and vertical velocity calculation
-                    # The simulation is already protected against that as dx, dy
-                    # were readonly. Quietly restore finite values at these locations
-                    edges = grid._water_contact & grid._land
-                    array.all_values[edges] = array.fill_value
-                array.all_values.flags.writeable = False
-
+        _invalidate(sim, startup=True)
         sim.start(start, timestep=60.0, split_factor=30, report=60)
+        _invalidate(sim, startup=False)
         while sim.time < stop:
-            sim.advance()
-        sim.check_finite()
+            sim.advance(check_finite=True)
         sim.finish()
 
     def test_masked(self):
@@ -95,7 +92,7 @@ class TestLandMask(unittest.TestCase):
             ):
                 continue
             with self.subTest(name=array.name):
-                land_values = array.all_values[..., array.grid.mask.all_values == 0]
+                land_values = array.all_values[array.all_mask]
                 self.assertTrue(np.isfinite(land_values).all())
                 self.assertTrue((land_values == array.fill_value).all())
 

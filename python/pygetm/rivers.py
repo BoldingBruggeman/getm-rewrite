@@ -6,7 +6,7 @@ import numpy as np
 
 from . import core
 from . import parallel
-from .constants import CoordinateType
+from .constants import CoordinateType, CellType
 
 
 class RiverTracer(core.Array):
@@ -82,7 +82,10 @@ class River:
         to the nearest non-masked grid cell."""
         if self.x is not None and self.y is not None:
             self.i_glob, self.j_glob = locator(
-                self.x, self.y, coordinate_type=self.coordinate_type, allowed_mask=(1,)
+                self.x,
+                self.y,
+                coordinate_type=self.coordinate_type,
+                valid_cell_types=(CellType.ACTIVE,),
             )
 
     def to_local_grid(self, grid: core.Grid, logger: logging.Logger) -> bool:
@@ -96,7 +99,7 @@ class River:
         logger.info(f"{self.name} at is located at i={self.i_loc}, j={self.j_loc}")
 
         mask = grid.mask.all_values[self.j_loc, self.i_loc]
-        if mask != 1:
+        if mask != CellType.ACTIVE:
             raise Exception(
                 f"{self.name} has been mapped to non-water grid cell"
                 f" (with mask value {mask})."

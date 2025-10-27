@@ -9,7 +9,7 @@ import numpy as np
 from . import core
 from .open_boundaries import ArrayOpenBoundaries
 from pygotm import _pygotm
-from .constants import INTERFACES, FILL_VALUE, ZERO_GRADIENT
+from .constants import INTERFACES, FILL_VALUE, ZERO_GRADIENT, CellType
 
 
 class VerticalMixing:
@@ -39,7 +39,9 @@ class VerticalMixing:
             long_name="turbulent diffusivity of momentum",
             fill_value=FILL_VALUE,
             attrs=dict(
-                _part_of_state=True, standard_name="ocean_vertical_momentum_diffusivity"
+                _part_of_state=True,
+                standard_name="ocean_vertical_momentum_diffusivity",
+                _valid_at=(CellType.BOUNDARY,),
             ),
         )
         self.nuh.fill(0.0)
