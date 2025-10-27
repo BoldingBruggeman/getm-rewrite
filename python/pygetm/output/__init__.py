@@ -41,6 +41,7 @@ class File(operators.FieldCollection):
         default_dtype: Optional[DTypeLike] = None,
         save_initial: bool = True,
         sub: bool = False,
+        add_coordinates: bool = True,
     ):
         """
         Args:
@@ -71,6 +72,7 @@ class File(operators.FieldCollection):
             self.interval_units == TimeUnit.TIMESTEPS and self.interval == -1
         )
         self.save_initial = save_initial and not self.save_on_close_only
+        self._add_coordinates = add_coordinates
 
         self._start = start
         self._stop = stop
@@ -114,7 +116,8 @@ class File(operators.FieldCollection):
                 f"For {self.interval_units} to be used, OutputManager.start should be"
                 " called with an actual cftime.datetime object."
             )
-        self.add_coordinates()
+        if self._add_coordinates:
+            self.add_coordinates()
         active = self.start_now(seconds_passed, time, default_time_reference or time)
         if self.save_initial:
             self._logger.debug("Saving initial state")
