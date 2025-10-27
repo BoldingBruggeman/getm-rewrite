@@ -1237,8 +1237,11 @@ class TemporalInterpolation(UnaryOperator):
             self._move_to_next(time)
 
         # Do linear interpolation
-        np.multiply(self._slope, numtime - self._numnext, out=self._current)
-        self._current += self._next
+        if numtime == self._numnext:
+            self._current[...] = self._next
+        else:
+            np.multiply(self._slope, numtime - self._numnext, out=self._current)
+            self._current += self._next
 
         # Save current time
         self._numnow = numtime
