@@ -150,8 +150,13 @@ def from_nc(
         **kwargs: additional keyword arguments to be passed to
             :func:`xarray.open_dataset`
     """
-    kwargs.setdefault("decode_times", True)
-    kwargs["use_cftime"] = True
+    try:
+        kwargs.setdefault("decode_times", xr.coders.CFDatetimeCoder(use_cftime=True))
+    except AttributeError:
+        # xarray < 2025.01.1
+        kwargs.setdefault("decode_times", True)
+        kwargs["use_cftime"] = True
+
     kwargs["cache"] = False
 
     if isinstance(paths, (str, os.PathLike)):

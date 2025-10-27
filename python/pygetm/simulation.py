@@ -141,9 +141,15 @@ class BaseSimulation:
         Returns:
             The time from which the restart information was taken.
         """
-        kwargs.setdefault("decode_times", True)
+        try:
+            kwargs.setdefault(
+                "decode_times", xr.coders.CFDatetimeCoder(use_cftime=True)
+            )
+        except AttributeError:
+            # xarray < 2025.01.1
+            kwargs.setdefault("decode_times", True)
+            kwargs["use_cftime"] = True
         kwargs["decode_timedelta"] = False
-        kwargs["use_cftime"] = True
         with xr.open_dataset(path, **kwargs) as ds:
             timevar = ds["time"]
             if timevar.ndim > 1:
