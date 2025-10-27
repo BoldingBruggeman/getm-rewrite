@@ -227,7 +227,7 @@ contains
       do k = 1, nz-1
          do j = jmin, jmax
             do i = imin, imax
-               if (mask(i,j) > 0) then
+               if (mask(i,j) == 1) then
                   SS(i,j,k) = 0.5_c_double * ( &
                        ((uk(i  ,j,k+1)-uk(i  ,j,k)) / (0.5_c_double*(hu(i  ,j,k+1)+hu(i  ,j,k))))**2 &
                      + ((uk(i-1,j,k+1)-uk(i-1,j,k)) / (0.5_c_double*(hu(i-1,j,k+1)+hu(i-1,j,k))))**2 &
@@ -253,7 +253,7 @@ contains
       do k = 1, nz-1
          do j = jmin, jmax
             do i = imin, imax
-               if (mask(i,j) > 0) then
+               if (mask(i,j) == 1) then
                   SS(i,j,k) = 0.5_c_double* &
                      ( &
                        (uk(i  ,j,k+1)-uk(i  ,j,k))**2 / (hu(i  ,j,k+1)+hu(i  ,j,k)) * (num(i,  j,  k)+num(i+1,j,  k)) &
@@ -278,7 +278,7 @@ contains
       ! surface shear velocity (m s-1) = sqrt(surface stress in Pa divided by density rho0)
       do j = jmin, jmax
          do i = imin, imax
-            if (mask(i,j) > 0) ustar(i,j) = (taux(i,j)**2 + tauy(i,j)**2)**0.25_c_double * sqrt(rho0i)
+            if (mask(i,j) /= 0) ustar(i,j) = (taux(i,j)**2 + tauy(i,j)**2)**0.25_c_double * sqrt(rho0i)
          end do
       end do
    end subroutine
@@ -308,7 +308,11 @@ contains
       do j = jmin, jmax
          do i = imin, imax
             if (mask(i,j) == 1) then
-               ! bottom shear velocity (m s-1) = bottom stress in Pa divided by density rho0
+               ! Bottom shear velocity (m s-1) = bottom stress in Pa divided by density rho0.
+               ! This is calculated for each T cell from squared shear velocity (ustar2_x, ustar2_y)
+               ! at its U and V faces. Thus, the above-calculated ustar2_x and ustar2_y need to be valid
+               ! (0) at land-water edges. This typically is realized by uk_bot and vk_bot being zero at
+               ! land-water edges, and rru and rrv being not NaN there.
                ustar(i,j) = (0.5_c_double * &
                                ( &
                                   (ustar2_x(i-1,j  ))**2 + (ustar2_x(i,j))**2 &
