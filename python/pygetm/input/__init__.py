@@ -16,6 +16,8 @@ import enum
 import functools
 import itertools
 import re
+import os
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -79,8 +81,18 @@ class GETMAccessor:
 
     @functools.cached_property
     def coordinates(self) -> Mapping[str, xr.DataArray]:
+        prescribed = self._obj.encoding.get("coordinates", "").split()
+
+        def priority(name: str) -> int:
+            if name in prescribed:
+                return 2
+            if name in self._obj.indexes:
+                return 1
+            return 0
+
         _coordinates = {}
-        for name, coord in self._obj.coords.items():
+        for name in sorted(self._obj.coords, key=priority):
+            coord = self._obj.coords[name]
             units = coord.attrs.get("units")
             standard_name = coord.attrs.get("standard_name")
             if standard_name in ("latitude", "longitude"):
@@ -105,7 +117,7 @@ class GETMAccessor:
 open_nc_files = []
 
 
-def _open(path, preprocess=None, **kwargs):
+def _open(path: Union[str, os.PathLike[str]], preprocess=None, **kwargs):
     key = (path, preprocess, kwargs.copy())
     for k, ds in open_nc_files:
         if k == key:
@@ -118,7 +130,7 @@ def _open(path, preprocess=None, **kwargs):
 
 
 def from_nc(
-    paths: Union[str, Sequence[str]],
+    paths: Union[str, os.PathLike[str], Sequence[Union[str, os.PathLike[str]]]],
     name: str,
     preprocess: Optional[Callable[[xr.Dataset], xr.Dataset]] = None,
     **kwargs,
@@ -141,31 +153,37 @@ def from_nc(
     kwargs.setdefault("decode_times", True)
     kwargs["use_cftime"] = True
     kwargs["cache"] = False
-    if isinstance(paths, str):
+
+    if isinstance(paths, (str, os.PathLike)):
         # Check if this is a URL or a pattern
         # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
-        if not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
+        if isinstance(paths, str) and not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
+            # Not a URL, but a file path or glob pattern. Cast to iterable of Paths
             pattern = paths
-            paths = glob.glob(pattern)
+            paths = map(Path, glob.glob(pattern))
             if not paths:
                 raise Exception(f"No files found matching {pattern!r}")
         else:
+            # A URL or a single file path (PathLike)
             paths = (paths,)
+
     arrays = []
     for path in paths:
         ds = _open(path, preprocess, **kwargs)
         array = ds[name]
         # Note: we wrap the netCDF array ourselves, in order to support lazy operators
         # (e.g., add, multiply)
-        lazyvar = Wrap(array.variable, name=f"from_nc({path!r}, {name!r})")
-        array = xr.DataArray(
+        lazyvar = Wrap(array.variable, name=f'from_nc("{path}", {name!r})')
+        wrapped_array = xr.DataArray(
             lazyvar,
             dims=array.dims,
             coords=array.coords,
             attrs=array.attrs,
             name=lazyvar.name,
         )
-        arrays.append(array)
+        wrapped_array.encoding.update(array.encoding)
+        arrays.append(wrapped_array)
+
     if len(arrays) == 1:
         return arrays[0]
     else:

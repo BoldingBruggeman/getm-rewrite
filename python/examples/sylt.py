@@ -2,7 +2,7 @@
 
 import argparse
 import datetime
-import os.path
+from pathlib import Path
 
 import pygetm
 import pygetm.legacy
@@ -10,29 +10,30 @@ import pygetm.legacy
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "setup_dir",
-    help="Path to configuration files (sylt directory from https://sourceforge.net/p/getm/getm-setups)",
+    type=Path,
     default=".",
+    help="Path to configuration files (sylt directory from https://sourceforge.net/p/getm/getm-setups)",
 )
 args = parser.parse_args()
 
 domain = pygetm.legacy.domain_from_topo(
-    os.path.join(args.setup_dir, "topo.nc"), z0=0.01, f=pygetm.domain.coriolis(50.0)
+    args.setup_dir / "topo.nc", z0=0.01, f=pygetm.domain.coriolis(50.0)
 )
-pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, "bdyinfo.dat"))
+pygetm.legacy.load_bdyinfo(domain, args.setup_dir / "bdyinfo.dat")
 
 sim = pygetm.Simulation(
     domain,
     runtype=pygetm.BAROTROPIC_3D,
     vertical_coordinates=pygetm.vertical_coordinates.Sigma(10),
     airsea=pygetm.airsea.Fluxes(),
-    gotm=os.path.join(args.setup_dir, "gotmturb.nml"),
+    gotm=args.setup_dir / "gotmturb.nml",
     Dcrit=0.2,
     Dmin=0.05,
 )
 
 sim.logger.info("Reading 2D boundary data from file")
-bdy_2d_path = os.path.join(args.setup_dir, "sylt_bdy.nc")
-domain.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
+bdy_2d_path = args.setup_dir / "sylt_bdy.nc"
+sim.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
 
 sim.logger.info("Setting up output")
 output = sim.output_manager.add_netcdf_file("sylt_2d.nc", interval=100)

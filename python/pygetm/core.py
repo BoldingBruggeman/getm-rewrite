@@ -114,7 +114,7 @@ class Locator:
             ally - y[..., np.newaxis, np.newaxis]
         ) ** 2
         if allowed_mask is not None:
-            valid = np.zeros(self.mask.shape, dtype=bool)
+            valid = False
             for m in allowed_mask:
                 valid |= self.mask == m
             dist[(slice(None),) * x.ndim + (~valid,)] = np.inf

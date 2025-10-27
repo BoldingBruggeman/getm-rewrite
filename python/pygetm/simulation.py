@@ -392,11 +392,11 @@ class BaseSimulation:
         self.tiling.comm.Allgather(parallel.MPI.IN_PLACE, nsub)
         fail = nsub.any()
         if fail:
-            sublist = ", ".join(f"{i} ({n})" for i, n in enumerate(nsub) if n > 0)
+            sublist = (f"{i} ({n} fields)" for i, n in enumerate(nsub) if n > 0)
             self.logger.error(
                 f"Non-finite values found in {(nsub > 0).sum()} subdomains"
                 f" at istep={self.istep}, time={self.time}."
-                f" Affected subdomains: {sublist}"
+                f" Affected subdomains: {', '.join(sublist)}"
             )
             if dump:
                 all_bad_fields = self.tiling.comm.allreduce(bad_fields)
@@ -558,11 +558,7 @@ class Simulation(BaseSimulation):
             t_postfix="t",
         )
 
-        self.open_boundaries = pygetm.open_boundaries.LocalOpenBoundaryCollection(
-            domain.open_boundaries,
-            self.T,
-            logger=self.logger.getChild("open_boundaries"),
-        )
+        self.open_boundaries = self.T.open_boundaries
 
         self.U = self.T.ugrid
         self.V = self.T.vgrid
@@ -960,7 +956,6 @@ class Simulation(BaseSimulation):
             self.momentum.V,
             self.momentum.uk if self.runtype > RunType.BAROTROPIC_2D else None,
             self.momentum.vk if self.runtype > RunType.BAROTROPIC_2D else None,
-            self._fields,
         )
         # Ensure U and V points at the land-water interface have non-zero water depth
         # and layer thickness, as (zero) transports at these points will be divided by

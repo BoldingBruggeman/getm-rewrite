@@ -629,6 +629,7 @@ class ArrayOpenBoundaries:
             )
         self.updaters: List[Callable[[], None]] = []
         self.relaxation: List[Relaxation] = []
+        array.grid.open_boundaries._arrays.append(self)
 
     def _set_type(self, value: Union[int, BoundaryCondition]):
         value = self._array.grid.open_boundaries._make_bc(value)
@@ -870,6 +871,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         self.np = 0
         self.np_glob = 0
         self._boundaries: List[LocalOpenBoundary] = []
+        self._arrays: List[ArrayOpenBoundaries] = []
 
         self.sponge = Sponge()
         self.zero_gradient = ZeroGradient()
@@ -916,7 +918,6 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
 
             self.np_glob += global_boundary.np
 
-        # Number of open boundary points (local and global)
         grid.open_boundaries = self
 
         # Local indices of open boundary points within local subdomain
@@ -1118,24 +1119,25 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
 
     def start(
         self,
-        U: core.Array,
-        V: core.Array,
-        uk: Optional[core.Array],
-        vk: Optional[core.Array],
-        fields: Mapping[str, core.Array],
+        U: Optional[core.Array] = None,
+        V: Optional[core.Array] = None,
+        uk: Optional[core.Array] = None,
+        vk: Optional[core.Array] = None,
     ):
         for boundary in self._boundaries:
-            # Set up depth-integrated/depth-averaged velocity perpendicular
-            # to the open boundary for Flather boundary conditions
 
-            # Modelled depth-integrated velocity (slice from full U/V)
-            boundary.UV = boundary.extract_uv_in(U.all_values, V.all_values)
+            if U is not None:
+                # Depth-integrated/depth-averaged velocity perpendicular
+                # to the open boundary for Flather boundary conditions
 
-            # Prescribed depth-integrated or depth-averaged velocity
-            if boundary.side in (Side.EAST, Side.WEST):
-                boundary.flow_ext = self.u_rot[boundary.slice_bdy]
-            else:
-                boundary.flow_ext = self.v_rot[boundary.slice_bdy]
+                # Modelled depth-integrated velocity (slice from full U/V)
+                boundary.UV = boundary.extract_uv_in(U.all_values, V.all_values)
+
+                # Prescribed depth-integrated or depth-averaged velocity
+                if boundary.side in (Side.EAST, Side.WEST):
+                    boundary.flow_ext = self.u_rot[boundary.slice_bdy]
+                else:
+                    boundary.flow_ext = self.v_rot[boundary.slice_bdy]
 
             if uk is not None:
                 # Depth-explicit horizontal model velocities for sponge BCs
@@ -1146,9 +1148,8 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                 # Inward velocity (to be calculated from uv and inward sign)
                 boundary.uv_in = self.uv_in.all_values[boundary.slice_bdy]
 
-        for field in fields.values():
-            if hasattr(field, "open_boundaries"):
-                self.bcs.update(field.open_boundaries.initialize())
+        for array_open_boundaries in self._arrays:
+            self.bcs.update(array_open_boundaries.initialize())
 
     def __getitem__(self, key: int) -> LocalOpenBoundary:
         return self._boundaries[key]

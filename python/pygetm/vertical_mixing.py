@@ -1,7 +1,8 @@
-from typing import Optional
+from typing import Union
 import itertools
-import os.path
+import os
 import logging
+from pathlib import Path
 
 import numpy as np
 
@@ -62,18 +63,20 @@ class GOTM(VerticalMixing):
     using the `General Ocean Turbulence Model (GOTM) <https://gotm.net>`_.
     """
 
-    def __init__(self, path: Optional[str] = None):
+    def __init__(self, path: Union[None, os.PathLike[str], str] = None):
         super().__init__()
-        if path and not os.path.isfile(path):
-            raise Exception(f"Configuration file {path} does not exist")
+        if path is not None:
+            path = Path(path)
+            if not path.is_file():
+                raise Exception(f"Configuration file {path} does not exist")
         self.path = path
 
     def initialize(self, grid: core.Grid, logger: logging.Logger):
         super().initialize(grid, logger)
 
-        has_yaml = self.path and self.path.endswith(".yaml")
-        nml_path = b"" if not self.path or has_yaml else self.path.encode("ascii")
-        yaml_path = b"" if not has_yaml else self.path.encode("ascii")
+        has_yaml = self.path and self.path.suffix == ".yaml"
+        nml_path = b"" if not self.path or has_yaml else str(self.path).encode("ascii")
+        yaml_path = b"" if not has_yaml else str(self.path).encode("ascii")
         self.mix = _pygotm.Mixing(grid.nz, nml_path, yaml_path)
         self.tke = grid.array(
             fill_value=FILL_VALUE,

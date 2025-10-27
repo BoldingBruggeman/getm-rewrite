@@ -138,17 +138,25 @@ class Base:
 
 
 class WrappedArray(Base):
-    __slots__ = ("_name", "values")
+    __slots__ = ("_name", "values", "_global_field")
 
-    def __init__(self, values: np.ndarray, name: str, dims: Tuple[str, ...], **kwargs):
+    def __init__(
+        self,
+        values: np.ndarray,
+        name: str,
+        dims: Tuple[str, ...],
+        global_field: Optional[Base] = None,
+        **kwargs,
+    ):
         super().__init__(
             name, values.shape, dims, values.dtype, time_varying=False, **kwargs
         )
         self._name = name
         self.values = values
+        self._global_field = global_field or self
 
     def gather(self) -> Base:
-        return self  # wrapped array is assumed identical on all subdomains
+        return self._global_field
 
     @property
     def default_name(self) -> str:
@@ -653,7 +661,7 @@ class InterpZ(UnivariateTransformWithData):
 
 
 class IndexXY(UnivariateTransform):
-    __slots__ = "_i", "_j", "_slice", "_index_dims", "_local2global"
+    __slots__ = "_i", "_j", "_slice", "_index_dims", "_local2global", "_index_coords"
 
     def __init__(
         self,
@@ -662,6 +670,7 @@ class IndexXY(UnivariateTransform):
         y: ArrayLike,
         coordinate_type: CoordinateType = CoordinateType.IJ,
         dims: Tuple[str, ...] = (),
+        coords: Mapping[str, Union[Base, ArrayLike]] = {},
     ):
         index_shape = np.broadcast_shapes(np.shape(x), np.shape(y))
         assert len(dims) == len(index_shape)
@@ -714,6 +723,15 @@ class IndexXY(UnivariateTransform):
             source, shape=flat_shape, dims=flat_dims, inherit_grid_info=False
         )
 
+        self._index_coords = []
+        for name, values in coords.items():
+            values = np.broadcast_to(values, index_shape)
+            global_field = WrappedArray(values, name, dims=dims)
+            local_field = WrappedArray(
+                values[inside], name, dims=(flat_dim_name,), global_field=global_field
+            )
+            self._index_coords.append(local_field)
+
     def get(
         self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
     ) -> ArrayLike:
@@ -729,6 +747,8 @@ class IndexXY(UnivariateTransform):
         for c in self._source.coords:
             if c.dims[-2:] == self._source.dims[-2:]:
                 c = IndexXY(c, self._i, self._j, dims=self._index_dims)
+            yield c
+        for c in self._index_coords:
             yield c
 
     @property

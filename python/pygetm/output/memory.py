@@ -12,14 +12,15 @@ from .operators import Base
 class MemoryFile(File):
     def start_now(
         self, seconds_passed: float, time: Optional[cftime.datetime], *args, **kwargs
-    ):
+    ) -> bool:
         self._times: Optional[List[cftime.datetime]] = None if time is None else []
         self._seconds: List[float] = []
         self._recorded_fields: Mapping[str, Tuple[Base, List[np.ndarray]]] = {}
         for name, field in self.fields.items():
             if field.time_varying:
                 self._recorded_fields[name] = (field, [])
-        self._x = None
+        self._x: Optional[xr.Dataset] = None
+        return len(self._recorded_fields) > 0
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         self._seconds.append(seconds_passed)

@@ -2,6 +2,7 @@ import logging
 from typing import Mapping, Optional, List, Union
 import datetime
 import enum
+import os
 
 from numpy.typing import DTypeLike
 import cftime
@@ -37,7 +38,6 @@ class File(operators.FieldCollection):
         interval_units: TimeUnit = TimeUnit.TIMESTEPS,
         start: Optional[cftime.datetime] = None,
         stop: Optional[cftime.datetime] = None,
-        path: Optional[str] = None,
         default_dtype: Optional[DTypeLike] = None,
         save_initial: bool = True,
         sub: bool = False,
@@ -72,7 +72,6 @@ class File(operators.FieldCollection):
         )
         self.save_initial = save_initial and not self.save_on_close_only
 
-        self.path = path
         self._start = start
         self._stop = stop
         self._start_seconds = 0.0
@@ -105,7 +104,7 @@ class File(operators.FieldCollection):
         itimestep: int,
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime] = None,
-    ):
+    ) -> bool:
         if (
             self.interval_units not in time_unit2seconds
             and self.interval_units != TimeUnit.TIMESTEPS
@@ -116,11 +115,12 @@ class File(operators.FieldCollection):
                 " called with an actual cftime.datetime object."
             )
         self.add_coordinates()
-        self.start_now(seconds_passed, time, default_time_reference or time)
+        active = self.start_now(seconds_passed, time, default_time_reference or time)
         if self.save_initial:
             self._logger.debug("Saving initial state")
             self.save_now(seconds_passed, time)
         self.next = self._next_time(seconds_passed, itimestep, time)
+        return active
 
     def save(
         self, seconds_passed: float, itimestep: int, time: Optional[cftime.datetime]
@@ -145,7 +145,7 @@ class File(operators.FieldCollection):
         seconds_passed: float,
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
-    ):
+    ) -> bool:
         pass
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
@@ -178,7 +178,9 @@ class OutputManager:
         self._time_reference = None
         self._logger = logger or logging.getLogger()
 
-    def add_netcdf_file(self, path: str, **kwargs) -> netcdf.NetCDFFile:
+    def add_netcdf_file(
+        self, path: Union[os.PathLike[str], str], **kwargs
+    ) -> netcdf.NetCDFFile:
         """Add a NetCDF file for output.
 
         Args:
@@ -188,7 +190,11 @@ class OutputManager:
         """
         self._logger.debug(f"Adding NetCDF file {path}")
         file = netcdf.NetCDFFile(
-            self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
+            self.fields,
+            self._logger.getChild(str(path)),
+            path,
+            rank=self.rank,
+            **kwargs,
         )
         self._files.append(file)
         return file
@@ -207,7 +213,9 @@ class OutputManager:
         self._files.append(file)
         return file
 
-    def add_restart(self, path: str, **kwargs) -> netcdf.NetCDFFile:
+    def add_restart(
+        self, path: Union[os.PathLike[str], str], **kwargs
+    ) -> netcdf.NetCDFFile:
         """Add a restart file to write to.
 
         Args:
@@ -229,7 +237,7 @@ class OutputManager:
 
     def dump(
         self,
-        path: str,
+        path: Union[os.PathLike[str], str],
         *fields: Union[str, core.Array],
         seconds_passed: float = 0.0,
         time: Optional[cftime.datetime] = None,
@@ -237,7 +245,11 @@ class OutputManager:
     ):
         kwargs.setdefault("time_reference", self._time_reference)
         file = netcdf.NetCDFFile(
-            self.fields, self._logger.getChild(path), path, rank=self.rank, **kwargs
+            self.fields,
+            self._logger.getChild(str(path)),
+            path,
+            rank=self.rank,
+            **kwargs,
         )
         file.request(*fields)
         file.start(seconds_passed, 0, time)
@@ -279,10 +291,12 @@ class OutputManager:
         for i in range(len(self._startable_files) - 1, -1, -1):
             file = self._startable_files[i]
             if file._start_seconds <= seconds_passed:
-                file.start(seconds_passed, itimestep, time, self._time_reference)
-                self._active_files.append(file)
-                if file._stop_seconds is not None:
-                    self._stoppable_files.append(file)
+                if file.start(seconds_passed, itimestep, time, self._time_reference):
+                    self._active_files.append(file)
+                    if file._stop_seconds is not None:
+                        self._stoppable_files.append(file)
+                else:
+                    file.close(seconds_passed, time)
                 del self._startable_files[i]
 
     def _stop_files(self, seconds_passed: float, time: Optional[cftime.datetime]):
