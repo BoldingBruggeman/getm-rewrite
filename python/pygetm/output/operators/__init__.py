@@ -8,7 +8,6 @@ from typing import (
     Callable,
     Any,
     NamedTuple,
-    Type,
     TypeVar,
 )
 import collections
@@ -65,7 +64,7 @@ class Base:
     )
 
     @classmethod
-    def parameterize(cls: Type[T], **kwargs) -> T:
+    def parameterize(cls: type[T], **kwargs) -> T:
         return functools.partial(cls, **kwargs)
 
     def __init__(
@@ -197,7 +196,7 @@ class FieldCollection:
         grid: Optional[pygetm.core.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
         generate_unique_name: bool = False,
-        transforms: Iterable[Type["UnivariateTransform"]] = (),
+        transforms: Iterable[type["UnivariateTransform"]] = (),
     ) -> tuple[str, ...]:
         """Add one or more arrays to this field collection.
 
