@@ -10,7 +10,6 @@ from typing import (
     Any,
     Callable,
     Iterable,
-    TYPE_CHECKING,
     Dict,
 )
 import logging
@@ -24,9 +23,6 @@ import xarray as xr
 from . import _pygetm
 from . import parallel
 from .constants import CENTERS, INTERFACES, FILL_VALUE, CoordinateType, CellType
-
-if TYPE_CHECKING:
-    import netCDF4
 
 
 def _noop(*args, **kwargs):
@@ -615,26 +611,6 @@ class Grid(_pygetm.Grid):
 
     def array(self, *args, **kwargs) -> "Array":
         return Array.create(self, *args, **kwargs)
-
-    def add_to_netcdf(self, nc: "netCDF4.Dataset", postfix: str = ""):
-        xdim, ydim = "x" + postfix, "y" + postfix
-
-        def save(name, units="", long_name=None):
-            data = getattr(self, name)
-            ncvar = nc.createVariable(name + postfix, data.dtype, (ydim, xdim))
-            ncvar[...] = data
-            ncvar.units = units
-            ncvar.long_name = long_name or name
-
-        ny, nx = self.x.shape
-        nc.createDimension(xdim, nx)
-        nc.createDimension(ydim, ny)
-        save("dx", "m")
-        save("dy", "m")
-        save("H", "m", "undisturbed water depth")
-        save("mask")
-        save("area", "m2")
-        save("cor", "s-1", "Coriolis parameter")
 
     def global_to_local(
         self, i: int, j: int, *, include_halos: bool = False
