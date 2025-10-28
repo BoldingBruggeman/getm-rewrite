@@ -43,7 +43,7 @@ class Prescribed(Base):
         airsea: pygetm.airsea.Fluxes,
     ):
         if macro:
-            f = np.where(self.ice.all_mask, 0.0, self.ice.all_values)
+            f = np.where(self.ice.grid._water, self.ice.all_values, 0.0)
             self.has_ice = f.any()
 
             # 1st order freezing point approximation based on
@@ -56,16 +56,16 @@ class Prescribed(Base):
                 # Set temperature in ice-covered fraction to freezing temperature
                 ct_sf.all_values += f * (ct_freezing - ct_sf.all_values)
 
+                # Allow outward surface heat flux [cooling] only in ice-free area
+                cooling = airsea.shf.all_values < 0
+                airsea.shf.all_values[cooling] *= self.ice_free[cooling]
+
             np.maximum(
                 ct_sf.all_values,
                 ct_freezing,
                 out=ct_sf.all_values,
-                where=ct_sf.all_mask,
+                where=self.ice.grid._water,
             )
-
-            # Allow outward surface heat flux [cooling] only in ice-free area
-            cooling = airsea.shf.all_values < 0
-            airsea.shf.all_values[cooling] *= self.ice_free[cooling]
 
         if self.has_ice:
             airsea.taux.all_values *= self.ice_free
@@ -94,15 +94,18 @@ class Ice(Base):
             # 1st order freezing point approximation based on
             # gsw_mod_freezing_poly_coefficients
             ct_freezing = 0.017947064327968736 - 0.06076099099929818 * sa_sf.all_values
-            unmasked = ~ct_sf.all_mask
             np.less_equal(
-                ct_sf.all_values, ct_freezing, out=self.covered, where=unmasked
+                ct_sf.all_values,
+                ct_freezing,
+                out=self.covered,
+                where=self.ice.grid._water,
             )
             self.has_ice = self.covered.any()
-            np.putmask(self.ice.all_values, unmasked, np.where(self.covered, 1.0, 0.0))
+            np.putmask(self.ice.all_values, self.ice.grid._water, self.covered)
             if self.has_ice:
                 np.putmask(ct_sf.all_values, self.covered, ct_freezing)
-                airsea.shf.all_values[self.covered & (airsea.shf.all_values < 0)] = 0.0
+                cooling = airsea.shf.all_values < 0
+                airsea.shf.all_values[self.covered & cooling] = 0.0
 
         if self.has_ice:
             airsea.taux.all_values[self.covered] = 0.0
