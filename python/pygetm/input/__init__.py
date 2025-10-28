@@ -1,14 +1,4 @@
-from typing import (
-    Callable,
-    Iterable,
-    List,
-    Mapping,
-    Union,
-    Optional,
-    Sequence,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing import Callable, Iterable, Mapping, Union, Optional, Sequence, TYPE_CHECKING
 import glob
 import numbers
 import logging
@@ -262,7 +252,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def is_time_varying(self) -> bool:
         return False
 
-    def _finalize_slices(self, slices: Tuple):
+    def _finalize_slices(self, slices: tuple):
         assert isinstance(slices, tuple)
         for i, s in enumerate(slices):
             if s is Ellipsis:
@@ -284,7 +274,7 @@ class Operator(LazyArray):
         *args,
         passthrough=(),
         dtype: npt.DTypeLike = None,
-        shape: Optional[Tuple[int]] = None,
+        shape: Optional[tuple[int]] = None,
         name: Optional[str] = None,
         kwslice: Iterable[str] = (),
         **kwargs,
@@ -443,7 +433,7 @@ class Wrap(UnaryOperator):
 
 
 class Slice(UnaryOperator):
-    def __init__(self, source, shape: Tuple[int], passthrough):
+    def __init__(self, source, shape: tuple[int], passthrough):
         super().__init__(source, shape=shape, passthrough=passthrough)
         self._slices = []
         self.passthrough_own_slices = True
@@ -1172,7 +1162,7 @@ class TemporalInterpolation(UnaryOperator):
         self._slope = 0.0
         self._inext = -1
         self._next = 0.0
-        self._slices: List[Union[int, slice]] = [slice(None)] * source.ndim
+        self._slices: list[Union[int, slice]] = [slice(None)] * source.ndim
 
         self.climatology = climatology
         self._year = self.times[0].year
@@ -1363,8 +1353,8 @@ class OnGrid(enum.Enum):
 
 class InputManager:
     def __init__(self, logger: logging.Logger):
-        self._all_fields: List[Tuple[str, LazyArray, np.ndarray]] = []
-        self._micro_fields: List[Tuple[str, LazyArray, np.ndarray]] = []
+        self._all_fields: list[tuple[str, LazyArray, np.ndarray]] = []
+        self._micro_fields: list[tuple[str, LazyArray, np.ndarray]] = []
         self.logger = logger
 
     def debug_nc_reads(self):
@@ -1384,7 +1374,7 @@ class InputManager:
         include_halos: Optional[bool] = None,
         climatology: bool = False,
         mask: bool = False,
-        updater_collection: Optional[List] = None,
+        updater_collection: Optional[list] = None,
     ):
         """Link an array to the provided input. If this input is constant in time,
         the value of the array will be set immediately.
@@ -1533,7 +1523,7 @@ class InputManager:
                     ip_mask = None
                     if value.getm.time is not None and not array.z:
                         itimedim = value.dims.index(value.getm.time.dims[0])
-                        slc: List[Union[int, slice]] = [slice(None)] * value.ndim
+                        slc: list[Union[int, slice]] = [slice(None)] * value.ndim
                         slc[itimedim] = 0
                         ip_mask = np.isnan(value[tuple(slc)])
                     value = pygetm.input.horizontal_interpolation(
@@ -1677,7 +1667,7 @@ class InputManager:
             )
 
     def update(
-        self, time: cftime.datetime, macro: bool = True, fields: Optional[List] = None
+        self, time: cftime.datetime, macro: bool = True, fields: Optional[list] = None
     ):
         """Update all arrays linked to time-dependent inputs to the current time.
 

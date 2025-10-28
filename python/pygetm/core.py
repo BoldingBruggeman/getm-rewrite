@@ -1,17 +1,6 @@
 import numbers
 import operator
-from typing import (
-    Optional,
-    Union,
-    Tuple,
-    Literal,
-    Mapping,
-    List,
-    Any,
-    Callable,
-    Iterable,
-    Dict,
-)
+from typing import Optional, Union, Literal, Mapping, Any, Callable, Iterable
 import logging
 import functools
 
@@ -47,7 +36,7 @@ class Rotator:
 
     def __call__(
         self, u: npt.ArrayLike, v: npt.ArrayLike, to_grid: bool = True
-    ) -> Tuple[npt.ArrayLike, npt.ArrayLike]:
+    ) -> tuple[npt.ArrayLike, npt.ArrayLike]:
         if to_grid:
             # clockwise
             u_new = u * self._cos + v * self._sin
@@ -82,7 +71,7 @@ class Locator:
         *,
         coordinate_type: CoordinateType,
         valid_cell_types: Optional[Iterable[CellType]] = None,
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """Locate the unmasked grid cell nearest to the specified location.
 
         Args:
@@ -367,10 +356,10 @@ class Grid(_pygetm.Grid):
 
         self._interior = (Ellipsis, slice(haloy, haloy + ny), slice(halox, halox + nx))
         self._interpolators: dict["Grid", Callable[[np.ndarray, np.ndarray], None]] = {}
-        self._mirrors: Dict[
-            "Grid", Optional[Tuple[Tuple[slice, ...], Tuple[slice, ...]]]
+        self._mirrors: dict[
+            "Grid", Optional[tuple[tuple[slice, ...], tuple[slice, ...]]]
         ] = {}
-        self.horizontal_coordinates: List["Array"] = []
+        self.horizontal_coordinates: list["Array"] = []
         self.extra_output_coordinates = []
 
         self._work = self.array(fill_value=np.nan)
@@ -594,7 +583,7 @@ class Grid(_pygetm.Grid):
 
     def rotate(
         self, u: npt.ArrayLike, v: npt.ArrayLike, to_grid: bool = True
-    ) -> Tuple[npt.ArrayLike, npt.ArrayLike]:
+    ) -> tuple[npt.ArrayLike, npt.ArrayLike]:
         """Rotate a geocentric velocity field to the model coordinate system,
         or a model velocity field to the geocentric coordinate system.
 
@@ -614,7 +603,7 @@ class Grid(_pygetm.Grid):
 
     def global_to_local(
         self, i: int, j: int, *, include_halos: bool = False
-    ) -> Tuple[Optional[int], Optional[int]]:
+    ) -> tuple[Optional[int], Optional[int]]:
         """Convert global indices (i, j) to local indices in the subdomain."""
         xoffset = 0 if self.tiling is None else self.tiling.xoffset
         yoffset = 0 if self.tiling is None else self.tiling.yoffset
@@ -630,7 +619,7 @@ class Grid(_pygetm.Grid):
 
     def get_gather_info(
         self,
-        shape: Tuple[int, ...],
+        shape: tuple[int, ...],
         on_boundary: bool,
         dtype: npt.DTypeLike,
         fill_value,
@@ -748,7 +737,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         units: Optional[str] = None,
         long_name: Optional[str] = None,
         fill_value: Optional[Union[float, int]] = None,
-        shape: Optional[Tuple[int, ...]] = None,
+        shape: Optional[tuple[int, ...]] = None,
         dtype: Optional[npt.DTypeLike] = None,
         grid: Grid = None,
         fabm_standard_name: Optional[str] = None,
@@ -965,7 +954,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return ar
 
     @property
-    def all_shape(self) -> Tuple[int, ...]:
+    def all_shape(self) -> tuple[int, ...]:
         shape = (
             [self.grid.open_boundaries.np]
             if self.on_boundary
@@ -1116,7 +1105,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.values[key] = values
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         """Shape excluding halos"""
         return self._shape
 

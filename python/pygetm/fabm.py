@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, MutableMapping, Iterable
+from typing import Optional, MutableMapping, Iterable
 import os
 
 import numpy as np
@@ -38,7 +38,7 @@ class FABM:
         self,
         grid: core.Grid,
         tracer_collection: tracer.TracerCollection,
-        tracer_totals: List[tracer.TracerTotal],
+        tracer_totals: list[tracer.TracerTotal],
         logger: logging.Logger,
     ):
         self.grid = grid

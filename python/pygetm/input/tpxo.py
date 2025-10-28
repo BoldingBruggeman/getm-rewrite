@@ -1,5 +1,5 @@
 import os.path
-from typing import Tuple, Mapping
+from typing import Mapping
 
 import numpy as np
 import numpy.typing as npt
@@ -60,7 +60,7 @@ def get(
     scale_factor *= {"h": 1e-3, "u": 1e-4, "v": 1e-4}.get(variable, 1.0)
     axis = {"h": "z"}.get(variable, variable)
     file_prefix = {"v": "u"}.get(variable, variable)
-    components: Mapping[str, Tuple[np.ndarray, np.ndarray]] = {}
+    components: Mapping[str, tuple[np.ndarray, np.ndarray]] = {}
     for component in COMPONENTS:
         if verbose:
             print(f"TPXO: reading {component} constituent of {variable}...")
@@ -78,7 +78,7 @@ def get(
 class Data(pygetm.input.LazyArray):
     def __init__(
         self,
-        components: Mapping[str, Tuple[np.ndarray, np.ndarray]],
+        components: Mapping[str, tuple[np.ndarray, np.ndarray]],
         lat: np.ndarray,
         **kwargs,
     ):

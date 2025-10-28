@@ -1,4 +1,4 @@
-from typing import Optional, Union, Tuple
+from typing import Optional, Union
 import numbers
 
 import numpy as np
@@ -182,7 +182,7 @@ class Density:
         lon: Optional[core.Array] = None,
         lat: Optional[core.Array] = None,
         in_situ: bool = False,
-    ) -> Tuple[xr.DataArray, xr.DataArray]:
+    ) -> tuple[xr.DataArray, xr.DataArray]:
         """Lazily convert practical salinity and potential temperature to absolute
         salinity and conservative temperature. The conversion is done only when the
         returned objects are indexed or cast to a :class:`numpy.ndarray`.

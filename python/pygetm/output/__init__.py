@@ -1,5 +1,5 @@
 import logging
-from typing import Mapping, Optional, List, Union
+from typing import Mapping, Optional, Union
 import datetime
 import enum
 import os
@@ -174,10 +174,10 @@ class OutputManager:
     ):
         self.fields = fields
         self.rank = rank
-        self._files: List[File] = []
-        self._active_files: List[File] = []
-        self._startable_files: List[File] = []
-        self._stoppable_files: List[File] = []
+        self._files: list[File] = []
+        self._active_files: list[File] = []
+        self._startable_files: list[File] = []
+        self._stoppable_files: list[File] = []
         self._time_reference = None
         self._logger = logger or logging.getLogger()
 

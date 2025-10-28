@@ -1,4 +1,4 @@
-from typing import Union, Optional, List, Tuple, Sequence, Mapping
+from typing import Union, Optional, Sequence, Mapping
 import logging
 import datetime
 import timeit
@@ -380,7 +380,7 @@ class BaseSimulation:
         if self._cached_check_finite_info is None:
             self._cached_check_finite_info = _collect_info()
         checklist = self._cached_check_finite_info[1 if macro_active else 0]
-        bad_fields: List[str] = []
+        bad_fields: list[str] = []
         for field, unmasked in checklist:
             finite = np.isfinite(field.values)
             if not finite.all(where=unmasked):
@@ -748,7 +748,7 @@ class Simulation(BaseSimulation):
 
         #: List of variables for which the domain-integrated total needs to be reported.
         #: These can be depth-integrated (2D) or depth-explicit (3D).
-        self.tracer_totals: List[pygetm.tracer.TracerTotal] = []
+        self.tracer_totals: list[pygetm.tracer.TracerTotal] = []
 
         self.fabm = None
 
@@ -1435,9 +1435,9 @@ class Simulation(BaseSimulation):
     @property
     def totals(
         self,
-    ) -> Tuple[
+    ) -> tuple[
         Optional[float],
-        Optional[Sequence[Tuple[pygetm.tracer.TracerTotal, float, float]]],
+        Optional[Sequence[tuple[pygetm.tracer.TracerTotal, float, float]]],
     ]:
         """Global totals of volume and tracers.
 

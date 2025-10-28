@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, List, Sequence, NamedTuple
+from typing import Mapping, Optional, Sequence, NamedTuple
 import logging
 
 import numpy as np
@@ -144,7 +144,7 @@ class TracerCollection(Sequence[Tracer]):
         self.logger.info(f"Crank-Nicolson parameter: {cnpar}")
 
         self.grid: core.Grid = grid
-        self._tracers: List[Tracer] = []
+        self._tracers: list[Tracer] = []
         self._source = grid.array(z=CENTERS)
         self._advection = operators.Advection(grid, scheme=advection_scheme)
         self._vertical_diffusion = operators.VerticalDiffusion(grid, cnpar=cnpar)

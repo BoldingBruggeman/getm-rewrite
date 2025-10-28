@@ -1,7 +1,7 @@
 import http.client
 import json
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 import argparse
 
 import urllib.parse
@@ -38,7 +38,7 @@ def download_era5(
     lat: npt.ArrayLike,
     start_year: int,
     stop_year: Optional[int] = None,
-    dims: Optional[Tuple[str]] = None,
+    dims: Optional[tuple[str]] = None,
     logger: Optional[logging.Logger] = None,
 ) -> xr.Dataset:
     lng = np.asarray(lng)
