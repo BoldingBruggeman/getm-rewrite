@@ -8,7 +8,15 @@ from . import core
 from . import parallel
 from . import operators
 import pygetm._pygetm
-from .constants import FILL_VALUE, RunType, CENTERS, RHO0, INTERFACES, TimeVarying
+from .constants import (
+    FILL_VALUE,
+    RunType,
+    CENTERS,
+    RHO0,
+    INTERFACES,
+    TimeVarying,
+    CellType,
+)
 
 
 class CoriolisScheme(enum.IntEnum):
@@ -153,7 +161,11 @@ class Momentum:
             units="m2 s-1",
             long_name="depth-integrated velocity in x-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_part_of_state=True, _mask_output=True),
+            attrs=dict(
+                _part_of_state=True,
+                _mask_output=True,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_Y),
+            ),
         )
 
         self.V = vgrid.array(
@@ -161,21 +173,31 @@ class Momentum:
             units="m2 s-1",
             long_name="depth-integrated velocity in y-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_part_of_state=True, _mask_output=True),
+            attrs=dict(
+                _part_of_state=True,
+                _mask_output=True,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_X),
+            ),
         )
         self.u1 = ugrid.array(
             name="u1",
             units="m s-1",
             long_name="depth-averaged velocity in x-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_mask_output=True),
+            attrs=dict(
+                _mask_output=True,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_Y),
+            ),
         )
         self.v1 = vgrid.array(
             name="v1",
             units="m s-1",
             long_name="depth-averaged velocity in y-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_mask_output=True),
+            attrs=dict(
+                _mask_output=True,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_X),
+            ),
         )
         self.SxA = ugrid.array(
             name="SxA",
@@ -313,7 +335,11 @@ class Momentum:
             units="m2 s-1",
             long_name="layer-integrated velocity in x-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_part_of_state=True, _mask_output=True),
+            attrs=dict(
+                _part_of_state=True,
+                _mask_output=True,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_Y),
+            ),
         )
         self.qk = vgrid.array(
             name="qk",
@@ -321,7 +347,11 @@ class Momentum:
             units="m2 s-1",
             long_name="layer-integrated velocity in y-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_part_of_state=True, _mask_output=True),
+            attrs=dict(
+                _part_of_state=True,
+                _mask_output=True,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_X),
+            ),
         )
         self.uk = ugrid.array(
             name="uk",
@@ -329,7 +359,11 @@ class Momentum:
             units="m s-1",
             long_name="velocity in x-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_mask_output=True, standard_name="sea_water_x_velocity"),
+            attrs=dict(
+                _mask_output=True,
+                standard_name="sea_water_x_velocity",
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_Y),
+            ),
         )
         self.vk = vgrid.array(
             name="vk",
@@ -337,7 +371,11 @@ class Momentum:
             units="m s-1",
             long_name="velocity in y-direction",
             fill_value=FILL_VALUE,
-            attrs=dict(_mask_output=True, standard_name="sea_water_y_velocity"),
+            attrs=dict(
+                _mask_output=True,
+                standard_name="sea_water_y_velocity",
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_X),
+            ),
         )
         self.ww = tgrid.array(
             name="ww",
@@ -345,7 +383,10 @@ class Momentum:
             units="m s-1",
             long_name="vertical velocity",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="upward_sea_water_velocity"),
+            attrs=dict(
+                standard_name="upward_sea_water_velocity",
+                _valid_at=(CellType.BOUNDARY,),
+            ),
         )
         self.SS = tgrid.array(
             name="SS",
@@ -405,14 +446,26 @@ class Momentum:
             units="m s-1",
             long_name="bottom drag coefficient multiplied by near-bottom velocity",
             fill_value=FILL_VALUE,
-            attrs=dict(_mask_output=True, _time_varying=TimeVarying.MACRO),
+            attrs=dict(
+                _mask_output=True,
+                _time_varying=TimeVarying.MACRO,
+                _valid_at=(
+                    CellType.EDGE_Y,
+                ),  # must be finite to calculate stresses at T points
+            ),
         )
         self.rrv = vgrid.array(
             name="rrv",
             units="m s-1",
             long_name="bottom drag coefficient multiplied by near-bottom velocity",
             fill_value=FILL_VALUE,
-            attrs=dict(_mask_output=True, _time_varying=TimeVarying.MACRO),
+            attrs=dict(
+                _mask_output=True,
+                _time_varying=TimeVarying.MACRO,
+                _valid_at=(
+                    CellType.EDGE_X,
+                ),  # must be finite to calculate stresses at T points
+            ),
         )
 
         self.Ui = ugrid.array(
@@ -421,7 +474,10 @@ class Momentum:
             long_name="depth-integrated velocity in x-direction averaged over previous macrotimestep",
             fill_value=FILL_VALUE,
             attrs=dict(
-                _part_of_state=True, _mask_output=True, _time_varying=TimeVarying.MACRO
+                _part_of_state=True,
+                _mask_output=True,
+                _time_varying=TimeVarying.MACRO,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_Y),
             ),
         )
         self.Vi = vgrid.array(
@@ -430,7 +486,10 @@ class Momentum:
             long_name="depth-integrated velocity in y-direction averaged over previous macrotimestep",
             fill_value=FILL_VALUE,
             attrs=dict(
-                _part_of_state=True, _mask_output=True, _time_varying=TimeVarying.MACRO
+                _part_of_state=True,
+                _mask_output=True,
+                _time_varying=TimeVarying.MACRO,
+                _valid_at=(CellType.MIRROR_INT, CellType.MIRROR_EXT, CellType.EDGE_X),
             ),
         )
 
@@ -504,8 +563,8 @@ class Momentum:
         self.runtype = runtype
 
         # Disable bottom friction if minimum hydrodynamic bottom roughness is 0 everywhere
-        z0b_u = ugrid.z0b_min.all_values[ugrid._water] == 0.0
-        z0b_v = vgrid.z0b_min.all_values[vgrid._water] == 0.0
+        z0b_u = ugrid.z0b_min.all_values[~ugrid.z0b_min.all_mask] == 0.0
+        z0b_v = vgrid.z0b_min.all_values[~vgrid.z0b_min.all_mask] == 0.0
         self.apply_bottom_friction = not (z0b_u.any() or z0b_v.any())
         if not self.apply_bottom_friction:
             self.logger.warning(
@@ -572,6 +631,7 @@ class Momentum:
             self.corqk.all_values[:, :, 0] = 0.0
             self.corqk.all_values[:, -1, :] = 0.0
 
+        # Advection operators
         if self.advection_scheme is None:
             self.advection_scheme = default_advection_scheme
         self.logger.info(f"Advection scheme: {self.advection_scheme.name}")
@@ -582,9 +642,6 @@ class Momentum:
             vgrid, scheme=self.advection_scheme, split_2d=self.advection_split_2d
         )
 
-        self.logger.info(f"Crank-Nicolson parameter: {self.cnpar}")
-        self.logger.info(f"Coriolis interpolation: {self.coriolis_scheme.name}")
-
         if self.runtype > RunType.BAROTROPIC_2D:
             # Layer thicknesses and velocities in bottom layer (for bottom friction)
             self.hU_bot = ugrid.hn.isel(z=0)
@@ -592,18 +649,28 @@ class Momentum:
             self.u_bot = self.uk.isel(z=0)
             self.v_bot = self.vk.isel(z=0)
 
+            # Vertical diffusion operator and helper arrays for source terms
+            self.logger.info(
+                f"Crank-Nicolson parameter for vertical diffusion: {self.cnpar}"
+            )
             self._vertical_diffusion = operators.VerticalDiffusion(
                 tgrid, cnpar=self.cnpar
             )
             self.ea2 = tgrid.array(fill=0.0, z=CENTERS)
             self.ea4 = tgrid.array(fill=0.0, z=CENTERS)
 
+        self.logger.info(f"Coriolis interpolation: {self.coriolis_scheme.name}")
+
         self.An = tgrid.array(
             name="An",
             units="m2 s-1",
             long_name="horizontal diffusivity of momentum",
             fill_value=FILL_VALUE,
-            attrs=dict(_require_halos=True, _time_varying=False),
+            attrs=dict(
+                _require_halos=True,
+                _time_varying=False,
+                _valid_at=(CellType.BOUNDARY,),
+            ),
         )
         self.An.fill(self._An_const)
 
@@ -626,12 +693,23 @@ class Momentum:
             array = getattr(self, v)
             array.all_values[..., array.grid._land] = 0.0
 
+        # Mirror transports (restarts may not include mirrored points)
+        # This is done twice because some external mirrored points (MIRROR_EXT)
+        # are mirrored from internal mirrored points (MIRROR_INT)
+        for _ in range(2):
+            self.U.mirror()
+            self.V.mirror()
+            if self.runtype > RunType.BAROTROPIC_2D:
+                self.pk.mirror()
+                self.qk.mirror()
+                self.Ui.mirror()
+                self.Vi.mirror()
+
+        # If horizontal diffusivity [damping] is specified, interpolate it to
+        # U and V grids
         self.An.update_halos()
-        self.An.all_values[self.An.grid._land] = self.An.fill_value
-        if (self.An.all_values[self.An.grid._water] == 0.0).all():
-            self.logger.info("Disabling numerical damping because An is 0 everywhere")
-            self.An_uu = self.An_uv = self.An_vu = self.An_vv = None
-        else:
+        self.An.all_values[self.An.all_mask] = self.An.fill_value
+        if self.An.all_values.any(where=~self.An.all_mask):
             self.logger.info(
                 "Horizontal diffusivity An used for numerical damping ranges between"
                 f" {self.An.ma.min()} and {self.An.ma.max()} m2 s-1"
@@ -640,6 +718,9 @@ class Momentum:
             self.An_uv = self.An.interp(self.U.grid.vgrid.array(fill=np.nan))
             self.An_vu = self.An.interp(self.V.grid.ugrid.array(fill=np.nan))
             self.An_vv = self.An.interp(self.V.grid.vgrid.array(fill=np.nan))
+        else:
+            self.logger.info("Disabling numerical damping because An is 0 everywhere")
+            self.An_uu = self.An_uv = self.An_vu = self.An_vv = None
 
     def advance_depth_integrated(
         self,

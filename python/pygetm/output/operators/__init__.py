@@ -43,12 +43,6 @@ class GridInfo(NamedTuple):
         )
         return gatherer, local_slice, dict(shape=global_shape)
 
-    def get_mask(self) -> np.ndarray:
-        att = "_land"
-        if self.z and hasattr(self.grid, "_land3d"):
-            att = "_land3d_if" if self.z == INTERFACES else "_land3d"
-        return getattr(self.grid, att)
-
     def get_coords(self, ndim: int) -> Iterable["Base"]:
         for array in self.grid._get_coords(ndim, self.z, self.on_boundary):
             yield Field(array)
@@ -130,7 +124,7 @@ class Base:
 
     @property
     def mask(self) -> np.ndarray:
-        return self.grid_info.get_mask()
+        return np.broadcast_to(False, self.shape)
 
     @property
     def coords(self) -> Iterable["Base"]:
@@ -388,6 +382,10 @@ class Field(Base):
     def grid_info(self) -> GridInfo:
         return GridInfo(self.array.grid, self.array.z, self.array.on_boundary)
 
+    @property
+    def mask(self) -> np.ndarray:
+        return self.array.all_mask
+
 
 class UnivariateTransform(Base):
     __slots__ = "_source", "_grid_info_provider"
@@ -433,7 +431,7 @@ class UnivariateTransform(Base):
 
     @property
     def mask(self) -> np.ndarray:
-        return self._grid_info_provider.mask
+        return self._source.mask
 
     @property
     def coords(self) -> Iterable[Base]:
@@ -612,6 +610,13 @@ class Regrid(UnivariateTransformWithData):
     def grid_info(self) -> GridInfo:
         return self._grid_info
 
+    @property
+    def mask(self) -> np.ndarray:
+        source_mask = self._source.mask.astype(float, order="C")
+        mask = np.zeros(self.shape, dtype=float)
+        self.interpolate(source_mask[self._slice], mask[self._slice])
+        return mask > 0.99
+
 
 class InterpZ(UnivariateTransformWithData):
     """Interpolate in the vertical.
@@ -654,10 +659,7 @@ class InterpZ(UnivariateTransformWithData):
 
     @property
     def mask(self) -> np.ndarray:
-        grid_info = self.grid_info
-        if grid_info is not None:
-            grid_info = GridInfo(grid_info.grid, None, grid_info.on_boundary)
-        return grid_info.get_mask()
+        return self._source.mask.all(axis=0)
 
 
 class IndexXY(UnivariateTransform):

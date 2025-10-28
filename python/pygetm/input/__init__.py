@@ -150,8 +150,13 @@ def from_nc(
         **kwargs: additional keyword arguments to be passed to
             :func:`xarray.open_dataset`
     """
-    kwargs.setdefault("decode_times", True)
-    kwargs["use_cftime"] = True
+    try:
+        kwargs.setdefault("decode_times", xr.coders.CFDatetimeCoder(use_cftime=True))
+    except AttributeError:
+        # xarray < 2025.01.1
+        kwargs.setdefault("decode_times", True)
+        kwargs["use_cftime"] = True
+
     kwargs["cache"] = False
 
     if isinstance(paths, (str, os.PathLike)):
@@ -1232,8 +1237,11 @@ class TemporalInterpolation(UnaryOperator):
             self._move_to_next(time)
 
         # Do linear interpolation
-        np.multiply(self._slope, numtime - self._numnext, out=self._current)
-        self._current += self._next
+        if numtime == self._numnext:
+            self._current[...] = self._next
+        else:
+            np.multiply(self._slope, numtime - self._numnext, out=self._current)
+            self._current += self._next
 
         # Save current time
         self._numnow = numtime
@@ -1376,6 +1384,7 @@ class InputManager:
         include_halos: Optional[bool] = None,
         climatology: bool = False,
         mask: bool = False,
+        updater_collection: Optional[List] = None,
     ):
         """Link an array to the provided input. If this input is constant in time,
         the value of the array will be set immediately.
@@ -1637,9 +1646,12 @@ class InputManager:
                 f"{array.name} will be updated dynamically from {data.name}{suffix}"
             )
             info = (array.name, data, target)
-            self._all_fields.append(info)
-            if time_varying == TimeVarying.MICRO:
-                self._micro_fields.append(info)
+            if updater_collection is not None:
+                updater_collection.append(info)
+            else:
+                self._all_fields.append(info)
+                if time_varying == TimeVarying.MICRO:
+                    self._micro_fields.append(info)
         else:
             target[...] = value
             finite = np.isfinite(target)
@@ -1664,7 +1676,9 @@ class InputManager:
                 f" (minimum: {minval}, maximum: {maxval})"
             )
 
-    def update(self, time: cftime.datetime, macro: bool = True):
+    def update(
+        self, time: cftime.datetime, macro: bool = True, fields: Optional[List] = None
+    ):
         """Update all arrays linked to time-dependent inputs to the current time.
 
         Args:
@@ -1673,7 +1687,8 @@ class InputManager:
                 the macro (3D) time step
         """
         numtime = time.toordinal(fractional=True)
-        fields = self._all_fields if macro else self._micro_fields
+        if fields is None:
+            fields = self._all_fields if macro else self._micro_fields
         for name, source, target in fields:
             self.logger.debug(f"updating {name}")
             source.update(time, numtime)

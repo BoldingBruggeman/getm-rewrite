@@ -1,16 +1,5 @@
 import enum
-from typing import (
-    Optional,
-    Sequence,
-    List,
-    Mapping,
-    Callable,
-    Iterable,
-    Tuple,
-    Union,
-    Set,
-    NamedTuple,
-)
+from typing import Optional, Sequence, Callable, Iterable, Union, NamedTuple
 import functools
 import logging
 
@@ -28,6 +17,7 @@ from .constants import (
     CLAMPED,
     TimeVarying,
     FILL_VALUE,
+    CellType,
 )
 
 
@@ -233,8 +223,8 @@ class BoundaryCondition:
         boundary.
 
         Boundary conditions that use nearby interior values (e.g., zero
-        gradient, flow-dependent relaxation) can only use points with mask=1
-        (wet and active). They must skip mask=2 to avoid dependence on the
+        gradient, flow-dependent relaxation) can only use points with mask=ACTIVE
+        (wet and active). They must skip mask=BOUNDARY to avoid dependence on the
         order in which boundaries are updated.
 
         Args:
@@ -251,7 +241,7 @@ class BoundaryCondition:
     @staticmethod
     def get_setter(
         array: core.Array,
-        slc: Tuple[Union[slice, int], ...],
+        slc: tuple[Union[slice, int], ...],
         where: Union[bool, np.ndarray] = True,
     ) -> Callable[[np.ndarray], None]:
         """Takes an array object and a slice, and returns a function that sets
@@ -265,7 +255,7 @@ class BoundaryCondition:
         """
         out = array.all_values[slc]
         kwargs = dict()
-        where = (array.grid.mask.all_values[slc] != 0) & where
+        where = (array.grid.mask.all_values[slc] != CellType.UNRESOLVED) & where
         if not where.all():
             kwargs["where"] = np.broadcast_to(where, out.shape)
         valid_min = array.attrs.get("_minimum")
@@ -308,9 +298,9 @@ class ZeroGradient(BoundaryCondition):
     def get_updater(
         self, boundary: OpenBoundary, array: core.Array, bdy: np.ndarray
     ) -> Callable[[], None]:
-        where = boundary.extract_inward(array.grid.mask.all_values, start=1) == 1
+        inner_mask = boundary.extract_inward(array.grid.mask.all_values, start=1)
         return functools.partial(
-            self.get_setter(array, boundary.slice_t, where),
+            self.get_setter(array, boundary.slice_t, inner_mask == CellType.ACTIVE),
             boundary.extract_inward(array.all_values, start=1),
         )
 
@@ -417,11 +407,12 @@ class Sponge(Clamped):
     ) -> Callable[[], None]:
         slicer = functools.partial(boundary.extract_inward, start=1, stop=self.n + 1)
 
-        # Select sponge points that are wet and active (mask=1) and connected
-        # to the open boundary (mask=2) via similar such points.
-        sponge_active = slicer(array.grid.mask.all_values) == 1
+        # Select sponge points that are wet and active (mask=ACTIVE) and connected
+        # to the open boundary (mask=BOUNDARY) via similar such points.
+        bdy_active = array.grid.mask.all_values[boundary.slice_t] == CellType.BOUNDARY
+        sponge_active = slicer(array.grid.mask.all_values) == CellType.ACTIVE
         assert sponge_active.shape[-1] == self.n
-        sponge_active[:, 0] &= array.grid.mask.all_values[boundary.slice_t] == 2
+        sponge_active[:, 0] &= bdy_active
         np.logical_and.accumulate(sponge_active, axis=-1, out=sponge_active)
 
         # Relax sponge zone to boundary values using coefficients sp
@@ -616,7 +607,7 @@ class ArrayOpenBoundaries:
         )
         if type is not None:
             type = array.grid.open_boundaries._make_bc(type)
-        self._bdy: List[ArrayOpenBoundary] = []
+        self._bdy: list[ArrayOpenBoundary] = []
         for bdy in array.grid.open_boundaries:
             self._bdy.append(
                 ArrayOpenBoundary(
@@ -627,8 +618,8 @@ class ArrayOpenBoundaries:
                     type or (bdy.type_2d if array.ndim == 2 else bdy.type_3d),
                 )
             )
-        self.updaters: List[Callable[[], None]] = []
-        self.relaxation: List[Relaxation] = []
+        self.updaters: list[Callable[[], None]] = []
+        self.relaxation: list[Relaxation] = []
         array.grid.open_boundaries._arrays.append(self)
 
     def _set_type(self, value: Union[int, BoundaryCondition]):
@@ -639,7 +630,7 @@ class ArrayOpenBoundaries:
     type = property(fset=_set_type)
 
     def initialize(self) -> Iterable[BoundaryCondition]:
-        bcs: Set[BoundaryCondition] = set()
+        bcs: set[BoundaryCondition] = set()
         for bdy in self._bdy:
             bdy._type.initialize(self._array.grid)
             self.updaters.append(
@@ -682,7 +673,8 @@ class ArrayOpenBoundaries:
                 be applied.
         """
         local = slicer(self._array.all_values)
-        where = (slicer(self._array.grid.mask.all_values) == 1) & where
+        mask = slicer(self._array.grid.mask.all_values)
+        where = (mask == CellType.ACTIVE) & where
         weights = np.where(where, weights, 0.0)
         self.relaxation.append(Relaxation(slicer, weights, target, local))
 
@@ -701,7 +693,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         self.ny = ny
         self.logger = logger
         self.allow_on_land = False
-        self._boundaries: List[OpenBoundary] = []
+        self._boundaries: list[OpenBoundary] = []
 
     def add_by_index(
         self,
@@ -804,9 +796,10 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
     def adjust_mask(self, mask: np.ndarray):
         """Adjust the global mask for open boundaries
 
-        This assigns mask values 2 (masked T point), 3 (velocity point in
-        between open boundary T points) and 4 (velocity point just
-        outside the open boundary)
+        This assigns mask values:
+        * BOUNDARY: masked T point
+        * MIRROR_INT: velocity point in between open boundary T points
+        * MIRROR_EXT: velocity point just outside the open boundary
 
         Args:
             mask: writeable mask defined on the supergrid, with shape (1+2*ny, 1+2*nx)
@@ -825,7 +818,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
                 bdy_tmask = tmask[l, mslice]
                 bdy_uvmask = vmask[l if boundary.side == Side.SOUTH else l + 1, mslice]
 
-            wet = bdy_tmask != 0
+            wet = bdy_tmask != CellType.UNRESOLVED
             if not wet.all():
                 self.logger.log(
                     logging.WARNING if self.allow_on_land else logging.ERROR,
@@ -837,14 +830,15 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
                     raise Exception()
 
             # The open boundary points themselves (T grid)
-            bdy_tmask[wet] = 2
+            bdy_tmask[wet] = CellType.BOUNDARY
 
             # Velocity points that lie just outside the T points of the open boundary
-            bdy_uvmask[wet] = 4
+            bdy_uvmask[wet] = CellType.MIRROR_EXT
 
         # Velocity points that lie in between open boundary T points
-        umask[:, 1:-1][(tmask[:, :-1] == 2) & (tmask[:, 1:] == 2)] = 3
-        vmask[1:-1, :][(tmask[:-1, :] == 2) & (tmask[1:, :] == 2)] = 3
+        tbdy = tmask == CellType.BOUNDARY
+        umask[:, 1:-1][tbdy[:, :-1] & tbdy[:, 1:]] = CellType.MIRROR_INT
+        vmask[1:-1, :][tbdy[:-1, :] & tbdy[1:, :]] = CellType.MIRROR_INT
 
     def __getitem__(self, key: int) -> OpenBoundary:
         return self._boundaries[key]
@@ -870,12 +864,12 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         self.logger = logger
         self.np = 0
         self.np_glob = 0
-        self._boundaries: List[LocalOpenBoundary] = []
-        self._arrays: List[ArrayOpenBoundaries] = []
+        self._boundaries: list[LocalOpenBoundary] = []
+        self._arrays: list[ArrayOpenBoundaries] = []
 
         self.sponge = Sponge()
         self.zero_gradient = ZeroGradient()
-        self.bcs: Set[BoundaryCondition] = set()
+        self.bcs: set[BoundaryCondition] = set()
 
         # Indices of T point in open boundary into arrays that INCLUDE halos.
         # We start with an empty array to support later concatenation in
@@ -883,7 +877,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         all_i = [np.empty((0,), dtype=np.intp)]
         all_j = [np.empty((0,), dtype=np.intp)]
         side2count = {Side.WEST: 0, Side.NORTH: 0, Side.EAST: 0, Side.SOUTH: 0}
-        self.local_to_global: List[slice] = []
+        self.local_to_global: list[slice] = []
         bdy_types_2d = {}
         for global_boundary in global_collection._boundaries:
             boundary = global_boundary.to_local_grid(grid)
@@ -926,7 +920,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         self.j = np.concatenate(all_j, dtype=np.intp)
         assert (
             global_collection.allow_on_land
-            or (grid.mask.all_values[self.j, self.i] == 2).all()
+            or (grid.mask.all_values[self.j, self.i] == CellType.BOUNDARY).all()
         )
 
         # Global indices of open boundary points within local subdomain
@@ -1056,7 +1050,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                     if check is not None:
                         assert (check[self.j_out[-1], self.i_out[-1]] == value).all()
 
-            def get_slices(self) -> Optional[Tuple[Tuple, Tuple]]:
+            def get_slices(self) -> Optional[tuple[tuple, tuple]]:
                 if self.i_in:
                     i_in = np.concatenate(self.i_in, dtype=np.intp)
                     j_in = np.concatenate(self.j_in, dtype=np.intp)
@@ -1073,11 +1067,11 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         vmask = grid.vgrid.mask.all_values
         for boundary in self._boundaries:
             # Select the T points from the open boundary that are actually wet
-            # (some may be on land with mask = 0)
-            tsel = tmask[boundary.j, boundary.i] == 2
+            # (some may be on land with mask = UNRESOLVED)
+            tsel = tmask[boundary.j, boundary.i] == CellType.BOUNDARY
 
-            # Velocity points that lie WITHIN the open boundary (mask=3),
-            # that is, they lie in between tracer points with mask=2.
+            # Velocity points that lie WITHIN the open boundary (mask = MIRROR_INT),
+            # that is, they lie in between tracer points with mask = BOUNDARY.
             # Values at these points will be mirrored from the interior velocity point.
             # We look 1 point beyond the start and stop of the boundary within the
             # current subdomain to catch cases where (a) the boundary extends into the
@@ -1088,29 +1082,37 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                 j = np.arange(max(boundary.j.min() - 1, 0), boundary.j.max() + 1)
                 i_out = boundary.i[0]
                 i_in = i_out + {Side.EAST: -1, Side.WEST: 1}[boundary.side]
-                mirror_V.append(i_in, j, i_out, j, vmask[j, i_out] == 3)
+                mirror_V.append(
+                    i_in, j, i_out, j, vmask[j, i_out] == CellType.MIRROR_INT
+                )
             else:
                 i = np.arange(max(boundary.i.min() - 1, 0), boundary.i.max() + 1)
                 j_out = boundary.j[0]
                 j_in = j_out + {Side.NORTH: -1, Side.SOUTH: 1}[boundary.side]
-                mirror_U.append(i, j_in, i, j_out, umask[j_out, i] == 3)
+                mirror_U.append(
+                    i, j_in, i, j_out, umask[j_out, i] == CellType.MIRROR_INT
+                )
 
-            # Velocity points OUTSIDE AND ALONG the open boundary (mask=4)
+            # Velocity points OUTSIDE AND ALONG the open boundary (mask = MIRROR_EXT)
             # Values at these points will be mirrored from either the neighboring
             # inner velocity point, or from inner T point (boundary.i, boundary.j)
-            # [e.g., elevations at mask=2]
+            # [e.g., elevations at mask = BOUNDARY]
             if boundary.side in (Side.WEST, Side.EAST):
                 j = boundary.j
                 i_in = boundary.i[0] + {Side.WEST: 0, Side.EAST: -1}[boundary.side]
                 i_out = boundary.i[0] + {Side.WEST: -1, Side.EAST: 0}[boundary.side]
-                mirror_U.append(i_in, j, i_out, j, tsel, umask, 4)
-                mirror_TU.append(boundary.i, j, i_out, j, tsel, umask, 4)
+                mirror_U.append(i_in, j, i_out, j, tsel, umask, CellType.MIRROR_EXT)
+                mirror_TU.append(
+                    boundary.i, j, i_out, j, tsel, umask, CellType.MIRROR_EXT
+                )
             else:
                 i = boundary.i
                 j_in = boundary.j[0] + {Side.SOUTH: 0, Side.NORTH: -1}[boundary.side]
                 j_out = boundary.j[0] + {Side.SOUTH: -1, Side.NORTH: 0}[boundary.side]
-                mirror_V.append(i, j_in, i, j_out, tsel, vmask, 4)
-                mirror_TV.append(i, boundary.j, i, j_out, tsel, vmask, 4)
+                mirror_V.append(i, j_in, i, j_out, tsel, vmask, CellType.MIRROR_EXT)
+                mirror_TV.append(
+                    i, boundary.j, i, j_out, tsel, vmask, CellType.MIRROR_EXT
+                )
 
         grid.ugrid._mirrors[grid.ugrid] = mirror_U.get_slices()
         grid.vgrid._mirrors[grid.vgrid] = mirror_V.get_slices()

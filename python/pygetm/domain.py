@@ -11,7 +11,7 @@ from . import core
 from . import parallel
 from . import rivers
 from . import open_boundaries
-from .constants import CoordinateType, GRAVITY
+from .constants import CoordinateType, CellType, GRAVITY
 
 if TYPE_CHECKING:
     import matplotlib.figure
@@ -991,12 +991,14 @@ class Domain:
             # No transport between velocity points along an open boundary (just outside)
             # This is done to state that no valid values (in e.g. h and D) are required
             # in these points.
+            U_mirror_ext = U.mask.all_values == CellType.MIRROR_EXT
             UV.mask.all_values[:-1, :][
-                (U.mask.all_values[:-1, :] == 4) & (U.mask.all_values[1:, :] == 4)
-            ] = 0
+                U_mirror_ext[:-1, :] & U_mirror_ext[1:, :]
+            ] = CellType.UNRESOLVED
+            V_mirror_ext = V.mask.all_values == CellType.MIRROR_EXT
             VU.mask.all_values[:, :-1][
-                (V.mask.all_values[:, :-1] == 4) & (V.mask.all_values[:, 1:] == 4)
-            ] = 0
+                V_mirror_ext[:, :-1] & V_mirror_ext[:, 1:]
+            ] = CellType.UNRESOLVED
 
         T.freeze()
 
@@ -1496,12 +1498,12 @@ class Domain:
         y: float,
         *,
         coordinate_type: Optional[CoordinateType] = None,
-        allowed_mask: Iterable[int] = (1,),
+        valid_cell_types: Iterable[CellType] = (CellType.ACTIVE,),
     ) -> Tuple[int, int]:
         if coordinate_type is None:
             coordinate_type = self.coordinate_type
         return self._tlocator()(
-            x, y, coordinate_type=coordinate_type, allowed_mask=allowed_mask
+            x, y, coordinate_type=coordinate_type, valid_cell_types=valid_cell_types
         )
 
     def plot(

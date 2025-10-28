@@ -266,8 +266,8 @@ class TestDomain(unittest.TestCase):
         )
         river = domain.rivers.add_by_location("foo", 2.0, 3.0)
         T = domain.create_grids(10, halox=2, haloy=2)
-        i_loc_exp = np.argmin(np.abs(lon - 2.0)) + 2 - T.tiling.xoffset
-        j_loc_exp = np.argmin(np.abs(lat - 3.0)) + 2 - T.tiling.yoffset
+        i_loc_exp = np.argmin(np.abs(lon - 2.0)) + T.halox - T.tiling.xoffset
+        j_loc_exp = np.argmin(np.abs(lat - 3.0)) + T.haloy - T.tiling.yoffset
         inside = (
             i_loc_exp >= 0
             and i_loc_exp < T.nx_
@@ -292,8 +292,8 @@ class TestDomain(unittest.TestCase):
         )
         river = domain.rivers.add_by_location("foo", 25000.0, 34000.0)
         T = domain.create_grids(10, halox=2, haloy=2)
-        i_loc_exp = np.argmin(np.abs(x - 25000.0)) + 2 - T.tiling.xoffset
-        j_loc_exp = np.argmin(np.abs(y - 34000.0)) + 2 - T.tiling.yoffset
+        i_loc_exp = np.argmin(np.abs(x - 25000.0)) + T.halox - T.tiling.xoffset
+        j_loc_exp = np.argmin(np.abs(y - 34000.0)) + T.haloy - T.tiling.yoffset
         inside = (
             i_loc_exp >= 0
             and i_loc_exp < T.nx_

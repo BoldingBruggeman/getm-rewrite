@@ -431,7 +431,7 @@ contains
       real(c_double), intent(in)        :: D(n)
       real(c_double), intent(in), value :: Dmin, Dcrit
       real(c_double), intent(inout)     :: alpha(n)
-      where (mask /= 0) alpha = max(0._c_double, min(1._c_double, (D - Dmin) / (Dcrit - Dmin)))
+      where (mask == 1) alpha = max(0._c_double, min(1._c_double, (D - Dmin) / (Dcrit - Dmin)))
    end subroutine
 
    subroutine c_elevation2depth(n, z, H, Dmin, mask, D) bind(c)
