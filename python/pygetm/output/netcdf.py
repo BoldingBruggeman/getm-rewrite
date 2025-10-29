@@ -69,7 +69,7 @@ def _add_time_coordinate(
 
 
 def _add_time_bounds(nc: netCDF4.Dataset, nctime: netCDF4.Variable) -> netCDF4.Variable:
-    nctime_ave = nc.createVariable("time_ave", float, ("time",))
+    nctime_ave = nc.createVariable("time_av", float, ("time",))
     nctime_ave.coordinates = nctime_ave.name
     nctime_bnds = nc.createVariable("time_bnds", float, ("time", "nv"))
     nctime_ave.bounds = nctime_bnds.name
@@ -104,7 +104,7 @@ def _add_variable(
         setattr(ncvar, att, value)
     coords = field.coordinates
     if "time: mean" in field.attrs.get("cell_methods", ""):
-        coords = coords + ["time_ave"]
+        coords = coords + ["time_av"]
     if coords:
         ncvar.coordinates = " ".join(coords)
 
