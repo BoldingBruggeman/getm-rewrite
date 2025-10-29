@@ -1,6 +1,5 @@
 import unittest
 import logging
-from typing import Tuple
 
 import numpy as np
 import netCDF4
@@ -50,7 +49,7 @@ class TestDomain(unittest.TestCase):
                 nc.createVariable("H", "f4", ("y", "x"))
         pygetm.parallel.MPI.COMM_WORLD.barrier()
 
-    def _check(self, arr, shape: Tuple[int], dtype=float):
+    def _check(self, arr, shape: tuple[int], dtype=float):
         self.assertEqual(type(arr), np.ndarray)
         self.assertEqual(arr.shape, shape)
         self.assertEqual(arr.dtype, np.dtype(dtype))

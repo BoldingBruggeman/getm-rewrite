@@ -1,5 +1,4 @@
 import unittest
-from typing import Tuple
 
 import numpy as np
 import cftime
@@ -18,7 +17,7 @@ SPLIT_FACTOR = 30
 class TestFABM(unittest.TestCase):
     def setup(
         self, fabm_yaml, bioshade_feedback: bool = False, repair: bool = True
-    ) -> Tuple[pygetm.domain.Domain, pygetm.Simulation]:
+    ) -> tuple[pygetm.domain.Domain, pygetm.Simulation]:
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),
             np.linspace(0, 100e3, 51),
@@ -43,7 +42,7 @@ class TestFABM(unittest.TestCase):
 
     def simulate(
         self, *args, **kwargs
-    ) -> Tuple[pygetm.domain.Domain, pygetm.Simulation]:
+    ) -> tuple[pygetm.domain.Domain, pygetm.Simulation]:
         domain, sim = self.setup(*args, **kwargs)
         while sim.time < STOP:
             sim.advance()

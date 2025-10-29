@@ -1,4 +1,4 @@
-from typing import Optional, Mapping, List
+from typing import Optional, Mapping
 import operator
 import logging
 
@@ -138,7 +138,7 @@ class Rivers(Mapping[str, River]):
         self.ny = ny
         self.default_coordinate_type = default_coordinate_type
         self.logger = logger
-        self._rivers: List[River] = []
+        self._rivers: list[River] = []
         self.global_rivers = self._rivers
         self._frozen = False
 

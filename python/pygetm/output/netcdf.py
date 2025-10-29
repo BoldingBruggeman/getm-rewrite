@@ -1,4 +1,4 @@
-from typing import Optional, Mapping, Dict, List, Tuple, Union
+from typing import Optional, Mapping, Union
 import os
 import logging
 import datetime
@@ -25,7 +25,7 @@ def _create_file(path: Union[os.PathLike, str], **kwargs) -> netCDF4.Dataset:
 
 def _create_dimensions(
     nc: netCDF4.Dataset, fields: Mapping[str, operators.Base]
-) -> Tuple[bool, bool]:
+) -> tuple[bool, bool]:
     needs_time = False
     needs_time_bounds = False
     for output_name, field in fields.items():
@@ -54,7 +54,7 @@ def _add_time_coordinate(
     time: Optional[cftime.datetime],
     seconds_passed: float,
     time_reference: Optional[cftime.datetime],
-) -> Tuple[netCDF4.Variable, float]:
+) -> tuple[netCDF4.Variable, float]:
     nctime = nc.createVariable("time", float, ("time",))
     nctime.axis = "T"
     if time is not None:
@@ -157,8 +157,8 @@ class NetCDFFile(File):
         self.sync_interval = sync_interval
         self.format = format
         self.compression = compression
-        self._field2nc: Dict[operators.Base, netCDF4.Variable] = {}
-        self._varying_fields: List[operators.Base] = []
+        self._field2nc: dict[operators.Base, netCDF4.Variable] = {}
+        self._varying_fields: list[operators.Base] = []
         self.nctime: Optional[netCDF4.Variable] = None
         self.nctime_bnds: Optional[netCDF4.Variable] = None
 

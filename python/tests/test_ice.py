@@ -21,8 +21,10 @@ class TestIce(unittest.TestCase):
         airsea.initialize(T, domain.root_logger.getChild("airsea"))
         taux = np.random.uniform(0.001, 0.1, airsea.taux.shape)
         tauy = np.random.uniform(0.001, 0.1, airsea.tauy.shape)
+        shf = np.random.uniform(-200.0, 200.0, airsea.shf.shape)
         airsea.taux.values[:, :] = taux
         airsea.tauy.values[:, :] = tauy
+        airsea.shf.values[:, :] = shf
 
         ice = pygetm.ice.Ice()
         ice.initialize(T, domain.root_logger.getChild("ice"))
@@ -32,14 +34,20 @@ class TestIce(unittest.TestCase):
         ct_sf.values[cover] = -10.0
         ice(True, ct_sf, sa_sf, airsea)
         self.assertTrue(ice.has_ice)
-        self.assertTrue((ice.ice.values[cover] == 1.0).all())
-        self.assertTrue((ice.ice.values[~cover] == 0.0).all())
-        self.assertTrue((ct_sf.values[cover] > -10.0).all())
-        self.assertTrue((ct_sf.values[~cover] == 10.0).all())
-        self.assertTrue((airsea.taux.values[cover] == 0.0).all())
-        self.assertTrue((airsea.tauy.values[cover] == 0.0).all())
-        self.assertTrue((airsea.taux.values[~cover] == taux[~cover]).all())
-        self.assertTrue((airsea.tauy.values[~cover] == tauy[~cover]).all())
+        self.assertTrue((ice.ice.values == 1.0).all(where=cover))
+        self.assertTrue((ice.ice.values == 0.0).all(where=~cover))
+        self.assertTrue((ct_sf.values > -10.0).all(where=cover))
+        self.assertTrue((ct_sf.values == 10.0).all(where=~cover))
+        self.assertTrue((airsea.taux.values == 0.0).all(where=cover))
+        self.assertTrue((airsea.tauy.values == 0.0).all(where=cover))
+        self.assertTrue((airsea.taux.values == taux).all(where=~cover))
+        self.assertTrue((airsea.tauy.values == tauy).all(where=~cover))
+
+        cooling = shf < 0.0
+        self.assertTrue((airsea.shf.values == shf).all(where=~cover))
+        self.assertTrue((airsea.shf.values >= 0.0).all(where=cover))
+        self.assertTrue((airsea.shf.values == 0.0).all(where=cover & cooling))
+        self.assertTrue((airsea.shf.values == shf).all(where=cover & ~cooling))
 
 
 if __name__ == "__main__":

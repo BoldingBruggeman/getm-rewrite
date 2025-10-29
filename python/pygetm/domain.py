@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Tuple, Union, Iterable, Any, TYPE_CHECKING
+from typing import Mapping, Optional, Union, Iterable, Any, TYPE_CHECKING
 import enum
 import functools
 import logging
@@ -1113,7 +1113,7 @@ class Domain:
     @apply_on_root_and_bcast
     def cfl_check(
         self, z: float = 0.0, return_location: bool = False
-    ) -> Union[float, Tuple[float, int, int, float]]:
+    ) -> Union[float, tuple[float, int, int, float]]:
         """Determine maximum time step (s) for depth-integrated equations
 
         Args:
@@ -1143,7 +1143,7 @@ class Domain:
 
     def get_rx0(
         self, zmin: float = 0.0, Dmin: float = 0.0
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Calculates the slope factor ``rx0`` as defined in
         https://doi.org/10.1016/j.ocemod.2009.03.009
 
@@ -1499,7 +1499,7 @@ class Domain:
         *,
         coordinate_type: Optional[CoordinateType] = None,
         valid_cell_types: Iterable[CellType] = (CellType.ACTIVE,),
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         if coordinate_type is None:
             coordinate_type = self.coordinate_type
         return self._tlocator()(
