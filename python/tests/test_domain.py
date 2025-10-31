@@ -386,6 +386,18 @@ class TestDomain(unittest.TestCase):
         T = domain.create_grids(10, halox=2, haloy=2, velocity_grids=0)
         self.assertEqual(len(T.open_boundaries), 0)
 
+    def test_all_masked(self):
+        nx, ny = 10, 10
+        lon = np.linspace(0.0, 1.0, nx)
+        lat = np.linspace(0.0, 1.0, ny)
+        logger = logging.getLogger()
+        logger.setLevel("ERROR")
+        domain = pygetm.domain.create_spherical(lon, lat, H=10.0, logger=logger)
+        domain.mask = 0
+        T = domain.create_grids(10, halox=2, haloy=2, velocity_grids=2)
+        self.assertEqual(T.nx, 0)
+        self.assertEqual(T.ny, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

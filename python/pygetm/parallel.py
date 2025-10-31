@@ -989,6 +989,18 @@ def find_optimal_divison(
     mask = np.asarray(mask)
     ny, nx = mask.shape
 
+    # For land-only domains, return empty decomposition
+    if not mask.any():
+        return {
+            "ncpus": 0,
+            "nx": 0,
+            "ny": 0,
+            "xoffset": 0,
+            "yoffset": 0,
+            "cost": 0,
+            "map": np.zeros((1, 1), dtype=np.intc),
+        }
+
     # If we only have 1 CPU, just use the full domain
     if ncpus == 1:
         return {
