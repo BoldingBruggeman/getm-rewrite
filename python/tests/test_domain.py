@@ -353,15 +353,38 @@ class TestDomain(unittest.TestCase):
         domain.open_boundaries.add_top_boundary("N2", ny - 1, 10, nx, t2d, t3d)
 
         # Reverse order
-        domain.open_boundaries.add_left_boundary("E1", nx - 1, 10, 0, t2d, t3d)
+        domain.open_boundaries.add_right_boundary("E1", nx - 1, 10, 0, t2d, t3d)
 
         # Cross with reverse
         with self.assertRaises(Exception):
-            domain.open_boundaries.add_left_boundary("E1", nx - 1, ny - 1, 10, t2d, t3d)
+            domain.open_boundaries.add_right_boundary(
+                "E1", nx - 1, ny - 1, 10, t2d, t3d
+            )
 
-        domain.open_boundaries.add_left_boundary("E1", nx - 1, ny - 2, 10, t2d, t3d)
+        domain.open_boundaries.add_right_boundary("E1", nx - 1, ny - 2, 10, t2d, t3d)
 
         domain.create_grids(10, halox=2, haloy=2, velocity_grids=2)
+
+    def test_boundary_on_land(self):
+        nx, ny = 10, 10
+        lon = np.linspace(0.0, 1.0, nx)
+        lat = np.linspace(0.0, 1.0, ny)
+        logger = logging.getLogger()
+        logger.setLevel("ERROR")
+        domain = pygetm.domain.create_spherical(lon, lat, H=10.0, logger=logger)
+
+        domain.mask = 0
+        domain.open_boundaries.allow_on_land = True
+        domain.open_boundaries.add_left_boundary(
+            "W",
+            0,
+            0,
+            ny,
+            pygetm.open_boundaries.FLATHER_ELEV,
+            pygetm.open_boundaries.ZERO_GRADIENT,
+        )
+        T = domain.create_grids(10, halox=2, haloy=2, velocity_grids=0)
+        self.assertEqual(len(T.open_boundaries), 0)
 
 
 if __name__ == "__main__":

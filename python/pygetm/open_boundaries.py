@@ -104,9 +104,14 @@ class OpenBoundary:
         mskip = (mstart - mstart_) // self.mstep
         assert mskip >= 0
 
-        return LocalOpenBoundary(
+        local_bdy = LocalOpenBoundary(
             self.name, self.side, l, mstart, mstop, mskip, self.type_2d, self.type_3d
         )
+
+        if (grid.mask.all_values[local_bdy.slice_t] == CellType.UNRESOLVED).all():
+            return None
+
+        return local_bdy
 
 
 class LocalOpenBoundary(OpenBoundary):
@@ -722,6 +727,11 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         assert mstart >= 0 and mstart < m_max
         assert mlast >= 0 and mlast < m_max
         assert l >= 0 and l < l_max
+
+        if side in (Side.WEST, Side.SOUTH):
+            assert l < l_max - 1, "No water points on the interior side of boundary"
+        else:
+            assert l > 0, "No water points on the interior side of boundary"
 
         if name is None:
             name = str(len(self._boundaries))
