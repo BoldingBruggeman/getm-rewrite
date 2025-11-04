@@ -981,8 +981,8 @@ class HorizontalInterpolation(UnaryOperator):
             else:
                 assert (
                     isinstance(s, slice)
-                    and s.start is None
-                    and s.stop is None
+                    and (s.start is None or s.start == 0)
+                    and (s.stop is None or s.stop == self.shape[i])
                     and s.step is None
                 ), repr(s)
         source = np.asarray(self._source[tuple(src_slice)])
