@@ -1,6 +1,7 @@
 import logging
 from typing import Optional, MutableMapping, Iterable
 import os
+import contextlib
 
 import numpy as np
 import cftime
@@ -218,22 +219,16 @@ class FABM:
                         shape = self.model.horizontal_domain_shape
                     variable.link(field.all_values.reshape(shape))
 
-        try:
+        with contextlib.suppress(KeyError):
             self._yearday = self.model.dependencies[
                 "number_of_days_since_start_of_the_year"
             ]
-        except KeyError:
-            pass
 
-        try:
+        with contextlib.suppress(KeyError):
             self._nyear = self.model.dependencies["number_of_days_in_year"]
-        except KeyError:
-            pass
 
-        try:
+        with contextlib.suppress(KeyError):
             self.model.dependencies["maximum_time_step"].value = timestep
-        except KeyError:
-            pass
 
         if self._yearday or self._nyear:
             self._yearstart = cftime.datetime(time.year, 1, 1, calendar=time.calendar)

@@ -4,6 +4,7 @@ import logging
 import datetime
 import sys
 from pathlib import Path
+import contextlib
 
 import cftime
 import netCDF4
@@ -91,12 +92,10 @@ def _add_variable(
         name, field.dtype, dims, fill_value=field.fill_value, **kwargs
     )
 
-    # Use try-except for set_auto_maskandscale because only some NetCDF
-    # engines support it (netCDF4 does, h5netcdf.legacyapi does not)
-    try:
+    # Only some NetCDF engines support set_auto_maskandscale
+    # (netCDF4 does, h5netcdf.legacyapi does not)
+    with contextlib.suppress(AttributeError):
         ncvar.set_auto_maskandscale(False)
-    except AttributeError:
-        pass
 
     # Variable attributes
     ncvar.expression = field.expression
