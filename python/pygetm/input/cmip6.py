@@ -101,6 +101,9 @@ def get_global_meteo(
     logger.info(f"Using temporary directory {cache_dir} for ESGF cache")
     intake_esgf.conf.set(all_indices=True, local_cache=cache_dir)
 
+    def on_rm_error(function, path, excinfo):
+        logger.warning(f"Failed to remove {path}: {excinfo}")
+
     try:
         cat = intake_esgf.ESGFCatalog()
         result = []
@@ -128,7 +131,7 @@ def get_global_meteo(
 
         if purge_cache_dir and cache_dir.exists():
             logger.info(f"Clearing temporary directory {cache_dir}")
-            shutil.rmtree(cache_dir)
+            shutil.rmtree(cache_dir, onexc=on_rm_error)
 
 
 def get_meteo(
