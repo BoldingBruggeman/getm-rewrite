@@ -277,8 +277,7 @@ class TestDomain(unittest.TestCase):
             self.assertEqual(T.rivers["foo"].i, i_loc_exp)
             self.assertEqual(T.rivers["foo"].j, j_loc_exp)
         else:
-            self.assertIsNone(T.rivers["foo"].i)
-            self.assertIsNone(T.rivers["foo"].j)
+            self.assertNotIn("foo", T.rivers)
 
         nx, ny = 100, 52
         x = np.linspace(0.0, 1e5, nx)
@@ -303,8 +302,7 @@ class TestDomain(unittest.TestCase):
             self.assertEqual(T.rivers["foo"].i, i_loc_exp)
             self.assertEqual(T.rivers["foo"].j, j_loc_exp)
         else:
-            self.assertIsNone(T.rivers["foo"].i)
-            self.assertIsNone(T.rivers["foo"].j)
+            self.assertNotIn("foo", T.rivers)
 
     def test_open_boundaries(self):
         nx, ny = 100, 52

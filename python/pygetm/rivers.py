@@ -260,7 +260,7 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
                     )
                 local_rivers.append(river)
             else:
-                self.logger.info(f"{river.name} falls outside this subdomain")
+                self.logger.info(f"{global_river.name} falls outside this subdomain")
 
         return LocalRiverCollection(grid, local_rivers, self.logger)
 
