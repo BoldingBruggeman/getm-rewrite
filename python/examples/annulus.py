@@ -143,31 +143,28 @@ def sim_analytical(domain, N, R):
     omega = 2 * np.pi / T
     eta0 = -0.051
 
-    # Analytical solution
+    # Analytical solution on the T-grid
     ua = sim.T.array(name="ua", fill_value=-2.0e-20, attrs=dict(_time_varying=False))
     va = sim.T.array(name="va", fill_value=-2.0e-20, attrs=dict(_time_varying=False))
     za = sim.T.array(name="za", fill_value=-2.0e-20, attrs=dict(_time_varying=False))
-    ua.values[1:-1, :] = -omega * sim["yu"].values[1:-1, :]
-    va.values[1:-1, :] = omega * sim["xv"].values[1:-1, :]
-    _R = np.sqrt(
-        sim["xt"].values * sim["xt"].values + sim["yt"].values * sim["yt"].values
-    )
-    za[1:-1, :] = eta0 + 0.5 * _R[1:-1, :] * _R[1:-1, :] * omega * omega / g
+    ua.values[1:-1, :] = -omega * sim["yt"].values[1:-1, :]
+    va.values[1:-1, :] = omega * sim["xt"].values[1:-1, :]
+    _R2 = sim["xt"].values * sim["xt"].values + sim["yt"].values * sim["yt"].values
+    za[1:-1, :] = eta0 + 0.5 * _R2[1:-1, :] * omega * omega / g
 
-    # Analytical solution on model grid
+    # Analytical solution on model grid - U-, V- and T-points
     r = (R[1:, 0] + R[:-1, 0]) / 2.0
-    sim["U"].values[...] = -omega * r[:, None] * H
+    sim["U"].values[1:-1, :] = -omega * r[1:-1, None] * H
     sim["U"].update_halos()
     sim["V"].values[...] = 0.0
     sim["V"].update_halos()
-
     sim["zt"].values[1:-1, :] = (
         eta0 + 0.5 * r[1:-1, None] * r[1:-1, None] * omega * omega / g
     )
     sim["zt"].update_halos()
-    sim["zot"].values[...] = sim["zt"][...]
-    print(sim["zot"][...])
-    sim["zot"].update_halos()
+    # sim["zot"].values[...] = sim["zt"][...]
+    # sim["zot"].update_halos()
+    # quit()
 
     _path = Path("analytical.nc")
     output = sim.output_manager.add_netcdf_file(
@@ -190,29 +187,22 @@ def sim_analytical(domain, N, R):
         "ua",
         "va",
         "za",
+        "ur",
+        "vr",
         "zt",
-        "zot",
+        # "zot",
         "dpdx",
         "dpdy",
     )
     output.request("u1", "v1", grid=sim.T)
-    output.request(ur, vr)
 
-    sim.start(
-        datetime(2000, 1, 1),
-        dt,
-        report=N // 100,
-        report_totals=N // 10,
-    )
-
-    sim["u1"].interp(u_T)
-    sim["v1"].interp(v_T)
+    # We don't have u1, v1 yet - so use U, V and divide by depth
+    sim["U"].interp(u_T)
+    sim["V"].interp(v_T)
     ur.all_values[...], vr.all_values[...] = sim.T.rotate(
-        u_T.all_values, v_T.all_values, to_grid=False
+        u_T.all_values / H, v_T.all_values / H, to_grid=False
     )
 
-    print(ur.values[...])
-    print(vr.values[...])
     if False:
         fig, ax = plt.subplots(figsize=(6, 6))
         ax.set_aspect("equal")
@@ -232,6 +222,13 @@ def sim_analytical(domain, N, R):
         )
         title = ax.set_title("time: 0 s")
         plt.show()
+
+    sim.start(
+        datetime(2000, 1, 1),
+        dt,
+        report=N // 100,
+        report_totals=N // 10,
+    )
     for _ in range(N):
         sim.advance()
         sim["u1"].interp(u_T)
@@ -258,28 +255,34 @@ def sim_radial_wind(domain, N, taux, tauy, plot=False):
     sim.airsea.taux.set(taux)
     sim.airsea.tauy.set(tauy)
 
+    u_T = sim.T.array()
+    v_T = sim.T.array()
+    # Back in physical space
+    ur = sim.T.array(name="ur", fill_value=-2.0e-20)
+    vr = sim.T.array(name="vr", fill_value=-2.0e-20)
+
     _path = Path("radial_wind.nc")
     output = sim.output_manager.add_netcdf_file(
         str(_path),
         interval_units=pygetm.TimeUnit.TIMESTEPS,
-        interval=1,
+        interval=nsave,
         sync_interval=None,
-        default_dtype=np.float32,
+        # default_dtype=np.float32,
         save_initial=True,
     )
     output.request(
         "Ht",
         "xx",
         "yx",
-        "rotationx",
         "zt",
-        "U",
-        "V",
         "u1",
         "v1",
+        "ur",
+        "vr",
         "tausx",
         "tausy",
     )
+    output.request("u1", "v1", grid=sim.T)
 
     if plot:
         fig, ax = plt.subplots(figsize=(6, 6))
@@ -298,6 +301,11 @@ def sim_radial_wind(domain, N, taux, tauy, plot=False):
         )
         title = ax.set_title("time: 0 s")
 
+    sim["u1"].interp(u_T)
+    sim["v1"].interp(v_T)
+    ur.all_values[...], vr.all_values[...] = sim.T.rotate(
+        u_T.all_values, v_T.all_values, to_grid=False
+    )
     sim.start(
         datetime(2000, 1, 1),
         dt,
@@ -306,6 +314,11 @@ def sim_radial_wind(domain, N, taux, tauy, plot=False):
     )
     for n in range(N):
         sim.advance()
+        sim["u1"].interp(u_T)
+        sim["v1"].interp(v_T)
+        ur.all_values[...], vr.all_values[...] = sim.T.rotate(
+            u_T.all_values, v_T.all_values, to_grid=False
+        )
 
     if plot:
         if True:
