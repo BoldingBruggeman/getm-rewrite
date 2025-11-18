@@ -528,8 +528,6 @@ class Simulation(BaseSimulation):
             )
             raise Exception("Dcrit < 2.5*Dmin")
 
-        self.rivers = domain.rivers
-
         HALO = 2
 
         self.runtype = runtype
@@ -563,6 +561,7 @@ class Simulation(BaseSimulation):
         )
 
         self.open_boundaries = self.T.open_boundaries
+        self.rivers = self.T.rivers
 
         self.U = self.T.ugrid
         self.V = self.T.vgrid

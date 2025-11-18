@@ -515,7 +515,7 @@ class Domain:
         self.open_boundaries = open_boundaries.GlobalOpenBoundaryCollection(
             nx, ny, self.logger.getChild("open_boundaries")
         )
-        self.rivers = rivers.Rivers(
+        self.rivers = rivers.GlobalRiverCollection(
             nx, ny, coordinate_type, self.logger.getChild("rivers")
         )
         self.default_output_transforms = []
@@ -978,7 +978,6 @@ class Domain:
             X = create_grid("x", 0, 0, overlap=1, istart=0, jstart=0)
 
         T = create_grid(t_postfix, 1, 1, ugrid=U, vgrid=V, xgrid=X)
-        T.rivers = self.rivers
 
         if velocity_grids > 0:
             T.infer_water_contact()
@@ -1005,8 +1004,7 @@ class Domain:
         open_boundaries.LocalOpenBoundaryCollection(
             self.open_boundaries, T, logger=self.logger
         )
-
-        self.rivers.initialize(T)
+        T.rivers = self.rivers.initialize(T)
 
         return T
 
@@ -1482,11 +1480,13 @@ class Domain:
                 MAP[b.side], l, mstart, mstop, type_2d=b.type_2d, type_3d=b.type_3d
             )
         for r in self.rivers.values():
-            if r.i_glob is not None and r.j_glob is not None:
-                rot_r = rotated_domain.rivers.add_by_index(
-                    r.name, r.j_glob, self.nx - 1 - r.i_glob
-                )
-            for att in ("original_name", "split", "zl", "zu"):
+            x, y = r.x, r.y
+            if r.coordinate_type == CoordinateType.IJ:
+                x, y = y, self.nx - 1 - x
+            rot_r = rotated_domain.rivers.add_by_location(
+                r.name, x, y, r.coordinate_type, zl=r.zl, zu=r.zu
+            )
+            for att in ("original_name", "split"):
                 if hasattr(r, att):
                     setattr(rot_r, att, getattr(r, att))
         return rotated_domain
@@ -1606,7 +1606,7 @@ class Domain:
         if show_rivers and self.rivers:
             self.rivers.map_to_grid(self._tlocator(mask))
             for river in self.rivers.global_rivers:
-                i_sup, j_sup = 1 + river.i_glob * 2, 1 + river.j_glob * 2
+                i_sup, j_sup = 1 + river.i * 2, 1 + river.j * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]
                 ax.plot([river_x], [river_y], ".r")
                 ax.text(river_x, river_y, river.name, color="r")
