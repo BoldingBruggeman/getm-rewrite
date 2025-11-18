@@ -125,6 +125,17 @@ class LocalRiverCollection(Mapping[str, LocalRiver]):
         self._rivers = {river.name: river for river in rivers}
         self.logger = logger
 
+        self.flow = np.zeros((len(rivers),))
+        self.zl = np.array([river.zl for river in rivers])
+        self.zu = np.array([river.zu for river in rivers])
+        for iriver, river in enumerate(rivers):
+            river.flow.wrap_ndarray(self.flow[..., iriver])
+            river.zl = self.zl[..., iriver]
+            river.zu = self.zu[..., iriver]
+        self.i = np.array([river.i for river in rivers], dtype=np.intp)
+        self.j = np.array([river.j for river in rivers], dtype=np.intp)
+        self.iarea = grid.iarea.all_values[self.j, self.i]
+
     def __getitem__(self, key: str) -> LocalRiver:
         return self._rivers[key]
 
@@ -248,17 +259,6 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
                 local_rivers.append(river)
             else:
                 self.logger.info(f"{river.name} falls outside this subdomain")
-
-        self.flow = np.zeros((len(local_rivers),))
-        self.zl = np.array([river.zl for river in local_rivers])
-        self.zu = np.array([river.zu for river in local_rivers])
-        for iriver, river in enumerate(local_rivers):
-            river.flow.wrap_ndarray(self.flow[..., iriver])
-            river.zl = self.zl[..., iriver]
-            river.zu = self.zu[..., iriver]
-        self.i = np.array([river.i for river in local_rivers], dtype=np.intp)
-        self.j = np.array([river.j for river in local_rivers], dtype=np.intp)
-        self.iarea = grid.iarea.all_values[self.j, self.i]
 
         return LocalRiverCollection(local_rivers, self.logger)
 
