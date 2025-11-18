@@ -121,7 +121,9 @@ class LocalRiver(Mapping[str, RiverTracer]):
 
 
 class LocalRiverCollection(Mapping[str, LocalRiver]):
-    def __init__(self, rivers: Iterable[LocalRiver], logger: logging.Logger):
+    def __init__(
+        self, grid: core.Grid, rivers: Iterable[LocalRiver], logger: logging.Logger
+    ):
         self._rivers = {river.name: river for river in rivers}
         self.logger = logger
 
@@ -260,7 +262,7 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
             else:
                 self.logger.info(f"{river.name} falls outside this subdomain")
 
-        return LocalRiverCollection(local_rivers, self.logger)
+        return LocalRiverCollection(grid, local_rivers, self.logger)
 
     def __getitem__(self, key: str) -> GlobalRiver:
         for river in self._rivers:
