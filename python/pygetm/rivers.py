@@ -148,7 +148,7 @@ class LocalRiverCollection(Mapping[str, LocalRiver]):
         return iter(self._rivers)
 
     def flag_prescribed_tracers(self):
-        for river in self._rivers:
+        for river in self._rivers.values():
             for rt in river._tracers.values():
                 prescribed = rt.values != rt.fill_value
                 if prescribed and rt.follow_target_cell:
