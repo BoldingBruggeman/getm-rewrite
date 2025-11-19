@@ -168,16 +168,7 @@ def from_nc(
         array = ds[name]
         # Note: we wrap the netCDF array ourselves, in order to support lazy operators
         # (e.g., add, multiply)
-        lazyvar = Wrap(array.variable, name=f'from_nc("{path}", {name!r})')
-        wrapped_array = xr.DataArray(
-            lazyvar,
-            dims=array.dims,
-            coords=array.coords,
-            attrs=array.attrs,
-            name=lazyvar.name,
-        )
-        wrapped_array.encoding.update(array.encoding)
-        arrays.append(wrapped_array)
+        arrays.append(wrap(array, name=f'from_nc("{path}", {name!r})'))
 
     if len(arrays) == 1:
         return arrays[0]
@@ -189,6 +180,21 @@ def from_nc(
             coords="minimal",
             combine_attrs="drop_conflicts",
         )
+
+
+def wrap(array: xr.DataArray, name: Optional[str] = None) -> xr.DataArray:
+    if name is None:
+        name = array.name or "wrapped_array"
+    lazyvar = Wrap(array.variable, name=name)
+    wrapped_array = xr.DataArray(
+        lazyvar,
+        dims=array.dims,
+        coords=array.coords,
+        attrs=array.attrs,
+        name=lazyvar.name,
+    )
+    wrapped_array.encoding.update(array.encoding)
+    return wrapped_array
 
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
