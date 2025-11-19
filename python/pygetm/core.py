@@ -1,6 +1,15 @@
 import numbers
 import operator
-from typing import Optional, Union, Literal, Mapping, Any, Callable, Iterable
+from typing import (
+    Optional,
+    Union,
+    Literal,
+    Mapping,
+    Any,
+    Callable,
+    Iterable,
+    TYPE_CHECKING,
+)
 import logging
 import functools
 
@@ -12,6 +21,10 @@ import xarray as xr
 from . import _pygetm
 from . import parallel
 from .constants import CENTERS, INTERFACES, FILL_VALUE, CoordinateType, CellType
+
+if TYPE_CHECKING:
+    import pygetm.open_boundaries
+    import pygetm.rivers
 
 
 def _noop(*args, **kwargs):
@@ -322,6 +335,9 @@ class Grid(_pygetm.Grid):
         "_work",
         "_masks",
     )
+
+    open_boundaries: "pygetm.open_boundaries.LocalOpenBoundaryCollection"
+    rivers: "pygetm.rivers.LocalRiverCollection"
 
     def __init__(
         self,

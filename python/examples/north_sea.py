@@ -95,14 +95,13 @@ def create_simulation(
                 pygetm.input.from_nc(bdy_3d_path, "salt")
             )
 
-    if domain.rivers:
-        river_path = os.path.join(setup_dir, "Forcing/River/rivers.nc")
-        for river in domain.rivers.values():
-            river.flow.set(
-                pygetm.input.from_nc(river_path, river.original_name) / river.split
-            )
-            if sim.runtype == pygetm.RunType.BAROCLINIC:
-                river["salt"].set(0.5)
+    river_path = os.path.join(setup_dir, "Forcing/River/rivers.nc")
+    for river in sim.rivers.values():
+        river.flow.set(
+            pygetm.input.from_nc(river_path, river.original_name) / river.split
+        )
+        if sim.runtype == pygetm.RunType.BAROCLINIC:
+            river["salt"].set(0.5)
 
     if sim.runtype < pygetm.RunType.BAROCLINIC:
         sim.sst = sim.airsea.t2m
