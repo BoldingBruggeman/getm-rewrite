@@ -172,7 +172,7 @@ class Updatable(enum.Enum):
     MACRO_ONLY = 2
 
 
-class FieldCollection:
+class FieldCollection(Mapping[str, Base]):
     def __init__(
         self,
         available_fields: Mapping[str, pygetm.core.Array],
@@ -185,6 +185,15 @@ class FieldCollection:
         self.default_dtype = default_dtype
         self.sub = sub
         self._updaters = {}
+
+    def __getitem__(self, key: str) -> Base:
+        return self.fields[key]
+
+    def __iter__(self):
+        return iter(self.fields)
+
+    def __len__(self) -> int:
+        return len(self.fields)
 
     def request(
         self,
