@@ -30,6 +30,46 @@ time_unit2seconds = {
 
 
 class File(operators.FieldCollection):
+    @staticmethod
+    def get_cf_time_attrs(
+        time: Optional[cftime.datetime],
+        seconds_passed: float,
+        time_reference: Optional[cftime.datetime],
+    ) -> tuple[dict[str, str], float]:
+        """Get CF-compliant time attributes and offset for output files.
+
+        This method generates metadata attributes for time variables following
+        the Climate and Forecast (CF) conventions, along with a time offset
+        to align the time coordinate with the reference time.
+
+        Args:
+            time: The current simulation time. If None, time is measured only as
+                seconds since simulation start.
+            seconds_passed: Total number of seconds elapsed since the simulation
+                started.
+            time_reference: Reference time for CF-compliant time units. This is
+                typically the start time of the first simulation in a series.
+                Only used when time is not None.
+
+        Returns:
+            A tuple containing:
+                - attrs: Dictionary of CF-compliant attributes for the time variable,
+                  including "axis", "units", and optionally "calendar" or "standard_name"
+                - time_offset: Offset in seconds between the time reference and the
+                  start of seconds_passed counting (0.0 if counting starts from
+                  time_reference)
+        """
+        attrs = {"axis": "T"}
+        if time is not None:
+            attrs["units"] = f"seconds since {time_reference:%Y-%m-%d %H:%M:%S}"
+            attrs["calendar"] = time.calendar
+            time_offset = (time - time_reference).total_seconds() - seconds_passed
+        else:
+            attrs["units"] = "s"
+            attrs["standard_name"] = "time"
+            time_offset = 0.0
+        return attrs, time_offset
+
     def __init__(
         self,
         available_fields: Mapping[str, core.Array],

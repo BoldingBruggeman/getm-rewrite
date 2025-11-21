@@ -51,22 +51,12 @@ def _create_dimensions(
 
 
 def _add_time_coordinate(
-    nc: netCDF4.Dataset,
-    time: Optional[cftime.datetime],
-    seconds_passed: float,
-    time_reference: Optional[cftime.datetime],
-) -> tuple[netCDF4.Variable, float]:
+    nc: netCDF4.Dataset, attrs: dict[str, str]
+) -> netCDF4.Variable:
     nctime = nc.createVariable("time", float, ("time",))
-    nctime.axis = "T"
-    if time is not None:
-        nctime.units = f"seconds since {time_reference:%Y-%m-%d %H:%M:%S}"
-        nctime.calendar = time.calendar
-        time_offset = (time - time_reference).total_seconds() - seconds_passed
-    else:
-        nctime.units = "s"
-        nctime.standard_name = "time"
-        time_offset = 0.0
-    return nctime, time_offset
+    for att, value in attrs.items():
+        setattr(nctime, att, value)
+    return nctime
 
 
 def _add_time_bounds(nc: netCDF4.Dataset, nctime: netCDF4.Variable) -> netCDF4.Variable:
@@ -186,9 +176,10 @@ class NetCDFFile(File):
                 has_time, has_time_bounds = _create_dimensions(self.nc, included_fields)
                 if has_time:
                     time_reference = self.time_reference or default_time_reference
-                    self.nctime, self.time_offset = _add_time_coordinate(
-                        self.nc, time, seconds_passed, time_reference
+                    attrs, self.time_offset = self.get_cf_time_attrs(
+                        time, seconds_passed, time_reference
                     )
+                    self.nctime = _add_time_coordinate(self.nc, attrs)
                     if has_time_bounds:
                         self.nctime_ave, self.nctime_bnds = _add_time_bounds(
                             self.nc, self.nctime
