@@ -104,9 +104,14 @@ class OpenBoundary:
         mskip = (mstart - mstart_) // self.mstep
         assert mskip >= 0
 
-        return LocalOpenBoundary(
+        local_bdy = LocalOpenBoundary(
             self.name, self.side, l, mstart, mstop, mskip, self.type_2d, self.type_3d
         )
+
+        if (grid.mask.all_values[local_bdy.slice_t] == CellType.UNRESOLVED).all():
+            return None
+
+        return local_bdy
 
 
 class LocalOpenBoundary(OpenBoundary):
@@ -583,6 +588,7 @@ class Relaxation(NamedTuple):
     weights: np.ndarray
     target: np.ndarray
     local: np.ndarray
+    where: np.ndarray
 
 
 class ArrayOpenBoundaries:
@@ -676,15 +682,15 @@ class ArrayOpenBoundaries:
         mask = slicer(self._array.grid.mask.all_values)
         where = (mask == CellType.ACTIVE) & where
         weights = np.where(where, weights, 0.0)
-        self.relaxation.append(Relaxation(slicer, weights, target, local))
+        self.relaxation.append(Relaxation(slicer, weights, target, local, where))
 
     def update(self):
         """Update the tracer at the open boundaries"""
         for updater in self.updaters:
             updater()
-        olds = [relax.local.copy() for relax in self.relaxation]
-        for relax, old in zip(self.relaxation, olds):
-            relax.local[...] += relax.weights * (relax.target - old)
+        deltas = [r.weights * (r.target - r.local) for r in self.relaxation]
+        for relax, delta in zip(self.relaxation, deltas):
+            np.add(relax.local, delta, out=relax.local, where=relax.where)
 
 
 class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
@@ -721,6 +727,11 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         assert mstart >= 0 and mstart < m_max
         assert mlast >= 0 and mlast < m_max
         assert l >= 0 and l < l_max
+
+        if side in (Side.WEST, Side.SOUTH):
+            assert l < l_max - 1, "No water points on the interior side of boundary"
+        else:
+            assert l > 0, "No water points on the interior side of boundary"
 
         if name is None:
             name = str(len(self._boundaries))

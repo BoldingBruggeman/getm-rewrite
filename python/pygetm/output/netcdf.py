@@ -4,6 +4,7 @@ import logging
 import datetime
 import sys
 from pathlib import Path
+import contextlib
 
 import cftime
 import netCDF4
@@ -50,26 +51,16 @@ def _create_dimensions(
 
 
 def _add_time_coordinate(
-    nc: netCDF4.Dataset,
-    time: Optional[cftime.datetime],
-    seconds_passed: float,
-    time_reference: Optional[cftime.datetime],
-) -> tuple[netCDF4.Variable, float]:
+    nc: netCDF4.Dataset, attrs: dict[str, str]
+) -> netCDF4.Variable:
     nctime = nc.createVariable("time", float, ("time",))
-    nctime.axis = "T"
-    if time is not None:
-        nctime.units = f"seconds since {time_reference:%Y-%m-%d %H:%M:%S}"
-        nctime.calendar = time.calendar
-        time_offset = (time - time_reference).total_seconds() - seconds_passed
-    else:
-        nctime.units = "s"
-        nctime.standard_name = "time"
-        time_offset = 0.0
-    return nctime, time_offset
+    for att, value in attrs.items():
+        setattr(nctime, att, value)
+    return nctime
 
 
 def _add_time_bounds(nc: netCDF4.Dataset, nctime: netCDF4.Variable) -> netCDF4.Variable:
-    nctime_ave = nc.createVariable("time_ave", float, ("time",))
+    nctime_ave = nc.createVariable("time_av", float, ("time",))
     nctime_ave.coordinates = nctime_ave.name
     nctime_bnds = nc.createVariable("time_bnds", float, ("time", "nv"))
     nctime_ave.bounds = nctime_bnds.name
@@ -91,12 +82,10 @@ def _add_variable(
         name, field.dtype, dims, fill_value=field.fill_value, **kwargs
     )
 
-    # Use try-except for set_auto_maskandscale because only some NetCDF
-    # engines support it (netCDF4 does, h5netcdf.legacyapi does not)
-    try:
+    # Only some NetCDF engines support set_auto_maskandscale
+    # (netCDF4 does, h5netcdf.legacyapi does not)
+    with contextlib.suppress(AttributeError):
         ncvar.set_auto_maskandscale(False)
-    except AttributeError:
-        pass
 
     # Variable attributes
     ncvar.expression = field.expression
@@ -104,7 +93,7 @@ def _add_variable(
         setattr(ncvar, att, value)
     coords = field.coordinates
     if "time: mean" in field.attrs.get("cell_methods", ""):
-        coords = coords + ["time_ave"]
+        coords = coords + ["time_av"]
     if coords:
         ncvar.coordinates = " ".join(coords)
 
@@ -187,9 +176,10 @@ class NetCDFFile(File):
                 has_time, has_time_bounds = _create_dimensions(self.nc, included_fields)
                 if has_time:
                     time_reference = self.time_reference or default_time_reference
-                    self.nctime, self.time_offset = _add_time_coordinate(
-                        self.nc, time, seconds_passed, time_reference
+                    attrs, self.time_offset = self.get_cf_time_attrs(
+                        time, seconds_passed, time_reference
                     )
+                    self.nctime = _add_time_coordinate(self.nc, attrs)
                     if has_time_bounds:
                         self.nctime_ave, self.nctime_bnds = _add_time_bounds(
                             self.nc, self.nctime

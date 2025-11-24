@@ -1,6 +1,15 @@
 import numbers
 import operator
-from typing import Optional, Union, Literal, Mapping, Any, Callable, Iterable
+from typing import (
+    Optional,
+    Union,
+    Literal,
+    Mapping,
+    Any,
+    Callable,
+    Iterable,
+    TYPE_CHECKING,
+)
 import logging
 import functools
 
@@ -12,6 +21,10 @@ import xarray as xr
 from . import _pygetm
 from . import parallel
 from .constants import CENTERS, INTERFACES, FILL_VALUE, CoordinateType, CellType
+
+if TYPE_CHECKING:
+    import pygetm.open_boundaries
+    import pygetm.rivers
 
 
 def _noop(*args, **kwargs):
@@ -323,6 +336,9 @@ class Grid(_pygetm.Grid):
         "_masks",
     )
 
+    open_boundaries: "pygetm.open_boundaries.LocalOpenBoundaryCollection"
+    rivers: "pygetm.rivers.LocalRiverCollection"
+
     def __init__(
         self,
         nx: int,
@@ -477,25 +493,42 @@ class Grid(_pygetm.Grid):
     def get_mask(
         self, values: Iterable[CellType], z: Literal[None, CENTERS, INTERFACES] = None
     ) -> np.ndarray:
-        """Get a boolean mask for the specified mask values.
+        """Get a Boolean mask that indicates where the cell type differs from
+        the specified values.
 
         Args:
-            mask: mask values to include
+            values: mask values to include
+            z: if CENTERS or INTERFACES, return a 3D mask for the specified
+                vertical coordinate type
         """
+
+        def _cache_mask(key, mask: np.ndarray):
+            mask.flags.writeable = False
+            self._masks[key] = mask
+
+        def _get_horizontal_mask(valid_mask_values) -> np.ndarray:
+            if valid_mask_values not in self._masks:
+                valid = np.isin(self.mask.all_values, list(valid_mask_values))
+                if CellType.EDGE_X in valid_mask_values:
+                    valid |= self._edge_x
+                if CellType.EDGE_Y in valid_mask_values:
+                    valid |= self._edge_y
+                _cache_mask(key=valid_mask_values, mask=~valid)
+            return self._masks[valid_mask_values]
+
+        def _make_3d_mask(horizontal_mask, z) -> np.ndarray:
+            if hasattr(self, "_land3d"):
+                att = "_land3d_if" if z == INTERFACES else "_land3d"
+                return horizontal_mask | getattr(self, att)
+            return horizontal_mask[np.newaxis, ...]
+
         valid_mask_values = frozenset(values)
         key = (valid_mask_values, z)
         if key not in self._masks:
-            valid = np.isin(self.mask.all_values, list(valid_mask_values))
-            if CellType.EDGE_X in valid_mask_values:
-                valid |= self._edge_x
-            if CellType.EDGE_Y in valid_mask_values:
-                valid |= self._edge_y
-            mask = ~valid
-            if z and hasattr(self, "_land3d"):
-                att = "_land3d_if" if z == INTERFACES else "_land3d"
-                mask = mask | getattr(self, att)
-            mask.flags.writeable = False
-            self._masks[key] = mask
+            mask = _get_horizontal_mask(valid_mask_values)
+            if z:
+                mask = _make_3d_mask(mask, z)
+            _cache_mask(key=key, mask=mask)
         return self._masks[key]
 
     def interpolator(self, target: "Grid") -> Callable[[np.ndarray, np.ndarray], None]:
@@ -980,10 +1013,13 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     @property
     def all_mask(self) -> np.ndarray:
         """Boolean array indicating invalid data points, including halos"""
-        if self._ndim == 0 or self.on_boundary:
-            return np.broadcast_to(False, self.all_values.shape)
+        if self._ndim == 0:
+            return np.array(False)
         valid_mask_values = self.attrs.get("_valid_at", ()) + (CellType.ACTIVE,)
         mask = self.grid.get_mask(valid_mask_values, self.z)
+        if self.on_boundary:
+            open_boundaries = self.grid.open_boundaries
+            mask = mask[..., open_boundaries.j, open_boundaries.i].T
         return np.broadcast_to(mask, self.all_shape)
 
     @property

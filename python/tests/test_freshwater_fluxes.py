@@ -44,9 +44,9 @@ class TestFreshwaterFluxes(unittest.TestCase):
         flow = 100.0
 
         domain = self.create_domain()
-        river = domain.rivers.add_by_index("dummy", 25, 25)
+        domain.rivers.add_by_index("dummy", 25, 25)
         sim = self.create_simulation(domain)
-        river.flow.set(flow)
+        sim.rivers["dummy"].flow.set(flow)
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -66,11 +66,11 @@ class TestFreshwaterFluxes(unittest.TestCase):
         flow2 = 200.0
 
         domain = self.create_domain()
-        river1 = domain.rivers.add_by_index("dummy1", 25, 25)
-        river2 = domain.rivers.add_by_index("dummy2", 25, 25)
+        domain.rivers.add_by_index("dummy1", 25, 25)
+        domain.rivers.add_by_index("dummy2", 25, 25)
         sim = self.create_simulation(domain)
-        river1.flow.set(flow1)
-        river2.flow.set(flow2)
+        sim.rivers["dummy1"].flow.set(flow1)
+        sim.rivers["dummy2"].flow.set(flow2)
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -93,12 +93,13 @@ class TestFreshwaterFluxes(unittest.TestCase):
         i_all = np.random.randint(0, domain.nx, n)
         j_all = np.random.randint(0, domain.ny, n)
 
-        rivers = []
+        river_names = []
         for iriver, (i, j) in enumerate(zip(i_all, j_all)):
-            rivers.append(domain.rivers.add_by_index("dummy%i" % iriver, i, j))
+            river = domain.rivers.add_by_index(f"dummy{iriver}", i, j)
+            river_names.append(river.name)
         sim = self.create_simulation(domain)
-        for river, f in zip(rivers, flow):
-            river.flow.set(f)
+        for river_name, f in zip(river_names, flow):
+            sim.rivers[river_name].flow.set(f)
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -117,10 +118,10 @@ class TestFreshwaterFluxes(unittest.TestCase):
         flow = 100.0
 
         domain = self.create_domain()
-        river = domain.rivers.add_by_index("dummy", 25, 25)
+        domain.rivers.add_by_index("dummy", 25, 25)
         sim = self.create_simulation(domain)
-        river.flow.set(flow)
-        river["dum"].follow_target_cell = True
+        sim.rivers["dummy"].flow.set(flow)
+        sim.rivers["dummy"]["dum"].follow_target_cell = True
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -141,9 +142,9 @@ class TestFreshwaterFluxes(unittest.TestCase):
         flow = -100.0
 
         domain = self.create_domain()
-        river = domain.rivers.add_by_index("dummy", 25, 25)
+        domain.rivers.add_by_index("dummy", 25, 25)
         sim = self.create_simulation(domain)
-        river.flow.set(flow)
+        sim.rivers["dummy"].flow.set(flow)
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -165,13 +166,12 @@ class TestFreshwaterFluxes(unittest.TestCase):
         flow2 = 200.0
 
         domain = self.create_domain()
-        river1 = domain.rivers.add_by_index("dummy1", 25, 25)
-        river2 = domain.rivers.add_by_index("dummy2", 25, 25)
+        domain.rivers.add_by_index("dummy1", 25, 25)
+        domain.rivers.add_by_index("dummy2", 25, 25)
         sim = self.create_simulation(domain)
-        river1.flow.set(flow1)
-        river2.flow.set(flow2)
-        river2["dum"].follow_target_cell = True
-
+        sim.rivers["dummy1"].flow.set(flow1)
+        sim.rivers["dummy2"].flow.set(flow2)
+        sim.rivers["dummy2"]["dum"].follow_target_cell = True
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
         while sim.time < STOP:
@@ -193,10 +193,10 @@ class TestFreshwaterFluxes(unittest.TestCase):
         concentration = 5.0
 
         domain = self.create_domain()
-        river = domain.rivers.add_by_index("dummy", 25, 25)
+        domain.rivers.add_by_index("dummy", 25, 25)
         sim = self.create_simulation(domain)
-        river.flow.set(flow)
-        river["dum"].values.fill(concentration)
+        sim.rivers["dummy"].flow.set(flow)
+        sim.rivers["dummy"]["dum"].values.fill(concentration)
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -219,13 +219,13 @@ class TestFreshwaterFluxes(unittest.TestCase):
         concentration2 = 5.0
 
         domain = self.create_domain()
-        river1 = domain.rivers.add_by_index("dummy1", 25, 25)
-        river2 = domain.rivers.add_by_index("dummy2", 25, 25)
+        domain.rivers.add_by_index("dummy1", 25, 25)
+        domain.rivers.add_by_index("dummy2", 25, 25)
         sim = self.create_simulation(domain)
-        river1.flow.set(flow1)
-        river2.flow.set(flow2)
-        river1["dum"].values.fill(concentration1)
-        river2["dum"].values.fill(concentration2)
+        sim.rivers["dummy1"].flow.set(flow1)
+        sim.rivers["dummy2"].flow.set(flow2)
+        sim.rivers["dummy1"]["dum"].values.fill(concentration1)
+        sim.rivers["dummy2"]["dum"].values.fill(concentration2)
 
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
         total_volume, total_tracers = sim.totals
@@ -250,18 +250,17 @@ class TestFreshwaterFluxes(unittest.TestCase):
         i_all = np.random.randint(0, domain.nx, n)
         j_all = np.random.randint(0, domain.ny, n)
 
-        rivers = []
+        river_names = []
         for iriver, (i, j) in enumerate(zip(i_all, j_all)):
             zu = np.random.uniform(-25.0, 75.0)
             zl = zu + np.random.uniform(0.0, 50.0)
-            rivers.append(
-                domain.rivers.add_by_index("dummy%i" % iriver, i, j, zu=zu, zl=zl)
-            )
+            river = domain.rivers.add_by_index(f"dummy{iriver}", i, j, zu=zu, zl=zl)
+            river_names.append(river.name)
         sim = self.create_simulation(domain)
-        for river, f, c in zip(rivers, flow, concentrations):
-            river.flow.set(f)
-            river["dum"].values.fill(c)
-            river["salt"].values.fill(35.0)
+        for river_name, f, c in zip(river_names, flow, concentrations):
+            sim.rivers[river_name].flow.set(f)
+            sim.rivers[river_name]["dum"].values.fill(c)
+            sim.rivers[river_name]["salt"].values.fill(35.0)
 
         # sim.output_manager.add_restart("res.nc")
         sim.start(START, TIMESTEP, SPLIT_FACTOR, report=datetime.timedelta(days=1))
@@ -326,15 +325,15 @@ class TestFreshwaterFluxes(unittest.TestCase):
         i_all = np.random.randint(0, domain.nx, n)
         j_all = np.random.randint(0, domain.ny, n)
 
-        rivers = []
+        river_names = []
         for iriver, (i, j) in enumerate(zip(i_all, j_all)):
             zu = np.random.uniform(-25.0, 75.0)
             zl = zu + np.random.uniform(0.0, 50.0)
-            rivers.append(
-                domain.rivers.add_by_index("dummy%i" % iriver, i, j, zu=zu, zl=zl)
-            )
+            river = domain.rivers.add_by_index(f"dummy{iriver}", i, j, zu=zu, zl=zl)
+            river_names.append(river.name)
         sim = self.create_simulation(domain)
-        for river, f, c in zip(rivers, flow, concentrations):
+        for river_name, f, c in zip(river_names, flow, concentrations):
+            river = sim.rivers[river_name]
             river.flow.set(f)
             river["dum"].values.fill(c)
             river["salt"].values.fill(35.0)

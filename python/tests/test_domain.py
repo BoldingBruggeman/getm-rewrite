@@ -263,7 +263,7 @@ class TestDomain(unittest.TestCase):
         self.assertEqual(
             domain.rivers.default_coordinate_type, pygetm.CoordinateType.LONLAT
         )
-        river = domain.rivers.add_by_location("foo", 2.0, 3.0)
+        domain.rivers.add_by_location("foo", 2.0, 3.0)
         T = domain.create_grids(10, halox=2, haloy=2)
         i_loc_exp = np.argmin(np.abs(lon - 2.0)) + T.halox - T.tiling.xoffset
         j_loc_exp = np.argmin(np.abs(lat - 3.0)) + T.haloy - T.tiling.yoffset
@@ -274,11 +274,10 @@ class TestDomain(unittest.TestCase):
             and j_loc_exp < T.ny_
         )
         if inside:
-            self.assertEqual(river.i_loc, i_loc_exp)
-            self.assertEqual(river.j_loc, j_loc_exp)
+            self.assertEqual(T.rivers["foo"].i, i_loc_exp)
+            self.assertEqual(T.rivers["foo"].j, j_loc_exp)
         else:
-            self.assertIsNone(river.i_loc)
-            self.assertIsNone(river.j_loc)
+            self.assertNotIn("foo", T.rivers)
 
         nx, ny = 100, 52
         x = np.linspace(0.0, 1e5, nx)
@@ -289,7 +288,7 @@ class TestDomain(unittest.TestCase):
         self.assertEqual(
             domain.rivers.default_coordinate_type, pygetm.CoordinateType.XY
         )
-        river = domain.rivers.add_by_location("foo", 25000.0, 34000.0)
+        domain.rivers.add_by_location("foo", 25000.0, 34000.0)
         T = domain.create_grids(10, halox=2, haloy=2)
         i_loc_exp = np.argmin(np.abs(x - 25000.0)) + T.halox - T.tiling.xoffset
         j_loc_exp = np.argmin(np.abs(y - 34000.0)) + T.haloy - T.tiling.yoffset
@@ -300,11 +299,10 @@ class TestDomain(unittest.TestCase):
             and j_loc_exp < T.ny_
         )
         if inside:
-            self.assertEqual(river.i_loc, i_loc_exp)
-            self.assertEqual(river.j_loc, j_loc_exp)
+            self.assertEqual(T.rivers["foo"].i, i_loc_exp)
+            self.assertEqual(T.rivers["foo"].j, j_loc_exp)
         else:
-            self.assertIsNone(river.i_loc)
-            self.assertIsNone(river.j_loc)
+            self.assertNotIn("foo", T.rivers)
 
     def test_open_boundaries(self):
         nx, ny = 100, 52
@@ -353,15 +351,50 @@ class TestDomain(unittest.TestCase):
         domain.open_boundaries.add_top_boundary("N2", ny - 1, 10, nx, t2d, t3d)
 
         # Reverse order
-        domain.open_boundaries.add_left_boundary("E1", nx - 1, 10, 0, t2d, t3d)
+        domain.open_boundaries.add_right_boundary("E1", nx - 1, 10, 0, t2d, t3d)
 
         # Cross with reverse
         with self.assertRaises(Exception):
-            domain.open_boundaries.add_left_boundary("E1", nx - 1, ny - 1, 10, t2d, t3d)
+            domain.open_boundaries.add_right_boundary(
+                "E1", nx - 1, ny - 1, 10, t2d, t3d
+            )
 
-        domain.open_boundaries.add_left_boundary("E1", nx - 1, ny - 2, 10, t2d, t3d)
+        domain.open_boundaries.add_right_boundary("E1", nx - 1, ny - 2, 10, t2d, t3d)
 
         domain.create_grids(10, halox=2, haloy=2, velocity_grids=2)
+
+    def test_boundary_on_land(self):
+        nx, ny = 10, 10
+        lon = np.linspace(0.0, 1.0, nx)
+        lat = np.linspace(0.0, 1.0, ny)
+        logger = logging.getLogger()
+        logger.setLevel("ERROR")
+        domain = pygetm.domain.create_spherical(lon, lat, H=10.0, logger=logger)
+
+        domain.mask = 0
+        domain.open_boundaries.allow_on_land = True
+        domain.open_boundaries.add_left_boundary(
+            "W",
+            0,
+            0,
+            ny,
+            pygetm.open_boundaries.FLATHER_ELEV,
+            pygetm.open_boundaries.ZERO_GRADIENT,
+        )
+        T = domain.create_grids(10, halox=2, haloy=2, velocity_grids=0)
+        self.assertEqual(len(T.open_boundaries), 0)
+
+    def test_all_masked(self):
+        nx, ny = 10, 10
+        lon = np.linspace(0.0, 1.0, nx)
+        lat = np.linspace(0.0, 1.0, ny)
+        logger = logging.getLogger()
+        logger.setLevel("ERROR")
+        domain = pygetm.domain.create_spherical(lon, lat, H=10.0, logger=logger)
+        domain.mask = 0
+        T = domain.create_grids(10, halox=2, haloy=2, velocity_grids=2)
+        self.assertEqual(T.nx, 0)
+        self.assertEqual(T.ny, 0)
 
 
 if __name__ == "__main__":

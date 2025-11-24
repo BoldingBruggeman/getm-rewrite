@@ -108,6 +108,8 @@ class Linear2DGridInterpolator:
                 import scipy.spatial
 
                 # Build kd-tree for nearest-neighbor lookup, using only unmasked points
+                if mask.all():
+                    raise ValueError("All source points are masked, cannot interpolate")
                 source_coords = np.indices(mask.shape)[:, ~mask]
                 tree = scipy.spatial.KDTree(source_coords.T)
 
