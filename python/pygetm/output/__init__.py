@@ -1,5 +1,5 @@
 import logging
-from typing import Mapping, Optional, Union
+from typing import Mapping, Optional, Union, TYPE_CHECKING
 import datetime
 import enum
 import os
@@ -9,6 +9,11 @@ import cftime
 
 from .. import core
 from . import operators
+
+if TYPE_CHECKING:
+    from . import netcdf
+    from . import memory
+    from . import zarr
 
 
 class TimeUnit(enum.Enum):
@@ -197,12 +202,22 @@ class File(operators.FieldCollection):
     def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         pass
 
+    def select_nonempty_fields(self) -> Mapping[str, core.Array]:
+        """Get all fields that contain data.
 
-# Note: specific file types cannot be imported before File is defined,
-# because that is imported by those types itself.
-# If this import statement came earlier, it would cause a circular dependency error.
-from . import netcdf
-from . import memory
+        Returns:
+            Mapping of field names to arrays for all fields that contain data.
+        """
+        included_fields = {}
+        for output_name, field in self.fields.items():
+            if 0 in field.shape:
+                self._logger.warning(
+                    f"Skipping {output_name} because it contains no data"
+                    f" (shape={field.shape})"
+                )
+            else:
+                included_fields[output_name] = field
+        return included_fields
 
 
 class OutputManager:
@@ -223,7 +238,7 @@ class OutputManager:
 
     def add_netcdf_file(
         self, path: Union[os.PathLike[str], str], **kwargs
-    ) -> netcdf.NetCDFFile:
+    ) -> "netcdf.NetCDFFile":
         """Add a NetCDF file for output.
 
         Args:
@@ -231,6 +246,8 @@ class OutputManager:
             **kwargs: additional keyword arguments passed to
                 :class:`pygetm.output.netcdf.NetCDFFile`
         """
+        from . import netcdf
+
         self._logger.debug(f"Adding NetCDF file {path}")
         file = netcdf.NetCDFFile(
             self.fields,
@@ -242,13 +259,36 @@ class OutputManager:
         self._files.append(file)
         return file
 
-    def add_recorder(self, **kwargs) -> memory.MemoryFile:
+    def add_zarr_group(self, store: "zarr.StoreLike", **kwargs) -> "zarr.ZarrGroup":
+        """Add a Zarr group for output.
+
+        Args:
+            store: Zarr group to write to.
+            **kwargs: additional keyword arguments passed to
+                :class:`pygetm.output.zarr.ZarrGroup`
+        """
+        from . import zarr
+
+        self._logger.debug(f"Adding Zarr group {store}")
+        file = zarr.ZarrGroup(
+            self.fields,
+            self._logger.getChild(str(store)),
+            store,
+            rank=self.rank,
+            **kwargs,
+        )
+        self._files.append(file)
+        return file
+
+    def add_recorder(self, **kwargs) -> "memory.MemoryFile":
         """Add an in-memory file to record output.
 
         Args:
             **kwargs: additional keyword arguments passed to
                 :class:`pygetm.output.File`
         """
+        from . import memory
+
         self._logger.debug("Adding in-memory file")
         file = memory.MemoryFile(
             self.fields, self._logger.getChild("memfile"), **kwargs
@@ -258,7 +298,7 @@ class OutputManager:
 
     def add_restart(
         self, path: Union[os.PathLike[str], str], **kwargs
-    ) -> netcdf.NetCDFFile:
+    ) -> "netcdf.NetCDFFile":
         """Add a restart file to write to.
 
         Args:
@@ -286,6 +326,8 @@ class OutputManager:
         time: Optional[cftime.datetime] = None,
         **kwargs,
     ):
+        from . import netcdf
+
         kwargs.setdefault("time_reference", self._time_reference)
         file = netcdf.NetCDFFile(
             self.fields,

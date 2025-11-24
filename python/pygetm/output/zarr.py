@@ -12,45 +12,34 @@ from . import operators
 import pygetm.core
 
 
-async def _create_arrays(
-    root: zarr.AsyncGroup, fields: Mapping[str, pygetm.core.Array], chunk_size: int
-) -> tuple[list[zarr.AsyncArray], bool, bool]:
-    needs_time = False
-    needs_time_av = False
-    tasks: list[asyncio.Task] = []
-    for output_name, field in fields.items():
-        shape = field.shape
-        chunks = field.shape
-        dims = field.dims
-        coords = field.coordinates
-        if field.time_varying:
-            shape = (0,) + shape
-            chunks = (chunk_size,) + chunks
-            dims = ("time",) + dims
-            if "time: mean" in field.attrs.get("cell_methods", ""):
-                coords = coords + ["time_av"]
-                needs_time_av = True
-            else:
-                needs_time = True
-        # Variable attributes
-        attrs = field.attrs.copy()
-        attrs["expression"] = field.expression
-        if coords:
-            attrs["coordinates"] = " ".join(coords)
-        tasks.append(
-            root.create_array(
-                name=output_name,
-                shape=shape,
-                chunks=chunks,
-                dtype=field.dtype,
-                config=dict(write_empty_chunks=True),
-                fill_value=field.fill_value,
-                attributes=attrs,
-                dimension_names=dims,
-            )
-        )
-    arrays = await asyncio.gather(*tasks)
-    return arrays, needs_time, needs_time_av
+async def _create_array(
+    root: zarr.AsyncGroup, name: str, field: operators.Base, chunk_size: int
+) -> zarr.AsyncArray:
+    shape = field.shape
+    chunks = field.shape
+    dims = field.dims
+    coords = field.coordinates
+    if field.time_varying:
+        shape = (0,) + shape
+        chunks = (chunk_size,) + chunks
+        dims = ("time",) + dims
+        if "time: mean" in field.attrs.get("cell_methods", ""):
+            coords = coords + ["time_av"]
+    # Variable attributes
+    attrs = field.attrs.copy()
+    attrs["expression"] = field.expression
+    if coords:
+        attrs["coordinates"] = " ".join(coords)
+    return await root.create_array(
+        name=name,
+        shape=shape,
+        chunks=chunks,
+        dtype=field.dtype,
+        config=dict(write_empty_chunks=True),
+        fill_value=field.fill_value,
+        attributes=attrs,
+        dimension_names=dims,
+    )
 
 
 async def _add_time_coordinate(
@@ -114,40 +103,43 @@ class ZarrGroup(File):
         loop = self.loop
         field2array: dict[operators.Base, zarr.AsyncArray] = {}
         if self.is_root or self.sub:
-            included_fields = {}
-            time_array: Optional[zarr.AsyncArray] = None
-            for output_name, field in self.fields.items():
-                if 0 in field.shape:
-                    self._logger.warning(
-                        f"Skipping {output_name} because it contains no data"
-                        f" (shape={field.shape})"
-                    )
-                else:
-                    included_fields[output_name] = field
-
+            included_fields = self.select_nonempty_fields()
             if included_fields:
                 self.root = loop.run_until_complete(
                     zarr.create_group(store=self.store, overwrite=True)
                 )
-                arrays, needs_time, needs_time_av = loop.run_until_complete(
-                    _create_arrays(self.root, included_fields, self._chunk_size)
-                )
-                field2array.update(zip(included_fields.values(), arrays))
+
+                needs_time = False
+                needs_time_av = False
+                tasks: list[asyncio.Task[zarr.AsyncArray]] = []
+                for name, field in included_fields.items():
+                    if field.time_varying:
+                        if "time: mean" in field.attrs.get("cell_methods", ""):
+                            needs_time_av = True
+                        else:
+                            needs_time = True
+                    coro = _create_array(self.root, name, field, self._chunk_size)
+                    tasks.append(self.loop.create_task(coro))
+
                 attrs, self.time_offset = self.get_cf_time_attrs(
                     time, seconds_passed, default_time_reference or time
                 )
+
                 if needs_time:
-                    time_array = loop.run_until_complete(
-                        _add_time_coordinate(self.root, "time", attrs, self._chunk_size)
+                    coro = _add_time_coordinate(
+                        self.root, "time", attrs, self._chunk_size
                     )
+                    tasks.append(self.loop.create_task(coro))
                 # if needs_time_av:
                 #     self.time_av_array = _add_time_coordinate(
                 #         self.root, "time_av", attrs
                 #     )
 
-            if time_array is not None:
-                self._time_cache = np.empty((self._chunk_size,), dtype=float)
-                self._cache.append((time_array, self._time_cache))
+                arrays = loop.run_until_complete(asyncio.gather(*tasks))
+                if needs_time:
+                    self._time_cache = np.empty((self._chunk_size,), dtype=float)
+                    self._cache.append((arrays.pop(), self._time_cache))
+                field2array.update(zip(included_fields.values(), arrays))
 
         for field in self.fields.values():
             array = field2array.get(field)
@@ -167,8 +159,8 @@ class ZarrGroup(File):
             self._time_cache[self._ncache] = self.time_offset + seconds_passed
         for field, cache in self._varying_fields:
             field.get(cache[self._ncache, ...])
-        self._ncache += 1
         self.itime += 1
+        self._ncache += 1
         if self._ncache == self._chunk_size:
             self._empty_cache()
 
@@ -180,7 +172,7 @@ class ZarrGroup(File):
             await array.resize((istop,) + data.shape[1:])
             await array.setitem((slice(istart, istop), Ellipsis), data[: self._ncache])
 
-        tasks = []
+        tasks: list[asyncio.Task[None]] = []
         for array, data in self._cache:
             tasks.append(self.loop.create_task(resize_and_set(array, data)))
         self.loop.run_until_complete(asyncio.gather(*tasks))
