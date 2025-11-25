@@ -161,16 +161,7 @@ class NetCDFFile(File):
         default_time_reference: Optional[cftime.datetime],
     ) -> bool:
         if self.is_root or self.sub:
-            included_fields = {}
-            for output_name, field in self.fields.items():
-                if 0 in field.shape:
-                    self._logger.warning(
-                        f"Skipping {output_name} because it contains no data"
-                        f" (shape={field.shape})"
-                    )
-                else:
-                    included_fields[output_name] = field
-
+            included_fields = self.select_nonempty_fields()
             if included_fields:
                 self.nc = _create_file(self.path, format=self.format)
                 has_time, has_time_bounds = _create_dimensions(self.nc, included_fields)

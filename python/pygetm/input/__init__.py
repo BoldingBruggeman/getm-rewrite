@@ -1118,6 +1118,30 @@ def _as_lazyarray(array: xr.DataArray) -> LazyArray:
         return Wrap(variable, name=name)
 
 
+class Cache(UnaryOperator):
+    def __init__(self, source: LazyArray, idim: int, n: int):
+        super().__init__(source)
+        self._cache: Optional[np.ndarray] = None
+        self.istart = 0
+        self.n = n
+        self.idim = idim
+
+    def __getitem__(self, slices) -> np.ndarray:
+        slices = list(self._finalize_slices(slices))
+        i = slices[self.idim]
+        if not isinstance(i, (int, np.integer)):
+            return self._source[tuple(slices)]
+        if self._cache is None or i < self.istart or i >= self.istart + self.n:
+            self.istart = i
+            slices[self.idim] = slice(i, i + self.n)
+            self._cache = self._source[tuple(slices)]
+        slices[self.idim] = i - self.istart
+        return self._cache[tuple(slices)]
+
+    def __array__(self, dtype=None, copy=None) -> np.ndarray:
+        return np.asarray(self._source, dtype=dtype)
+
+
 class TemporalInterpolation(UnaryOperator):
     __slots__ = (
         "_current",
@@ -1133,6 +1157,7 @@ class TemporalInterpolation(UnaryOperator):
         "_timevalues",
     )
     MAX_CACHE_SIZE = 0
+    NTIME_CACHE = 1
 
     def __init__(
         self,
@@ -1145,6 +1170,8 @@ class TemporalInterpolation(UnaryOperator):
         logger: Optional[logging.Logger] = None,
         **kwargs,
     ):
+        if self.NTIME_CACHE > 1:
+            source = Cache(source, itimedim, self.NTIME_CACHE)
         shape = list(source.shape)
         self._itimedim = itimedim
         ntime = shape[self._itimedim]
