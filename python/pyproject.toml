@@ -16,7 +16,7 @@ dependencies = [
   "mpi4py",
   "netCDF4"
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",

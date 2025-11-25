@@ -50,7 +50,7 @@ sim.salt.open_boundaries.type = pygetm.SPONGE
 sim.salt.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "salt"))
 
 river_path = os.path.join(args.setup_dir, "Forcing/River/rivers.nc")
-for name, river in domain.rivers.items():
+for name, river in sim.rivers.items():
     river.flow.set(pygetm.input.from_nc(river_path, name))
     river["salt"].set(0.5)
 

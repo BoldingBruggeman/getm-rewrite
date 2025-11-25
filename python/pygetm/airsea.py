@@ -6,10 +6,10 @@ import numpy as np
 import cftime
 
 import awex
-import pygetm.domain
-from . import core
-from .constants import FILL_VALUE, RHO0, TimeVarying
 from awex import HumidityMeasure, LongwaveMethod, AlbedoMethod
+
+from . import core
+from .constants import FILL_VALUE, RHO0, TimeVarying, CellType
 
 
 class ShortwaveMethod(enum.IntEnum):
@@ -33,7 +33,7 @@ class Base:
     as well as surface air pressure.
     """
 
-    def initialize(self, grid: pygetm.core.Grid, logger: logging.Logger):
+    def initialize(self, grid: core.Grid, logger: logging.Logger):
         self.logger = logger
 
         self.taux = grid.array(
@@ -41,14 +41,20 @@ class Base:
             long_name="wind stress in x-direction",
             units="Pa",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="downward_x_stress_at_sea_water_surface"),
+            attrs=dict(
+                standard_name="downward_x_stress_at_sea_water_surface",
+                _valid_at=(CellType.BOUNDARY,),
+            ),
         )
         self.tauy = grid.array(
             name="tausy",
             long_name="wind stress in y-direction",
             units="Pa",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="downward_y_stress_at_sea_water_surface"),
+            attrs=dict(
+                standard_name="downward_y_stress_at_sea_water_surface",
+                _valid_at=(CellType.BOUNDARY,),
+            ),
         )
         self.shf = grid.array(
             name="shf",
@@ -62,7 +68,11 @@ class Base:
             units="Pa",
             fill_value=FILL_VALUE,
             fabm_standard_name="surface_air_pressure",
-            attrs=dict(_require_halos=True, standard_name="surface_air_pressure"),
+            attrs=dict(
+                _require_halos=True,
+                standard_name="surface_air_pressure",
+                _valid_at=(CellType.BOUNDARY,),
+            ),
         )
         self.swr = grid.array(
             name="swr",
@@ -82,7 +92,7 @@ class Base:
             ),
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs=dict(_time_varying=TimeVarying.MACRO),
+            attrs=dict(_time_varying=TimeVarying.MACRO, _valid_at=(CellType.BOUNDARY,)),
         )
 
         self._ready = False
@@ -152,7 +162,7 @@ class Fluxes(Base):
         self._initial_swr = swr
         self._initial_pe = pe
 
-    def initialize(self, grid: pygetm.core.Grid, logger: logging.Logger):
+    def initialize(self, grid: core.Grid, logger: logging.Logger):
         super().initialize(grid, logger)
         self.taux.fill(self._initial_taux)
         self.tauy.fill(self._initial_tauy)
@@ -204,7 +214,7 @@ class FluxesFromMeteo(Fluxes):
         self.humidity_measure = humidity_measure
         self.calculate_evaporation = calculate_evaporation
 
-    def initialize(self, grid: pygetm.core.Grid, logger: logging.Logger):
+    def initialize(self, grid: core.Grid, logger: logging.Logger):
         super().initialize(grid, logger)
         self.taux.attrs["_mask_output"] = True
         self.tauy.attrs["_mask_output"] = True
@@ -323,7 +333,7 @@ class FluxesFromMeteo(Fluxes):
             units="degrees_Celsius",
             fill_value=FILL_VALUE,
             fabm_standard_name="surface_temperature",
-            attrs=dict(standard_name="air_temperature"),
+            attrs=dict(standard_name="air_temperature", _valid_at=(CellType.BOUNDARY,)),
         )
 
         self.u10 = grid.array(
@@ -331,14 +341,14 @@ class FluxesFromMeteo(Fluxes):
             long_name="wind speed in eastward direction @ 10 m",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="eastward_wind"),
+            attrs=dict(standard_name="eastward_wind", _valid_at=(CellType.BOUNDARY,)),
         )
         self.v10 = grid.array(
             name="v10",
             long_name="wind speed in northward direction @ 10 m",
             units="m s-1",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="northward_wind"),
+            attrs=dict(standard_name="northward_wind", _valid_at=(CellType.BOUNDARY,)),
         )
         self.tcc = grid.array(
             name="tcc",
@@ -357,7 +367,7 @@ class FluxesFromMeteo(Fluxes):
             units="m s-1",
             fabm_standard_name="wind_speed",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="wind_speed"),
+            attrs=dict(standard_name="wind_speed", _valid_at=(CellType.BOUNDARY,)),
         )
 
         self.lon = grid.lon

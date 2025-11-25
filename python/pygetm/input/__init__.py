@@ -1,14 +1,4 @@
-from typing import (
-    Callable,
-    Iterable,
-    List,
-    Mapping,
-    Union,
-    Optional,
-    Sequence,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing import Callable, Iterable, Mapping, Union, Optional, Sequence, TYPE_CHECKING
 import glob
 import numbers
 import logging
@@ -150,8 +140,13 @@ def from_nc(
         **kwargs: additional keyword arguments to be passed to
             :func:`xarray.open_dataset`
     """
-    kwargs.setdefault("decode_times", True)
-    kwargs["use_cftime"] = True
+    try:
+        kwargs.setdefault("decode_times", xr.coders.CFDatetimeCoder(use_cftime=True))
+    except AttributeError:
+        # xarray < 2025.01.1
+        kwargs.setdefault("decode_times", True)
+        kwargs["use_cftime"] = True
+
     kwargs["cache"] = False
 
     if isinstance(paths, (str, os.PathLike)):
@@ -173,16 +168,7 @@ def from_nc(
         array = ds[name]
         # Note: we wrap the netCDF array ourselves, in order to support lazy operators
         # (e.g., add, multiply)
-        lazyvar = Wrap(array.variable, name=f'from_nc("{path}", {name!r})')
-        wrapped_array = xr.DataArray(
-            lazyvar,
-            dims=array.dims,
-            coords=array.coords,
-            attrs=array.attrs,
-            name=lazyvar.name,
-        )
-        wrapped_array.encoding.update(array.encoding)
-        arrays.append(wrapped_array)
+        arrays.append(wrap(array, name=f'from_nc("{path}", {name!r})'))
 
     if len(arrays) == 1:
         return arrays[0]
@@ -194,6 +180,21 @@ def from_nc(
             coords="minimal",
             combine_attrs="drop_conflicts",
         )
+
+
+def wrap(array: xr.DataArray, name: Optional[str] = None) -> xr.DataArray:
+    if name is None:
+        name = array.name or "wrapped_array"
+    lazyvar = Wrap(array.variable, name=name)
+    wrapped_array = xr.DataArray(
+        lazyvar,
+        dims=array.dims,
+        coords=array.coords,
+        attrs=array.attrs,
+        name=lazyvar.name,
+    )
+    wrapped_array.encoding.update(array.encoding)
+    return wrapped_array
 
 
 class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
@@ -257,7 +258,7 @@ class LazyArray(numpy.lib.mixins.NDArrayOperatorsMixin):
     def is_time_varying(self) -> bool:
         return False
 
-    def _finalize_slices(self, slices: Tuple):
+    def _finalize_slices(self, slices: tuple):
         assert isinstance(slices, tuple)
         for i, s in enumerate(slices):
             if s is Ellipsis:
@@ -279,7 +280,7 @@ class Operator(LazyArray):
         *args,
         passthrough=(),
         dtype: npt.DTypeLike = None,
-        shape: Optional[Tuple[int]] = None,
+        shape: Optional[tuple[int]] = None,
         name: Optional[str] = None,
         kwslice: Iterable[str] = (),
         **kwargs,
@@ -438,7 +439,7 @@ class Wrap(UnaryOperator):
 
 
 class Slice(UnaryOperator):
-    def __init__(self, source, shape: Tuple[int], passthrough):
+    def __init__(self, source, shape: tuple[int], passthrough):
         super().__init__(source, shape=shape, passthrough=passthrough)
         self._slices = []
         self.passthrough_own_slices = True
@@ -986,8 +987,8 @@ class HorizontalInterpolation(UnaryOperator):
             else:
                 assert (
                     isinstance(s, slice)
-                    and s.start is None
-                    and s.stop is None
+                    and (s.start is None or s.start == 0)
+                    and (s.stop is None or s.stop == self.shape[i])
                     and s.step is None
                 ), repr(s)
         source = np.asarray(self._source[tuple(src_slice)])
@@ -1117,6 +1118,30 @@ def _as_lazyarray(array: xr.DataArray) -> LazyArray:
         return Wrap(variable, name=name)
 
 
+class Cache(UnaryOperator):
+    def __init__(self, source: LazyArray, idim: int, n: int):
+        super().__init__(source)
+        self._cache: Optional[np.ndarray] = None
+        self.istart = 0
+        self.n = n
+        self.idim = idim
+
+    def __getitem__(self, slices) -> np.ndarray:
+        slices = list(self._finalize_slices(slices))
+        i = slices[self.idim]
+        if not isinstance(i, (int, np.integer)):
+            return self._source[tuple(slices)]
+        if self._cache is None or i < self.istart or i >= self.istart + self.n:
+            self.istart = i
+            slices[self.idim] = slice(i, i + self.n)
+            self._cache = self._source[tuple(slices)]
+        slices[self.idim] = i - self.istart
+        return self._cache[tuple(slices)]
+
+    def __array__(self, dtype=None, copy=None) -> np.ndarray:
+        return np.asarray(self._source, dtype=dtype)
+
+
 class TemporalInterpolation(UnaryOperator):
     __slots__ = (
         "_current",
@@ -1132,6 +1157,7 @@ class TemporalInterpolation(UnaryOperator):
         "_timevalues",
     )
     MAX_CACHE_SIZE = 0
+    NTIME_CACHE = 1
 
     def __init__(
         self,
@@ -1144,6 +1170,8 @@ class TemporalInterpolation(UnaryOperator):
         logger: Optional[logging.Logger] = None,
         **kwargs,
     ):
+        if self.NTIME_CACHE > 1:
+            source = Cache(source, itimedim, self.NTIME_CACHE)
         shape = list(source.shape)
         self._itimedim = itimedim
         ntime = shape[self._itimedim]
@@ -1167,7 +1195,7 @@ class TemporalInterpolation(UnaryOperator):
         self._slope = 0.0
         self._inext = -1
         self._next = 0.0
-        self._slices: List[Union[int, slice]] = [slice(None)] * source.ndim
+        self._slices: list[Union[int, slice]] = [slice(None)] * source.ndim
 
         self.climatology = climatology
         self._year = self.times[0].year
@@ -1232,8 +1260,11 @@ class TemporalInterpolation(UnaryOperator):
             self._move_to_next(time)
 
         # Do linear interpolation
-        np.multiply(self._slope, numtime - self._numnext, out=self._current)
-        self._current += self._next
+        if numtime == self._numnext:
+            self._current[...] = self._next
+        else:
+            np.multiply(self._slope, numtime - self._numnext, out=self._current)
+            self._current += self._next
 
         # Save current time
         self._numnow = numtime
@@ -1355,8 +1386,8 @@ class OnGrid(enum.Enum):
 
 class InputManager:
     def __init__(self, logger: logging.Logger):
-        self._all_fields: List[Tuple[str, LazyArray, np.ndarray]] = []
-        self._micro_fields: List[Tuple[str, LazyArray, np.ndarray]] = []
+        self._all_fields: list[tuple[str, LazyArray, np.ndarray]] = []
+        self._micro_fields: list[tuple[str, LazyArray, np.ndarray]] = []
         self.logger = logger
 
     def debug_nc_reads(self):
@@ -1376,6 +1407,7 @@ class InputManager:
         include_halos: Optional[bool] = None,
         climatology: bool = False,
         mask: bool = False,
+        updater_collection: Optional[list] = None,
     ):
         """Link an array to the provided input. If this input is constant in time,
         the value of the array will be set immediately.
@@ -1524,7 +1556,7 @@ class InputManager:
                     ip_mask = None
                     if value.getm.time is not None and not array.z:
                         itimedim = value.dims.index(value.getm.time.dims[0])
-                        slc: List[Union[int, slice]] = [slice(None)] * value.ndim
+                        slc: list[Union[int, slice]] = [slice(None)] * value.ndim
                         slc[itimedim] = 0
                         ip_mask = np.isnan(value[tuple(slc)])
                     value = pygetm.input.horizontal_interpolation(
@@ -1637,9 +1669,12 @@ class InputManager:
                 f"{array.name} will be updated dynamically from {data.name}{suffix}"
             )
             info = (array.name, data, target)
-            self._all_fields.append(info)
-            if time_varying == TimeVarying.MICRO:
-                self._micro_fields.append(info)
+            if updater_collection is not None:
+                updater_collection.append(info)
+            else:
+                self._all_fields.append(info)
+                if time_varying == TimeVarying.MICRO:
+                    self._micro_fields.append(info)
         else:
             target[...] = value
             finite = np.isfinite(target)
@@ -1664,7 +1699,9 @@ class InputManager:
                 f" (minimum: {minval}, maximum: {maxval})"
             )
 
-    def update(self, time: cftime.datetime, macro: bool = True):
+    def update(
+        self, time: cftime.datetime, macro: bool = True, fields: Optional[list] = None
+    ):
         """Update all arrays linked to time-dependent inputs to the current time.
 
         Args:
@@ -1673,7 +1710,8 @@ class InputManager:
                 the macro (3D) time step
         """
         numtime = time.toordinal(fractional=True)
-        fields = self._all_fields if macro else self._micro_fields
+        if fields is None:
+            fields = self._all_fields if macro else self._micro_fields
         for name, source, target in fields:
             self.logger.debug(f"updating {name}")
             source.update(time, numtime)

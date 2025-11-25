@@ -38,3 +38,17 @@ class CoordinateType(enum.Enum):
     XY = enum.auto()
     LONLAT = enum.auto()
     IJ = enum.auto()
+
+
+class CellType(enum.IntEnum):
+    UNRESOLVED = 0  #: land point
+    ACTIVE = 1  #: actively modeled wet point
+    BOUNDARY = 2  #: wet point that is part of an open boundary
+    MIRROR_INT = 3  #: wet point within boundary, set by mirroring the interior
+    MIRROR_EXT = 4  #: wet point just outside boundary, set by mirroring the interior
+    EDGE_X = (
+        -1
+    )  #: edge between actively modeled and unresolved points (e.g., coastlines)
+    EDGE_Y = (
+        -2
+    )  #: edge between actively modeled and unresolved points (e.g., coastlines)

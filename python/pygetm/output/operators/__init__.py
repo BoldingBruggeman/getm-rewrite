@@ -1,16 +1,13 @@
 from typing import (
     Iterable,
     MutableMapping,
-    Tuple,
     Union,
     Optional,
     Mapping,
     Literal,
     Callable,
-    List,
     Any,
     NamedTuple,
-    Type,
     TypeVar,
 )
 import collections
@@ -34,7 +31,7 @@ class GridInfo(NamedTuple):
 
     def _get_gather_info(
         self, source: "Base"
-    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
+    ) -> tuple[Callable, tuple, Mapping[str, Any]]:
         gatherer, local_slice, global_shape = self.grid.get_gather_info(
             shape=source.shape,
             on_boundary=self.on_boundary,
@@ -42,12 +39,6 @@ class GridInfo(NamedTuple):
             fill_value=source.fill_value,
         )
         return gatherer, local_slice, dict(shape=global_shape)
-
-    def get_mask(self) -> np.ndarray:
-        att = "_land"
-        if self.z and hasattr(self.grid, "_land3d"):
-            att = "_land3d_if" if self.z == INTERFACES else "_land3d"
-        return getattr(self.grid, att)
 
     def get_coords(self, ndim: int) -> Iterable["Base"]:
         for array in self.grid._get_coords(ndim, self.z, self.on_boundary):
@@ -73,7 +64,7 @@ class Base:
     )
 
     @classmethod
-    def parameterize(cls: Type[T], **kwargs) -> T:
+    def parameterize(cls: type[T], **kwargs) -> T:
         return functools.partial(cls, **kwargs)
 
     def __init__(
@@ -97,10 +88,10 @@ class Base:
         self.fill_value = fill_value
         self.attrs = attrs
         self.time_varying = time_varying
-        self.coordinates: List[str] = []
+        self.coordinates: list[str] = []
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         raise NotImplementedError
 
@@ -125,12 +116,12 @@ class Base:
 
     def _get_gather_info(
         self, source: "Base"
-    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
+    ) -> tuple[Callable, tuple, Mapping[str, Any]]:
         return self.grid_info._get_gather_info(source)
 
     @property
     def mask(self) -> np.ndarray:
-        return self.grid_info.get_mask()
+        return np.broadcast_to(False, self.shape)
 
     @property
     def coords(self) -> Iterable["Base"]:
@@ -144,7 +135,7 @@ class WrappedArray(Base):
         self,
         values: np.ndarray,
         name: str,
-        dims: Tuple[str, ...],
+        dims: tuple[str, ...],
         global_field: Optional[Base] = None,
         **kwargs,
     ):
@@ -167,7 +158,7 @@ class WrappedArray(Base):
         return ()
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         if out is None:
             return self.values
@@ -181,7 +172,7 @@ class Updatable(enum.Enum):
     MACRO_ONLY = 2
 
 
-class FieldCollection:
+class FieldCollection(Mapping[str, Base]):
     def __init__(
         self,
         available_fields: Mapping[str, pygetm.core.Array],
@@ -195,6 +186,15 @@ class FieldCollection:
         self.sub = sub
         self._updaters = {}
 
+    def __getitem__(self, key: str) -> Base:
+        return self.fields[key]
+
+    def __iter__(self):
+        return iter(self.fields)
+
+    def __len__(self) -> int:
+        return len(self.fields)
+
     def request(
         self,
         *fields: Union[str, pygetm.core.Array],
@@ -205,8 +205,8 @@ class FieldCollection:
         grid: Optional[pygetm.core.Grid] = None,
         z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
         generate_unique_name: bool = False,
-        transforms: Iterable[Type["UnivariateTransform"]] = (),
-    ) -> Tuple[str, ...]:
+        transforms: Iterable[type["UnivariateTransform"]] = (),
+    ) -> tuple[str, ...]:
         """Add one or more arrays to this field collection.
 
         Args:
@@ -372,7 +372,7 @@ class Field(Base):
         )
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         if out is None:
             return self.array.all_values
@@ -388,6 +388,10 @@ class Field(Base):
     def grid_info(self) -> GridInfo:
         return GridInfo(self.array.grid, self.array.z, self.array.on_boundary)
 
+    @property
+    def mask(self) -> np.ndarray:
+        return self.array.all_mask
+
 
 class UnivariateTransform(Base):
     __slots__ = "_source", "_grid_info_provider"
@@ -395,7 +399,7 @@ class UnivariateTransform(Base):
     def __init__(
         self,
         source: Base,
-        shape: Optional[Tuple[int, ...]] = None,
+        shape: Optional[tuple[int, ...]] = None,
         dims: Optional[Iterable[str]] = None,
         dtype: Optional[DTypeLike] = None,
         expression: Optional[str] = None,
@@ -433,7 +437,7 @@ class UnivariateTransform(Base):
 
     @property
     def mask(self) -> np.ndarray:
-        return self._grid_info_provider.mask
+        return self._source.mask
 
     @property
     def coords(self) -> Iterable[Base]:
@@ -441,7 +445,7 @@ class UnivariateTransform(Base):
 
     def _get_gather_info(
         self, source: "Base"
-    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
+    ) -> tuple[Callable, tuple, Mapping[str, Any]]:
         return self._grid_info_provider._get_gather_info(source)
 
 
@@ -453,7 +457,7 @@ class UnivariateTransformWithData(UnivariateTransform):
         self.values = np.empty(self.shape, self.dtype)
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         if out is None:
             return self.values
@@ -473,7 +477,7 @@ class Gather(UnivariateTransform):
         self._gather = gatherer
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         if self.root_has_global_values:
             global_values = self._source._global_values
@@ -504,7 +508,7 @@ class Mask(UnivariateTransformWithData):
         assert self._mask.shape == self.shape[-self._mask.ndim :]
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         self._source.get(out=self.values)
         self.values[..., self._mask] = self.fill_value
@@ -541,7 +545,7 @@ class TimeAverage(UnivariateTransformWithData):
         self._n += 1
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         if self._n > 0:
             self.values *= 1.0 / self._n
@@ -603,7 +607,7 @@ class Regrid(UnivariateTransformWithData):
         self._grid_info = GridInfo(grid, z, False)
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         self.interpolate(self._source.get()[self._slice], self.values[self._slice])
         return super().get(out, slice_spec)
@@ -611,6 +615,13 @@ class Regrid(UnivariateTransformWithData):
     @property
     def grid_info(self) -> GridInfo:
         return self._grid_info
+
+    @property
+    def mask(self) -> np.ndarray:
+        source_mask = self._source.mask.astype(float, order="C")
+        mask = np.zeros(self.shape, dtype=float)
+        self.interpolate(source_mask[self._slice], mask[self._slice])
+        return mask > 0.99
 
 
 class InterpZ(UnivariateTransformWithData):
@@ -637,7 +648,7 @@ class InterpZ(UnivariateTransformWithData):
             raise ValueError("Could not find source z coordinate")
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         ip = pygetm.util.interpolate.LinearVectorized1D(
             self.z_tgt, self.z_src, 0, self.fill_value
@@ -654,10 +665,7 @@ class InterpZ(UnivariateTransformWithData):
 
     @property
     def mask(self) -> np.ndarray:
-        grid_info = self.grid_info
-        if grid_info is not None:
-            grid_info = GridInfo(grid_info.grid, None, grid_info.on_boundary)
-        return grid_info.get_mask()
+        return self._source.mask.all(axis=0)
 
 
 class IndexXY(UnivariateTransform):
@@ -669,7 +677,7 @@ class IndexXY(UnivariateTransform):
         x: ArrayLike,
         y: ArrayLike,
         coordinate_type: CoordinateType = CoordinateType.IJ,
-        dims: Tuple[str, ...] = (),
+        dims: tuple[str, ...] = (),
         coords: Mapping[str, Union[Base, ArrayLike]] = {},
     ):
         index_shape = np.broadcast_shapes(np.shape(x), np.shape(y))
@@ -733,7 +741,7 @@ class IndexXY(UnivariateTransform):
             self._index_coords.append(local_field)
 
     def get(
-        self, out: Optional[ArrayLike] = None, slice_spec: Tuple[int, ...] = ()
+        self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         values = self._source.get()[self._slice]
         if out is None:
@@ -757,7 +765,7 @@ class IndexXY(UnivariateTransform):
 
     def _get_gather_info(
         self, source: Base
-    ) -> Tuple[Callable, Tuple, Mapping[str, Any]]:
+    ) -> tuple[Callable, tuple, Mapping[str, Any]]:
         """Gather across all processes and reshape the flattened
         data to the original index shape"""
 

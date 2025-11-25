@@ -1,4 +1,4 @@
-from typing import Union, Optional, List, Tuple, Sequence, Mapping
+from typing import Union, Optional, Sequence, Mapping
 import logging
 import datetime
 import timeit
@@ -18,6 +18,7 @@ from .constants import (
     GRAVITY,
     TimeVarying,
     RunType,
+    CellType,
 )
 from . import _pygetm
 from . import core
@@ -141,9 +142,15 @@ class BaseSimulation:
         Returns:
             The time from which the restart information was taken.
         """
-        kwargs.setdefault("decode_times", True)
+        try:
+            kwargs.setdefault(
+                "decode_times", xr.coders.CFDatetimeCoder(use_cftime=True)
+            )
+        except AttributeError:
+            # xarray < 2025.01.1
+            kwargs.setdefault("decode_times", True)
+            kwargs["use_cftime"] = True
         kwargs["decode_timedelta"] = False
-        kwargs["use_cftime"] = True
         with xr.open_dataset(path, **kwargs) as ds:
             timevar = ds["time"]
             if timevar.ndim > 1:
@@ -360,10 +367,7 @@ class BaseSimulation:
             for field in self._fields.values():
                 if field.ndim == 0:
                     continue
-                unmasked = True
-                if not field.on_boundary:
-                    unmasked = np.isin(field.grid.mask.values, (1, 2))
-                unmasked = np.broadcast_to(unmasked, field.shape)
+                unmasked = ~field.mask
                 default_time_varying = (
                     TimeVarying.MACRO if field.z else TimeVarying.MICRO
                 )
@@ -376,7 +380,7 @@ class BaseSimulation:
         if self._cached_check_finite_info is None:
             self._cached_check_finite_info = _collect_info()
         checklist = self._cached_check_finite_info[1 if macro_active else 0]
-        bad_fields: List[str] = []
+        bad_fields: list[str] = []
         for field, unmasked in checklist:
             finite = np.isfinite(field.values)
             if not finite.all(where=unmasked):
@@ -524,8 +528,6 @@ class Simulation(BaseSimulation):
             )
             raise Exception("Dcrit < 2.5*Dmin")
 
-        self.rivers = domain.rivers
-
         HALO = 2
 
         self.runtype = runtype
@@ -559,6 +561,7 @@ class Simulation(BaseSimulation):
         )
 
         self.open_boundaries = self.T.open_boundaries
+        self.rivers = self.T.rivers
 
         self.U = self.T.ugrid
         self.V = self.T.vgrid
@@ -582,6 +585,7 @@ class Simulation(BaseSimulation):
                 standard_name="sea_surface_height_above_geopotential_datum",
                 _part_of_state=True,
                 _minimum=self.Dmin - self.T.H.all_values,
+                _valid_at=(CellType.BOUNDARY,),
             ),
         )
         self.T.zo = self.T.array(
@@ -589,7 +593,7 @@ class Simulation(BaseSimulation):
             units="m",
             long_name="surface elevation at previous microtimestep",
             fill_value=FILL_VALUE,
-            attrs=dict(_part_of_state=True),
+            attrs=dict(_part_of_state=True, _valid_at=self.T.z.attrs["_valid_at"]),
         )
         # Initialize elevation at all water points to 0
         self.T.z.fill(0.0)
@@ -601,14 +605,22 @@ class Simulation(BaseSimulation):
                 units="m",
                 long_name="surface elevation at macrotimestep",
                 fill_value=FILL_VALUE,
-                attrs=dict(_part_of_state=True, _time_varying=TimeVarying.MACRO),
+                attrs=dict(
+                    _part_of_state=True,
+                    _time_varying=TimeVarying.MACRO,
+                    _valid_at=self.T.z.attrs["_valid_at"],
+                ),
             )
             self.T.zio = self.T.array(
                 name="ziot",
                 units="m",
                 long_name="surface elevation at previous macrotimestep",
                 fill_value=FILL_VALUE,
-                attrs=dict(_part_of_state=True, _time_varying=TimeVarying.MACRO),
+                attrs=dict(
+                    _part_of_state=True,
+                    _time_varying=TimeVarying.MACRO,
+                    _valid_at=self.T.zin.attrs["_valid_at"],
+                ),
             )
 
             for grid in (self.T, self.U, self.V):
@@ -618,6 +630,7 @@ class Simulation(BaseSimulation):
                     units="m",
                     long_name="cell thickness at previous time step",
                     fill_value=FILL_VALUE,
+                    attrs=dict(_valid_at=grid.hn.attrs["_valid_at"]),
                 )
 
             # On T grid, ho cannot be computed from zio,
@@ -657,9 +670,10 @@ class Simulation(BaseSimulation):
                 long_name="pressure",
                 fabm_standard_name="depth",
                 fill_value=FILL_VALUE,
+                attrs=dict(_valid_at=(CellType.BOUNDARY,)),  # to compute density
             )
 
-        unmasked = self.T.mask != 0
+        unmasked = self.T.mask != CellType.UNRESOLVED
         self.total_volume_ref = (self.T.H * self.T.area).global_sum(where=unmasked)
         self.total_area = self.T.area.global_sum(where=unmasked)
 
@@ -671,7 +685,7 @@ class Simulation(BaseSimulation):
             self.logger.getChild("momentum"), self.T, runtype, advection_scheme
         )
 
-        self._cum_river_height_increase = np.zeros((len(domain.rivers),))
+        self._cum_river_height_increase = np.zeros((len(self.rivers),))
 
         #: Provider of air-water fluxes of heat and momentum.
         #: This must inherit from :class:`pygetm.airsea.Fluxes`
@@ -733,7 +747,7 @@ class Simulation(BaseSimulation):
 
         #: List of variables for which the domain-integrated total needs to be reported.
         #: These can be depth-integrated (2D) or depth-explicit (3D).
-        self.tracer_totals: List[pygetm.tracer.TracerTotal] = []
+        self.tracer_totals: list[pygetm.tracer.TracerTotal] = []
 
         self.fabm = None
 
@@ -744,7 +758,11 @@ class Simulation(BaseSimulation):
             units="degrees_Celsius",
             long_name="sea surface temperature",
             fill_value=FILL_VALUE,
-            attrs=dict(standard_name="sea_surface_temperature", _mask_output=True),
+            attrs=dict(
+                standard_name="sea_surface_temperature",
+                _mask_output=True,
+                _valid_at=(CellType.BOUNDARY,),
+            ),
         )
         self.ssu = self.T.array(fill=0.0)
         self.ssv = self.T.array(fill=0.0)
@@ -877,14 +895,18 @@ class Simulation(BaseSimulation):
                 long_name="density",
                 fabm_standard_name="density",
                 fill_value=FILL_VALUE,
-                attrs=dict(standard_name="sea_water_density", _mask_output=True),
+                attrs=dict(
+                    standard_name="sea_water_density",
+                    _mask_output=True,
+                    _valid_at=(CellType.BOUNDARY,),
+                ),
             )
             self.buoy = self.T.array(
                 z=CENTERS,
                 name="buoy",
                 units="m s-2",
                 long_name="buoyancy",
-                attrs=dict(_mask_output=True),
+                attrs=dict(_mask_output=True, _valid_at=(CellType.BOUNDARY,)),
             )
             self.tracer_totals += [
                 pygetm.tracer.TracerTotal(
@@ -957,11 +979,13 @@ class Simulation(BaseSimulation):
             self.momentum.uk if self.runtype > RunType.BAROTROPIC_2D else None,
             self.momentum.vk if self.runtype > RunType.BAROTROPIC_2D else None,
         )
-        # Ensure U and V points at the land-water interface have non-zero water depth
-        # and layer thickness, as (zero) transports at these points will be divided by
-        # these quantities
+        # Ensure U and V points at the land-water interface have finite and non-zero
+        # water depth and layer thickness, as (zero) transports at these points will
+        # be divided by these quantities to compute velocities, which in turn are
+        # needed to compute Coriolis and bottom friction terms.
+        # NB update_depth will not set these, as they are unresolved (mask=0)
         for grid in (self.U, self.V):
-            edges = grid._water_contact & grid._land
+            edges = grid._edge_x | grid._edge_y
             grid.D.all_values[edges] = FILL_VALUE
             if grid.hn is not None:
                 grid.hn.all_values[..., edges] = FILL_VALUE
@@ -1410,9 +1434,9 @@ class Simulation(BaseSimulation):
     @property
     def totals(
         self,
-    ) -> Tuple[
+    ) -> tuple[
         Optional[float],
-        Optional[Sequence[Tuple[pygetm.tracer.TracerTotal, float, float]]],
+        Optional[Sequence[tuple[pygetm.tracer.TracerTotal, float, float]]],
     ]:
         """Global totals of volume and tracers.
 
@@ -1420,7 +1444,7 @@ class Simulation(BaseSimulation):
             A tuple with total volume and a list with (tracer_total, total, mean)
             tuples on the root subdomains. On non-root subdomains it returns None, None
         """
-        unmasked = self.T.mask != 0
+        unmasked = self.T.mask != CellType.UNRESOLVED
         total_volume = (self.T.D * self.T.area).global_sum(where=unmasked)
         if any(tt.per_mass for tt in self.tracer_totals):
             vol = self.T.hn * self.T.area
@@ -1440,7 +1464,7 @@ class Simulation(BaseSimulation):
                 if tt.per_mass:
                     total.all_values *= self.rho.all_values
                 total.all_values *= grid.hn.all_values
-            total = total.global_sum(where=grid.mask != 0)
+            total = total.global_sum(where=grid.mask != CellType.UNRESOLVED)
             if total is not None:
                 ref = total_volume if not tt.per_mass else total_mass
                 mean = (total / ref - tt.offset) / tt.scale_factor
@@ -1498,8 +1522,10 @@ class Simulation(BaseSimulation):
         return 0.5 * rho0 * self.T.area * vel2_D2 / self.T.D
 
     def update_depth(self, _3d: bool = False, timestep: float = 0.0):
-        """Use old and new surface elevation on T grid to update elevations on
-        U, V, X grids and subsequently update total water depth ``D`` on all grids.
+        """Use old and new surface elevation on T grid to calculate elevations on
+        U, V, X grids. Subsequently update total water depth ``D`` on all grids.
+        If ``_3d`` is True, also update layer thicknesses ``hn``, layer center
+        depths ``zc`` and interface depths ``zf`` on all grids.
 
         Args:
             _3d: update elevations of the macrotimestep (``zin``) rather than

@@ -1,4 +1,4 @@
-from typing import Iterable, Mapping, Optional, Tuple, Union, Any, List, Dict
+from typing import Iterable, Mapping, Optional, Union, Any
 import logging
 import functools
 import pickle
@@ -29,7 +29,7 @@ LOGFILE_PREFIX = "getm-"
 
 
 def get_logger(level=logging.INFO, comm=MPI.COMM_WORLD) -> logging.Logger:
-    handlers: List[logging.Handler] = []
+    handlers: list[logging.Handler] = []
     if comm.rank == 0:
         handlers.append(logging.StreamHandler())
     if comm.size > 1:
@@ -198,7 +198,7 @@ class Tiling:
         self.bottomleft = find_neighbor(-1, -1)
         self.bottomright = find_neighbor(-1, +1)
 
-        self._caches: Dict[Tuple[Tuple[int, ...], DTypeLike, Any], np.ndarray] = {}
+        self._caches: dict[tuple[tuple[int, ...], DTypeLike, Any], np.ndarray] = {}
         self.nx_glob = None
 
     @property
@@ -310,7 +310,7 @@ class Tiling:
         haloy_sub: int = 0,
         scale: int = 1,
         share: int = 0,
-    ) -> Union[Tuple[slice, slice], Tuple[None, None]]:
+    ) -> Union[tuple[slice, slice], tuple[None, None]]:
         if irow is None:
             irow = self.irow
         if icol is None:
@@ -352,11 +352,11 @@ class Tiling:
         share: int = 0,
         exclude_halos: bool = True,
         exclude_global_halos: bool = False,
-    ) -> Tuple[
-        Tuple[Any, slice, slice],
-        Tuple[Any, slice, slice],
-        Tuple[int, int],
-        Tuple[int, int],
+    ) -> tuple[
+        tuple[Any, slice, slice],
+        tuple[Any, slice, slice],
+        tuple[int, int],
+        tuple[int, int],
     ]:
         """Determine the activate extent of a subdomain in terms of the slices
         spanned in subdomain arrays and in global arrays
@@ -528,7 +528,7 @@ class Tiling:
 
     def _get_work_array(
         self,
-        shape: Tuple[int, ...],
+        shape: tuple[int, ...],
         dtype: DTypeLike,
         fill_value: Optional[float] = None,
     ) -> np.ndarray:
@@ -606,12 +606,12 @@ class DistributedArray:
         overlap: int = 0,
     ):
         self.rank = tiling.rank
-        self.group2task: List[
-            Tuple[
-                List[MPI.Prequest],
-                List[MPI.Prequest],
-                List[Tuple[np.ndarray, np.ndarray]],
-                List[Tuple[np.ndarray, np.ndarray]],
+        self.group2task: list[
+            tuple[
+                list[MPI.Prequest],
+                list[MPI.Prequest],
+                list[tuple[np.ndarray, np.ndarray]],
+                list[tuple[np.ndarray, np.ndarray]],
             ]
         ] = [([], [], [], []) for _ in range(max(Neighbor) + 1)]
         self.halo2name = {}
@@ -619,8 +619,8 @@ class DistributedArray:
         def add_task(
             recvtag: Neighbor,
             sendtag: Neighbor,
-            outer_slice: Tuple[slice, slice],
-            inner_slice: Tuple[slice, slice],
+            outer_slice: tuple[slice, slice],
+            inner_slice: tuple[slice, slice],
         ):
             outer = field[(Ellipsis,) + outer_slice]
             inner = field[(Ellipsis,) + inner_slice]
@@ -759,7 +759,7 @@ class Gather:
     def __init__(
         self,
         tiling: Tiling,
-        shape: Tuple[int, ...],
+        shape: tuple[int, ...],
         dtype: DTypeLike,
         fill_value=None,
         root: int = 0,
@@ -889,8 +889,8 @@ class GatherFromIndices:
         self,
         comm: MPI.Comm,
         local2global: np.ndarray,
-        index_shape: Tuple[int, ...],
-        nonindexed_shape: Tuple[int, ...],
+        index_shape: tuple[int, ...],
+        nonindexed_shape: tuple[int, ...],
         dtype: DTypeLike,
         *,
         fill_value=None,
@@ -988,6 +988,18 @@ def find_optimal_divison(
 
     mask = np.asarray(mask)
     ny, nx = mask.shape
+
+    # For land-only domains, return empty decomposition
+    if not mask.any():
+        return {
+            "ncpus": 0,
+            "nx": 0,
+            "ny": 0,
+            "xoffset": 0,
+            "yoffset": 0,
+            "cost": 0,
+            "map": np.zeros((1, 1), dtype=np.intc),
+        }
 
     # If we only have 1 CPU, just use the full domain
     if ncpus == 1:

@@ -1,5 +1,4 @@
 import unittest
-from typing import Tuple
 import logging
 
 import numpy as np
@@ -10,7 +9,7 @@ TOLERANCE = 1e-14
 
 
 class TestRadiation(unittest.TestCase):
-    def create_grid(self) -> Tuple[pygetm.core.Grid, logging.Logger]:
+    def create_grid(self) -> tuple[pygetm.core.Grid, logging.Logger]:
         vc = pygetm.vertical_coordinates.Sigma(30, ddu=2.0)
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),

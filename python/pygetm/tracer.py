@@ -1,9 +1,16 @@
-from typing import Mapping, Optional, List, Sequence, NamedTuple
+from typing import Mapping, Optional, Sequence, NamedTuple
 import logging
 
 import numpy as np
 
-from .constants import ZERO_GRADIENT, CENTERS, INTERFACES, TimeVarying, FILL_VALUE
+from .constants import (
+    ZERO_GRADIENT,
+    CENTERS,
+    INTERFACES,
+    TimeVarying,
+    FILL_VALUE,
+    CellType,
+)
 from . import core
 from . import rivers
 from .open_boundaries import ArrayOpenBoundaries
@@ -77,7 +84,9 @@ class Tracer(core.Array):
             **kwargs: keyword arguments to be passed to :class:`pygetm.core.Array`
         """
         kwargs.setdefault("attrs", {}).update(
-            _part_of_state=True, _time_varying=TimeVarying.MACRO
+            _part_of_state=True,
+            _time_varying=TimeVarying.MACRO,
+            _valid_at=(CellType.BOUNDARY,),
         )
         super().__init__(grid=grid, shape=grid.hn.all_values.shape, **kwargs)
 
@@ -135,7 +144,7 @@ class TracerCollection(Sequence[Tracer]):
         self.logger.info(f"Crank-Nicolson parameter: {cnpar}")
 
         self.grid: core.Grid = grid
-        self._tracers: List[Tracer] = []
+        self._tracers: list[Tracer] = []
         self._source = grid.array(z=CENTERS)
         self._advection = operators.Advection(grid, scheme=advection_scheme)
         self._vertical_diffusion = operators.VerticalDiffusion(grid, cnpar=cnpar)
@@ -146,19 +155,17 @@ class TracerCollection(Sequence[Tracer]):
             units="m2 s-1",
             long_name="horizontal diffusivity of tracers",
             fill_value=FILL_VALUE,
-            attrs=dict(_require_halos=True, _time_varying=False),
+            attrs=dict(
+                _require_halos=True, _time_varying=False, _valid_at=(CellType.BOUNDARY,)
+            ),
         )
         self.Ah.fill(0.0)
         self.Ah_u = self.Ah_v = None
 
     def start(self):
         self.Ah.update_halos()
-        self.Ah.all_values[self.grid._land] = self.Ah.fill_value
-        if (self.Ah.all_values[self.grid._water] == 0.0).all():
-            self.logger.info(
-                "Disabling horizontal diffusion because Ah is 0 everywhere"
-            )
-        else:
+        self.Ah.all_values[self.Ah.all_mask] = self.Ah.fill_value
+        if self.Ah.all_values.any(where=~self.Ah.all_mask):
             self.logger.info(
                 f"Horizontal diffusivity Ah ranges between {self.Ah.ma.min()}"
                 f" and {self.Ah.ma.max()} m2 s-1"
@@ -169,6 +176,10 @@ class TracerCollection(Sequence[Tracer]):
             self.Ah.interp(self.Ah_v)
             self.Ah_u.update_halos()
             self.Ah_v.update_halos()
+        else:
+            self.logger.info(
+                "Disabling horizontal diffusion because Ah is 0 everywhere"
+            )
 
     def __getitem__(self, index: int) -> Tracer:
         return self._tracers[index]

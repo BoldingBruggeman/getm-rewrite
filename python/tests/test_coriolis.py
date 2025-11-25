@@ -70,8 +70,12 @@ class TestCoriolis(unittest.TestCase):
             sim.V.mask.all_values != 0, v * h, 0.0
         )
 
-        self.assertTrue((sim.U.hn.ma == h).all())
-        self.assertTrue((sim.V.hn.ma == h).all())
+        self.assertTrue(
+            (sim.U.hn.all_values == h).all(where=sim.U.mask.all_values != 0)
+        )
+        self.assertTrue(
+            (sim.V.hn.all_values == h).all(where=sim.V.mask.all_values != 0)
+        )
 
         sim.momentum.coriolis(sim.momentum.pk, sim.momentum.corqk, True)
         sim.momentum.coriolis(sim.momentum.qk, sim.momentum.corpk, False)

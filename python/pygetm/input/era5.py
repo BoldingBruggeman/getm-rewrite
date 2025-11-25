@@ -1,4 +1,4 @@
-from typing import Iterable, Optional, List, Mapping, Tuple, Union
+from typing import Iterable, Optional, Mapping, Union
 import multiprocessing
 import os
 import argparse
@@ -38,8 +38,8 @@ DEFAULT_VARIABLES = ("u10", "v10", "t2m", "d2m", "sp", "tcc", "tp")
 
 def _download_year(
     year: int,
-    area: List[float],
-    variables: List[str],
+    area: list[float],
+    variables: list[str],
     fmt: str,
     path: Path,
     complevel: int = 0,
@@ -82,7 +82,7 @@ def get(
     cdsapirc: Union[os.PathLike, str, bytes, None] = None,
     logger: Optional[logging.Logger] = None,
     **kwargs,
-) -> Mapping[Tuple[int, str], Path]:
+) -> Mapping[tuple[int, str], Path]:
     logging.basicConfig(level=logging.INFO)
     logger = logger or logging.getLogger()
 
@@ -129,7 +129,7 @@ def get(
     years = range(start_year, stop_year + 1)
     pool = multiprocessing.Pool(processes=len(years) * len(variables))
     ext = "nc" if fmt == "netcdf" else "grib"
-    tasks: List[Tuple[int, str, multiprocessing.pool.AsyncResult]] = []
+    tasks: list[tuple[int, str, multiprocessing.pool.AsyncResult]] = []
     for year in years:
         logger.info(f"  {year}:")
         for variable in variables:

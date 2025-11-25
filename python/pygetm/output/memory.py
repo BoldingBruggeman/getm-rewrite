@@ -1,4 +1,4 @@
-from typing import Optional, List, Mapping, Tuple
+from typing import Optional, Mapping
 
 import numpy as np
 import numpy.typing as npt
@@ -13,9 +13,9 @@ class MemoryFile(File):
     def start_now(
         self, seconds_passed: float, time: Optional[cftime.datetime], *args, **kwargs
     ) -> bool:
-        self._times: Optional[List[cftime.datetime]] = None if time is None else []
-        self._seconds: List[float] = []
-        self._recorded_fields: Mapping[str, Tuple[Base, List[np.ndarray]]] = {}
+        self._times: Optional[list[cftime.datetime]] = None if time is None else []
+        self._seconds: list[float] = []
+        self._recorded_fields: Mapping[str, tuple[Base, list[np.ndarray]]] = {}
         for name, field in self.fields.items():
             if field.time_varying:
                 self._recorded_fields[name] = (field, [])

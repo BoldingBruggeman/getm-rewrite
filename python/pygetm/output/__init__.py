@@ -1,5 +1,5 @@
 import logging
-from typing import Mapping, Optional, List, Union
+from typing import Mapping, Optional, Union, TYPE_CHECKING
 import datetime
 import enum
 import os
@@ -9,6 +9,11 @@ import cftime
 
 from .. import core
 from . import operators
+
+if TYPE_CHECKING:
+    from . import netcdf
+    from . import memory
+    from . import zarr
 
 
 class TimeUnit(enum.Enum):
@@ -30,6 +35,46 @@ time_unit2seconds = {
 
 
 class File(operators.FieldCollection):
+    @staticmethod
+    def get_cf_time_attrs(
+        time: Optional[cftime.datetime],
+        seconds_passed: float,
+        time_reference: Optional[cftime.datetime],
+    ) -> tuple[dict[str, str], float]:
+        """Get CF-compliant time attributes and offset for output files.
+
+        This method generates metadata attributes for time variables following
+        the Climate and Forecast (CF) conventions, along with a time offset
+        to align the time coordinate with the reference time.
+
+        Args:
+            time: The current simulation time. If None, time is measured only as
+                seconds since simulation start.
+            seconds_passed: Total number of seconds elapsed since the simulation
+                started.
+            time_reference: Reference time for CF-compliant time units. This is
+                typically the start time of the first simulation in a series.
+                Only used when time is not None.
+
+        Returns:
+            A tuple containing:
+                - attrs: Dictionary of CF-compliant attributes for the time variable,
+                  including "axis", "units", and optionally "calendar" or "standard_name"
+                - time_offset: Offset in seconds between the time reference and the
+                  start of seconds_passed counting (0.0 if counting starts from
+                  time_reference)
+        """
+        attrs = {"axis": "T"}
+        if time is not None:
+            attrs["units"] = f"seconds since {time_reference:%Y-%m-%d %H:%M:%S}"
+            attrs["calendar"] = time.calendar
+            time_offset = (time - time_reference).total_seconds() - seconds_passed
+        else:
+            attrs["units"] = "s"
+            attrs["standard_name"] = "time"
+            time_offset = 0.0
+        return attrs, time_offset
+
     def __init__(
         self,
         available_fields: Mapping[str, core.Array],
@@ -41,6 +86,7 @@ class File(operators.FieldCollection):
         default_dtype: Optional[DTypeLike] = None,
         save_initial: bool = True,
         sub: bool = False,
+        add_coordinates: bool = True,
     ):
         """
         Args:
@@ -71,6 +117,7 @@ class File(operators.FieldCollection):
             self.interval_units == TimeUnit.TIMESTEPS and self.interval == -1
         )
         self.save_initial = save_initial and not self.save_on_close_only
+        self._add_coordinates = add_coordinates
 
         self._start = start
         self._stop = stop
@@ -114,7 +161,8 @@ class File(operators.FieldCollection):
                 f"For {self.interval_units} to be used, OutputManager.start should be"
                 " called with an actual cftime.datetime object."
             )
-        self.add_coordinates()
+        if self._add_coordinates:
+            self.add_coordinates()
         active = self.start_now(seconds_passed, time, default_time_reference or time)
         if self.save_initial:
             self._logger.debug("Saving initial state")
@@ -154,12 +202,22 @@ class File(operators.FieldCollection):
     def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         pass
 
+    def select_nonempty_fields(self) -> Mapping[str, core.Array]:
+        """Get all fields that contain data.
 
-# Note: specific file types cannot be imported before File is defined,
-# because that is imported by those types itself.
-# If this import statement came earlier, it would cause a circular dependency error.
-from . import netcdf
-from . import memory
+        Returns:
+            Mapping of field names to arrays for all fields that contain data.
+        """
+        included_fields = {}
+        for output_name, field in self.fields.items():
+            if 0 in field.shape:
+                self._logger.warning(
+                    f"Skipping {output_name} because it contains no data"
+                    f" (shape={field.shape})"
+                )
+            else:
+                included_fields[output_name] = field
+        return included_fields
 
 
 class OutputManager:
@@ -171,16 +229,16 @@ class OutputManager:
     ):
         self.fields = fields
         self.rank = rank
-        self._files: List[File] = []
-        self._active_files: List[File] = []
-        self._startable_files: List[File] = []
-        self._stoppable_files: List[File] = []
+        self._files: list[File] = []
+        self._active_files: list[File] = []
+        self._startable_files: list[File] = []
+        self._stoppable_files: list[File] = []
         self._time_reference = None
         self._logger = logger or logging.getLogger()
 
     def add_netcdf_file(
         self, path: Union[os.PathLike[str], str], **kwargs
-    ) -> netcdf.NetCDFFile:
+    ) -> "netcdf.NetCDFFile":
         """Add a NetCDF file for output.
 
         Args:
@@ -188,6 +246,8 @@ class OutputManager:
             **kwargs: additional keyword arguments passed to
                 :class:`pygetm.output.netcdf.NetCDFFile`
         """
+        from . import netcdf
+
         self._logger.debug(f"Adding NetCDF file {path}")
         file = netcdf.NetCDFFile(
             self.fields,
@@ -199,13 +259,36 @@ class OutputManager:
         self._files.append(file)
         return file
 
-    def add_recorder(self, **kwargs) -> memory.MemoryFile:
+    def add_zarr_group(self, store: "zarr.StoreLike", **kwargs) -> "zarr.ZarrGroup":
+        """Add a Zarr group for output.
+
+        Args:
+            store: Zarr group to write to.
+            **kwargs: additional keyword arguments passed to
+                :class:`pygetm.output.zarr.ZarrGroup`
+        """
+        from . import zarr
+
+        self._logger.debug(f"Adding Zarr group {store}")
+        file = zarr.ZarrGroup(
+            self.fields,
+            self._logger.getChild(str(store)),
+            store,
+            rank=self.rank,
+            **kwargs,
+        )
+        self._files.append(file)
+        return file
+
+    def add_recorder(self, **kwargs) -> "memory.MemoryFile":
         """Add an in-memory file to record output.
 
         Args:
             **kwargs: additional keyword arguments passed to
                 :class:`pygetm.output.File`
         """
+        from . import memory
+
         self._logger.debug("Adding in-memory file")
         file = memory.MemoryFile(
             self.fields, self._logger.getChild("memfile"), **kwargs
@@ -215,7 +298,7 @@ class OutputManager:
 
     def add_restart(
         self, path: Union[os.PathLike[str], str], **kwargs
-    ) -> netcdf.NetCDFFile:
+    ) -> "netcdf.NetCDFFile":
         """Add a restart file to write to.
 
         Args:
@@ -243,6 +326,8 @@ class OutputManager:
         time: Optional[cftime.datetime] = None,
         **kwargs,
     ):
+        from . import netcdf
+
         kwargs.setdefault("time_reference", self._time_reference)
         file = netcdf.NetCDFFile(
             self.fields,

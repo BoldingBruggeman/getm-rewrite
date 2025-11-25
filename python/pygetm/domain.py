@@ -1,4 +1,4 @@
-from typing import Mapping, Optional, Tuple, Union, Iterable, Any, TYPE_CHECKING
+from typing import Mapping, Optional, Union, Iterable, Any, TYPE_CHECKING
 import enum
 import functools
 import logging
@@ -11,7 +11,7 @@ from . import core
 from . import parallel
 from . import rivers
 from . import open_boundaries
-from .constants import CoordinateType, GRAVITY
+from .constants import CoordinateType, CellType, GRAVITY
 
 if TYPE_CHECKING:
     import matplotlib.figure
@@ -515,7 +515,7 @@ class Domain:
         self.open_boundaries = open_boundaries.GlobalOpenBoundaryCollection(
             nx, ny, self.logger.getChild("open_boundaries")
         )
-        self.rivers = rivers.Rivers(
+        self.rivers = rivers.GlobalRiverCollection(
             nx, ny, coordinate_type, self.logger.getChild("rivers")
         )
         self.default_output_transforms = []
@@ -978,7 +978,6 @@ class Domain:
             X = create_grid("x", 0, 0, overlap=1, istart=0, jstart=0)
 
         T = create_grid(t_postfix, 1, 1, ugrid=U, vgrid=V, xgrid=X)
-        T.rivers = self.rivers
 
         if velocity_grids > 0:
             T.infer_water_contact()
@@ -991,20 +990,21 @@ class Domain:
             # No transport between velocity points along an open boundary (just outside)
             # This is done to state that no valid values (in e.g. h and D) are required
             # in these points.
+            U_mirror_ext = U.mask.all_values == CellType.MIRROR_EXT
             UV.mask.all_values[:-1, :][
-                (U.mask.all_values[:-1, :] == 4) & (U.mask.all_values[1:, :] == 4)
-            ] = 0
+                U_mirror_ext[:-1, :] & U_mirror_ext[1:, :]
+            ] = CellType.UNRESOLVED
+            V_mirror_ext = V.mask.all_values == CellType.MIRROR_EXT
             VU.mask.all_values[:, :-1][
-                (V.mask.all_values[:, :-1] == 4) & (V.mask.all_values[:, 1:] == 4)
-            ] = 0
+                V_mirror_ext[:, :-1] & V_mirror_ext[:, 1:]
+            ] = CellType.UNRESOLVED
 
         T.freeze()
 
         open_boundaries.LocalOpenBoundaryCollection(
             self.open_boundaries, T, logger=self.logger
         )
-
-        self.rivers.initialize(T)
+        T.rivers = self.rivers.initialize(T)
 
         return T
 
@@ -1111,7 +1111,7 @@ class Domain:
     @apply_on_root_and_bcast
     def cfl_check(
         self, z: float = 0.0, return_location: bool = False
-    ) -> Union[float, Tuple[float, int, int, float]]:
+    ) -> Union[float, tuple[float, int, int, float]]:
         """Determine maximum time step (s) for depth-integrated equations
 
         Args:
@@ -1141,7 +1141,7 @@ class Domain:
 
     def get_rx0(
         self, zmin: float = 0.0, Dmin: float = 0.0
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Calculates the slope factor ``rx0`` as defined in
         https://doi.org/10.1016/j.ocemod.2009.03.009
 
@@ -1480,11 +1480,13 @@ class Domain:
                 MAP[b.side], l, mstart, mstop, type_2d=b.type_2d, type_3d=b.type_3d
             )
         for r in self.rivers.values():
-            if r.i_glob is not None and r.j_glob is not None:
-                rot_r = rotated_domain.rivers.add_by_index(
-                    r.name, r.j_glob, self.nx - 1 - r.i_glob
-                )
-            for att in ("original_name", "split", "zl", "zu"):
+            x, y = r.x, r.y
+            if r.coordinate_type == CoordinateType.IJ:
+                x, y = y, self.nx - 1 - x
+            rot_r = rotated_domain.rivers.add_by_location(
+                r.name, x, y, r.coordinate_type, zl=r.zl, zu=r.zu
+            )
+            for att in ("original_name", "split"):
                 if hasattr(r, att):
                     setattr(rot_r, att, getattr(r, att))
         return rotated_domain
@@ -1496,12 +1498,12 @@ class Domain:
         y: float,
         *,
         coordinate_type: Optional[CoordinateType] = None,
-        allowed_mask: Iterable[int] = (1,),
-    ) -> Tuple[int, int]:
+        valid_cell_types: Iterable[CellType] = (CellType.ACTIVE,),
+    ) -> tuple[int, int]:
         if coordinate_type is None:
             coordinate_type = self.coordinate_type
         return self._tlocator()(
-            x, y, coordinate_type=coordinate_type, allowed_mask=allowed_mask
+            x, y, coordinate_type=coordinate_type, valid_cell_types=valid_cell_types
         )
 
     def plot(
@@ -1604,7 +1606,7 @@ class Domain:
         if show_rivers and self.rivers:
             self.rivers.map_to_grid(self._tlocator(mask))
             for river in self.rivers.global_rivers:
-                i_sup, j_sup = 1 + river.i_glob * 2, 1 + river.j_glob * 2
+                i_sup, j_sup = 1 + river.i * 2, 1 + river.j * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]
                 ax.plot([river_x], [river_y], ".r")
                 ax.text(river_x, river_y, river.name, color="r")

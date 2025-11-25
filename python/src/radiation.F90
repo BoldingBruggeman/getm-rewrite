@@ -18,7 +18,7 @@ contains
       cumkc = 0._c_double
       do k=nz,1,-1
          hkc = h(:,:,k) * kc(:,:,k)
-         where (mask /= 0) out(:,:,k) = top * exp(-(cumkc + 0.5_c_double * hkc))
+         where (mask == 1) out(:,:,k) = top * exp(-(cumkc + 0.5_c_double * hkc))
          cumkc = cumkc + hkc
       end do
    end subroutine
@@ -45,11 +45,11 @@ contains
          h_offset = 1
       end if
 
-      where (mask /= 0) out(:,:,kstart) = initial
+      where (mask == 1) out(:,:,kstart) = initial
       cumkc = 0._c_double
       do k = kstart + kstep, kstop, kstep
          cumkc = cumkc + kc(:,:,k+h_offset) * h(:,:,k+h_offset)
-         where (mask /= 0) out(:,:,k) = initial * exp(-cumkc)
+         where (mask == 1) out(:,:,k) = initial * exp(-cumkc)
       end do
    end subroutine
 

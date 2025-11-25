@@ -1,6 +1,7 @@
 import logging
-from typing import List, Optional, MutableMapping, Iterable
+from typing import Optional, MutableMapping, Iterable
 import os
+import contextlib
 
 import numpy as np
 import cftime
@@ -38,7 +39,7 @@ class FABM:
         self,
         grid: core.Grid,
         tracer_collection: tracer.TracerCollection,
-        tracer_totals: List[tracer.TracerTotal],
+        tracer_totals: list[tracer.TracerTotal],
         logger: logging.Logger,
     ):
         self.grid = grid
@@ -218,22 +219,16 @@ class FABM:
                         shape = self.model.horizontal_domain_shape
                     variable.link(field.all_values.reshape(shape))
 
-        try:
+        with contextlib.suppress(KeyError):
             self._yearday = self.model.dependencies[
                 "number_of_days_since_start_of_the_year"
             ]
-        except KeyError:
-            pass
 
-        try:
+        with contextlib.suppress(KeyError):
             self._nyear = self.model.dependencies["number_of_days_in_year"]
-        except KeyError:
-            pass
 
-        try:
+        with contextlib.suppress(KeyError):
             self.model.dependencies["maximum_time_step"].value = timestep
-        except KeyError:
-            pass
 
         if self._yearday or self._nyear:
             self._yearstart = cftime.datetime(time.year, 1, 1, calendar=time.calendar)
@@ -270,16 +265,9 @@ class FABM:
         )
 
         # Apply mask to all state variables (interior, bottom, surface)
-        for variable in self.model.interior_state_variables:
+        for variable in self.model.state_variables:
             array = self._variable2array[variable]
-            mask = getattr(self.grid, "_land3d", self.grid._land)
-            array.all_values[..., mask] = variable.missing_value
-        for variable in self.model.bottom_state_variables:
-            array = self._variable2array[variable]
-            array.all_values[..., self.grid._land] = variable.missing_value
-        for variable in self.model.surface_state_variables:
-            array = self._variable2array[variable]
-            array.all_values[..., self.grid._land] = variable.missing_value
+            array.all_values[array.all_mask] = variable.missing_value
 
         if self.kc_variable is not None:
             data = self.kc_variable.value
