@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, MutableMapping, Iterable
+from typing import Optional, MutableMapping, Iterable, Union
 import os
 import contextlib
 
@@ -16,14 +16,14 @@ from .constants import TimeVarying
 class FABM:
     def __init__(
         self,
-        path: str = "fabm.yaml",
+        path: Union[os.PathLike[str], str] = "fabm.yaml",
         repair: bool = True,
         bioshade_feedback: bool = False,
         libname: str = os.path.join(os.path.dirname(__file__), "fabm"),
         time_varying: TimeVarying = TimeVarying.MACRO,
         squeeze: bool = False,
     ):
-        self.path = path
+        self.path = str(path)
         self.repair = repair
         self.bioshade_feedback: bool = bioshade_feedback
         self.libname = libname
