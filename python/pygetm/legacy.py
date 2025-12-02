@@ -30,7 +30,6 @@ def domain_from_topo(
         yname, xname = H.dimensions
         if hasattr(H, "missing_value"):
             H = np.ma.masked_equal(H, H.missing_value)
-        mask = np.where(np.ma.getmaskarray(H), 0, 1)
 
         # Follow legacy GETM in inferring regularly spaced grids from
         # first and last value. This could improve accuracy if values in the topo
@@ -40,20 +39,20 @@ def domain_from_topo(
         x = np.linspace(ncx[0], ncx[-1], ncx.size, dtype=float)
         y = np.linspace(ncy[0], ncy[-1], ncy.size, dtype=float)
 
-        return x, y, H, mask
+        return x, y, H
 
     with netCDF4.Dataset(path) as nc:
         grid_type = int(np.reshape(nc["grid_type"], ()))
         if grid_type == 1:
             # Cartesian
-            x, y, H, mask = _get_metrics(nc)
+            x, y, H = _get_metrics(nc)
             kwargs.setdefault("lon", nc.variables.get("lonc", None))
             kwargs.setdefault("lat", nc.variables.get("latc", None))
-            domain = pygetm.domain.create_cartesian(x, y, H=H, mask=mask, **kwargs)
+            domain = pygetm.domain.create_cartesian(x, y, H=H, **kwargs)
         elif grid_type == 2:
             # spherical
-            lon, lat, H, mask = _get_metrics(nc)
-            domain = pygetm.domain.create_spherical(lon, lat, H=H, mask=mask, **kwargs)
+            lon, lat, H = _get_metrics(nc)
+            domain = pygetm.domain.create_spherical(lon, lat, H=H, **kwargs)
         elif grid_type == 3:
             # planar curvilinear
             raise NotImplementedError(
