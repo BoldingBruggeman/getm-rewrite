@@ -34,9 +34,11 @@ class FABM:
             repair: Whether to attempt to repair invalid FABM state values
                 by clipping them to valid ranges.
             bioshade_feedback: Whether to obtain the attenuation coefficient
-                for photosynthetic active radiation from FABM. This will then
-                contribute to light absorption in the radiation module, which
-                in turn affects the heat distribution in the water column.
+                for photosynthetic active radiation from FABM. This will be
+                available as attribute :attr:`kc`. It can be used to contribute
+                to light absorption, e.g., by providing it as argument `kc2_add`
+                to :class:`pygetm.radiation.TwoBand`. There it in turn affects
+                the heat distribution in the water column.
             libname: Path to FABM shared library, excluding any platform-specific
                 prefix/suffix
             time_varying: Model step at which FABM variables will be updated.
@@ -191,13 +193,13 @@ class FABM:
         # Optionally request PAR attenuation coefficient from FABM for
         # feedbacks to physics
         self.kc = None
-        self.kc_variable = None
+        self._kc_variable = None
         if self.bioshade_feedback:
-            self.kc_variable = self.model.find_standard_variable(
+            self._kc_variable = self.model.find_standard_variable(
                 "attenuation_coefficient_of_photosynthetic_radiative_flux"
             )
-            if self.kc_variable is not None:
-                model.require_data(self.kc_variable)
+            if self._kc_variable is not None:
+                model.require_data(self._kc_variable)
                 self.kc = core.Array(
                     name="kc_fabm",
                     units="m-1",
@@ -293,8 +295,8 @@ class FABM:
             array = self._variable2array[variable]
             array.all_values[array.all_mask] = variable.missing_value
 
-        if self.kc_variable is not None:
-            data = self.kc_variable.value
+        if self._kc_variable is not None:
+            data = self._kc_variable.value
             data = data.reshape(self.grid.hn.all_values.shape)
             self.kc.wrap_ndarray(data, register=False)
 
