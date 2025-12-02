@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, Union
+import os
 
 import numpy as np
 import netCDF4
@@ -79,7 +80,7 @@ class DatFile:
     """Support for reading GETM dat files with comments indicated by ! or #.
     Whitespace-only lines are skipped."""
 
-    def __init__(self, path: str):
+    def __init__(self, path: Union[str, os.PathLike[str]]):
         self.path = path
         self.f = open(path)
 
@@ -103,7 +104,7 @@ class DatFile:
 
 def load_bdyinfo(
     domain: pygetm.domain.Domain,
-    path: str,
+    path: Union[str, os.PathLike[str]],
     type_2d: Optional[int] = None,
     type_3d: Optional[int] = None,
 ):
@@ -143,7 +144,7 @@ def load_bdyinfo(
                 )
 
 
-def load_riverinfo(domain: pygetm.domain.Domain, path: str):
+def load_riverinfo(domain: pygetm.domain.Domain, path: Union[str, os.PathLike[str]]):
     """Add rivers from riverinfo.dat to domain
 
     Args:
