@@ -220,6 +220,7 @@ class BaseSimulation:
         report: Union[int, datetime.timedelta] = 10,
         report_totals: Union[int, datetime.timedelta] = datetime.timedelta(days=1),
         profile: Optional[str] = None,
+        dump_on_error: bool = False,
     ):
         """Start a simulation by configuring the time, zeroing velocities, updating
         diagnostics to match the start time, and optionally saving output.
@@ -240,6 +241,9 @@ class BaseSimulation:
                 rank and extension ``.prof`` will be appended, so that the final name
                 becomes ``<profile>-<rank>.prof``. If the argument is not provided,
                 profiling is disabled.
+            dump_on_error: if True, when non-finite values are detected in the model
+                state or forcing, the current state will be saved to a NetCDF file
+                for debugging purposes.
         """
         self.time = to_cftime(time)
         self.logger.info(f"Starting simulation at {self.time}")
@@ -274,7 +278,7 @@ class BaseSimulation:
 
         # Verify all fields have finite values. Do this after self.output_manager.start
         # so the user can diagnose issues by reviewing the output
-        if not self.check_finite(dump=False):
+        if not self.check_finite(dump=dump_on_error):
             raise Exception("Initial state or forcing is invalid")
 
         # Record true start time for performance analysis
@@ -342,9 +346,15 @@ class BaseSimulation:
         if self._profile:
             name, pr = self._profile
             pr.disable()
-            profile_path = f"{name}-{self.tiling.rank:03}.prof"
-            self.logger.info(f"Writing profiling report to {profile_path}")
-            with open(profile_path, "w") as f:
+            prof_fn = f"{name}-{self.tiling.rank:03}.prof"
+            self.logger.info(
+                f"Writing profiling results to {prof_fn}"
+                " (view with snakeviz or similar)"
+            )
+            pr.dump_stats(prof_fn)
+            stats_fn = f"{name}-{self.tiling.rank:03}.prof.stats"
+            self.logger.info(f"Writing human-readable profiling summary to {stats_fn}")
+            with open(stats_fn, "w") as f:
                 ps = pstats.Stats(pr, stream=f).sort_stats(pstats.SortKey.TIME)
                 ps.print_stats()
                 self._summarize_profiling_result(ps)
@@ -1330,10 +1340,6 @@ class Simulation(BaseSimulation):
             self.report_domain_integrals()
 
     def _summarize_profiling_result(self, ps: pstats.Stats):
-        if not hasattr(ps, "get_stats_profile"):
-            # python < 3.9
-            return
-
         sp = ps.get_stats_profile()
         if "<built-in method Waitall>" not in sp.func_profiles:
             # not a parallel simulation, or advance was never called
@@ -1373,8 +1379,8 @@ class Simulation(BaseSimulation):
         z_if -= z_if[:, -1:]
 
         # Determine the part of every layer over which inflow occurs
-        zl = np.clip(rivers.zl, 1e-6, z_if[:, 0])
-        zu = np.clip(rivers.zu, 0.0, zl - 1e-6)
+        zl = rivers.zl.clip(1e-6, z_if[:, 0])
+        zu = rivers.zu.clip(0.0, zl - 1e-6)
         zbot = np.minimum(zl[:, np.newaxis], z_if[:, :-1])
         ztop = np.maximum(zu[:, np.newaxis], z_if[:, 1:])
         h_active = np.maximum(zbot - ztop, 0.0)
