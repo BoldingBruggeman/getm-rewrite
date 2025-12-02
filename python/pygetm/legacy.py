@@ -8,7 +8,9 @@ import pygetm.domain
 import pygetm.open_boundaries
 
 
-def domain_from_topo(path: str, **kwargs) -> pygetm.domain.Domain:
+def domain_from_topo(
+    path: Union[str, os.PathLike[str]], **kwargs
+) -> pygetm.domain.Domain:
     """Create a domain object from a topo.nc file used by legacy GETM.
 
     Args:
