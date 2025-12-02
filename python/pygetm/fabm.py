@@ -1,5 +1,6 @@
 import logging
-from typing import Optional, MutableMapping, Iterable, Union
+from typing import Any, Optional, Union
+from collections.abc import Iterable, Mapping, MutableMapping
 import os
 import contextlib
 
@@ -14,18 +15,43 @@ from .constants import TimeVarying
 
 
 class FABM:
+    """Interface to the Framework for Aquatic Biogeochemical Models (FABM)."""
+
     def __init__(
         self,
-        path: Union[os.PathLike[str], str] = "fabm.yaml",
+        path: Union[os.PathLike[str], str, Mapping[str, Any]] = "fabm.yaml",
         repair: bool = True,
         bioshade_feedback: bool = False,
         libname: str = os.path.join(os.path.dirname(__file__), "fabm"),
         time_varying: TimeVarying = TimeVarying.MACRO,
         squeeze: bool = False,
     ):
-        self.path = str(path)
+        """Initialize FABM interface.
+
+        Args:
+            path: Path to FABM configuration file, in YAML format, or a mapping
+                representing the parsed content of such a file.
+            repair: Whether to attempt to repair invalid FABM state values
+                by clipping them to valid ranges.
+            bioshade_feedback: Whether to obtain the attenuation coefficient
+                for photosynthetic active radiation from FABM. This will be
+                available as attribute :attr:`kc`. It can be used to contribute
+                to light absorption, e.g., by providing it as argument `kc2_add`
+                to :class:`pygetm.radiation.TwoBand`. There it in turn affects
+                the heat distribution in the water column.
+            libname: Path to FABM shared library, excluding any platform-specific
+                prefix/suffix
+            time_varying: Model step at which FABM variables will be updated.
+                FABM arrays will be flagged with this attribute to tell the
+                output manager when they are updated.
+            squeeze: Whether FABM's internal representation of arrays has all
+                singleton dimensions (with length 1) squeezed out.
+        """
+        if not isinstance(path, Mapping):
+            path = str(path)
+        self.path = path
         self.repair = repair
-        self.bioshade_feedback: bool = bioshade_feedback
+        self.bioshade_feedback = bioshade_feedback
         self.libname = libname
         self.time_varying = time_varying
         self.squeeze = squeeze
@@ -167,13 +193,13 @@ class FABM:
         # Optionally request PAR attenuation coefficient from FABM for
         # feedbacks to physics
         self.kc = None
-        self.kc_variable = None
+        self._kc_variable = None
         if self.bioshade_feedback:
-            self.kc_variable = self.model.find_standard_variable(
+            self._kc_variable = self.model.find_standard_variable(
                 "attenuation_coefficient_of_photosynthetic_radiative_flux"
             )
-            if self.kc_variable is not None:
-                model.require_data(self.kc_variable)
+            if self._kc_variable is not None:
+                model.require_data(self._kc_variable)
                 self.kc = core.Array(
                     name="kc_fabm",
                     units="m-1",
@@ -269,8 +295,8 @@ class FABM:
             array = self._variable2array[variable]
             array.all_values[array.all_mask] = variable.missing_value
 
-        if self.kc_variable is not None:
-            data = self.kc_variable.value
+        if self._kc_variable is not None:
+            data = self._kc_variable.value
             data = data.reshape(self.grid.hn.all_values.shape)
             self.kc.wrap_ndarray(data, register=False)
 
