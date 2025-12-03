@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, Union
+import os
 
 import numpy as np
 import netCDF4
@@ -7,7 +8,9 @@ import pygetm.domain
 import pygetm.open_boundaries
 
 
-def domain_from_topo(path: str, **kwargs) -> pygetm.domain.Domain:
+def domain_from_topo(
+    path: Union[str, os.PathLike[str]], **kwargs
+) -> pygetm.domain.Domain:
     """Create a domain object from a topo.nc file used by legacy GETM.
 
     Args:
@@ -27,7 +30,6 @@ def domain_from_topo(path: str, **kwargs) -> pygetm.domain.Domain:
         yname, xname = H.dimensions
         if hasattr(H, "missing_value"):
             H = np.ma.masked_equal(H, H.missing_value)
-        mask = np.where(np.ma.getmaskarray(H), 0, 1)
 
         # Follow legacy GETM in inferring regularly spaced grids from
         # first and last value. This could improve accuracy if values in the topo
@@ -37,20 +39,20 @@ def domain_from_topo(path: str, **kwargs) -> pygetm.domain.Domain:
         x = np.linspace(ncx[0], ncx[-1], ncx.size, dtype=float)
         y = np.linspace(ncy[0], ncy[-1], ncy.size, dtype=float)
 
-        return x, y, H, mask
+        return x, y, H
 
     with netCDF4.Dataset(path) as nc:
         grid_type = int(np.reshape(nc["grid_type"], ()))
         if grid_type == 1:
             # Cartesian
-            x, y, H, mask = _get_metrics(nc)
+            x, y, H = _get_metrics(nc)
             kwargs.setdefault("lon", nc.variables.get("lonc", None))
             kwargs.setdefault("lat", nc.variables.get("latc", None))
-            domain = pygetm.domain.create_cartesian(x, y, H=H, mask=mask, **kwargs)
+            domain = pygetm.domain.create_cartesian(x, y, H=H, **kwargs)
         elif grid_type == 2:
             # spherical
-            lon, lat, H, mask = _get_metrics(nc)
-            domain = pygetm.domain.create_spherical(lon, lat, H=H, mask=mask, **kwargs)
+            lon, lat, H = _get_metrics(nc)
+            domain = pygetm.domain.create_spherical(lon, lat, H=H, **kwargs)
         elif grid_type == 3:
             # planar curvilinear
             raise NotImplementedError(
@@ -79,7 +81,7 @@ class DatFile:
     """Support for reading GETM dat files with comments indicated by ! or #.
     Whitespace-only lines are skipped."""
 
-    def __init__(self, path: str):
+    def __init__(self, path: Union[str, os.PathLike[str]]):
         self.path = path
         self.f = open(path)
 
@@ -103,7 +105,7 @@ class DatFile:
 
 def load_bdyinfo(
     domain: pygetm.domain.Domain,
-    path: str,
+    path: Union[str, os.PathLike[str]],
     type_2d: Optional[int] = None,
     type_3d: Optional[int] = None,
 ):
@@ -143,7 +145,7 @@ def load_bdyinfo(
                 )
 
 
-def load_riverinfo(domain: pygetm.domain.Domain, path: str):
+def load_riverinfo(domain: pygetm.domain.Domain, path: Union[str, os.PathLike[str]]):
     """Add rivers from riverinfo.dat to domain
 
     Args:

@@ -2,7 +2,7 @@
 
 import argparse
 import datetime
-import os.path
+import pathlib
 
 import pygetm
 import pygetm.legacy
@@ -12,18 +12,17 @@ parser.add_argument(
     "setup_dir",
     help="Path to configuration files (NorthSea directory from https://sourceforge.net/p/getm/getm-setups)",
     default=".",
+    type=pathlib.Path,
 )
 args = parser.parse_args()
 
-domain = pygetm.legacy.domain_from_topo(
-    os.path.join(args.setup_dir, "Topo/NS6nm.v01.nc"), z0=0.001
-)
-pygetm.legacy.load_bdyinfo(domain, os.path.join(args.setup_dir, "bdyinfo.dat"))
-pygetm.legacy.load_riverinfo(domain, os.path.join(args.setup_dir, "riverinfo.dat"))
+domain = pygetm.legacy.domain_from_topo(args.setup_dir / "Topo/NS6nm.v01.nc", z0=0.001)
+pygetm.legacy.load_bdyinfo(domain, args.setup_dir / "bdyinfo.dat")
+pygetm.legacy.load_riverinfo(domain, args.setup_dir / "riverinfo.dat")
 
 sim = pygetm.Simulation(
     domain,
-    gotm=os.path.join(args.setup_dir, "gotmturb.nml"),
+    gotm=args.setup_dir / "gotmturb.nml",
     airsea=pygetm.airsea.FluxesFromMeteo(
         humidity_measure=pygetm.HumidityMeasure.SPECIFIC_HUMIDITY,
         calculate_evaporation=True,
@@ -37,19 +36,19 @@ sim = pygetm.Simulation(
 )
 
 sim.logger.info("Reading 2D boundary data from file")
-bdy_2d_path = os.path.join(args.setup_dir, "Forcing/2D/bdy.2d.2006.nc")
+bdy_2d_path = args.setup_dir / "Forcing/2D/bdy.2d.2006.nc"
 sim.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
 sim.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
 sim.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
 
-bdy_3d_path = os.path.join(args.setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc")
+bdy_3d_path = args.setup_dir / "Forcing/3D/bound_3D.CFSR.2006.nc"
 sim.open_boundaries.sponge.tmrlx = True
 sim.temp.open_boundaries.type = pygetm.SPONGE
 sim.temp.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "temp"))
 sim.salt.open_boundaries.type = pygetm.SPONGE
 sim.salt.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "salt"))
 
-river_path = os.path.join(args.setup_dir, "Forcing/River/rivers.nc")
+river_path = args.setup_dir / "Forcing/River/rivers.nc"
 for name, river in sim.rivers.items():
     river.flow.set(pygetm.input.from_nc(river_path, name))
     river["salt"].set(0.5)
@@ -60,7 +59,7 @@ sim.salt.set(35.2)
 sim.density.convert_ts(sim.salt, sim.temp)
 
 sim.logger.info("Setting up meteorological forcing")
-met_path = os.path.join(args.setup_dir, "Forcing/Meteo/CFSR.daymean.2006.nc")
+met_path = args.setup_dir / "Forcing/Meteo/CFSR.daymean.2006.nc"
 sim.airsea.tcc.set(pygetm.input.from_nc(met_path, "tcc"))
 sim.airsea.t2m.set(pygetm.input.from_nc(met_path, "t2"))
 sim.airsea.qa.set(pygetm.input.from_nc(met_path, "sh"))
