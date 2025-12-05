@@ -88,7 +88,7 @@ class Base:
         self.pe = grid.array(
             name="pe",
             long_name=(
-                "net freshwater flux due to precipitation, condensation, evaporation",
+                "net freshwater flux due to precipitation, condensation, evaporation"
             ),
             units="m s-1",
             fill_value=FILL_VALUE,
