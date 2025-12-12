@@ -604,10 +604,13 @@ class FluxesFromMeteo(Fluxes):
         # Air humidity
         self.update_humidity(sst)
 
-        # Wind speed
-        u10, v10 = self.grid.rotate(self.u10, self.v10)
-        u10 = u10.all_values - ssu.all_values
-        v10 = v10.all_values - ssv.all_values
+        # Rotate geocentric u10 and v10 to become model-centric
+        # NB if the model grid is not rotated, this returns the original values
+        u10, v10 = self.grid.rotate(self.u10.all_values, self.v10.all_values)
+
+        # Wind speed at 10 m, relative to current velocity at the water surface
+        u10 = u10 - ssu.all_values
+        v10 = v10 - ssv.all_values
         np.hypot(u10, v10, out=self.w.all_values)
 
         # Transfer coefficients of heat and momentum
