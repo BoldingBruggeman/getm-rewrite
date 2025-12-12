@@ -83,7 +83,7 @@ class TestVerticalDiffusion(unittest.TestCase):
         )
 
         tracer = tracer_in.grid.array(z=tracer_in.z)
-        tracer.all_values[...] = tracer_in.all_values
+        tracer.all_values = tracer_in.all_values
         vdif = pygetm.operators.VerticalDiffusion(tracer.grid, cnpar=cnpar)
 
         # Set diffusivity at all masked points to NaN
@@ -97,7 +97,7 @@ class TestVerticalDiffusion(unittest.TestCase):
         expected_integral = (tracer_in.ma * tracer_in.grid.hn).sum(axis=0)
         for _ in range(self.NSTEP):
             if change_ho:
-                tracer.grid.ho.all_values[...] = tracer.grid.hn.all_values
+                tracer.grid.ho.all_values = tracer.grid.hn.all_values
                 hn_pert = np.random.lognormal(
                     np.log(tracer.grid.hn.ma.mean(axis=(1, 2))), 0.1
                 )

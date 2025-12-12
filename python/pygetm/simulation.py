@@ -978,7 +978,7 @@ class Simulation(BaseSimulation):
     def _after_restart(self):
         if self.runtype > RunType.BAROTROPIC_2D:
             # Restore elevation from before open boundary condition was applied
-            self.T.z.all_values[...] = self.T.zin.all_values
+            self.T.z.all_values = self.T.zin.all_values
 
     def _start(self):
         self.momentum.start()
@@ -1023,7 +1023,7 @@ class Simulation(BaseSimulation):
 
         # First (out of two) 2D depth update based on old elevations zo
         z_backup = self.T.z.all_values.copy()
-        self.T.z.all_values[...] = self.T.zo.all_values
+        self.T.z.all_values = self.T.zo.all_values
         self.update_depth(_3d=False)
 
         if self.runtype > RunType.BAROTROPIC_2D:
@@ -1036,7 +1036,7 @@ class Simulation(BaseSimulation):
             # explicitly set them (here: T.zio/T.ho) to NaN to make it easier to detect
             # algorithms depending on them.
             # As a result of that, all new metrics on the U, V, X grids will be NaN too!
-            self.T.z.all_values[...] = (
+            self.T.z.all_values = (
                 self.T.zio.all_values
             )  # to become T.zin when update_depth is called
             self.T.zio.fill(np.nan)
@@ -1050,10 +1050,10 @@ class Simulation(BaseSimulation):
             # New metrics for U, V, X grids will be calculated from valid old and new
             # metrics on T grid; therefore they will be valid too. However, old metrics
             # (ho/zio) for U, V, X grids will still be NaN and should not be used.
-            self.T.z.all_values[...] = zin_backup
+            self.T.z.all_values = zin_backup
 
             if "hot" in self._initialized_variables:
-                self.T.hn.all_values[...] = ho_T_backup
+                self.T.hn.all_values = ho_T_backup
 
             # this moves our zin backup into zin, and at the same time moves the
             # current zin (originally zio) to zio
@@ -1064,7 +1064,7 @@ class Simulation(BaseSimulation):
 
         # Update all forcing, which includes the final 2D depth update based on
         # (original) z
-        self.T.z.all_values[...] = z_backup
+        self.T.z.all_values = z_backup
 
     def _advance_state(self, macro_active: bool):
         # Update transports U and V from time=-1/2 to +1/2, using surface stresses and
@@ -1217,7 +1217,7 @@ class Simulation(BaseSimulation):
             # pressure; not yet valid because T&S were not valid in halos when rho was
             # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
             self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)
-            self.buoy.all_values[...] = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
+            self.buoy.all_values = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
             self.internal_pressure(self.buoy)
             if not self.delay_slow_ip:
                 self.internal_pressure.idpdx.all_values.sum(
@@ -1278,7 +1278,7 @@ class Simulation(BaseSimulation):
 
         # Update depth-integrated freshwater fluxes:
         # precipitation/evaporation/condensation from the airsea module, plus rivers
-        self.fwf.all_values[...] = self.airsea.pe.all_values
+        self.fwf.all_values = self.airsea.pe.all_values
         np.add.at(
             self.fwf.all_values,
             (self.rivers.j, self.rivers.i),
@@ -1308,10 +1308,10 @@ class Simulation(BaseSimulation):
 
         if update_3d:
             # Save surface forcing variables for the next macro momentum update
-            self.tausxo.all_values[...] = self.tausx.all_values
-            self.tausyo.all_values[...] = self.tausy.all_values
-            self.dpdxo.all_values[...] = self.dpdx.all_values
-            self.dpdyo.all_values[...] = self.dpdy.all_values
+            self.tausxo.all_values = self.tausx.all_values
+            self.tausyo.all_values = self.tausy.all_values
+            self.dpdxo.all_values = self.dpdx.all_values
+            self.dpdyo.all_values = self.dpdy.all_values
 
             # Update surface shear velocity (used by GOTM). This requires updated
             # surface stresses and there can only be done after the airsea update.
@@ -1549,11 +1549,11 @@ class Simulation(BaseSimulation):
         """
         if _3d:
             # Store current elevations as previous elevations (on the 3D time step)
-            self.T.zio.all_values[...] = self.T.zin.all_values
+            self.T.zio.all_values = self.T.zin.all_values
 
             # Synchronize new elevations on the 3D time step to those of the 2D time
             # step that has just completed.
-            self.T.zin.all_values[...] = self.T.z.all_values
+            self.T.zin.all_values = self.T.z.all_values
 
             z_T, zo_T = self.T.zin, self.T.zio
         else:
@@ -1618,9 +1618,9 @@ class Simulation(BaseSimulation):
             # NB on U and V grids, ho is needed to estimate thicknesses
             # in between start and stop of the timestep (i.e., in sync with T grid)
             # These are used in the momentum update
-            self.T.ho.all_values[...] = self.T.hn.all_values
-            self.U.ho.all_values[...] = self.U.hn.all_values
-            self.V.ho.all_values[...] = self.V.hn.all_values
+            self.T.ho.all_values = self.T.hn.all_values
+            self.U.ho.all_values = self.U.hn.all_values
+            self.V.ho.all_values = self.V.hn.all_values
 
             # Update layer thicknesses (hn) on all grids, using bathymetry H and new
             # elevations zin (on the 3D timestep)
@@ -1639,7 +1639,7 @@ class Simulation(BaseSimulation):
             # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips,
             # respectively (the last strip of values within their halos);
             # fortunately these values are not needed for advection.
-            self.h_T_half.all_values[...] = 0.5 * (
+            self.h_T_half.all_values = 0.5 * (
                 self.T.ho.all_values + self.T.hn.all_values
             )
             self.U.ugrid.hn.all_values[:, :, :-1] = self.h_T_half.all_values[:, :, 1:]
@@ -1655,10 +1655,10 @@ class Simulation(BaseSimulation):
             # Update vertical coordinate at open boundary, used to interpolate
             # inputs on z grid to dynamic model depths
             if self.open_boundaries.zc.saved:
-                self.open_boundaries.zc.all_values[...] = self.T.zc.all_values[
+                self.open_boundaries.zc.all_values = self.T.zc.all_values[
                     :, self.open_boundaries.j, self.open_boundaries.i
                 ].T
             if self.open_boundaries.zf.saved:
-                self.open_boundaries.zf.all_values[...] = self.T.zf.all_values[
+                self.open_boundaries.zf.all_values = self.T.zf.all_values[
                     :, self.open_boundaries.j, self.open_boundaries.i
                 ].T

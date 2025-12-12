@@ -29,8 +29,8 @@ class Linear2DGridInterpolator:
             self.nyp > 1
         ), f"source y coordinate must have length > 1, but has length {self.nyp}"
         x, y = np.broadcast_arrays(x, y)
-        dxp = np.diff(xp)
-        dyp = np.diff(yp)
+        dxp = xp[1:] - xp[:-1]
+        dyp = yp[1:] - yp[:-1]
         assert (dxp > 0).all() or (
             dxp < 0
         ).all(), "source x coordinate must be monotonically increasing or decreasing"
@@ -239,7 +239,7 @@ def interp_1d(x, xp, fp, axis: int = 0):
     )
     assert fp.shape[axis] == xp.shape[0]
 
-    dxp = np.diff(xp)
+    dxp = xp[1:] - xp[:-1]
     assert (dxp > 0).all() or (
         dxp < 0
     ).all(), "source coordinate must be monotonically increasing or decreasing"

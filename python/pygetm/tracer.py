@@ -275,7 +275,7 @@ class TracerCollection(Sequence[Tracer]):
             if tracer.source is not None or tracer.surface_flux is not None:
                 source = self._source  # work array to hold sources
                 if tracer.source is not None:
-                    source.all_values[...] = tracer.source.all_values
+                    source.all_values = tracer.source.all_values
                 else:
                     source.all_values.fill(0.0)
                 if tracer.surface_flux is not None:

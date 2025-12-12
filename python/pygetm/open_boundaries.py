@@ -401,7 +401,7 @@ class Sponge(Clamped):
         This is done once per timestep and processes all open boundaries at once.
         """
         if self.tmrlx:
-            self.rlxcoef.all_values[...] = (self.tmrlx_max - self.tmrlx_min) * np.clip(
+            self.rlxcoef.all_values = (self.tmrlx_max - self.tmrlx_min) * np.clip(
                 (self.inflow - self.tmrlx_umin) / (self.tmrlx_ucut - self.tmrlx_umin),
                 0.0,
                 1.0,

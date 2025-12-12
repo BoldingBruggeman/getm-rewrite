@@ -29,12 +29,8 @@ class TestCoriolis(unittest.TestCase):
         sim = pygetm.Simulation(
             domain, vertical_coordinates=pygetm.vertical_coordinates.Sigma(nz)
         )
-        sim.momentum.U.all_values[...] = np.where(
-            sim.U.mask.all_values != 0, u * H, 0.0
-        )
-        sim.momentum.V.all_values[...] = np.where(
-            sim.V.mask.all_values != 0, v * H, 0.0
-        )
+        sim.momentum.U.all_values = np.where(sim.U.mask.all_values != 0, u * H, 0.0)
+        sim.momentum.V.all_values = np.where(sim.V.mask.all_values != 0, v * H, 0.0)
 
         sim.momentum.coriolis(sim.momentum.U, sim.momentum.corV, True)
         sim.momentum.coriolis(sim.momentum.V, sim.momentum.corU, False)
@@ -63,12 +59,8 @@ class TestCoriolis(unittest.TestCase):
             self.assertTrue((fu.values == -fv.values.T).all())
 
         h = H / nz
-        sim.momentum.pk.all_values[...] = np.where(
-            sim.U.mask.all_values != 0, u * h, 0.0
-        )
-        sim.momentum.qk.all_values[...] = np.where(
-            sim.V.mask.all_values != 0, v * h, 0.0
-        )
+        sim.momentum.pk.all_values = np.where(sim.U.mask.all_values != 0, u * h, 0.0)
+        sim.momentum.qk.all_values = np.where(sim.V.mask.all_values != 0, v * h, 0.0)
 
         self.assertTrue(
             (sim.U.hn.all_values == h).all(where=sim.U.mask.all_values != 0)

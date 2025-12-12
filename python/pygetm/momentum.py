@@ -613,7 +613,7 @@ class Momentum:
             )
         for v in ZERO_EVERYWHERE:
             array = getattr(self, v)
-            array.all_values[...] = 0.0
+            array.all_values = 0.0
         for v in ZERO_UNMASKED:
             getattr(self, v).fill(0.0)
 
@@ -995,7 +995,7 @@ class Momentum:
         )
         if self.taub.saved:
             # compute total bottom stress in Pa for e.g. FABM
-            self.taub.all_values[...] = self.ustar_b.all_values**2 * RHO0
+            self.taub.all_values = self.ustar_b.all_values**2 * RHO0
 
         # Advect 3D u and v velocity from time=1/2 to 1 1/2 using velocities
         # interpolated to its own advection grids. Store the resulting trend, which
@@ -1006,7 +1006,7 @@ class Momentum:
         # (colocated) layer heights, like we do for 2D
 
         # Advection of 3D u velocity (uk)
-        self.advpk.all_values[...] = self.uk.all_values
+        self.advpk.all_values = self.uk.all_values
         self.uadv.apply_3d(
             self.uk.interp(self.uua3d),
             self.vk.interp(self.uva3d),
@@ -1024,7 +1024,7 @@ class Momentum:
         )
 
         # Advection of 3D v velocity (vk)
-        self.advqk.all_values[...] = self.vk.all_values
+        self.advqk.all_values = self.vk.all_values
         self.vadv.apply_3d(
             self.uk.interp(self.vua3d),
             self.vk.interp(self.vva3d),
@@ -1068,18 +1068,10 @@ class Momentum:
         self._transport_2d_momentum(
             self.Ui, self.Vi, timestep, self.SxA, self.SyA, self.SxD, self.SyD, False
         )
-        self.SxA.all_values[...] = (
-            self.advpk.all_values.sum(axis=0) - self.SxA.all_values
-        )
-        self.SyA.all_values[...] = (
-            self.advqk.all_values.sum(axis=0) - self.SyA.all_values
-        )
-        self.SxD.all_values[...] = (
-            self.diffpk.all_values.sum(axis=0) - self.SxD.all_values
-        )
-        self.SyD.all_values[...] = (
-            self.diffqk.all_values.sum(axis=0) - self.SyD.all_values
-        )
+        self.SxA.all_values = self.advpk.all_values.sum(axis=0) - self.SxA.all_values
+        self.SyA.all_values = self.advqk.all_values.sum(axis=0) - self.SyA.all_values
+        self.SxD.all_values = self.diffpk.all_values.sum(axis=0) - self.SxD.all_values
+        self.SyD.all_values = self.diffqk.all_values.sum(axis=0) - self.SyD.all_values
 
         if self.apply_bottom_friction:
             # Note: ru and rv have been updated by _transport_2d_momentum, using
@@ -1088,10 +1080,10 @@ class Momentum:
             # are -ru*u1 and -rv*v1. Slow bottom friction (stress in Pa divided by
             # density) is derived by taking the difference between the tendency of 3D
             # (bottom) transport and the inferred depth-integrated tendencies.
-            self.SxF.all_values[...] = (
+            self.SxF.all_values = (
                 self.ustar2_bx.all_values + self.ru.all_values * self.u1.all_values
             )
-            self.SyF.all_values[...] = (
+            self.SyF.all_values = (
                 self.ustar2_by.all_values + self.rv.all_values * self.v1.all_values
             )
 
@@ -1164,7 +1156,7 @@ class Momentum:
         V.interp(self.uva)
         self.uua.all_values /= self.uua.grid.D.all_values
         self.uva.all_values /= self.uva.grid.D.all_values
-        advU.all_values[...] = self.u1.all_values
+        advU.all_values = self.u1.all_values
         self.uadv(self.uua, self.uva, timestep, advU, skip_initial_halo_exchange=True)
         pygetm._pygetm.reconstruct_transport_change(advU, self.uadv.D, U, timestep)
 
@@ -1173,7 +1165,7 @@ class Momentum:
         V.interp(self.vva)
         self.vua.all_values /= self.vua.grid.D.all_values
         self.vva.all_values /= self.vva.grid.D.all_values
-        advV.all_values[...] = self.v1.all_values
+        advV.all_values = self.v1.all_values
         self.vadv(self.vua, self.vva, timestep, advV, skip_initial_halo_exchange=True)
         pygetm._pygetm.reconstruct_transport_change(advV, self.vadv.D, V, timestep)
 
