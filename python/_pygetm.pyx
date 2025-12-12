@@ -88,7 +88,7 @@ cdef class Array:
     @all_values.setter
     def all_values(self, value):
         if value is not self._array:
-            self._array[...] = value
+            numpy.PyArray_CopyObject(self._array, value)
 
     cdef wrap_c_array(self, grid, int source, void* obj, bytes name, register=True):
         cdef int grid_type
