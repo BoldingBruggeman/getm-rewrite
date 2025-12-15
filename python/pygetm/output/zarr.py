@@ -1,6 +1,10 @@
-from typing import Optional, Mapping
+from typing import Optional, TypeVar
+from collections.abc import Coroutine, Mapping
 import logging
 import asyncio
+import concurrent.futures
+import threading
+import atexit
 
 import cftime
 import zarr.api.asynchronous as zarr
@@ -10,6 +14,19 @@ import numpy as np
 from . import File
 from . import operators
 import pygetm.core
+
+loop: list[Optional[asyncio.AbstractEventLoop]] = [None]
+iothread: list[Optional[threading.Thread]] = [None]
+
+
+def cleanup_resources() -> None:
+    if loop[0] is not None:
+        loop[0].call_soon_threadsafe(loop[0].stop)  # Stop loop from another thread
+        iothread[0].join(timeout=0.2)  # Add a timeout to avoid hanging
+        loop[0].close()
+
+
+atexit.register(cleanup_resources)
 
 
 async def _create_array(
@@ -56,6 +73,15 @@ async def _add_time_coordinate(
     )
 
 
+async def _resize_and_set(array: zarr.AsyncArray, data: np.ndarray, istop: int):
+    await array.resize((istop,) + data.shape[1:])
+    istart = istop - data.shape[0]
+    await array.setitem(slice(istart, istop), data)
+
+
+T = TypeVar("T")
+
+
 class ZarrGroup(File):
     def __init__(
         self,
@@ -89,7 +115,11 @@ class ZarrGroup(File):
         self._cache: list[tuple[zarr.AsyncArray, np.ndarray]] = []
         self._ncache = 0
         self._chunk_size = chunk_size
-        self.loop = asyncio.new_event_loop()
+        if loop[0] is None:
+            loop[0] = asyncio.new_event_loop()
+            iothread[0] = threading.Thread(target=loop[0].run_forever, daemon=True)
+            iothread[0].start()
+        self._futures: list[concurrent.futures.Future] = []
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}('{self.path}')"
@@ -100,42 +130,40 @@ class ZarrGroup(File):
         time: Optional[cftime.datetime],
         default_time_reference: Optional[cftime.datetime],
     ) -> bool:
-        loop = self.loop
         field2array: dict[operators.Base, zarr.AsyncArray] = {}
         if self.is_root or self.sub:
             included_fields = self.select_nonempty_fields()
             if included_fields:
-                self.root = loop.run_until_complete(
+                self.root = self._run(
                     zarr.create_group(store=self.store, overwrite=True)
                 )
 
                 needs_time = False
                 needs_time_av = False
-                tasks: list[asyncio.Task[zarr.AsyncArray]] = []
                 for name, field in included_fields.items():
                     if field.time_varying:
                         if "time: mean" in field.attrs.get("cell_methods", ""):
                             needs_time_av = True
                         else:
                             needs_time = True
-                    coro = _create_array(self.root, name, field, self._chunk_size)
-                    tasks.append(self.loop.create_task(coro))
+                    self._schedule(
+                        _create_array(self.root, name, field, self._chunk_size)
+                    )
 
                 attrs, self.time_offset = self.get_cf_time_attrs(
                     time, seconds_passed, default_time_reference or time
                 )
 
                 if needs_time:
-                    coro = _add_time_coordinate(
-                        self.root, "time", attrs, self._chunk_size
+                    self._schedule(
+                        _add_time_coordinate(self.root, "time", attrs, self._chunk_size)
                     )
-                    tasks.append(self.loop.create_task(coro))
                 # if needs_time_av:
                 #     self.time_av_array = _add_time_coordinate(
                 #         self.root, "time_av", attrs
                 #     )
 
-                arrays = loop.run_until_complete(asyncio.gather(*tasks))
+                arrays = self._complete_scheduled_tasks()
                 if needs_time:
                     self._time_cache = np.empty((self._chunk_size,), dtype=float)
                     self._cache.append((arrays.pop(), self._time_cache))
@@ -150,7 +178,7 @@ class ZarrGroup(File):
                 self._cache.append((array, cache))
             else:
                 # Write static field now
-                loop.run_until_complete(array.setitem(Ellipsis, field.get()))
+                self._schedule(array.setitem((), field.get()))
 
         return len(self._varying_fields) > 0
 
@@ -164,21 +192,27 @@ class ZarrGroup(File):
         if self._ncache == self._chunk_size:
             self._empty_cache()
 
-    def _empty_cache(self):
-        istop = self.itime
-        istart = self.itime - self._ncache
-
-        async def resize_and_set(array: zarr.AsyncArray, data: np.ndarray):
-            await array.resize((istop,) + data.shape[1:])
-            await array.setitem((slice(istart, istop), Ellipsis), data[: self._ncache])
-
-        tasks: list[asyncio.Task[None]] = []
-        for array, data in self._cache:
-            tasks.append(self.loop.create_task(resize_and_set(array, data)))
-        self.loop.run_until_complete(asyncio.gather(*tasks))
-
-        self._ncache = 0
-
     def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if self._ncache > 0:
             self._empty_cache()
+        self._complete_scheduled_tasks()
+
+    def _empty_cache(self):
+        self._complete_scheduled_tasks()
+        for array, data in self._cache:
+            self._schedule(
+                _resize_and_set(array, data[: self._ncache].copy(), self.itime)
+            )
+
+        self._ncache = 0
+
+    def _run(self, coro: Coroutine[None, None, T]) -> T:
+        return asyncio.run_coroutine_threadsafe(coro, loop[0]).result()
+
+    def _schedule(self, coro: Coroutine[None, None, T]):
+        self._futures.append(asyncio.run_coroutine_threadsafe(coro, loop[0]))
+
+    def _complete_scheduled_tasks(self) -> list:
+        results = [future.result() for future in self._futures]
+        self._futures.clear()
+        return results
