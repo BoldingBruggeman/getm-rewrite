@@ -1099,7 +1099,7 @@ class Domain:
         # If the Coriolis parameter was not set explicitly at domain level,
         # calculate it from latitude
         if "cor" not in retrieved_from_domain:
-            grid.create_array("cor").all_values[...] = coriolis(grid._lat.all_values)
+            grid.create_array("cor").all_values = coriolis(grid._lat.all_values)
 
         # Set default horizontal coordinates (e.g., for output and online plotting)
         # based on the coordinate type set at domain level.

@@ -50,7 +50,7 @@ class TestInternalPressure(unittest.TestCase):
         # lock exchange density in x-direction
         rho.values[:, :, :50] = rho_min
         rho.values[:, :, 50:] = rho_max
-        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        buoy.all_values = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
         ip(buoy)
         self.assertTrue((ip.idpdy.ma == 0.0).all())
         dP_dx = (
@@ -64,7 +64,7 @@ class TestInternalPressure(unittest.TestCase):
 
         # linearly increasing density in x-direction
         rho.values[:, :, :] = rho_min + (rho_max - rho_min) * T.x / 100000
-        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        buoy.all_values = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
         ip(buoy)
         self.assertTrue((ip.idpdy.ma == 0.0).all())
         diff = ip.idpdx.ma[:, 0, :] - ip.idpdx.values[:, 0, :1]
@@ -73,7 +73,7 @@ class TestInternalPressure(unittest.TestCase):
         # lock exchange density in y-direction
         rho.values[:, :50, :] = rho_min
         rho.values[:, 50:, :] = rho_max
-        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        buoy.all_values = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
         ip(buoy)
         self.assertTrue((ip.idpdx.ma == 0.0).all())
         dP_dy = (
@@ -86,7 +86,7 @@ class TestInternalPressure(unittest.TestCase):
 
         # linearly increasing density in y-direction
         rho.values[:, :, :] = rho_min + (rho_max - rho_min) * T.y / 100000
-        buoy.all_values[...] = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
+        buoy.all_values = (-GRAVITY / RHO0) * (rho.all_values - RHO0)
         ip(buoy)
         self.assertTrue((ip.idpdx.ma == 0.0).all())
         diff = ip.idpdy.ma[:, :, 0] - ip.idpdy.values[:, :1, 0]
@@ -116,7 +116,7 @@ class TestInternalPressure(unittest.TestCase):
         # #
         # # stratification wih same profile everywhere (but varying water depth!)
         # sim.rho.values[:, :, :] = rho_min
-        # sim.buoy.all_values[...] = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
+        # sim.buoy.all_values = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
         # sim.update_internal_pressure_gradient(sim.buoy)
         # self.assertTrue((sim.idpdy.ma == 0.0).all())
         # zpos = (

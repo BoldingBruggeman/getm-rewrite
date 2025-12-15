@@ -84,7 +84,7 @@ def calculate_sigma(nz: int, ddl: float = 0.0, ddu: float = 0.0) -> np.ndarray:
     ga = np.linspace(0.0, 1.0, nz + 1)
     ga[1:-1] = np.tanh((ddl + ddu) * ga[1:-1] - ddl) + np.tanh(ddl)
     ga[1:-1] /= np.tanh(ddl) + np.tanh(ddu)
-    dga = np.diff(ga)
+    dga = ga[1:] - ga[:-1]
     assert (dga > 0.0).all(), f"ga not monotonically increasing: {ga}"
     assert dga.size == nz
     return dga

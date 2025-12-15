@@ -205,8 +205,8 @@ class TwoBand(Radiation):
         assert kc2_add is None or (kc2_add.grid is self.grid and kc2_add.z == CENTERS)
 
         # Non-visible band - downward
-        self._kc.all_values[...] = self.kc1.all_values
-        self._swr.all_values[...] = self.A.all_values * swr.all_values
+        self._kc.all_values = self.kc1.all_values
+        self._swr.all_values = self.A.all_values * swr.all_values
         _pygetm.exponential_profile_1band_interfaces(
             self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self.rad
         )
@@ -214,7 +214,7 @@ class TwoBand(Radiation):
         # Non-visible band - upward
         if self.reflect_at_bottom:
             np.multiply(
-                self.rad.all_values[0, ...],
+                self.rad.all_values[0],
                 self.bottom_albedo.all_values,
                 out=self._swr_up.all_values,
             )
@@ -228,26 +228,26 @@ class TwoBand(Radiation):
             )
 
         # Visible band - downward
-        self._kc.all_values[...] = self.kc2.all_values
+        self._kc.all_values = self.kc2.all_values
         if kc2_add is not None:
             self._kc.all_values += kc2_add.all_values
-        self._swr.all_values[...] = swr.all_values - self._swr.all_values
+        self._swr.all_values = swr.all_values - self._swr.all_values
         _pygetm.exponential_profile_1band_interfaces(
             self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self._rad
         )
 
         # Total downward
         self.rad.all_values += self._rad.all_values
-        self.swr_abs.all_values[...] = np.diff(self.rad.all_values, axis=0)
+        self.swr_abs.all_values = self.rad.all_values[1:] - self.rad.all_values[:-1]
 
         # all remaining radiation is absorbed at the bottom and
         # injected in the water layer above it
-        self.swr_abs.all_values[0, ...] += self.rad.all_values[0, ...]
+        self.swr_abs.all_values[0] += self.rad.all_values[0]
 
         # Visible band and total - upward
         if self.reflect_at_bottom:
             np.multiply(
-                self._rad.all_values[0, ...],
+                self._rad.all_values[0],
                 self.bottom_albedo.all_values,
                 out=self._swr_up.all_values,
             )
@@ -260,13 +260,15 @@ class TwoBand(Radiation):
                 out=self._rad,
             )
             self.rad_up.all_values += self._rad.all_values
-            self.swr_abs.all_values[0, ...] -= self.rad_up.all_values[0, ...]
-            self.swr_abs.all_values -= np.diff(self.rad_up.all_values, axis=0)
+            self.swr_abs.all_values[0] -= self.rad_up.all_values[0]
+            self.swr_abs.all_values += (
+                self.rad_up.all_values[:-1] - self.rad_up.all_values[1:]
+            )
 
         if self.par0.saved:
             # Visible part of shortwave radiation just below sea surface
             # (i.e., reflection/albedo already accounted for)
-            self.par0.all_values[...] = self._swr.all_values
+            self.par0.all_values = self._swr.all_values
         if self.par.saved:
             # Visible part of shortwave radiation at layer centers,
             # often used by biogeochemistry

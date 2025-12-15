@@ -500,9 +500,8 @@ class FluxesFromMeteo(Fluxes):
             )
         elif self.longwave_method == DOWNWARD_FLUX:
             sst_K = sst.all_values + 273.15
-            self.ql.all_values[...] = (
-                self.ql_downwards.all_values
-                - emissivity * stefan_boltzmann * np.power(sst_K, 4)
+            self.ql.all_values = (
+                self.ql_downwards.all_values - emissivity * stefan_boltzmann * sst_K**4
             )
 
     def update_shortwave_radiation(self, time: cftime.datetime):
@@ -535,7 +534,7 @@ class FluxesFromMeteo(Fluxes):
             )
             self.swr.all_values *= 1.0 - self.albedo.all_values
         elif self.shortwave_method == DOWNWARD_FLUX:
-            self.swr.all_values[...] = self.swr_downwards.all_values * (
+            self.swr.all_values = self.swr_downwards.all_values * (
                 1.0 - self.albedo.all_values
             )
 
@@ -604,10 +603,13 @@ class FluxesFromMeteo(Fluxes):
         # Air humidity
         self.update_humidity(sst)
 
-        # Wind speed
-        u10, v10 = self.grid.rotate(self.u10, self.v10)
-        u10 = u10.all_values - ssu.all_values
-        v10 = v10.all_values - ssv.all_values
+        # Rotate geocentric u10 and v10 to become model-centric
+        # NB if the model grid is not rotated, this returns the original values
+        u10, v10 = self.grid.rotate(self.u10.all_values, self.v10.all_values)
+
+        # Wind speed at 10 m, relative to current velocity at the water surface
+        u10 = u10 - ssu.all_values
+        v10 = v10 - ssv.all_values
         np.hypot(u10, v10, out=self.w.all_values)
 
         # Transfer coefficients of heat and momentum
@@ -624,7 +626,7 @@ class FluxesFromMeteo(Fluxes):
             L = 2.5e6 - 0.00234e6 * sst.all_values
 
             # Sensible heat flux
-            self.qh.all_values[...] = (
+            self.qh.all_values = (
                 self.cd_sensible.all_values
                 * CPA
                 * self.rhoa.all_values
@@ -633,7 +635,7 @@ class FluxesFromMeteo(Fluxes):
             )
 
             # Latent heat flux
-            self.qe.all_values[...] = (
+            self.qe.all_values = (
                 self.cd_latent.all_values
                 * L
                 * self.rhoa.all_values
@@ -645,7 +647,7 @@ class FluxesFromMeteo(Fluxes):
             self.update_longwave_radiation(sst)
 
             # Net heat flux is the sum of sensible, latent, longwave fluxes
-            self.shf.all_values[...] = (
+            self.shf.all_values = (
                 self.qh.all_values + self.qe.all_values + self.ql.all_values
             )
 
