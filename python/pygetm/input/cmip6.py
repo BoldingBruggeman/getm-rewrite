@@ -44,11 +44,23 @@ METEO_VARS_ACCUM = (
     "pr",  # Precipitation
 )
 
+EXPERIMENT2CO2ATM = dict(
+    ssp119="mole-fraction-of-carbon-dioxide-in-air_input4MIPs_GHGConcentrations_ScenarioMIP_UoM-IMAGE-ssp119-1-2-1_gr-0p5x360deg_201501-250012.nc",
+    ssp126="mole-fraction-of-carbon-dioxide-in-air_input4MIPs_GHGConcentrations_ScenarioMIP_UoM-IMAGE-ssp126-1-2-1_gr-0p5x360deg_201501-250012.nc",
+    ssp245="mole-fraction-of-carbon-dioxide-in-air_input4MIPs_GHGConcentrations_ScenarioMIP_UoM-MESSAGE-GLOBIOM-ssp245-1-2-1_gr-0p5x360deg_201501-250012.nc",
+    ssp370="mole-fraction-of-carbon-dioxide-in-air_input4MIPs_GHGConcentrations_ScenarioMIP_UoM-AIM-ssp370-1-2-1_gr-0p5x360deg_201501-250012.nc",
+    ssp585="mole-fraction-of-carbon-dioxide-in-air_input4MIPs_GHGConcentrations_ScenarioMIP_UoM-REMIND-MAGPIE-ssp585-1-2-1_gr-0p5x360deg_201501-250012.nc",
+)
+
+# Extra usful variables:
+# co2 Amon
+# siconc SIday
+
 METEO_VARS = METEO_VARS_INSTANT + METEO_VARS_ACCUM
 
 
 def list_available_models():
-    intake_esgf.conf.set(all_indices=True)
+    intake_esgf.conf.set()  # all_indices=True)
     cat = intake_esgf.ESGFCatalog()
     cat = cat.search(
         # experiment_id="ssp245",
@@ -74,6 +86,8 @@ def get_global_meteo(
     cache_dir: Union[os.PathLike[str], str, None] = None,
     variables: Iterable[str] = METEO_VARS,
     prefer_streaming: bool = True,
+    frequency: str = "3hr",
+    **kwargs,
 ) -> Iterator[xr.Dataset]:
     logger = logger or _create_logger()
 
@@ -99,7 +113,7 @@ def get_global_meteo(
         cache_dir = tempfile.mkdtemp(prefix="esgf_cache_")
     cache_dir = Path(cache_dir)
     logger.info(f"Using temporary directory {cache_dir} for ESGF cache")
-    intake_esgf.conf.set(all_indices=True, local_cache=cache_dir)
+    intake_esgf.conf.set(local_cache=cache_dir)  # all_indices=True,
 
     def on_rm_error(function, path, excinfo):
         logger.warning(f"Failed to remove {path}: {excinfo}")
@@ -114,7 +128,8 @@ def get_global_meteo(
                 experiment_id=experiment_id,
                 source_id=source_id,
                 variable_id=varname,
-                frequency="3hr",
+                frequency=frequency,
+                **kwargs,
             )
             cat.remove_ensembles()
             paths = cat.to_path_dict(prefer_streaming=prefer_streaming)[varname]

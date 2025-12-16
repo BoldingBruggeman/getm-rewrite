@@ -409,9 +409,9 @@ class Grid(_pygetm.Grid):
                 setattr(self, name, None)
 
         with np.errstate(divide="ignore"):
-            self._iarea.all_values[...] = 1.0 / self._area.all_values
-            self._idx.all_values[...] = 1.0 / self._dx.all_values
-            self._idy.all_values[...] = 1.0 / self._dy.all_values
+            self._iarea.all_values = 1.0 / self._area.all_values
+            self._idx.all_values = 1.0 / self._dx.all_values
+            self._idy.all_values = 1.0 / self._dy.all_values
 
         if self._rotation is not None:
             self._rotator = Rotator(self._rotation.all_values)
@@ -436,8 +436,8 @@ class Grid(_pygetm.Grid):
             # For this, H should be valid also on land, where it then represents
             # (negative) surface elevation. Thus, it needs to be done before H is
             # masked on land below.
-            self.zc.all_values[...] = -self.H.all_values
-            self.zf.all_values[...] = -self.H.all_values
+            self.zc.all_values = -self.H.all_values
+            self.zf.all_values = -self.H.all_values
 
         self.H.all_values[self.H.all_mask] = FILL_VALUE
         assert np.isfinite(self.H.all_values).all(where=~self.H.all_mask)
@@ -448,7 +448,7 @@ class Grid(_pygetm.Grid):
             if array is not None:
                 array.all_values.flags.writeable = False
 
-        self.z0b.all_values[...] = self.z0b_min.all_values
+        self.z0b.all_values = self.z0b_min.all_values
 
         # Default water depth follows bathymetry (elevation=0)
         self.D.all_values[self._water] = self.H.all_values[self._water]
@@ -827,7 +827,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self._fill_value = np.array(self._fill_value, dtype=self._dtype)
         if self.on_boundary or self._ndim == 0:
             # boundary array or scalar
-            self.values = self.all_values[...]
+            self.values = self.all_values
         else:
             self.values = self.all_values[self.grid._interior]
 
@@ -1003,8 +1003,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         set to :attr:`fill_value`
         """
         try:
-            self.all_values[...] = value
+            self.all_values = value
         except ValueError:
+            # Incorrect shape for all_values, try values (excl halos) instead
             self.values[...] = value
             self.update_halos()
         if self.fill_value is not None:

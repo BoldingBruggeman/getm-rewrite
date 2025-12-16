@@ -22,7 +22,7 @@ class TestGrid(unittest.TestCase):
             with self.subTest(z=z):
                 # Random initialization of T
                 t = T.array(z=z)
-                t.all_values[...] = np.random.random(t.all_values.shape)
+                t.all_values = np.random.random(t.all_values.shape)
 
                 # From T to U
                 u = t.interp(T.ugrid)
@@ -72,7 +72,7 @@ class TestGrid(unittest.TestCase):
                 )
 
                 # Random initialization of X
-                x.all_values[...] = np.random.random(x.all_values.shape)
+                x.all_values = np.random.random(x.all_values.shape)
 
                 # From X to T
                 t = x.interp(T)
@@ -85,7 +85,7 @@ class TestGrid(unittest.TestCase):
                 self.assertLess(np.abs(t.all_values - t_control).max(), TOLERANCE)
 
                 # Random initialization of U
-                u.all_values[...] = np.random.random(u.all_values.shape)
+                u.all_values = np.random.random(u.all_values.shape)
 
                 # From U to UU
                 uu = u.interp(T.ugrid.ugrid)
@@ -119,7 +119,7 @@ class TestGrid(unittest.TestCase):
                 )
 
                 # Random initialization of V
-                v.all_values[...] = np.random.random(v.all_values.shape)
+                v.all_values = np.random.random(v.all_values.shape)
 
                 # From V to UV
                 uv = v.interp(T.ugrid.vgrid)
