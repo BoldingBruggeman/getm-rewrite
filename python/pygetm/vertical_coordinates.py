@@ -450,8 +450,8 @@ class Adaptive(Base):
         if self.csigma > 0:
             self.nug[1:, ...] = self.csigma
         else:
-            self.nug.all_values[...] = np.nan
-            self.nug.all_values[...] = -999.0
+            self.nug.all_values = np.nan
+            self.nug.all_values = -999.0
 
         # Here we need to have hn_gvc - and the scaling has to depend
         # on the value of gamma_surf - needs fix
