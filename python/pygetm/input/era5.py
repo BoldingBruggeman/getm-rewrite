@@ -4,6 +4,7 @@ import os
 import argparse
 import logging
 from pathlib import Path
+import contextlib
 
 
 import yaml
@@ -15,6 +16,7 @@ except ImportError:
     raise Exception("You need cdsapi. See https://cds.climate.copernicus.eu/how-to-api")
 
 from . import util
+from . import limit_region
 
 VARIABLES = {
     "u10": "10m_u_component_of_wind",
@@ -77,10 +79,9 @@ def get(
     start_year: int,
     stop_year: Optional[int] = None,
     variables: Iterable[str] = DEFAULT_VARIABLES,
-    fmt: str = "netcdf",
     target_dir: Union[os.PathLike[str], str] = ".",
-    cdsapirc: Union[os.PathLike, str, bytes, None] = None,
     logger: Optional[logging.Logger] = None,
+    source: str = "cds",
     **kwargs,
 ) -> Mapping[tuple[int, str], Path]:
     logging.basicConfig(level=logging.INFO)
@@ -119,14 +120,85 @@ def get(
     logger.info(f"Selected variables: {', '.join(variables)}")
 
     area = [maxlat, minlon, minlat, maxlon]
-    if cdsapirc:
-        with open(cdsapirc, "r") as f:
-            kwargs.update(yaml.safe_load(f))
 
     target_dir = Path(target_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
 
     years = range(start_year, stop_year + 1)
+
+    getter = {"cds": _get_cds, "arco": _get_arco}[source.lower()]
+    return getter(
+        variables=variables,
+        years=years,
+        area=area,
+        target_dir=target_dir,
+        logger=logger,
+        **kwargs,
+    )
+
+
+def _get_arco(
+    variables: Iterable[str],
+    years: Iterable[str],
+    area: list[float] = [90.0, -180.0, -90.0, 180.0],
+    target_dir: Path = Path("."),
+    logger: Optional[logging.Logger] = None,
+    url: str = "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3",
+    **kwargs,
+):
+    logger = logger or logging.getLogger()
+
+    import zarr.storage
+    import zarr.experimental.cache_store
+    from dask.diagnostics import ProgressBar
+
+    remote_store = zarr.storage.FsspecStore.from_url(
+        url, read_only=True, storage_options=dict(token="anon")
+    )
+    cache_store = zarr.storage.MemoryStore()
+    cached_store = zarr.experimental.cache_store.CacheStore(
+        store=remote_store, cache_store=cache_store, max_size=1024**3
+    )
+
+    maxlat, minlon, minlat, maxlon = area
+    results = {}
+    with xr.open_zarr(cached_store, chunks=None) as ds:
+        for year in years:
+            ds_current = ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31T23:30:00"))
+            logger.info(f"  {year}:")
+            for variable in variables:
+                path = target_dir / f"era5_{variable}_{year}.nc"
+                full_name = VARIABLES[variable]
+                da = ds_current[full_name]
+                da = limit_region(da, minlon, maxlon, minlat, maxlat, periodic_lon=True)
+                shape = tuple(map(int, da.shape))
+                logger.info(f"    {full_name}: {path} ({da.dtype}, shape {shape})")
+                with ProgressBar():
+                    da.chunk(time=24).rename(variable).to_netcdf(path)
+                results[(year, variable)] = path
+
+    # To avoid hang on Windows
+    with contextlib.suppress(Exception):
+        zarr.core.sync.cleanup_resources()
+
+    return results
+
+
+def _get_cds(
+    variables: Iterable[str],
+    years: Iterable[str],
+    area: list[float] = [90.0, -180.0, -90.0, 180.0],
+    target_dir: Path = Path("."),
+    logger: Optional[logging.Logger] = None,
+    fmt: str = "netcdf",
+    cdsapirc: Union[os.PathLike, str, bytes, None] = None,
+    **kwargs,
+):
+    logger = logger or logging.getLogger()
+    if cdsapirc:
+        with open(cdsapirc, "r") as f:
+            kwargs.update(yaml.safe_load(f))
+
     pool = multiprocessing.Pool(processes=len(years) * len(variables))
     ext = "nc" if fmt == "netcdf" else "grib"
     tasks: list[tuple[int, str, multiprocessing.pool.AsyncResult]] = []
@@ -182,6 +254,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--grib", action="store_const", const="grib", dest="fmt", default="netcdf"
     )
+    parser.add_argument("--source", choices=["cds", "arco"], default="cds")
     parser.add_argument(
         "--complevel",
         help="NetCDF compression level (0-9). Default = 0 = no compression",
@@ -204,4 +277,5 @@ if __name__ == "__main__":
         cdsapirc=args.cdsapirc,
         fmt=args.fmt,
         complevel=args.complevel,
+        source=args.source,
     )
