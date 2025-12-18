@@ -136,6 +136,7 @@ class LocalRiverCollection(Mapping[str, LocalRiver]):
             river.zu = self.zu[..., iriver]
         self.i = np.array([river.i for river in rivers], dtype=np.intp)
         self.j = np.array([river.j for river in rivers], dtype=np.intp)
+        self.slice = (Ellipsis, self.j, self.i)
         self.iarea = grid.iarea.all_values[self.j, self.i]
 
     def __getitem__(self, key: str) -> LocalRiver:

@@ -468,7 +468,7 @@ class Simulation(BaseSimulation):
         "dpdy",
         "dpdxo",
         "dpdyo",
-        "_cum_river_height_increase",
+        "_int_river_flow",
         "radiation",
         "delay_slow_ip",
         "total_volume_ref",
@@ -695,7 +695,7 @@ class Simulation(BaseSimulation):
             self.logger.getChild("momentum"), self.T, runtype, advection_scheme
         )
 
-        self._cum_river_height_increase = np.zeros((len(self.rivers),))
+        self._int_river_flow = np.zeros((len(self.rivers),))
 
         #: Provider of air-water fluxes of heat and momentum.
         #: This must inherit from :class:`pygetm.airsea.Fluxes`
@@ -1084,11 +1084,8 @@ class Simulation(BaseSimulation):
             self.timestep, self.momentum.U, self.momentum.V, self.fwf
         )
 
-        # Track cumulative increase in elevation due to river inflow over the current
-        # macrotimestep
-        self._cum_river_height_increase += (
-            self.rivers.flow * self.rivers.iarea * self.timestep
-        )
+        # Track cumulative river inflow (m3) over the current macrotimestep
+        self._int_river_flow += self.rivers.flow * self.timestep
 
         if self.runtype > RunType.BAROTROPIC_2D and macro_active:
             # Use previous source terms for biogeochemistry (valid for the start of the
@@ -1280,9 +1277,7 @@ class Simulation(BaseSimulation):
         # precipitation/evaporation/condensation from the airsea module, plus rivers
         self.fwf.all_values = self.airsea.pe.all_values
         np.add.at(
-            self.fwf.all_values,
-            (self.rivers.j, self.rivers.i),
-            self.rivers.flow * self.rivers.iarea,
+            self.fwf.all_values, self.rivers.slice, self.rivers.flow * self.rivers.iarea
         )
 
         # Update elevation at the open boundaries. This must be done before
@@ -1369,36 +1364,37 @@ class Simulation(BaseSimulation):
         precipitation, evaporation and river inflow.
         """
         # Local names for river-related variables
-        rivers = self.rivers
-        z_increases = self._cum_river_height_increase
+        slc = self.rivers.slice
+        z_increases = self._int_river_flow * self.rivers.iarea
 
         # Depth of layer interfaces for each river cell
-        h = self.T.hn.all_values[:, rivers.j, rivers.i].T
-        z_if = np.zeros((h.shape[0], h.shape[1] + 1))
-        z_if[:, 1:] = -h.cumsum(axis=1)
-        z_if -= z_if[:, -1:]
+        h = self.T.hn.all_values[slc]
+        hcum_if = np.zeros((h.shape[0] + 1, h.shape[1]))
+        h.cumsum(axis=0, out=hcum_if[1:, :])
 
         # Determine the part of every layer over which inflow occurs
-        zl = rivers.zl.clip(1e-6, z_if[:, 0])
-        zu = rivers.zu.clip(0.0, zl - 1e-6)
-        zbot = np.minimum(zl[:, np.newaxis], z_if[:, :-1])
-        ztop = np.maximum(zu[:, np.newaxis], z_if[:, 1:])
-        h_active = np.maximum(zbot - ztop, 0.0)
+        D = hcum_if[-1]
+        hcum_ll = D - self.rivers.zl
+        hcum_ul = D - self.rivers.zu
+        hcum_ll.clip(0.0, D - 1e-6, out=hcum_ll)
+        hcum_ul.clip(hcum_ll + 1e-6, D, out=hcum_ul)
+        hcum_bot = np.maximum(hcum_ll, hcum_if[:-1, :])
+        hcum_top = np.minimum(hcum_ul, hcum_if[1:, :])
+        h_active = np.maximum(hcum_top - hcum_bot, 0.0)
 
         # Change in thickness per layer
-        h_increase_riv = h_active * (z_increases / h_active.sum(axis=1))[:, np.newaxis]
+        h_increase_riv = h_active * (z_increases / h_active.sum(axis=0))
+        np.add.at(self.T.hn.all_values, slc, h_increase_riv)
 
         # Calculate the depth-integrated change in tracer, per layer.
-        tracer_adds = np.empty((len(self.tracers),) + h.shape)
-        for tracer, river_values in zip(self.tracers, tracer_adds):
+        h_new_inv = 1.0 / self.T.hn.all_values[slc]
+        for tracer in self.tracers:
             follow = tracer.river_follow | (z_increases < 0.0)
-            ext = tracer.river_values[:, np.newaxis]
-            if follow.any():
-                int = tracer.all_values[:, rivers.j, rivers.i].T
-                river_values[...] = np.where(follow[:, np.newaxis], int, ext)
-            else:
-                river_values[...] = ext
-        tracer_adds *= h_increase_riv
+            tracer_old = tracer.all_values[slc]
+            add = np.where(follow, tracer_old, tracer.river_values) * h_increase_riv
+            tracer.all_values[slc] = tracer_old * h
+            np.add.at(tracer.all_values, slc, add)
+            tracer.all_values[slc] *= h_new_inv
 
         # Precipitation and evaporation (surface layer only)
         # First update halos for the net freshwater flux, as we need to ensure that the
@@ -1414,28 +1410,15 @@ class Simulation(BaseSimulation):
                 tracer.all_values[-1, :, :] *= dilution
         h[:, :] = h_new
 
-        # Update thicknesses and tracer values with river inflow. This must be done
-        # iteratively because different rivers can target the same cell (i, j)
-        all_tracer_values = [tracer.all_values for tracer in self.tracers]
-        for iriver, (i, j) in enumerate(zip(rivers.i, rivers.j)):
-            h = self.T.hn.all_values[:, j, i]
-            h_new = h + h_increase_riv[iriver, :]
-            h_new_inv = 1.0 / h_new
-            for itracer, all_values in enumerate(all_tracer_values):
-                tracer_values = all_values[:, j, i]
-                add = tracer_adds[itracer, iriver, :]
-                tracer_values[:] = (tracer_values * h + add) * h_new_inv
-            h[:] = h_new
-
         # Update elevation
-        np.add.at(z_increase_fwf, (rivers.j, rivers.i), z_increases)
+        np.add.at(z_increase_fwf, slc, z_increases)
         self.T.zin.all_values += z_increase_fwf
 
         # Start tracer halo exchange (to prepare for advection)
         for tracer in self.tracers:
             tracer.update_halos_start(self.tracers._advection.halo1)
 
-        self._cum_river_height_increase.fill(0.0)
+        self._int_river_flow.fill(0.0)
 
     @property
     def totals(
