@@ -1365,35 +1365,26 @@ class Simulation(BaseSimulation):
         """
         # Local names for river-related variables
         slc = self.rivers.slice
-        z_increases = self._int_river_flow * self.rivers.iarea
 
-        # Depth of layer interfaces for each river cell
-        h = self.T.hn.all_values[slc]
-        hcum_if = np.zeros((h.shape[0] + 1, h.shape[1]))
-        h.cumsum(axis=0, out=hcum_if[1:, :])
+        # Increase in water depth (m)
+        z_add = self._int_river_flow * self.rivers.iarea
 
-        # Determine the part of every layer over which inflow occurs
-        D = hcum_if[-1]
-        hcum_ll = D - self.rivers.zl
-        hcum_ul = D - self.rivers.zu
-        hcum_ll.clip(0.0, D - 1e-6, out=hcum_ll)
-        hcum_ul.clip(hcum_ll + 1e-6, D, out=hcum_ul)
-        hcum_bot = np.maximum(hcum_ll, hcum_if[:-1, :])
-        hcum_top = np.minimum(hcum_ul, hcum_if[1:, :])
-        h_active = np.maximum(hcum_top - hcum_bot, 0.0)
+        # Determine the part of every layer over which inflow or outflow occurs
+        h_old = self.T.hn.all_values[slc]
+        h_active = self.rivers.get_active_part_of_layers(h_old)
 
         # Change in thickness per layer
-        h_increase_riv = h_active * (z_increases / h_active.sum(axis=0))
-        np.add.at(self.T.hn.all_values, slc, h_increase_riv)
+        h_add = h_active * (z_add / h_active.sum(axis=0))
+        np.add.at(self.T.hn.all_values, slc, h_add)
 
         # Calculate the depth-integrated change in tracer, per layer.
         h_new_inv = 1.0 / self.T.hn.all_values[slc]
         for tracer in self.tracers:
-            follow = tracer.river_follow | (z_increases < 0.0)
+            follow = tracer.river_follow | (z_add < 0.0)
             tracer_old = tracer.all_values[slc]
-            add = np.where(follow, tracer_old, tracer.river_values) * h_increase_riv
-            tracer.all_values[slc] = tracer_old * h
-            np.add.at(tracer.all_values, slc, add)
+            tracer_add = np.where(follow, tracer_old, tracer.river_values) * h_add
+            tracer.all_values[slc] = tracer_old * h_old
+            np.add.at(tracer.all_values, slc, tracer_add)
             tracer.all_values[slc] *= h_new_inv
 
         # Precipitation and evaporation (surface layer only)
@@ -1411,7 +1402,7 @@ class Simulation(BaseSimulation):
         h[:, :] = h_new
 
         # Update elevation
-        np.add.at(z_increase_fwf, slc, z_increases)
+        np.add.at(z_increase_fwf, slc, z_add)
         self.T.zin.all_values += z_increase_fwf
 
         # Start tracer halo exchange (to prepare for advection)
