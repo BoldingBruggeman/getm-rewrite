@@ -1377,7 +1377,9 @@ class Simulation(BaseSimulation):
         h_add = h_active * (z_add / h_active.sum(axis=0))
         np.add.at(self.T.hn.all_values, slc, h_add)
 
-        # Calculate the depth-integrated change in tracer, per layer.
+        # Update tracers
+        # We operate in depth-integrated tracer units to support
+        # summing contributions from different rivers to the same cell
         h_new_inv = 1.0 / self.T.hn.all_values[slc]
         for tracer in self.tracers:
             follow = tracer.river_follow | (z_add < 0.0)
@@ -1392,18 +1394,18 @@ class Simulation(BaseSimulation):
         # layer heights updated as a result remain valid in the halos.
         self.airsea.pe.update_halos()
         unmasked = self.T._water
-        z_increase_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
-        h = self.T.hn.all_values[-1, :, :]
-        h_new = h + z_increase_fwf
-        dilution = h / h_new
+        z_add_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
+        h_sf = self.T.hn.all_values[-1, :, :]
+        h_sf_new = h_sf + z_add_fwf
+        dilution = h_sf / h_sf_new
         for tracer in self.tracers:
             if not tracer.precipitation_follows_target_cell:
                 tracer.all_values[-1, :, :] *= dilution
-        h[:, :] = h_new
+        h_sf[:, :] = h_sf_new
 
-        # Update elevation
-        np.add.at(z_increase_fwf, slc, z_add)
-        self.T.zin.all_values += z_increase_fwf
+        # Update elevation (first add river contriubiton to z_add_fwf)
+        np.add.at(z_add_fwf, slc, z_add)
+        self.T.zin.all_values += z_add_fwf
 
         # Start tracer halo exchange (to prepare for advection)
         for tracer in self.tracers:
