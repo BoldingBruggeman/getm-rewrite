@@ -252,7 +252,7 @@ class TestFreshwaterFluxes(unittest.TestCase):
 
         river_names = []
         for iriver, (i, j) in enumerate(zip(i_all, j_all)):
-            zu = np.random.uniform(-25.0, 75.0)
+            zu = np.random.uniform(0.0, 75.0)
             zl = zu + np.random.uniform(0.0, 50.0)
             river = domain.rivers.add_by_index(f"dummy{iriver}", i, j, zu=zu, zl=zl)
             river_names.append(river.name)
@@ -327,7 +327,7 @@ class TestFreshwaterFluxes(unittest.TestCase):
 
         river_names = []
         for iriver, (i, j) in enumerate(zip(i_all, j_all)):
-            zu = np.random.uniform(-25.0, 75.0)
+            zu = np.random.uniform(0.0, 75.0)
             zl = zu + np.random.uniform(0.0, 50.0)
             river = domain.rivers.add_by_index(f"dummy{iriver}", i, j, zu=zu, zl=zl)
             river_names.append(river.name)
