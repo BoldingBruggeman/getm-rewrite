@@ -1403,7 +1403,7 @@ class Simulation(BaseSimulation):
                 tracer.all_values[-1, :, :] *= dilution
         h_sf[:, :] = h_sf_new
 
-        # Update elevation (first add river contriubiton to z_add_fwf)
+        # Update elevation (first add river contribution to z_add_fwf)
         np.add.at(z_add_fwf, slc, z_add)
         self.T.zin.all_values += z_add_fwf
 
