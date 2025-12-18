@@ -316,6 +316,25 @@ class TestFreshwaterFluxes(unittest.TestCase):
         self.assertLess(np.abs(tot2 / target - 1.0), TOLERANCE)
         self.assertLess(np.abs(mean2 / mean1 - 1.0), TOLERANCE)
 
+    def test_invalid_rivers(self):
+        domain = self.create_domain()
+        i = j = 25
+        with self.assertRaises(ValueError):
+            domain.rivers.add_by_index("dummy", i, j, zu=-1.0)
+        with self.assertRaises(ValueError):
+            domain.rivers.add_by_index("dummy", i, j, zl=-1.0)
+        with self.assertRaises(ValueError):
+            domain.rivers.add_by_index("dummy", i, j, zl=1.0, zu=2.0)
+        with self.assertRaises(ValueError):
+            domain.rivers.add_by_index(
+                "dummy",
+                i,
+                j,
+                zl=2.0,
+                zu=1.0,
+                vertical_position=pygetm.rivers.VerticalPosition.DistanceFromBottom,
+            )
+
     def test_multiple_rivers_with_prescribed_tracer_and_pe(self):
         n = 100
         flow = np.random.uniform(0.0, 500.0, n)
