@@ -1426,7 +1426,7 @@ class Simulation(BaseSimulation):
             A tuple with total volume and a list with (tracer_total, total, mean)
             tuples on the root subdomains. On non-root subdomains it returns None, None
         """
-        unmasked = self.T.mask != CellType.UNRESOLVED
+        unmasked = self.T.mask == CellType.ACTIVE
         total_volume = (self.T.D * self.T.area).global_sum(where=unmasked)
         if any(tt.per_mass for tt in self.tracer_totals):
             vol = self.T.hn * self.T.area
@@ -1446,7 +1446,7 @@ class Simulation(BaseSimulation):
                 if tt.per_mass:
                     total.all_values *= self.rho.all_values
                 total.all_values *= grid.hn.all_values
-            total = total.global_sum(where=grid.mask != CellType.UNRESOLVED)
+            total = total.global_sum(where=grid.mask == CellType.ACTIVE)
             if total is not None:
                 ref = total_volume if not tt.per_mass else total_mass
                 mean = (total / ref - tt.offset) / tt.scale_factor
