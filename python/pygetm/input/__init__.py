@@ -150,12 +150,13 @@ def from_nc(
     kwargs["cache"] = False
 
     if isinstance(paths, (str, os.PathLike)):
-        # Check if this is a URL or a pattern
+        # This is a single item (string or PathLike), not a list of such items.
+        # Check if it is a URL or a pattern
         # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
         if isinstance(paths, str) and not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
             # Not a URL, but a file path or glob pattern. Cast to iterable of Paths
             pattern = paths
-            paths = map(Path, glob.glob(pattern))
+            paths = glob.glob(pattern)
             if not paths:
                 raise Exception(f"No files found matching {pattern!r}")
         else:

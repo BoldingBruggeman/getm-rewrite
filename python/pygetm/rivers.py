@@ -1,3 +1,4 @@
+import enum
 from typing import Optional, Mapping, Union, Iterable
 import operator
 import logging
@@ -39,14 +40,20 @@ class RiverTracer(core.Array):
         self._follow[...] = value
 
 
+class VerticalPosition(enum.Enum):
+    DistanceFromSurface = 1
+    DistanceFromBottom = 2
+
+
 class GlobalRiver:
     def __init__(
         self,
         name: str,
         x: Union[int, float],
         y: Union[int, float],
-        zl: Optional[float] = np.inf,
-        zu: Optional[float] = 0.0,
+        zl: Optional[float] = None,
+        zu: Optional[float] = None,
+        vertical_position: VerticalPosition = VerticalPosition.DistanceFromSurface,
         coordinate_type: CoordinateType = CoordinateType.IJ,
     ):
         """
@@ -54,8 +61,12 @@ class GlobalRiver:
             name: unique name for this river
             x: x coordinate of river
             y: y coordinate of river
-            zl: maximum depth to which the river penetrates (non-negative)
-            zu: minimum depth from which the river penetrates (non-negative)
+            zl: lower limit (deepest point) of river penetration (m; >=0).
+                Defaults to bottom
+            zu: upper limit of river penetration (m; >=0).
+                Defaults to surface
+            vertical_position: whether depth limits zl and zu are distances
+                from the surface or from the bottom
             coordinate_type: coordinate type of x and y
                 (LONLAT spherical, XY for Cartesian coordinates)
         """
@@ -63,8 +74,24 @@ class GlobalRiver:
         self.x = x
         self.y = y
         self.coordinate_type = coordinate_type
+        if vertical_position == VerticalPosition.DistanceFromBottom:
+            zl = 0.0 if zl is None else zl
+            zu = np.inf if zu is None else zu
+            if zl > zu:
+                raise ValueError("For DistanceFromBottom, zl must be <= zu")
+        else:
+            zl = np.inf if zl is None else zl
+            zu = 0.0 if zu is None else zu
+            if zl < zu:
+                raise ValueError("For DistanceFromSurface, zl must be >= zu")
+        if zl < 0.0:
+            raise ValueError("zl must be non-negative")
+        if zu < 0.0:
+            raise ValueError("zu must be non-negative")
+
         self.zl = zl
         self.zu = zu
+        self.vertical_position = vertical_position
         self.i: Optional[int] = None
         self.j: Optional[int] = None
 
@@ -86,7 +113,15 @@ class GlobalRiver:
         i_loc, j_loc = grid.global_to_local(self.i, self.j, include_halos=True)
         if i_loc is None or j_loc is None:
             return None
-        river = LocalRiver(grid, self.name, i_loc, j_loc, zl=self.zl, zu=self.zu)
+        river = LocalRiver(
+            grid,
+            self.name,
+            i_loc,
+            j_loc,
+            zl=self.zl,
+            zu=self.zu,
+            vertical_position=self.vertical_position,
+        )
         for att in ("original_name", "split"):
             if hasattr(self, att):
                 setattr(river, att, getattr(self, att))
@@ -95,13 +130,21 @@ class GlobalRiver:
 
 class LocalRiver(Mapping[str, RiverTracer]):
     def __init__(
-        self, grid: core.Grid, name: str, i: int, j: int, zl: float, zu: float
+        self,
+        grid: core.Grid,
+        name: str,
+        i: int,
+        j: int,
+        zl: float,
+        zu: float,
+        vertical_position: VerticalPosition,
     ):
         self.name = name
         self.i = i
         self.j = j
         self.zl = zl
         self.zu = zu
+        self.vertical_position = vertical_position
         self._tracers: Mapping[str, RiverTracer] = {}
         self.flow = core.Array(
             grid=grid,
@@ -130,13 +173,16 @@ class LocalRiverCollection(Mapping[str, LocalRiver]):
         self.flow = np.zeros((len(rivers),))
         self.zl = np.array([river.zl for river in rivers])
         self.zu = np.array([river.zu for river in rivers])
+        pos = np.array([river.vertical_position for river in rivers])
+        self._relative_to_surface = pos == VerticalPosition.DistanceFromSurface
         for iriver, river in enumerate(rivers):
             river.flow.wrap_ndarray(self.flow[..., iriver])
             river.zl = self.zl[..., iriver]
             river.zu = self.zu[..., iriver]
         self.i = np.array([river.i for river in rivers], dtype=np.intp)
         self.j = np.array([river.j for river in rivers], dtype=np.intp)
-        self.iarea = grid.iarea.all_values[self.j, self.i]
+        self.slice = (Ellipsis, self.j, self.i)
+        self.iarea = grid.iarea.all_values[self.slice]
 
     def __getitem__(self, key: str) -> LocalRiver:
         return self._rivers[key]
@@ -162,6 +208,30 @@ class LocalRiverCollection(Mapping[str, LocalRiver]):
                         f"Value for {rt.name} not set. Using default of 0.0"
                     )
                     rt.values[...] = 0.0
+
+    def get_active_part_of_layers(self, h: np.ndarray) -> np.ndarray:
+        """For each layer of each river cell, get the part (m) affected by the river
+
+        Args:
+            h: layer thicknesses for each river cell (shape: nz x nrivers)
+        Returns:
+            h_active: part of each layer affected by the river (shape: nz x nrivers)
+        """
+        # Vertical position of layer interfaces (distance from bottom)
+        hcum_if = np.zeros((h.shape[0] + 1, h.shape[1]))
+        h.cumsum(axis=0, out=hcum_if[1:, :])
+
+        # Lower and upper limit of river penetration for each river cell
+        # (distance from bottom, so lower < upper)
+        D = hcum_if[-1]
+        lower_limit = np.where(self._relative_to_surface, D - self.zl, self.zl)
+        upper_limit = np.where(self._relative_to_surface, D - self.zu, self.zu)
+        lower_limit.clip(0.0, D - 1e-6, out=lower_limit)
+        upper_limit.clip(lower_limit + 1e-6, D, out=upper_limit)
+
+        hcum_bot = np.maximum(lower_limit, hcum_if[:-1, :])
+        hcum_top = np.minimum(upper_limit, hcum_if[1:, :])
+        return np.maximum(hcum_top - hcum_bot, 0.0)
 
 
 class GlobalRiverCollection(Mapping[str, GlobalRiver]):

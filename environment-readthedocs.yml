@@ -16,7 +16,7 @@ dependencies:
   - xarray
   - netcdf4>=1.6
   - scipy
-  - pyfabm>=2.1
+  - pyfabm>=3.0
   - awex
   - pygotm
   - sphinx_rtd_theme>=2.0
