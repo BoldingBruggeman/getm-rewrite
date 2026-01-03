@@ -119,6 +119,12 @@ def _open(path: Union[str, os.PathLike[str]], preprocess=None, **kwargs):
     return ds
 
 
+try:
+    DEFAULT_TIME_DECODER = xr.coders.CFDatetimeCoder(use_cftime=True)
+except AttributeError:
+    DEFAULT_TIME_DECODER = None
+
+
 def from_nc(
     paths: Union[str, os.PathLike[str], Sequence[Union[str, os.PathLike[str]]]],
     name: str,
@@ -140,9 +146,9 @@ def from_nc(
         **kwargs: additional keyword arguments to be passed to
             :func:`xarray.open_dataset`
     """
-    try:
-        kwargs.setdefault("decode_times", xr.coders.CFDatetimeCoder(use_cftime=True))
-    except AttributeError:
+    if DEFAULT_TIME_DECODER is not None:
+        kwargs.setdefault("decode_times", DEFAULT_TIME_DECODER)
+    else:
         # xarray < 2025.01.1
         kwargs.setdefault("decode_times", True)
         kwargs["use_cftime"] = True
