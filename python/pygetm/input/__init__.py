@@ -160,7 +160,7 @@ def from_nc(
         # Check if it is a URL or a pattern
         # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
         if isinstance(paths, str) and not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
-            # Not a URL, but a file path or glob pattern. Cast to iterable of Paths
+            # Not a URL, but a file path or glob pattern. Cast to list of valid paths.
             pattern = paths
             paths = glob.glob(pattern)
             if not paths:
