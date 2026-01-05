@@ -9,13 +9,14 @@ from pygetm.util.interpolate import Linear2DGridInterpolator, interp_1d
 def generate_random_horizontal_grid(nx=99, ny=100):
     # Random source grid (1D x and y)
     # Still monotonically increasing because of the use of cumsum
-    dx = np.random.random_sample((nx,))
-    dy = np.random.random_sample((ny,))
+    rng = np.random.default_rng()
+    dx = rng.random(nx)
+    dy = rng.random(ny)
     xp = np.cumsum(dx)
     yp = np.cumsum(dy)
 
     # Random source field
-    fp = np.random.random_sample((xp.size, yp.size,))
+    fp = rng.random((xp.size, yp.size))
     return xp, yp, fp
 
 
@@ -28,9 +29,7 @@ class TestInterpolate(unittest.TestCase):
 
         def compare_index(i: int, j: int):
             f = Linear2DGridInterpolator(xp[i], yp[j], xp, yp)(fp)
-            self.assertEqual(
-                f, fp[i, j], "mismatch @ x=%i, y=%i" % (i, j),
-            )
+            self.assertEqual(f, fp[i, j], f"mismatch @ x={i}, y={j}")
 
         compare_index(0, 0)
         compare_index(0, -1)
@@ -51,37 +50,39 @@ class TestInterpolate(unittest.TestCase):
             f = Linear2DGridInterpolator(x, y, xp, yp)(fp)
             self.assertTrue(
                 np.isclose(f, f_check, rtol=self.EPS, atol=self.EPS).all(),
-                "%s - original order" % name,
+                f"{name} - original order",
             )
 
             f2 = Linear2DGridInterpolator(x, y, xp[::-1], yp)(fp[::-1, :])
-            self.assertTrue((f - f2 == 0).all(), "%s - x reversed" % name)
+            self.assertTrue((f - f2 == 0).all(), f"{name} - x reversed")
 
             f2 = Linear2DGridInterpolator(x, y, xp, yp[::-1])(fp[:, ::-1])
-            self.assertTrue((f - f2 == 0).all(), "%s - y reversed" % name)
+            self.assertTrue((f - f2 == 0).all(), f"{name} - y reversed")
 
             f2 = Linear2DGridInterpolator(x, y, xp[::-1], yp[::-1])(fp[::-1, ::-1])
-            self.assertTrue((f - f2 == 0).all(), "%s - xy reversed" % name)
+            self.assertTrue((f - f2 == 0).all(), f"{name} - xy reversed")
 
         # Interpolate to 2D target grid
         # and compare results with that of scipy.interpolate.interpn
         shape = (50, 51)
-        x = np.random.uniform(xp[0], xp[-1], shape)
-        y = np.random.uniform(yp[0], yp[-1], shape)
+        rng = np.random.default_rng()
+        x = rng.uniform(xp[0], xp[-1], shape)
+        y = rng.uniform(yp[0], yp[-1], shape)
         compare_spatial("2D", x, y)
 
         # Interpolate to 1D target grid
         # and compare results with that of scipy.interpolate.interpn
         shape = (100,)
-        x = np.random.uniform(xp[0], xp[-1], shape)
-        y = np.random.uniform(yp[0], yp[-1], shape)
+        x = rng.uniform(xp[0], xp[-1], shape)
+        y = rng.uniform(yp[0], yp[-1], shape)
         compare_spatial("1D", x, y)
 
     def test_vertical_1d(self):
-        dx = np.random.random_sample((99,))
+        rng = np.random.default_rng()
+        dx = rng.random(99)
         xp = np.cumsum(dx)
-        fp = np.random.random_sample((xp.size,))
-        x = np.random.uniform(xp[0] - 5, xp[-1] + 5, (100,))
+        fp = rng.random(xp.size)
+        x = rng.uniform(xp[0] - 5, xp[-1] + 5, (100,))
         f = interp_1d(x, xp, fp)
         f_check = np.interp(x, xp, fp)
         self.assertTrue(
@@ -92,15 +93,20 @@ class TestInterpolate(unittest.TestCase):
         f2 = interp_1d(x, xp[::-1], fp[::-1])
         self.assertTrue((f == f2).all(), "1D - reversed")
 
+        f3 = interp_1d(xp, xp, fp)
+        self.assertTrue((f3 == fp).all(), "1D - to original grid")
+
+        f4 = interp_1d(xp[::-1], xp, fp)
+        self.assertTrue((f4 == fp[::-1]).all(), "1D - to reversed original grid")
+
     def test_vertical_3d(self):
         nx, ny = 5, 6
-        dx = np.random.random_sample((99,))
+        rng = np.random.default_rng()
+        dx = rng.random(99)
         xp = np.cumsum(dx)
-        fp = np.random.random_sample((xp.size, ny, nx))
+        fp = rng.random((xp.size, ny, nx))
 
-        x = -10 * np.random.random_sample((ny, nx)) + 1.5 * np.random.random_sample(
-            (100, ny, nx)
-        ).cumsum(axis=0)
+        x = -10 * rng.random((ny, nx)) + 1.5 * rng.random((100, ny, nx)).cumsum(axis=0)
         f = interp_1d(x, xp, fp)
         self.assertTrue(x.shape == f.shape)
         f_check = np.empty_like(f)
@@ -116,16 +122,15 @@ class TestInterpolate(unittest.TestCase):
 
     def test_vertical_3d_masked(self):
         nx, ny = 5, 6
-        dx = np.random.random_sample((99,))
+        rng = np.random.default_rng()
+        dx = rng.random(99)
         xp = np.cumsum(dx)
-        fp = np.random.random_sample((xp.size, ny, nx))
+        fp = rng.random((xp.size, ny, nx))
 
-        x = -10 * np.random.random_sample((ny, nx)) + 1.5 * np.random.random_sample(
-            (100, ny, nx)
-        ).cumsum(axis=0)
+        x = -10 * rng.random((ny, nx)) + 1.5 * rng.random((100, ny, nx)).cumsum(axis=0)
 
-        start = np.random.randint(0, fp.shape[0] - 1, fp.shape[1:])
-        stop = np.random.randint(start, fp.shape[0])
+        start = rng.integers(0, fp.shape[0] - 1, fp.shape[1:])
+        stop = rng.integers(start, fp.shape[0])
         ind = np.broadcast_to(
             np.arange(fp.shape[0])[:, np.newaxis, np.newaxis], fp.shape
         )
@@ -155,23 +160,22 @@ class TestInterpolate(unittest.TestCase):
     def test_vertical_3d_masked_lastaxis(self):
         axis = 2
         nx, ny = 5, 6
-        dx = np.random.random_sample((99,))
+        rng = np.random.default_rng()
+        dx = rng.random(99)
         xp = np.cumsum(dx)
         shape = [ny, nx]
         shape.insert(axis, xp.size)
-        fp = np.random.random_sample(tuple(shape))
+        fp = rng.random(shape)
 
         shape[axis] = 100
         shape2 = list(shape)
         shape2[axis] = 1
-        x = -10 * np.random.random_sample(
-            tuple(shape2)
-        ) + 1.5 * np.random.random_sample(tuple(shape)).cumsum(axis=axis)
+        x = -10 * rng.random(shape2) + 1.5 * rng.random(shape).cumsum(axis=axis)
 
-        start = np.random.randint(
+        start = rng.integers(
             0, fp.shape[axis] - 1, fp.shape[:axis] + fp.shape[axis + 1 :]
         )
-        stop = np.random.randint(start, fp.shape[axis])
+        stop = rng.integers(start, fp.shape[axis])
         ind = np.arange(fp.shape[axis])
         slc = [np.newaxis] * fp.ndim
         slc[axis] = slice(None)
