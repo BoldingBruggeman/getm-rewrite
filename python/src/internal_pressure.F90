@@ -80,15 +80,19 @@ module c_internal_pressure
       do j=jmin,jmax+1
          do i=imin,imax+1
             if (mask(i,j) > 0) then
+               ! Elementary vertical differences
+               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 1
                do k=nz-1,1,-1
                   dR(i,j,k)=buoy(i,j,k+1)-buoy(i,j,k)
-                  dZ(i,j,k)=zc(i,j,k+1)-zc(i,j,k)
+                  dZ(i,j,k)=zc  (i,j,k+1)-zc  (i,j,k)
                end do
                dR(i,j,nz)=dR(i,j,nz-1)
                dZ(i,j,nz)=dZ(i,j,nz-1)
                dR(i,j,0)=dR(i,j,1)
                dZ(i,j,0)=dZ(i,j,1)
 
+               ! Harmonic average of vertical differences
+               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 2
                do k=nz,1,-1
                   cff=2._c_double*dR(i,j,k)*dR(i,j,k-1)
                   if (cff > eps) then
@@ -99,6 +103,9 @@ module c_internal_pressure
                   dZ(i,j,k)=2._c_double*dZ(i,j,k)*dZ(i,j,k-1)/(dZ(i,j,k)+dZ(i,j,k-1))
                end do
 
+               ! Depth-integrated pressure at layer centers (already divided by rho0 through buoyancy)
+               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.2
+               ! (replacing step 4 of section 5.1)
                if (nz > 1) then
                   cff=0.5_c_double*(buoy(i,j,nz)-buoy(i,j,nz-1))*0.5_c_double*h(i,j,nz) &
                       /(zc(i,j,nz)-zc(i,j,nz-1))
@@ -107,21 +114,26 @@ module c_internal_pressure
                end if
                P(i,j,nz)=(buoy(i,j,nz)+cff)*0.5_c_double*h(i,j,nz)
                do k=nz-1,1,-1
-                  P(i,j,k)=P(i,j,k+1)+0.5_c_double*((buoy(i,j,k+1)+buoy(i,j,k)) &
-                       *(zc(i,j,k+1)-zc(i,j,k))-0.2_c_double*((dR(i,j,k+1)-dR(i,j,k)) &
-                       *(zc(i,j,k+1)-zc(i,j,k)-x*(dZ(i,j,k+1)+dZ(i,j,k))) &
-                       -(dZ(i,j,k+1)-dZ(i,j,k))*(buoy(i,j,k+1)-buoy(i,j,k) &
-                       -x*(dR(i,j,k+1)+dR(i,j,k)))))
+                  P(i,j,k) = P(i,j,k+1) + 0.5_c_double * ( &
+                     (buoy(i,j,k+1)+buoy(i,j,k)) * (zc(i,j,k+1)-zc(i,j,k)) &
+                     - 0.2_c_double * ( &   ! NB 0.5 * 0.2 = 0.1 from Shchepetkin & McWilliams
+                           (dR(i,j,k+1)-dR(i,j,k))*(zc  (i,j,k+1) - zc  (i,j,k) - x*(dZ(i,j,k+1)+dZ(i,j,k))) &
+                         - (dZ(i,j,k+1)-dZ(i,j,k))*(buoy(i,j,k+1) - buoy(i,j,k) - x*(dR(i,j,k+1)+dR(i,j,k))) &
+                     ) &
+                  )
                end do
             end if
          end do
       end do
 
+      ! Gradient in x-direction
       do k=nz,1,-1
+         ! Elementary differences along sigma-coordinates
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 5
          do j=jmin,jmax
             do i=imin,imax+2
                if (umask(i-1,j) > 0) then
-                  dZx(i,j)=zc(i,j,k)-zc(i-1,j,k)
+                  dZx(i,j)=zc  (i,j,k)-zc  (i-1,j,k)
                   dRx(i,j)=buoy(i,j,k)-buoy(i-1,j,k)
                else
                   dZx(i,j)=0._c_double
@@ -130,6 +142,8 @@ module c_internal_pressure
             end do
          end do
 
+         ! Harmonic averages of elementary differences
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 6
          do j=jmin,jmax
             do i=imin,imax+1
                cff=2._c_double*dZx(i,j)*dZx(i+1,j)
@@ -150,27 +164,35 @@ module c_internal_pressure
          do j=jmin,jmax
             do i=imin,imax
                if (umask(i,j) == 1) then
-                  FC=0.5_c_double*((buoy(i+1,j,k)+buoy(i,j,k))*(zc(i+1,j,k)-zc(i,j,k)) &
+                  FC = 0.5_c_double * ( &
+                        (buoy(i+1,j,k)+buoy(i,j,k)) * (zc(i+1,j,k)-zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
-                    -0.2_c_double*((dRx(i+1,j)-dRx(i,j)) &
-                                *(zc(i+1,j,k)-zc(i,j,k)-x*(dZx(i+1,j)+dZx(i,j))) &
-                                -(dZx(i+1,j)-dZx(i,j)) &
-                                *( buoy(i+1,j,k)- buoy(i,j,k)-x*(dRx(i+1,j)+dRx(i,j)))) &
+                        -0.2_c_double * ( &
+                             (dRx(i+1,j)-dRx(i,j)) * (zc  (i+1,j,k) - zc  (i,j,k) - x*(dZx(i+1,j)+dZx(i,j))) &
+                           - (dZx(i+1,j)-dZx(i,j)) * (buoy(i+1,j,k) - buoy(i,j,k) - x*(dRx(i+1,j)+dRx(i,j))) &
+                        ) &
 #endif
-                                )
-                  idpdx(i,j,k)=0.5_c_double*(h(i,j,k)+h(i+1,j,k))*idxu(i,j) &
-                                    *(P(i+1,j,k)-P(i,j,k)+FC &
-                                    -(z(i+1,j)-z(i,j))*0.5_c_double*(buoy(i+1,j,nz)+buoy(i,j,nz)))
+                  )
+                  ! Internal pressure = horizontal pressure (S&M, 2003, Eq 1.1/5.40) minus external pressure
+                  ! Multiply with approximate U layer thicknesses at tracer timestep because
+                  ! momentum source terms must be layer-integrated
+                  idpdx(i,j,k) = 0.5_c_double*(h(i,j,k)+h(i+1,j,k)) * idxu(i,j) * ( &
+                                    P(i+1,j,k) - P(i,j,k) + FC &
+                                    - (z(i+1,j)-z(i,j))*0.5_c_double*(buoy(i+1,j,nz)+buoy(i,j,nz)) &
+                                 )
                end if
             end do
          end do
       end do
 
+      ! Gradient in y-direction
       do k=nz,1,-1
+         ! Elementary differences along sigma-coordinates
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 5
          do j=jmin,jmax+2
             do i=imin,imax
                if (vmask(i,j-1) > 0) then
-                  dZx(i,j)=zc(i,j,k)-zc(i,j-1,k)
+                  dZx(i,j)=zc  (i,j,k)-zc  (i,j-1,k)
                   dRx(i,j)=buoy(i,j,k)-buoy(i,j-1,k)
                else
                   dZx(i,j)=0._c_double
@@ -179,6 +201,8 @@ module c_internal_pressure
             end do
          end do
 
+         ! Harmonic averages of elementary differences
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 6
          do j=jmin,jmax+1
             do i=imin,imax
                cff=2._c_double*dZx(i,j)*dZx(i,j+1)
@@ -199,17 +223,22 @@ module c_internal_pressure
          do j=jmin,jmax
             do i=imin,imax
                if (vmask(i,j) == 1) then
-                  FC=0.5_c_double*((buoy(i,j+1,k)+buoy(i,j,k))*(zc(i,j+1,k)-zc(i,j,k)) &
+                  FC = 0.5_c_double * ( &
+                        (buoy(i,j+1,k)+buoy(i,j,k)) * (zc(i,j+1,k)-zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
-                    -0.2_c_double*((dRx(i,j+1)-dRx(i,j)) &
-                                *(zc(i,j+1,k)-zc(i,j,k)-x*(dZx(i,j+1)+dZx(i,j))) &
-                                -(dZx(i,j+1)-dZx(i,j)) &
-                                *(buoy(i,j+1,k)-buoy(i,j,k)-x*(dRx(i,j+1)+dRx(i,j)))) &
+                        - 0.2_c_double * ( &
+                             (dRx(i,j+1)-dRx(i,j)) * (zc  (i,j+1,k)-zc  (i,j,k) - x*(dZx(i,j+1)+dZx(i,j))) &
+                           - (dZx(i,j+1)-dZx(i,j)) * (buoy(i,j+1,k)-buoy(i,j,k) - x*(dRx(i,j+1)+dRx(i,j))) &
+                        ) &
 #endif
-                                )
-                  idpdy(i,j,k)=0.5_c_double*(h(i,j,k)+h(i,j+1,k))*idyv(i,j) &
-                                    *(P(i,j+1,k)-P(i,j,k)+FC &
-                                    -(z(i,j+1)-z(i,j))*0.5_c_double*(buoy(i,j+1,nz)+buoy(i,j,nz)))
+                  )
+                  ! Internal pressure = horizontal pressure (S&M, 2003, Eq 1.1/5.40) minus external pressure
+                  ! Multiply with approximate V layer thicknesses at tracer timestep because
+                  ! momentum source terms must be layer-integrated
+                  idpdy(i,j,k) = 0.5_c_double*(h(i,j,k)+h(i,j+1,k)) * idyv(i,j) * ( &
+                                    P(i,j+1,k) - P(i,j,k) + FC &
+                                    - (z(i,j+1)-z(i,j))*0.5_c_double*(buoy(i,j+1,nz)+buoy(i,j,nz)) &
+                     )
                end if
             end do
          end do
