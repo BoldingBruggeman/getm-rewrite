@@ -119,6 +119,12 @@ def _open(path: Union[str, os.PathLike[str]], preprocess=None, **kwargs):
     return ds
 
 
+try:
+    DEFAULT_TIME_DECODER = xr.coders.CFDatetimeCoder(use_cftime=True)
+except AttributeError:
+    DEFAULT_TIME_DECODER = None
+
+
 def from_nc(
     paths: Union[str, os.PathLike[str], Sequence[Union[str, os.PathLike[str]]]],
     name: str,
@@ -140,9 +146,9 @@ def from_nc(
         **kwargs: additional keyword arguments to be passed to
             :func:`xarray.open_dataset`
     """
-    try:
-        kwargs.setdefault("decode_times", xr.coders.CFDatetimeCoder(use_cftime=True))
-    except AttributeError:
+    if DEFAULT_TIME_DECODER is not None:
+        kwargs.setdefault("decode_times", DEFAULT_TIME_DECODER)
+    else:
         # xarray < 2025.01.1
         kwargs.setdefault("decode_times", True)
         kwargs["use_cftime"] = True
@@ -154,7 +160,7 @@ def from_nc(
         # Check if it is a URL or a pattern
         # https://github.com/pydata/xarray/blob/40c27d19d169ccf1c469255c6c6da327f5822d01/xarray/core/utils.py#L692C17-L692C63
         if isinstance(paths, str) and not re.match(r"[a-z][a-z0-9]*(\://|\:\:)", paths):
-            # Not a URL, but a file path or glob pattern. Cast to iterable of Paths
+            # Not a URL, but a file path or glob pattern. Cast to list of valid paths.
             pattern = paths
             paths = glob.glob(pattern)
             if not paths:

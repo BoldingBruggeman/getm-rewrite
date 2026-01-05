@@ -221,66 +221,89 @@ class LinearVectorized1D:
         return y
 
 
-def interp_1d(x, xp, fp, axis: int = 0):
+def interp_1d(
+    x: npt.ArrayLike, xp: npt.ArrayLike, fp: npt.ArrayLike, axis: int = 0
+) -> np.ndarray:
+    """Vectorized 1D linear interpolation along a given axis
+
+    Source values may contain NaNs or masked values at the beginning or end
+    of the interpolated dimension; these will be skipped during interpolation.
+
+    Where target coordinates fall outside the range of valid source coordinates,
+    the corresponding output values will be equal to the nearest valid source value.
+
+    Args:
+        x: Target coordinate values (nD, matching shape of fp except at `axis`)
+        xp: Source coordinate values (1D)
+        fp: Source values to interpolate (nD, matching the size of xp at `axis`)
+        axis: Axis along which to interpolate
+    Returns:
+        Interpolated values at target coordinates
+    """
     x = np.asarray(x, dtype=float)
     xp = np.asarray(xp, dtype=float)
     fp = np.ma.filled(fp, np.nan)
-    assert fp.ndim == x.ndim, (
-        f"Number of dimensions {fp.ndim} of source values"
-        f" does not match {x.ndim} of target coordinate."
-    )
-    assert xp.ndim == 1, f"Source coordinate must be 1D but has shape {xp.shape}."
-    assert (
-        fp.shape[:axis] == x.shape[:axis]
-        and fp.shape[axis + 1 :] == x.shape[axis + 1 :]
-    ), (
-        f"Shapes of source values {fp.shape} and target coordinate {x.shape}"
-        f" should match everywhere except at the interpolated dimension ({axis})"
-    )
-    assert fp.shape[axis] == xp.shape[0]
+    if fp.ndim != x.ndim:
+        raise ValueError(
+            f"Number of dimensions {fp.ndim} of source values"
+            f" does not match {x.ndim} of target coordinate."
+        )
+    if xp.ndim != 1:
+        raise ValueError(f"Source coordinate must be 1D but has shape {xp.shape}.")
+    if fp.shape[:axis] != x.shape[:axis] or fp.shape[axis + 1 :] != x.shape[axis + 1 :]:
+        raise ValueError(
+            f"Shapes of source values {fp.shape} and target coordinate {x.shape}"
+            f" should match everywhere except at the interpolated dimension ({axis})"
+        )
+    if fp.shape[axis] != xp.shape[0]:
+        raise ValueError(
+            f"Size of source values {fp.shape[axis]} and source coordinate {xp.shape[0]}"
+            f" must match at the interpolated dimension ({axis})"
+        )
 
     dxp = xp[1:] - xp[:-1]
-    assert (dxp > 0).all() or (
-        dxp < 0
-    ).all(), "source coordinate must be monotonically increasing or decreasing"
-    if dxp[0] < 0:
-        # reversed source coordinate
-        xp = xp[::-1]
+    if not ((dxp > 0).all() or (dxp < 0).all()):
+        raise ValueError("xp must be monotonically increasing or decreasing")
 
-    # Deal with masked sections at beginning or end of source values
     invalid = np.isnan(fp)
     if invalid.any():
+        # Source values include NaNs. Identify the inner valid (NaN-free) region.
         valid = ~invalid
         s = tuple(np.newaxis if i != axis else slice(None) for i in range(fp.ndim))
         ind = np.broadcast_to(np.arange(fp.shape[axis])[s], fp.shape)
         first = ind.min(axis=axis, where=valid, initial=fp.shape[axis], keepdims=True)
         last = ind.max(axis=axis, where=valid, initial=0, keepdims=True)
         first = np.minimum(first, last)  # if no valid elements at all, first=last=0
-        if dxp[0] < 0:
-            first, last = fp.shape[axis] - last - 1, fp.shape[axis] - first - 1
     else:
         first = 0
-        last = fp.shape[axis] - 1
+        last = xp.size - 1
+
+    xp_reversed = dxp[0] < 0
+    if xp_reversed:
+        # Monotonically DEcreasing source coordinate. Flip it to make it
+        # monotonically INcreasing for lookup of bounding intervals
+        xp = xp[::-1]
+        dxp = -dxp[::-1]
+        first, last = (xp.size - 1) - last, (xp.size - 1) - first
 
     # Look up upper bound of interval around each target coordinate
     # This will be 0 [invalid!] if first source coordinate < minimum target coordinate
     # This will be xp.size [invalid!] if last source coordinate >= maximum target
     # coordinate
-    ix_right = xp.searchsorted(x, side="right")
+    i_right = xp.searchsorted(x, side="right")
 
-    # Determine intervals left and right bounds).
-    # These will be zero-width (ix_left == ix_right) at the boundaries
-    ix_left = np.clip(ix_right - 1, first, last)
-    np.clip(ix_right, first, last, out=ix_right)
-    valid_interval = ix_left != ix_right
-    xp_right = xp[ix_right]
-    wx_left = np.true_divide(xp_right - x, xp_right - xp[ix_left], where=valid_interval)
-    np.putmask(wx_left, ~valid_interval, 1.0)
+    # Determine intervals (left and right bounds).
+    # These will be zero-width (i_left == i_right) at the boundaries
+    i_left = i_right - 1
+    i_left.clip(first, last, out=i_left)
+    i_right.clip(first, last, out=i_right)
+    scale = np.zeros(x.shape, dtype=float)
+    idxp = np.append(1.0 / dxp, 0.0)
+    np.multiply(x - xp[i_left], idxp[i_left], where=i_left != i_right, out=scale)
 
-    # If we reversed source coordinates, compute the correct indices
-    if dxp[0] < 0:
-        ix_left, ix_right = xp.size - ix_left - 1, xp.size - ix_right - 1
-
-    f_left = np.take_along_axis(fp, ix_left, axis=axis)
-    f_right = np.take_along_axis(fp, ix_right, axis=axis)
-    return wx_left * f_left + (1.0 - wx_left) * f_right
+    if xp_reversed:
+        # Correct indices into fp for flipped source coordinate
+        i_left, i_right = (xp.size - 1) - i_left, (xp.size - 1) - i_right
+    f_left = np.take_along_axis(fp, i_left, axis=axis)
+    f_right = np.take_along_axis(fp, i_right, axis=axis)
+    return f_left + (f_right - f_left) * scale
