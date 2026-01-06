@@ -11,20 +11,23 @@ class Base:
         self.idpdx = ugrid.array(
             name="idpdx",
             units="m2 s-2",
-            long_name="internal pressure gradient in x-direction",
+            long_name="tendency of layer-integrated x-velocity due to internal pressure",
             z=CENTERS,
             fill_value=FILL_VALUE,
         )
         self.idpdy = vgrid.array(
             name="idpdy",
             units="m2 s-2",
-            long_name="internal pressure gradient in y-direction",
+            long_name="tendency of layer-integrated y-velocity due to internal pressure",
             z=CENTERS,
             fill_value=FILL_VALUE,
         )
 
     def __call__(self, buoy: core.Array):
-        """Update internal pressure gradient arrays `idpdx` and `idpdy`.
+        """Update tendencies of layer-integrated velocity due to internal pressure.
+
+        These are defined as -hu/rho0 * dp/dx and -hv/rho0 * dp/dy,
+        with all quantities defined at the current (tracer) time level.
 
         Args:
             buoy: buoyancy (m s-2)
@@ -42,8 +45,8 @@ class Prescribed(Base):
     def __init__(self, idpdx: float = 0.0, idpdy: float = 0.0):
         """
         Args:
-            idpdx: initial internal pressure gradient in x-direction (m2 s-2)
-            idpdy: initial internal pressure gradient in y-direction (m2 s-2)
+            idpdx: initial tendency of layer-integrated x-velocity (m2 s-2)
+            idpdy: initial tendency of layer-integrated y-velocity (m2 s-2)
         """
         super().__init__()
         self._initial_idpdx = idpdx

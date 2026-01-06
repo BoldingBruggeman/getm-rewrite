@@ -1,9 +1,10 @@
-from typing import Union, Optional, Sequence, Mapping
+from typing import Union, Optional, Sequence, Mapping, Any
 import logging
 import datetime
 import timeit
 import functools
 import pstats
+import os
 
 import numpy as np
 import cftime
@@ -494,8 +495,10 @@ class Simulation(BaseSimulation):
         *,
         runtype: RunType = RunType.BAROCLINIC,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.DEFAULT,
-        fabm: Union[pygetm.fabm.FABM, bool, str, None] = None,
-        gotm: Union[str, None] = None,
+        fabm: Union[
+            pygetm.fabm.FABM, bool, str, os.PathLike[str], Mapping[str, Any], None
+        ] = None,
+        gotm: Union[os.PathLike[str], str, None] = None,
         momentum: Optional[pygetm.momentum.Momentum] = None,
         vertical_mixing: Optional[pygetm.vertical_mixing.VerticalMixing] = None,
         airsea: Optional[pygetm.airsea.Fluxes] = None,
@@ -683,7 +686,7 @@ class Simulation(BaseSimulation):
                 attrs=dict(_valid_at=(CellType.BOUNDARY,)),  # to compute density
             )
 
-        unmasked = self.T.mask != CellType.UNRESOLVED
+        unmasked = self.T.mask == CellType.ACTIVE
         self.total_volume_ref = (self.T.H * self.T.area).global_sum(where=unmasked)
         self.total_area = self.T.area.global_sum(where=unmasked)
 
@@ -824,9 +827,9 @@ class Simulation(BaseSimulation):
             self.nuh_ct = None
             if fabm:
                 if not isinstance(fabm, pygetm.fabm.FABM):
-                    fabm = pygetm.fabm.FABM(
-                        fabm if isinstance(fabm, str) else "fabm.yaml"
-                    )
+                    if not isinstance(fabm, (str, os.PathLike, Mapping)):
+                        fabm = "fabm.yaml"
+                    fabm = pygetm.fabm.FABM(fabm)
                 self.fabm = fabm
                 self.fabm.initialize(
                     self.T,
@@ -947,7 +950,7 @@ class Simulation(BaseSimulation):
         if runtype == RunType.BAROTROPIC_2D:
             internal_pressure = None
         elif runtype == RunType.BAROTROPIC_3D:
-            internal_pressure = pygetm.internal_pressure.Base()
+            internal_pressure = pygetm.internal_pressure.Prescribed(idpdx=0, idpdy=0)
         elif internal_pressure is None:
             internal_pressure = pygetm.internal_pressure.ShchepetkinMcwilliams()
         self.internal_pressure = internal_pressure
