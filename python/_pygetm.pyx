@@ -63,7 +63,7 @@ cdef extern void c_multiply_add(int n, double* tgt, const double* add, double sc
 cdef extern void c_advance_surface_elevation(int nx, int ny, int halox, int haloy, int* mask, double* dyu, double* dxv, double* iarea, double* z, double* U, double* V, double* fwf, double dt) nogil
 cdef extern void c_surface_pressure_gradient(int nx, int ny, int imin, int imax, int jmin, int jmax, int* umask, int* vmask, double* idxu, double* idyv, double* z, double* sp, double* H, double* D, double Dmin, double* dpdx, double* dpdy) nogil
 cdef extern void c_blumberg_mellor(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* umask, const int* vmask, const double* idxu, const double* idyv, const double* hu, const double* hv, const double* zf, const double* buoy, double* idpdx, double* idpdy) nogil
-cdef extern void c_shchepetkin_mcwilliams(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const int* umask, const int* vmask, const double* idxu, const double* idyv, const double* h, const double* z, const double* zc, const double* buoy, double* idpdx, double* idpdy) nogil
+cdef extern void c_shchepetkin_mcwilliams(int nx, int ny, int nz, int imin, int imax, int jmin, int jmax, const int* mask, const int* umask, const int* vmask, const double* idxu, const double* idyv, const double* h, const double* zc, const double* buoy, double* idpdx, double* idpdy) nogil
 cdef extern void c_vertical_advection_to_sources(int nx, int ny, int nz, int halox, int haloy, const int* mask, const double* c, const double* w, const double* h, double* s)
 cdef extern void c_update_gvc(int nx, int ny, int nz, double dsigma, const double* dbeta, double Dgamma, int kk, const double* D, const int* mask, double* h)
 
@@ -588,9 +588,8 @@ def shchepetkin_mcwilliams(Array buoy, Array idpdx, Array idpdy):
     cdef Array idxu = idpdx.grid.idx
     cdef Array idyv = idpdy.grid.idy
     cdef Array h = grid.hn
-    cdef Array z = grid.zin
     cdef Array zc = grid.zc
-    c_shchepetkin_mcwilliams(grid.nx_, grid.ny_, grid.nz_, grid.halox + 1, grid.halox + grid.nx, grid.haloy + 1, grid.haloy + grid.ny, <int*>mask.p, <int*>umask.p, <int*>vmask.p, <double*>idxu.p, <double*>idyv.p, <double*>h.p, <double*>z.p, <double*>zc.p, <double*>buoy.p, <double*>idpdx.p, <double*>idpdy.p)
+    c_shchepetkin_mcwilliams(grid.nx_, grid.ny_, grid.nz_, grid.halox + 1, grid.halox + grid.nx, grid.haloy + 1, grid.haloy + grid.ny, <int*>mask.p, <int*>umask.p, <int*>vmask.p, <double*>idxu.p, <double*>idyv.p, <double*>h.p, <double*>zc.p, <double*>buoy.p, <double*>idpdx.p, <double*>idpdy.p)
 
 def multiply_add(double[::1] tgt, const double[::1] add, double scale_factor):
     if tgt.shape[0] != 0:
