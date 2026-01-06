@@ -1,4 +1,4 @@
-from typing import Callable, Iterable, Mapping, Union, Optional, Sequence, TYPE_CHECKING
+from typing import Callable, Iterable, Mapping, Union, Optional, TYPE_CHECKING
 import glob
 import numbers
 import logging
@@ -126,7 +126,7 @@ except AttributeError:
 
 
 def from_nc(
-    paths: Union[str, os.PathLike[str], Sequence[Union[str, os.PathLike[str]]]],
+    paths: Union[str, os.PathLike[str], Iterable[Union[str, os.PathLike[str]]]],
     name: str,
     preprocess: Optional[Callable[[xr.Dataset], xr.Dataset]] = None,
     **kwargs,
@@ -165,6 +165,7 @@ def from_nc(
             paths = glob.glob(pattern)
             if not paths:
                 raise Exception(f"No files found matching {pattern!r}")
+            paths = map(Path, paths)
         else:
             # A URL or a single file path (PathLike)
             paths = (paths,)
