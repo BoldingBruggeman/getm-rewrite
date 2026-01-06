@@ -47,8 +47,8 @@ class RiverTracer(core.Array):
 
     @property
     def follow_target_cell(self) -> bool:
-        """Whether to take the tracer concentration in the river from the
-        model cell it flows into."""
+        """Whether to take the tracer value in the river from the model cell it
+        flows into."""
         return bool(self._follow)
 
     @follow_target_cell.setter
@@ -62,6 +62,8 @@ class VerticalPosition(enum.Enum):
 
 
 class GlobalRiver:
+    """Single river in the global domain."""
+
     def __init__(
         self,
         name: str,
