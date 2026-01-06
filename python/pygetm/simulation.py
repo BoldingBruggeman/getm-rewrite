@@ -683,7 +683,7 @@ class Simulation(BaseSimulation):
                 attrs=dict(_valid_at=(CellType.BOUNDARY,)),  # to compute density
             )
 
-        unmasked = self.T.mask != CellType.UNRESOLVED
+        unmasked = self.T.mask == CellType.ACTIVE
         self.total_volume_ref = (self.T.H * self.T.area).global_sum(where=unmasked)
         self.total_area = self.T.area.global_sum(where=unmasked)
 
