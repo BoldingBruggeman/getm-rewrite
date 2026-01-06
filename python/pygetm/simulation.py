@@ -947,7 +947,7 @@ class Simulation(BaseSimulation):
         if runtype == RunType.BAROTROPIC_2D:
             internal_pressure = None
         elif runtype == RunType.BAROTROPIC_3D:
-            internal_pressure = pygetm.internal_pressure.Base()
+            internal_pressure = pygetm.internal_pressure.Prescribed(idpdx=0, idpdy=0)
         elif internal_pressure is None:
             internal_pressure = pygetm.internal_pressure.ShchepetkinMcwilliams()
         self.internal_pressure = internal_pressure
