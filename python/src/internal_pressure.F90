@@ -23,7 +23,7 @@ module c_internal_pressure
             if (umask(i,j) > 0) then
                grdl=(buoy(i+1,j,nz)-buoy(i,j,nz))*idxu(i,j)
                buoyl=0.5*(buoy(i+1,j,nz)+buoy(i,j,nz))
-               prgr=grdl*0.5_c_double*hu(i,j,nz)
+               prgr=buoyl*(zf(i+1,j,nz)-zf(i,j,nz))*idxu(i,j) + grdl*0.5_c_double*hu(i,j,nz)
                idpdx(i,j,nz)=hu(i,j,nz)*prgr
                do k=nz-1,1,-1
                   grdu=grdl
@@ -43,7 +43,7 @@ module c_internal_pressure
             if (vmask(i,j) > 0) then
                grdl=(buoy(i,j+1,nz)-buoy(i,j,nz))*idyv(i,j)
                buoyl=0.5_c_double*(buoy(i,j+1,nz)+buoy(i,j,nz))
-               prgr=grdl*0.5_c_double*hv(i,j,nz)
+               prgr=buoyl*(zf(i,j+1,nz)-zf(i,j,nz))*idyv(i,j) + grdl*0.5_c_double*hv(i,j,nz)
                idpdy(i,j,nz)=hv(i,j,nz)*prgr
                do k=nz-1,1,-1
                   grdu=grdl
@@ -60,12 +60,12 @@ module c_internal_pressure
    end subroutine c_blumberg_mellor
 
 
-   subroutine c_shchepetkin_mcwilliams(nx, ny, nz, imin, imax, jmin, jmax, mask, umask, vmask, idxu, idyv, h, z, zc, &
+   subroutine c_shchepetkin_mcwilliams(nx, ny, nz, imin, imax, jmin, jmax, mask, umask, vmask, idxu, idyv, h, zc, &
          buoy, idpdx, idpdy) bind(c)
       integer(c_int), value, intent(in)    :: nx, ny, nz, imin, imax, jmin, jmax
       integer(c_int),        intent(in)    :: mask(nx,ny), umask(nx,ny), vmask(nx,ny)
       real(c_double),        intent(in)    :: idxu(nx,ny), idyv(nx,ny)
-      real(c_double),        intent(in)    :: h(nx,ny,nz), z(nx,ny), zc(nx,ny,nz)
+      real(c_double),        intent(in)    :: h(nx,ny,nz), zc(nx,ny,nz)
       real(c_double),        intent(in)    :: buoy(nx,ny,nz)
       real(c_double),        intent(inout) :: idpdx(nx,ny,nz), idpdy(nx,ny,nz)
 
@@ -80,15 +80,19 @@ module c_internal_pressure
       do j=jmin,jmax+1
          do i=imin,imax+1
             if (mask(i,j) > 0) then
+               ! Elementary vertical differences
+               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 1
                do k=nz-1,1,-1
                   dR(i,j,k)=buoy(i,j,k+1)-buoy(i,j,k)
-                  dZ(i,j,k)=zc(i,j,k+1)-zc(i,j,k)
+                  dZ(i,j,k)=zc  (i,j,k+1)-zc  (i,j,k)
                end do
                dR(i,j,nz)=dR(i,j,nz-1)
                dZ(i,j,nz)=dZ(i,j,nz-1)
                dR(i,j,0)=dR(i,j,1)
                dZ(i,j,0)=dZ(i,j,1)
 
+               ! Harmonic average of vertical differences
+               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 2
                do k=nz,1,-1
                   cff=2._c_double*dR(i,j,k)*dR(i,j,k-1)
                   if (cff > eps) then
@@ -99,6 +103,13 @@ module c_internal_pressure
                   dZ(i,j,k)=2._c_double*dZ(i,j,k)*dZ(i,j,k-1)/(dZ(i,j,k)+dZ(i,j,k-1))
                end do
 
+               ! Depth-integrated pressure P, defined at at layer centers
+               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.2
+               ! (replacing step 4 of section 5.1)
+               ! As we are not working with rho as in S&M, but with buoyancy = -g/rho0 * (rho - rho0):
+               ! * no multiplication with g is needed
+               ! * our P includes a extra scale factor -1/rho0
+               ! * our P includes an extra term g*[depth_below_free_surface]
                if (nz > 1) then
                   cff=0.5_c_double*(buoy(i,j,nz)-buoy(i,j,nz-1))*0.5_c_double*h(i,j,nz) &
                       /(zc(i,j,nz)-zc(i,j,nz-1))
@@ -107,21 +118,26 @@ module c_internal_pressure
                end if
                P(i,j,nz)=(buoy(i,j,nz)+cff)*0.5_c_double*h(i,j,nz)
                do k=nz-1,1,-1
-                  P(i,j,k)=P(i,j,k+1)+0.5_c_double*((buoy(i,j,k+1)+buoy(i,j,k)) &
-                       *(zc(i,j,k+1)-zc(i,j,k))-0.2_c_double*((dR(i,j,k+1)-dR(i,j,k)) &
-                       *(zc(i,j,k+1)-zc(i,j,k)-x*(dZ(i,j,k+1)+dZ(i,j,k))) &
-                       -(dZ(i,j,k+1)-dZ(i,j,k))*(buoy(i,j,k+1)-buoy(i,j,k) &
-                       -x*(dR(i,j,k+1)+dR(i,j,k)))))
+                  P(i,j,k) = P(i,j,k+1) + 0.5_c_double * ( &
+                     (buoy(i,j,k+1)+buoy(i,j,k)) * (zc(i,j,k+1)-zc(i,j,k)) &
+                     - 0.2_c_double * ( &   ! NB 0.5 * 0.2 = 0.1 from Shchepetkin & McWilliams
+                           (dR(i,j,k+1)-dR(i,j,k))*(zc  (i,j,k+1) - zc  (i,j,k) - x*(dZ(i,j,k+1)+dZ(i,j,k))) &
+                         - (dZ(i,j,k+1)-dZ(i,j,k))*(buoy(i,j,k+1) - buoy(i,j,k) - x*(dR(i,j,k+1)+dR(i,j,k))) &
+                     ) &
+                  )
                end do
             end if
          end do
       end do
 
+      ! Gradient in x-direction
       do k=nz,1,-1
+         ! Elementary differences along sigma-coordinates
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 5
          do j=jmin,jmax
             do i=imin,imax+2
                if (umask(i-1,j) > 0) then
-                  dZx(i,j)=zc(i,j,k)-zc(i-1,j,k)
+                  dZx(i,j)=zc  (i,j,k)-zc  (i-1,j,k)
                   dRx(i,j)=buoy(i,j,k)-buoy(i-1,j,k)
                else
                   dZx(i,j)=0._c_double
@@ -130,6 +146,8 @@ module c_internal_pressure
             end do
          end do
 
+         ! Harmonic averages of elementary differences
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 6
          do j=jmin,jmax
             do i=imin,imax+1
                cff=2._c_double*dZx(i,j)*dZx(i+1,j)
@@ -150,27 +168,41 @@ module c_internal_pressure
          do j=jmin,jmax
             do i=imin,imax
                if (umask(i,j) == 1) then
-                  FC=0.5_c_double*((buoy(i+1,j,k)+buoy(i,j,k))*(zc(i+1,j,k)-zc(i,j,k)) &
+                  ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 7
+                  ! As we are not working with rho as in S&M, but with buoyancy = -g/rho0 * (rho - rho0):
+                  ! * our FC includes a extra scale factor -g/rho0 
+                  ! * our FC includes an extra term g*[zc(i+1,j,k)-zc(i,j,k)]
+                  FC = 0.5_c_double * ( &
+                        (buoy(i+1,j,k)+buoy(i,j,k)) * (zc(i+1,j,k)-zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
-                    -0.2_c_double*((dRx(i+1,j)-dRx(i,j)) &
-                                *(zc(i+1,j,k)-zc(i,j,k)-x*(dZx(i+1,j)+dZx(i,j))) &
-                                -(dZx(i+1,j)-dZx(i,j)) &
-                                *( buoy(i+1,j,k)- buoy(i,j,k)-x*(dRx(i+1,j)+dRx(i,j)))) &
+                        -0.2_c_double * ( &
+                             (dRx(i+1,j)-dRx(i,j)) * (zc  (i+1,j,k) - zc  (i,j,k) - x*(dZx(i+1,j)+dZx(i,j))) &
+                           - (dZx(i+1,j)-dZx(i,j)) * (buoy(i+1,j,k) - buoy(i,j,k) - x*(dRx(i+1,j)+dRx(i,j))) &
+                        ) &
 #endif
-                                )
-                  idpdx(i,j,k)=0.5_c_double*(h(i,j,k)+h(i+1,j,k))*idxu(i,j) &
-                                    *(P(i+1,j,k)-P(i,j,k)+FC &
-                                    -(z(i+1,j)-z(i,j))*0.5_c_double*(buoy(i+1,j,nz)+buoy(i,j,nz)))
+                  )
+                  ! Internal pressure = horizontal pressure (S&M, 2003, Eq 1.1/5.40) minus external pressure -g*elevation_gradient
+                  ! Due to working with buoyancy, our P includes an extra term g*[depth_below_free_surface] (see above),
+                  ! which is equal to g*[elevation(i,j,k) - zc(i,j,k)]. Our gradient in P, computed below,
+                  ! thus includes an extra term g*[elevation(i+1,j,k) - elevation(i,j,k) - zc(i+1,j,k) + zc(i,j,k)].
+                  ! The last two terms cancel against the extra buoyancy-related term coming from FC (see above)
+                  ! The remaining terms g*[elevation(i+1,j,k) - elevation(i,j,k)] exactly subtract the external pressure gradient.
+                  ! Multiply with approximate U layer thicknesses at tracer timestep because
+                  ! momentum source terms must be layer-integrated
+                  idpdx(i,j,k) = 0.5_c_double*(h(i,j,k)+h(i+1,j,k)) * idxu(i,j) * (P(i+1,j,k) - P(i,j,k) + FC)
                end if
             end do
          end do
       end do
 
+      ! Gradient in y-direction
       do k=nz,1,-1
+         ! Elementary differences along sigma-coordinates
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 5
          do j=jmin,jmax+2
             do i=imin,imax
                if (vmask(i,j-1) > 0) then
-                  dZx(i,j)=zc(i,j,k)-zc(i,j-1,k)
+                  dZx(i,j)=zc  (i,j,k)-zc  (i,j-1,k)
                   dRx(i,j)=buoy(i,j,k)-buoy(i,j-1,k)
                else
                   dZx(i,j)=0._c_double
@@ -179,6 +211,8 @@ module c_internal_pressure
             end do
          end do
 
+         ! Harmonic averages of elementary differences
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 6
          do j=jmin,jmax+1
             do i=imin,imax
                cff=2._c_double*dZx(i,j)*dZx(i,j+1)
@@ -199,17 +233,27 @@ module c_internal_pressure
          do j=jmin,jmax
             do i=imin,imax
                if (vmask(i,j) == 1) then
-                  FC=0.5_c_double*((buoy(i,j+1,k)+buoy(i,j,k))*(zc(i,j+1,k)-zc(i,j,k)) &
+                  ! As we are not working with rho as in S&M, but with buoyancy = -g/rho0 * (rho - rho0):
+                  ! * our FC includes a extra scale factor -g/rho0 
+                  ! * our FC includes an extra term g*[zc(i,j+1,k)-zc(i,j,k)]
+                  FC = 0.5_c_double * ( &
+                        (buoy(i,j+1,k)+buoy(i,j,k)) * (zc(i,j+1,k)-zc(i,j,k)) &
 #ifndef _STD_JACOBIAN_
-                    -0.2_c_double*((dRx(i,j+1)-dRx(i,j)) &
-                                *(zc(i,j+1,k)-zc(i,j,k)-x*(dZx(i,j+1)+dZx(i,j))) &
-                                -(dZx(i,j+1)-dZx(i,j)) &
-                                *(buoy(i,j+1,k)-buoy(i,j,k)-x*(dRx(i,j+1)+dRx(i,j)))) &
+                        - 0.2_c_double * ( &
+                             (dRx(i,j+1)-dRx(i,j)) * (zc  (i,j+1,k)-zc  (i,j,k) - x*(dZx(i,j+1)+dZx(i,j))) &
+                           - (dZx(i,j+1)-dZx(i,j)) * (buoy(i,j+1,k)-buoy(i,j,k) - x*(dRx(i,j+1)+dRx(i,j))) &
+                        ) &
 #endif
-                                )
-                  idpdy(i,j,k)=0.5_c_double*(h(i,j,k)+h(i,j+1,k))*idyv(i,j) &
-                                    *(P(i,j+1,k)-P(i,j,k)+FC &
-                                    -(z(i,j+1)-z(i,j))*0.5_c_double*(buoy(i,j+1,nz)+buoy(i,j,nz)))
+                  )
+                  ! Internal pressure = horizontal pressure (S&M, 2003, Eq 1.1/5.40) minus external pressure -g*elevation_gradient
+                  ! Due to working with buoyancy, our P includes an extra term g*[depth_below_free_surface] (see above),
+                  ! which is equal to g*[elevation(i,j,k) - zc(i,j,k)]. Our gradient in P, computed below,
+                  ! thus includes an extra term g*[elevation(i,j+1,k) - elevation(i,j,k) - zc(i,j+1,k) + zc(i,j,k)].
+                  ! The last two terms cancel against the extra buoyancy-related term coming from FC (see above)
+                  ! The remaining terms g*[elevation(i,j+1,k) - elevation(i,j,k)] exactly subtract the external pressure gradient.
+                  ! Multiply with approximate U layer thicknesses at tracer timestep because
+                  ! momentum source terms must be layer-integrated
+                  idpdy(i,j,k) = 0.5_c_double*(h(i,j,k)+h(i,j+1,k)) * idyv(i,j) * (P(i,j+1,k) - P(i,j,k) + FC)
                end if
             end do
          end do

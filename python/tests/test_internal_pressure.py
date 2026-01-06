@@ -41,7 +41,6 @@ class TestInternalPressure(unittest.TestCase):
         vc.update(None)
         for g in (T, U, V):
             pygetm._pygetm.thickness2vertical_coordinates(g.mask, g.H, g.hn, g.zc, g.zf)
-        T.zin = T.array(fill_value=0.0)
 
         ip.initialize(U, V)
         rho = T.array(z=pygetm.CENTERS)
@@ -92,46 +91,50 @@ class TestInternalPressure(unittest.TestCase):
         diff = ip.idpdy.ma[:, :, 0] - ip.idpdy.values[:, :1, 0]
         self.assertLess(np.abs(diff).max(), tol)
 
-        # x = np.linspace(0, 50000, 101)
-        # y = np.linspace(0, 100000, 100)
-        # domain = pygetm.domain.create_cartesian(
-        #     x,
-        #     y,
-        #     nz,
-        #     interfaces=True,
-        #     f=0.0,
-        #     H=H,
-        #     ddu=ddu,
-        #     logger=pygetm.parallel.get_logger(level="ERROR"),
-        # )
-        # dH_dx = 50 / 50000
-        # dH_dy = 0.0  # 50 / 100000
-        # domain.H_[...] = domain.H_ + domain.x_ * dH_dx + domain.y_ * dH_dy
+        # elevation gradient in x and constant buoyancy
+        # analytical solution: idpdx / hu = buoy * d(elev)/dx
+        lin = np.linspace(0.5, 1.5, x.size - 1)
+        h_bck = T.hn.values[-1, ...].copy()
+        T.hn.values[-1, ...] += lin
+        T.hn.interp(U.hn)
+        T.hn.interp(V.hn)
+        pygetm._pygetm.thickness2vertical_coordinates(T.mask, T.H, T.hn, T.zc, T.zf)
 
-        # sim = pygetm.Simulation(
-        #     domain, internal_pressure_method=method,
-        # )
-        # # ((D2 * g * rho) - (D1 * g * rho))/dx
+        for const_buoy in (0.01, 0.0, -0.01):
+            with self.subTest(const_buoy=const_buoy):
+                buoy.all_values = const_buoy
+                ip(buoy)
+                idp_per_h = ip.idpdx.ma / U.hn.ma
+                d_elev_dx = (lin[1] - lin[0]) / U.dx.values[0, 0]
+                target = const_buoy * d_elev_dx
+                self.assertLessEqual(
+                    np.abs(idp_per_h.min() - target), 1e-12 * np.abs(target)
+                )
+                self.assertLessEqual(
+                    np.abs(idp_per_h.max() - target), 1e-12 * np.abs(target)
+                )
 
-        # #
-        # # stratification wih same profile everywhere (but varying water depth!)
-        # sim.rho.values[:, :, :] = rho_min
-        # sim.buoy.all_values = (-GRAVITY / RHO0) * (sim.rho.all_values - RHO0)
-        # sim.update_internal_pressure_gradient(sim.buoy)
-        # self.assertTrue((sim.idpdy.ma == 0.0).all())
-        # zpos = (
-        #     domain.V.zf.values[-1, :, :] - domain.V.zc.values[:, :, :]
-        # ) / domain.V.D.values
-        # dz_dx = zpos * dH_dy
-        # rho_if = rho_min + zpos * (rho_max - rho_min)
-        # dP_dx = rho_if * dz_dx * GRAVITY
-        # print(dP_dx, sim.idpdx.values[:, :, :])
-        # acceleration = -dP_dx / RHO0
-        # dU = acceleration * domain.U.hn.values[:, 0, 0]
-        # tol = 1e-14
-        # diff = dU - sim.idpdx.values[:, 0, 49]
-        # print(diff.min(), diff.max())
-        # # self.assertTrue((np.abs(diff) < tol).all())
+        # elevation gradient in y and constant buoyancy
+        # analytical solution: idpdx / hu = buoy * d(elev)/dx
+        lin = np.linspace(0.5, 1.5, y.size - 1)
+        T.hn.values[-1, ...] = h_bck + lin[:, np.newaxis]
+        T.hn.interp(U.hn)
+        T.hn.interp(V.hn)
+        pygetm._pygetm.thickness2vertical_coordinates(T.mask, T.H, T.hn, T.zc, T.zf)
+
+        for const_buoy in (0.01, 0.0, -0.01):
+            with self.subTest(const_buoy=const_buoy):
+                buoy.all_values = const_buoy
+                ip(buoy)
+                idp_per_h = ip.idpdy.ma / V.hn.ma
+                d_elev_dy = (lin[1] - lin[0]) / V.dy.values[0, 0]
+                target = const_buoy * d_elev_dy
+                self.assertLessEqual(
+                    np.abs(idp_per_h.min() - target), 1e-12 * np.abs(target)
+                )
+                self.assertLessEqual(
+                    np.abs(idp_per_h.max() - target), 1e-12 * np.abs(target)
+                )
 
 
 if __name__ == "__main__":
