@@ -1,9 +1,10 @@
-from typing import Union, Optional, Sequence, Mapping
+from typing import Union, Optional, Sequence, Mapping, Any
 import logging
 import datetime
 import timeit
 import functools
 import pstats
+import os
 
 import numpy as np
 import cftime
@@ -494,8 +495,10 @@ class Simulation(BaseSimulation):
         *,
         runtype: RunType = RunType.BAROCLINIC,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.DEFAULT,
-        fabm: Union[pygetm.fabm.FABM, bool, str, None] = None,
-        gotm: Union[str, None] = None,
+        fabm: Union[
+            pygetm.fabm.FABM, bool, str, os.PathLike[str], Mapping[str, Any], None
+        ] = None,
+        gotm: Union[os.PathLike[str], str, None] = None,
         momentum: Optional[pygetm.momentum.Momentum] = None,
         vertical_mixing: Optional[pygetm.vertical_mixing.VerticalMixing] = None,
         airsea: Optional[pygetm.airsea.Fluxes] = None,
@@ -824,9 +827,9 @@ class Simulation(BaseSimulation):
             self.nuh_ct = None
             if fabm:
                 if not isinstance(fabm, pygetm.fabm.FABM):
-                    fabm = pygetm.fabm.FABM(
-                        fabm if isinstance(fabm, str) else "fabm.yaml"
-                    )
+                    if not isinstance(fabm, (str, os.PathLike, Mapping)):
+                        fabm = "fabm.yaml"
+                    fabm = pygetm.fabm.FABM(fabm)
                 self.fabm = fabm
                 self.fabm.initialize(
                     self.T,
