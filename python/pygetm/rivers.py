@@ -11,6 +11,20 @@ from .constants import CoordinateType, CellType
 
 
 class RiverTracer(core.Array):
+    """Single tracer in a single river.
+
+    Call :meth:`pygetm.core.Array.set` on this object to prescribe the tracer
+    value in the river, or set the :attr:`follow_target_cell` attribute
+    to `True` to take the river's tracer value from the model cell it flows
+    into.
+
+    If you prescribe the tracer value, the :attr:`follow_target_cell` attribute
+    will automatically be set to `False`.
+
+    If you do not prescribe the tracer value and :attr:`follow_target_cell`
+    is `False`, the tracer value will default to 0.0.
+    """
+
     __slots__ = ("_follow",)
 
     def __init__(
@@ -33,6 +47,8 @@ class RiverTracer(core.Array):
 
     @property
     def follow_target_cell(self) -> bool:
+        """Whether to take the tracer value in the river from the model cell it
+        flows into."""
         return bool(self._follow)
 
     @follow_target_cell.setter
@@ -46,6 +62,8 @@ class VerticalPosition(enum.Enum):
 
 
 class GlobalRiver:
+    """Single river in the global domain."""
+
     def __init__(
         self,
         name: str,
@@ -109,7 +127,13 @@ class GlobalRiver:
             )
 
     def to_local_grid(self, grid: core.Grid) -> Optional["LocalRiver"]:
-        """Map global river to local subdomain."""
+        """Map river to local subdomain.
+
+        Args:
+            grid: local grid
+        Returns:
+            local river instance, or None if the river falls outside the local subdomain
+        """
         i_loc, j_loc = grid.global_to_local(self.i, self.j, include_halos=True)
         if i_loc is None or j_loc is None:
             return None
@@ -129,6 +153,11 @@ class GlobalRiver:
 
 
 class LocalRiver(Mapping[str, RiverTracer]):
+    """Single river in the local subdomain.
+
+    It acts as a mapping from tracer names to :class:`RiverTracer` instances,
+    allowing you to access and control the value of each tracer in this river."""
+
     def __init__(
         self,
         grid: core.Grid,
@@ -164,6 +193,11 @@ class LocalRiver(Mapping[str, RiverTracer]):
 
 
 class LocalRiverCollection(Mapping[str, LocalRiver]):
+    """Collection of rivers that fall within the local subdomain.
+
+    It acts as a mapping from river names to :class:`LocalRiver` instances
+    """
+
     def __init__(
         self, grid: core.Grid, rivers: Iterable[LocalRiver], logger: logging.Logger
     ):
@@ -215,7 +249,7 @@ class LocalRiverCollection(Mapping[str, LocalRiver]):
         Args:
             h: layer thicknesses for each river cell (shape: nz x nrivers)
         Returns:
-            h_active: part of each layer affected by the river (shape: nz x nrivers)
+            part of each layer affected by the river (shape: nz x nrivers)
         """
         # Vertical position of layer interfaces (distance from bottom)
         hcum_if = np.zeros((h.shape[0] + 1, h.shape[1]))
@@ -235,6 +269,11 @@ class LocalRiverCollection(Mapping[str, LocalRiver]):
 
 
 class GlobalRiverCollection(Mapping[str, GlobalRiver]):
+    """Collection of rivers in the global domain.
+
+    It acts as a mapping from river names to :class:`GlobalRiver` instances.
+    """
+
     def __init__(
         self,
         nx: int,
@@ -309,9 +348,7 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
             river.i, river.j = comm.bcast(ind)
 
     def initialize(self, grid: core.Grid) -> LocalRiverCollection:
-        """Freeze the river collection. Drop those outside the current subdomain
-        and verify the remaining ones are on unmasked T points.
-        """
+        """Return a collection of only those rivers that fall within the local subdomain."""
         self._broadcast_locations(grid.tiling.comm)
 
         # Keep only rivers that fall within the local subdomain

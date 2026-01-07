@@ -77,96 +77,116 @@ module c_internal_pressure
       real(c_double), allocatable :: dR(:,:,:), dZ(:,:,:), P(:,:,:), dZx(:,:), dRx(:,:)
       allocate(dR(nx,ny,0:nz), dZ(nx,ny,0:nz), P(nx,ny,nz), dZx(nx,ny), dRx(nx,ny))
 
-      do j=jmin,jmax+1
-         do i=imin,imax+1
-            if (mask(i,j) > 0) then
-               ! Elementary vertical differences
-               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 1
-               do k=nz-1,1,-1
-                  dR(i,j,k)=buoy(i,j,k+1)-buoy(i,j,k)
-                  dZ(i,j,k)=zc  (i,j,k+1)-zc  (i,j,k)
+      if (nz > 1) then
+         ! Elementary vertical differences, defined at layer interfaces
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 1
+         do k = 1, nz-1
+            do j = jmin, jmax+1
+               do i = 1, nx   ! Only imin, imax+1 are required, but full range can help vectorization
+                  dR(i,j,k) = buoy(i,j,k+1) - buoy(i,j,k)
+                  dZ(i,j,k) = zc  (i,j,k+1) - zc  (i,j,k)
                end do
-               dR(i,j,nz)=dR(i,j,nz-1)
-               dZ(i,j,nz)=dZ(i,j,nz-1)
-               dR(i,j,0)=dR(i,j,1)
-               dZ(i,j,0)=dZ(i,j,1)
+            end do
+         end do
+         do j = jmin, jmax+1
+            do i = 1, nx   ! Only imin, imax+1 are required, but full range can help vectorization
+               dR(i,j,0) = dR(i,j,1)
+               dZ(i,j,0) = dZ(i,j,1)
+               dR(i,j,nz) = dR(i,j,nz-1)
+               dZ(i,j,nz) = dZ(i,j,nz-1)
+            end do
+         end do
 
-               ! Harmonic average of vertical differences
-               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 2
-               do k=nz,1,-1
-                  cff=2._c_double*dR(i,j,k)*dR(i,j,k-1)
+         ! Harmonic average of vertical differences, defined at layer centers
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 2
+         do k = nz, 1, -1
+            do j = jmin, jmax+1
+               do i = 1, nx   ! Only imin, imax+1 are required, but full range can help vectorization
+                  cff = 2._c_double * dR(i,j,k) * dR(i,j,k-1)
                   if (cff > eps) then
-                     dR(i,j,k)=cff/(dR(i,j,k)+dR(i,j,k-1))
+                     dR(i,j,k) = cff / (dR(i,j,k) + dR(i,j,k-1))
                   else
-                     dR(i,j,k)=0._c_double
+                     dR(i,j,k) = 0._c_double
                   end if
-                  dZ(i,j,k)=2._c_double*dZ(i,j,k)*dZ(i,j,k-1)/(dZ(i,j,k)+dZ(i,j,k-1))
+                  dZ(i,j,k) = 2._c_double * dZ(i,j,k) * dZ(i,j,k-1) / (dZ(i,j,k) + dZ(i,j,k-1))
                end do
+            end do
+         end do
 
-               ! Depth-integrated pressure P, defined at at layer centers
-               ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.2
-               ! (replacing step 4 of section 5.1)
-               ! As we are not working with rho as in S&M, but with buoyancy = -g/rho0 * (rho - rho0):
-               ! * no multiplication with g is needed
-               ! * our P includes a extra scale factor -1/rho0
-               ! * our P includes an extra term g*[depth_below_free_surface]
-               if (nz > 1) then
-                  cff=0.5_c_double*(buoy(i,j,nz)-buoy(i,j,nz-1))*0.5_c_double*h(i,j,nz) &
-                      /(zc(i,j,nz)-zc(i,j,nz-1))
-               else
-                  cff=0.0_c_double
-               end if
-               P(i,j,nz)=(buoy(i,j,nz)+cff)*0.5_c_double*h(i,j,nz)
-               do k=nz-1,1,-1
+         ! Depth-integrated pressure P, defined at at layer centers
+         ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.2
+         ! (replacing step 4 of section 5.1)
+         ! As we are not working with rho as in S&M, but with buoyancy = -g/rho0 * (rho - rho0):
+         ! * no multiplication with g is needed
+         ! * our P includes a extra scale factor -1/rho0
+         ! * our P includes an extra term g*[depth_below_free_surface]
+         do j = jmin, jmax+1
+            do i = 1, nx   ! Only imin, imax+1 are required, but full range can help vectorization
+               cff = 0.25_c_double * h(i,j,nz) * &
+                     (buoy(i,j,nz)-buoy(i,j,nz-1)) / (zc(i,j,nz)-zc(i,j,nz-1))
+               P(i,j,nz) = (buoy(i,j,nz) + cff) * 0.5_c_double * h(i,j,nz)
+            end do
+         end do
+         do k = nz-1, 1, -1
+            do j = jmin, jmax+1
+               do i = 1, nx   ! Only imin, imax+1 are required, but full range can help vectorization
                   P(i,j,k) = P(i,j,k+1) + 0.5_c_double * ( &
                      (buoy(i,j,k+1)+buoy(i,j,k)) * (zc(i,j,k+1)-zc(i,j,k)) &
                      - 0.2_c_double * ( &   ! NB 0.5 * 0.2 = 0.1 from Shchepetkin & McWilliams
-                           (dR(i,j,k+1)-dR(i,j,k))*(zc  (i,j,k+1) - zc  (i,j,k) - x*(dZ(i,j,k+1)+dZ(i,j,k))) &
-                         - (dZ(i,j,k+1)-dZ(i,j,k))*(buoy(i,j,k+1) - buoy(i,j,k) - x*(dR(i,j,k+1)+dR(i,j,k))) &
+                             (dR(i,j,k+1)-dR(i,j,k))*(zc  (i,j,k+1) - zc  (i,j,k) - x*(dZ(i,j,k+1)+dZ(i,j,k))) &
+                           - (dZ(i,j,k+1)-dZ(i,j,k))*(buoy(i,j,k+1) - buoy(i,j,k) - x*(dR(i,j,k+1)+dR(i,j,k))) &
                      ) &
                   )
                end do
-            end if
+            end do
          end do
-      end do
+      else
+         ! Single layer: no higher order approximation possible
+         do j = jmin, jmax+1
+            do i = 1, nx   ! Only imin, imax+1 are required, but full range can help vectorization
+               P(i,j,1) = buoy(i,j,1) * 0.5_c_double * h(i,j,1)
+            end do
+         end do
+      end if
 
-      ! Gradient in x-direction
-      do k=nz,1,-1
+      do k = 1, nz
+         ! Gradient in x-direction
+
          ! Elementary differences along sigma-coordinates
          ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 5
-         do j=jmin,jmax
-            do i=imin,imax+2
+         do j = jmin, jmax
+            do i = imin, imax+2
                if (umask(i-1,j) > 0) then
-                  dZx(i,j)=zc  (i,j,k)-zc  (i-1,j,k)
-                  dRx(i,j)=buoy(i,j,k)-buoy(i-1,j,k)
+                  dZx(i,j) = zc  (i,j,k) - zc  (i-1,j,k)
+                  dRx(i,j) = buoy(i,j,k) - buoy(i-1,j,k)
                else
-                  dZx(i,j)=0._c_double
-                  dRx(i,j)=0._c_double
+                  dZx(i,j) = 0._c_double
+                  dRx(i,j) = 0._c_double
                end if
             end do
          end do
 
          ! Harmonic averages of elementary differences
          ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 6
-         do j=jmin,jmax
-            do i=imin,imax+1
-               cff=2._c_double*dZx(i,j)*dZx(i+1,j)
+         do j = jmin, jmax
+            do i = imin, imax+1
+               cff = 2._c_double * dZx(i,j) * dZx(i+1,j)
                if (cff > eps) then
-                  dZx(i,j)=cff/(dZx(i,j)+dZx(i+1,j))
+                  dZx(i,j) = cff / (dZx(i,j) + dZx(i+1,j))
                else
-                  dZx(i,j)=0._c_double
+                  dZx(i,j) = 0._c_double
                end if
-               cff=2._c_double*dRx(i,j)*dRx(i+1,j)
+               cff = 2._c_double * dRx(i,j) * dRx(i+1,j)
                if (cff > eps) then
-                  dRx(i,j)=cff/(dRx(i,j)+dRx(i+1,j))
+                  dRx(i,j) = cff / (dRx(i,j) + dRx(i+1,j))
                else
-                  dRx(i,j)=0._c_double
+                  dRx(i,j) = 0._c_double
                end if
             end do
          end do
 
-         do j=jmin,jmax
-            do i=imin,imax
+         do j = jmin, jmax
+            do i = imin, imax
                if (umask(i,j) == 1) then
                   ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 7
                   ! As we are not working with rho as in S&M, but with buoyancy = -g/rho0 * (rho - rho0):
@@ -193,45 +213,44 @@ module c_internal_pressure
                end if
             end do
          end do
-      end do
 
-      ! Gradient in y-direction
-      do k=nz,1,-1
+         ! Gradient in y-direction
+
          ! Elementary differences along sigma-coordinates
          ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 5
-         do j=jmin,jmax+2
-            do i=imin,imax
+         do j = jmin, jmax+2
+            do i = imin, imax
                if (vmask(i,j-1) > 0) then
-                  dZx(i,j)=zc  (i,j,k)-zc  (i,j-1,k)
-                  dRx(i,j)=buoy(i,j,k)-buoy(i,j-1,k)
+                  dZx(i,j) = zc  (i,j,k) - zc  (i,j-1,k)
+                  dRx(i,j) = buoy(i,j,k) - buoy(i,j-1,k)
                else
-                  dZx(i,j)=0._c_double
-                  dRx(i,j)=0._c_double
+                  dZx(i,j) = 0._c_double
+                  dRx(i,j) = 0._c_double
                end if
             end do
          end do
 
          ! Harmonic averages of elementary differences
          ! Shchepetkin & McWilliams (2003, https://doi.org/10.1029/2001JC001047), section 5.1, step 6
-         do j=jmin,jmax+1
-            do i=imin,imax
-               cff=2._c_double*dZx(i,j)*dZx(i,j+1)
+         do j = jmin, jmax+1
+            do i = imin, imax
+               cff = 2._c_double * dZx(i,j) * dZx(i,j+1)
                if (cff > eps) then
-                  dZx(i,j)=cff/(dZx(i,j)+dZx(i,j+1))
+                  dZx(i,j) = cff / (dZx(i,j) + dZx(i,j+1))
                else
-                  dZx(i,j)=0._c_double
+                  dZx(i,j) = 0._c_double
                end if
-               cff=2._c_double*dRx(i,j)*dRx(i,j+1)
+               cff = 2._c_double * dRx(i,j) * dRx(i,j+1)
                if (cff > eps) then
-                  dRx(i,j)=cff/(dRx(i,j)+dRx(i,j+1))
+                  dRx(i,j) = cff / (dRx(i,j) + dRx(i,j+1))
                else
-                  dRx(i,j)=0._c_double
+                  dRx(i,j) = 0._c_double
                end if
             end do
          end do
 
-         do j=jmin,jmax
-            do i=imin,imax
+         do j = jmin, jmax
+            do i = imin, imax
                if (vmask(i,j) == 1) then
                   ! As we are not working with rho as in S&M, but with buoyancy = -g/rho0 * (rho - rho0):
                   ! * our FC includes a extra scale factor -g/rho0 
@@ -251,7 +270,7 @@ module c_internal_pressure
                   ! thus includes an extra term g*[elevation(i,j+1,k) - elevation(i,j,k) - zc(i,j+1,k) + zc(i,j,k)].
                   ! The last two terms cancel against the extra buoyancy-related term coming from FC (see above)
                   ! The remaining terms g*[elevation(i,j+1,k) - elevation(i,j,k)] exactly subtract the external pressure gradient.
-                  ! Multiply with approximate U layer thicknesses at tracer timestep because
+                  ! Multiply with approximate V layer thicknesses at tracer timestep because
                   ! momentum source terms must be layer-integrated
                   idpdy(i,j,k) = 0.5_c_double*(h(i,j,k)+h(i,j+1,k)) * idyv(i,j) * (P(i,j+1,k) - P(i,j,k) + FC)
                end if

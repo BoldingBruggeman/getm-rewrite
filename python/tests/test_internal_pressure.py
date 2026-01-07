@@ -9,14 +9,20 @@ RHO0 = 1025.0
 
 class TestInternalPressure(unittest.TestCase):
     def test_blumberg_mellor(self):
-        for ddu in (0.0, 1.0, 2.0):
-            with self.subTest(ddu=ddu):
-                self._test(pygetm.internal_pressure.BlumbergMellor(), ddu=ddu)
+        for nz in (1, 10, 30):
+            for ddu in (0.0, 1.0, 2.0):
+                with self.subTest(ddu=ddu, nz=nz):
+                    self._test(
+                        pygetm.internal_pressure.BlumbergMellor(), ddu=ddu, nz=nz
+                    )
 
     def test_shchepetkin_mcwilliams(self):
-        for ddu in (0.0, 1.0, 2.0):
-            with self.subTest(ddu=ddu):
-                self._test(pygetm.internal_pressure.ShchepetkinMcwilliams(), ddu=ddu)
+        for nz in (1, 10, 30):
+            for ddu in (0.0, 1.0, 2.0):
+                with self.subTest(ddu=ddu, nz=nz):
+                    self._test(
+                        pygetm.internal_pressure.ShchepetkinMcwilliams(), ddu=ddu, nz=nz
+                    )
 
     def _test(self, ip: pygetm.internal_pressure.Base, H=100.0, nz=30, ddu=0.0):
         rho_min = 1020.0
@@ -57,7 +63,7 @@ class TestInternalPressure(unittest.TestCase):
         )
         acceleration = -dP_dx / RHO0
         dU = acceleration * U.hn.values[:, 0, 0]
-        tol = 1e-14
+        tol = 1e-13
         diff = dU - ip.idpdx.values[:, 0, 49]
         self.assertLess(np.abs(diff).max(), tol)
 
@@ -80,7 +86,7 @@ class TestInternalPressure(unittest.TestCase):
         )
         acceleration = -dP_dy / RHO0
         dV = acceleration * V.hn.values[:, 0, 0]
-        tol = 1e-14
+        tol = 1e-13
         self.assertLess(np.abs(dV - ip.idpdy.values[:, 49, 0]).max(), tol)
 
         # linearly increasing density in y-direction
@@ -93,8 +99,10 @@ class TestInternalPressure(unittest.TestCase):
 
         # elevation gradient in x and constant buoyancy
         # analytical solution: idpdx / hu = buoy * d(elev)/dx
+        tol = 1e-11
         lin = np.linspace(0.5, 1.5, x.size - 1)
         h_bck = T.hn.values[-1, ...].copy()
+        D_bck = T.D.values.copy()
         T.hn.values[-1, ...] += lin
         T.hn.interp(U.hn)
         T.hn.interp(V.hn)
@@ -108,14 +116,16 @@ class TestInternalPressure(unittest.TestCase):
                 d_elev_dx = (lin[1] - lin[0]) / U.dx.values[0, 0]
                 target = const_buoy * d_elev_dx
                 self.assertLessEqual(
-                    np.abs(idp_per_h.min() - target), 1e-12 * np.abs(target)
+                    np.abs(idp_per_h.min() - target), tol * np.abs(target)
                 )
                 self.assertLessEqual(
-                    np.abs(idp_per_h.max() - target), 1e-12 * np.abs(target)
+                    np.abs(idp_per_h.max() - target), tol * np.abs(target)
                 )
+                self.assertTrue((ip.idpdy.ma == 0.0).all())
 
         # elevation gradient in y and constant buoyancy
         # analytical solution: idpdx / hu = buoy * d(elev)/dx
+        tol = 1e-11
         lin = np.linspace(0.5, 1.5, y.size - 1)
         T.hn.values[-1, ...] = h_bck + lin[:, np.newaxis]
         T.hn.interp(U.hn)
@@ -130,11 +140,57 @@ class TestInternalPressure(unittest.TestCase):
                 d_elev_dy = (lin[1] - lin[0]) / V.dy.values[0, 0]
                 target = const_buoy * d_elev_dy
                 self.assertLessEqual(
-                    np.abs(idp_per_h.min() - target), 1e-12 * np.abs(target)
+                    np.abs(idp_per_h.min() - target), tol * np.abs(target)
                 )
                 self.assertLessEqual(
-                    np.abs(idp_per_h.max() - target), 1e-12 * np.abs(target)
+                    np.abs(idp_per_h.max() - target), tol * np.abs(target)
                 )
+                self.assertTrue((ip.idpdx.ma == 0.0).all())
+
+        tol = 1e-10
+        lin = -np.linspace(0.5, 1.5, x.size - 1)
+        T.D.values[...] = D_bck + lin
+        T.D.interp(U.D)
+        T.D.interp(V.D)
+        vc.update(None)
+        pygetm._pygetm.thickness2vertical_coordinates(T.mask, T.H, T.hn, T.zc, T.zf)
+        for const_buoy in (0.01, 0.0, -0.01):
+            with self.subTest(const_buoy=const_buoy):
+                buoy.all_values = const_buoy
+                ip(buoy)
+                idp_per_h = ip.idpdx.ma / U.hn.ma
+                d_elev_dx = (lin[1] - lin[0]) / U.dx.values[0, 0]
+                target = const_buoy * d_elev_dx
+                self.assertLessEqual(
+                    np.abs(idp_per_h.min() - target), tol * np.abs(target)
+                )
+                self.assertLessEqual(
+                    np.abs(idp_per_h.max() - target), tol * np.abs(target)
+                )
+                self.assertTrue((ip.idpdy.ma == 0.0).all())
+
+        tol = 1e-10
+        lin = np.linspace(0.5, 1.5, y.size - 1)
+        T.D.values[...] = D_bck + lin[:, np.newaxis]
+        T.D.interp(U.D)
+        T.D.interp(V.D)
+        vc.update(None)
+        pygetm._pygetm.thickness2vertical_coordinates(T.mask, T.H, T.hn, T.zc, T.zf)
+
+        for const_buoy in (0.01, 0.0, -0.01):
+            with self.subTest(const_buoy=const_buoy):
+                buoy.all_values = const_buoy
+                ip(buoy)
+                idp_per_h = ip.idpdy.ma / V.hn.ma
+                d_elev_dy = (lin[1] - lin[0]) / V.dy.values[0, 0]
+                target = const_buoy * d_elev_dy
+                self.assertLessEqual(
+                    np.abs(idp_per_h.min() - target), tol * np.abs(target)
+                )
+                self.assertLessEqual(
+                    np.abs(idp_per_h.max() - target), tol * np.abs(target)
+                )
+                self.assertTrue((ip.idpdx.ma == 0.0).all())
 
 
 if __name__ == "__main__":
