@@ -8,10 +8,7 @@ from pygetm.constants import FILL_VALUE, CellType
 
 
 class Base:
-    """Simple ice model that assumes a cell is completely ice covered when its
-    surface temperature drops below freezing. At that point, surface heat
-    fluxes in that cell are clipped to positive values (= no further cooling).
-    Surface momentum fluxes for that same cell are switched off altogether."""
+    """Base class for ice models."""
 
     def initialize(self, grid: pygetm.core.Grid, logger: logging.Logger):
         self.logger = logger
