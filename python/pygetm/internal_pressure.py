@@ -4,6 +4,24 @@ from .constants import FILL_VALUE, CENTERS
 
 
 class Base:
+    """Base class for calculating the internal pressure gradient
+    in x- and y-direction.
+
+    These gradients are represented by internal-pressure-associated tendencies
+    of layer-integrated velocity, which equal the difference between tendencies
+    associated with the total horizontal pressure gradient DP/dx (or DP/dy) and
+    those associated with the external pressure gradient, which follows from
+    the horizontal gradient in free surface elevation (dz/dx or dz/dy):
+
+      idpdx = -hu/rho0 * dP/dx + hu * g * dz/dx
+      idpdy = -hv/rho0 * dP/dy + hv * g * dz/dy
+
+    with all quantities defined at the current (tracer) time level.
+    Note that the rightmost terms, which remove the external pressure gradient,
+    will be subtracted again in the momentum equations to recover the impact of the
+    total pressure gradient.
+    """
+
     idpdx: core.Array
     idpdy: core.Array
 
@@ -25,9 +43,6 @@ class Base:
 
     def __call__(self, buoy: core.Array):
         """Update tendencies of layer-integrated velocity due to internal pressure.
-
-        These are defined as -hu/rho0 * dp/dx and -hv/rho0 * dp/dy,
-        with all quantities defined at the current (tracer) time level.
 
         Args:
             buoy: buoyancy (m s-2)

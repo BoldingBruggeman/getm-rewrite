@@ -103,14 +103,14 @@ def create_simulation(
         if sim.runtype == pygetm.RunType.BAROCLINIC:
             river["salt"].set(0.5)
 
-    if sim.runtype < pygetm.RunType.BAROCLINIC:
-        sim.sst = sim.airsea.t2m
-        if sim.runtype > pygetm.RunType.BAROTROPIC_2D:
-            sim.vertical_mixing.num[...] = 1e-2
     if sim.runtype == pygetm.RunType.BAROCLINIC:
         sim.radiation.set_jerlov_type(pygetm.Jerlov.Type_II)
         sim.temp.set(11.6)
         sim.salt.set(35.2)
+    else:
+        # Temperature is not modelled, but it is needed at the surface for
+        # air-sea fluxes. Set surface temperature equal to air temperature.
+        sim.sst = sim.airsea.t2m
 
     if meteo_dir:
         sim.logger.info("Setting up ERA5 meteorological forcing")
