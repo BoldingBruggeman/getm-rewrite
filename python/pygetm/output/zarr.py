@@ -76,7 +76,7 @@ async def _add_time_coordinate(
 async def _resize_and_set(array: zarr.AsyncArray, data: np.ndarray, istop: int):
     await array.resize((istop,) + data.shape[1:])
     istart = istop - data.shape[0]
-    await array.setitem(slice(istart, istop), data)
+    await array.setitem((slice(istart, istop),), data)
 
 
 T = TypeVar("T")

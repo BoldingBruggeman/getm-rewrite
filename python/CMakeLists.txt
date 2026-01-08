@@ -1,8 +1,8 @@
-# Ensure FindPython3 supports NumPy and CMP0094
-cmake_minimum_required(VERSION 3.15)
+# Ensure FindPython3 supports NumPy and CMP0094 (3.15) and WITH_SOABI (3.17)
+cmake_minimum_required(VERSION 3.17)
 
 # Create main project.
-project(pygetm VERSION 0.9.17 LANGUAGES Fortran C)
+project(pygetm VERSION 0.9.20 LANGUAGES Fortran C)
 
 # Specify position-independent code since we will build a shared library.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -66,7 +66,7 @@ add_custom_command(OUTPUT _pygetm.c
   VERBATIM
 )
 
-Python3_add_library(_pygetm MODULE
+Python3_add_library(_pygetm MODULE WITH_SOABI
   "${CMAKE_CURRENT_BINARY_DIR}/_pygetm.c")
 target_link_libraries(_pygetm PRIVATE cgetm Python3::NumPy)
 

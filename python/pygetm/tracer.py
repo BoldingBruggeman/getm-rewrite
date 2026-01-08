@@ -73,8 +73,9 @@ class Tracer(core.Array):
                 (e.g. sinking). Defaults to 0 (no movement independent of the water).
             rivers_follow_target_cell: tracer values in river water are assumed equal
                 to those in the cell into which the river flows. This can be customized
-                further by setting <TRACER>.rivers[<RIVERNAME>].follow_target_cell
-                and/or <TRACER>.rivers[<RIVERNAME>].values
+                further for individual :attr:`rivers` by setting
+                :attr:`pygetm.rivers.RiverTracer.follow_target_cell`
+                and/or calling :meth:`pygetm.rivers.RiverTracer.set`.
             precipitation_follows_target_cell: tracer values in precipitation are
                 assumed equal to surface values in the cell into which the
                 precipitation falls. If not set, tracer values in precipitation are
@@ -132,6 +133,8 @@ class Tracer(core.Array):
 
 
 class TracerCollection(Sequence[Tracer]):
+    """Collection of all tracers that are subject to advection and diffusion."""
+
     def __init__(
         self,
         grid: core.Grid,

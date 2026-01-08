@@ -1,9 +1,10 @@
-from typing import Union, Optional, Sequence, Mapping
+from typing import Union, Optional, Sequence, Mapping, Any
 import logging
 import datetime
 import timeit
 import functools
 import pstats
+import os
 
 import numpy as np
 import cftime
@@ -468,7 +469,7 @@ class Simulation(BaseSimulation):
         "dpdy",
         "dpdxo",
         "dpdyo",
-        "_cum_river_height_increase",
+        "_int_river_flow",
         "radiation",
         "delay_slow_ip",
         "total_volume_ref",
@@ -494,8 +495,10 @@ class Simulation(BaseSimulation):
         *,
         runtype: RunType = RunType.BAROCLINIC,
         advection_scheme: operators.AdvectionScheme = operators.AdvectionScheme.DEFAULT,
-        fabm: Union[pygetm.fabm.FABM, bool, str, None] = None,
-        gotm: Union[str, None] = None,
+        fabm: Union[
+            pygetm.fabm.FABM, bool, str, os.PathLike[str], Mapping[str, Any], None
+        ] = None,
+        gotm: Union[os.PathLike[str], str, None] = None,
         momentum: Optional[pygetm.momentum.Momentum] = None,
         vertical_mixing: Optional[pygetm.vertical_mixing.VerticalMixing] = None,
         airsea: Optional[pygetm.airsea.Fluxes] = None,
@@ -683,7 +686,7 @@ class Simulation(BaseSimulation):
                 attrs=dict(_valid_at=(CellType.BOUNDARY,)),  # to compute density
             )
 
-        unmasked = self.T.mask != CellType.UNRESOLVED
+        unmasked = self.T.mask == CellType.ACTIVE
         self.total_volume_ref = (self.T.H * self.T.area).global_sum(where=unmasked)
         self.total_area = self.T.area.global_sum(where=unmasked)
 
@@ -695,7 +698,7 @@ class Simulation(BaseSimulation):
             self.logger.getChild("momentum"), self.T, runtype, advection_scheme
         )
 
-        self._cum_river_height_increase = np.zeros((len(self.rivers),))
+        self._int_river_flow = np.zeros((len(self.rivers),))
 
         #: Provider of air-water fluxes of heat and momentum.
         #: This must inherit from :class:`pygetm.airsea.Fluxes`
@@ -824,9 +827,9 @@ class Simulation(BaseSimulation):
             self.nuh_ct = None
             if fabm:
                 if not isinstance(fabm, pygetm.fabm.FABM):
-                    fabm = pygetm.fabm.FABM(
-                        fabm if isinstance(fabm, str) else "fabm.yaml"
-                    )
+                    if not isinstance(fabm, (str, os.PathLike, Mapping)):
+                        fabm = "fabm.yaml"
+                    fabm = pygetm.fabm.FABM(fabm)
                 self.fabm = fabm
                 self.fabm.initialize(
                     self.T,
@@ -947,7 +950,7 @@ class Simulation(BaseSimulation):
         if runtype == RunType.BAROTROPIC_2D:
             internal_pressure = None
         elif runtype == RunType.BAROTROPIC_3D:
-            internal_pressure = pygetm.internal_pressure.Base()
+            internal_pressure = pygetm.internal_pressure.Prescribed(idpdx=0, idpdy=0)
         elif internal_pressure is None:
             internal_pressure = pygetm.internal_pressure.ShchepetkinMcwilliams()
         self.internal_pressure = internal_pressure
@@ -1084,11 +1087,8 @@ class Simulation(BaseSimulation):
             self.timestep, self.momentum.U, self.momentum.V, self.fwf
         )
 
-        # Track cumulative increase in elevation due to river inflow over the current
-        # macrotimestep
-        self._cum_river_height_increase += (
-            self.rivers.flow * self.rivers.iarea * self.timestep
-        )
+        # Track cumulative river inflow (m3) over the current macrotimestep
+        self._int_river_flow += self.rivers.flow * self.timestep
 
         if self.runtype > RunType.BAROTROPIC_2D and macro_active:
             # Use previous source terms for biogeochemistry (valid for the start of the
@@ -1280,9 +1280,7 @@ class Simulation(BaseSimulation):
         # precipitation/evaporation/condensation from the airsea module, plus rivers
         self.fwf.all_values = self.airsea.pe.all_values
         np.add.at(
-            self.fwf.all_values,
-            (self.rivers.j, self.rivers.i),
-            self.rivers.flow * self.rivers.iarea,
+            self.fwf.all_values, self.rivers.slice, self.rivers.flow * self.rivers.iarea
         )
 
         # Update elevation at the open boundaries. This must be done before
@@ -1369,73 +1367,54 @@ class Simulation(BaseSimulation):
         precipitation, evaporation and river inflow.
         """
         # Local names for river-related variables
-        rivers = self.rivers
-        z_increases = self._cum_river_height_increase
+        slc = self.rivers.slice
 
-        # Depth of layer interfaces for each river cell
-        h = self.T.hn.all_values[:, rivers.j, rivers.i].T
-        z_if = np.zeros((h.shape[0], h.shape[1] + 1))
-        z_if[:, 1:] = -h.cumsum(axis=1)
-        z_if -= z_if[:, -1:]
+        # Increase in water depth (m)
+        z_add = self._int_river_flow * self.rivers.iarea
 
-        # Determine the part of every layer over which inflow occurs
-        zl = rivers.zl.clip(1e-6, z_if[:, 0])
-        zu = rivers.zu.clip(0.0, zl - 1e-6)
-        zbot = np.minimum(zl[:, np.newaxis], z_if[:, :-1])
-        ztop = np.maximum(zu[:, np.newaxis], z_if[:, 1:])
-        h_active = np.maximum(zbot - ztop, 0.0)
+        # Determine the part of every layer over which inflow or outflow occurs
+        h_old = self.T.hn.all_values[slc]
+        h_active = self.rivers.get_active_part_of_layers(h_old)
 
         # Change in thickness per layer
-        h_increase_riv = h_active * (z_increases / h_active.sum(axis=1))[:, np.newaxis]
+        h_add = h_active * (z_add / h_active.sum(axis=0))
+        np.add.at(self.T.hn.all_values, slc, h_add)
 
-        # Calculate the depth-integrated change in tracer, per layer.
-        tracer_adds = np.empty((len(self.tracers),) + h.shape)
-        for tracer, river_values in zip(self.tracers, tracer_adds):
-            follow = tracer.river_follow | (z_increases < 0.0)
-            ext = tracer.river_values[:, np.newaxis]
-            if follow.any():
-                int = tracer.all_values[:, rivers.j, rivers.i].T
-                river_values[...] = np.where(follow[:, np.newaxis], int, ext)
-            else:
-                river_values[...] = ext
-        tracer_adds *= h_increase_riv
+        # Update tracers
+        # We operate in depth-integrated tracer units to support
+        # summing contributions from different rivers to the same cell
+        h_new_inv = 1.0 / self.T.hn.all_values[slc]
+        for tracer in self.tracers:
+            follow = tracer.river_follow | (z_add < 0.0)
+            tracer_old = tracer.all_values[slc]
+            tracer_add = np.where(follow, tracer_old, tracer.river_values) * h_add
+            tracer.all_values[slc] = tracer_old * h_old
+            np.add.at(tracer.all_values, slc, tracer_add)
+            tracer.all_values[slc] *= h_new_inv
 
         # Precipitation and evaporation (surface layer only)
         # First update halos for the net freshwater flux, as we need to ensure that the
         # layer heights updated as a result remain valid in the halos.
         self.airsea.pe.update_halos()
         unmasked = self.T._water
-        z_increase_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
-        h = self.T.hn.all_values[-1, :, :]
-        h_new = h + z_increase_fwf
-        dilution = h / h_new
+        z_add_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
+        h_sf = self.T.hn.all_values[-1, :, :]
+        h_sf_new = h_sf + z_add_fwf
+        dilution = h_sf / h_sf_new
         for tracer in self.tracers:
             if not tracer.precipitation_follows_target_cell:
                 tracer.all_values[-1, :, :] *= dilution
-        h[:, :] = h_new
+        h_sf[:, :] = h_sf_new
 
-        # Update thicknesses and tracer values with river inflow. This must be done
-        # iteratively because different rivers can target the same cell (i, j)
-        all_tracer_values = [tracer.all_values for tracer in self.tracers]
-        for iriver, (i, j) in enumerate(zip(rivers.i, rivers.j)):
-            h = self.T.hn.all_values[:, j, i]
-            h_new = h + h_increase_riv[iriver, :]
-            h_new_inv = 1.0 / h_new
-            for itracer, all_values in enumerate(all_tracer_values):
-                tracer_values = all_values[:, j, i]
-                add = tracer_adds[itracer, iriver, :]
-                tracer_values[:] = (tracer_values * h + add) * h_new_inv
-            h[:] = h_new
-
-        # Update elevation
-        np.add.at(z_increase_fwf, (rivers.j, rivers.i), z_increases)
-        self.T.zin.all_values += z_increase_fwf
+        # Update elevation (first add river contribution to z_add_fwf)
+        np.add.at(z_add_fwf, slc, z_add)
+        self.T.zin.all_values += z_add_fwf
 
         # Start tracer halo exchange (to prepare for advection)
         for tracer in self.tracers:
             tracer.update_halos_start(self.tracers._advection.halo1)
 
-        self._cum_river_height_increase.fill(0.0)
+        self._int_river_flow.fill(0.0)
 
     @property
     def totals(
@@ -1450,7 +1429,7 @@ class Simulation(BaseSimulation):
             A tuple with total volume and a list with (tracer_total, total, mean)
             tuples on the root subdomains. On non-root subdomains it returns None, None
         """
-        unmasked = self.T.mask != CellType.UNRESOLVED
+        unmasked = self.T.mask == CellType.ACTIVE
         total_volume = (self.T.D * self.T.area).global_sum(where=unmasked)
         if any(tt.per_mass for tt in self.tracer_totals):
             vol = self.T.hn * self.T.area
@@ -1470,7 +1449,7 @@ class Simulation(BaseSimulation):
                 if tt.per_mass:
                     total.all_values *= self.rho.all_values
                 total.all_values *= grid.hn.all_values
-            total = total.global_sum(where=grid.mask != CellType.UNRESOLVED)
+            total = total.global_sum(where=grid.mask == CellType.ACTIVE)
             if total is not None:
                 ref = total_volume if not tt.per_mass else total_mass
                 mean = (total / ref - tt.offset) / tt.scale_factor
