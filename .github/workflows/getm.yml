@@ -38,6 +38,7 @@ jobs:
               python-version: ${{ matrix.python-version }}
               environment-file: environment.yml
               activate-environment: pygetm
+              conda-remove-defaults: "true"
          - name: Compile (Linux/Mac)
            if: matrix.os != 'windows-latest'
            run: source ./install
