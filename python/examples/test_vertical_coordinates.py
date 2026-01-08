@@ -55,7 +55,6 @@ gamma_surf = True
 
 vc = vertical_coordinates.Adaptive(
     nz,
-    timestep,
     cnpar=cnpar,
     ddu=ddu,
     ddl=ddl,
@@ -94,7 +93,8 @@ print(f"depth: {H.min()} to {H.max()}")
 print(f"ddl={ddl}, ddu={ddu}, Dgamma={Dgamma}")
 print("note - specified on super grid")
 
-grid.ho[...] = grid.hn[...]
+vc.update()
+grid.ho.all_values = grid.hn.all_values
 
 fig, axs = plt.subplots(3, 2)
 first = True
@@ -105,7 +105,7 @@ bott = []
 for i in range(10000):
     #vc(grid.D[...], grid.hn[...])
     vc.update(timestep)
-    grid.ho[...] = grid.hn[...]
+    grid.ho.all_values = grid.hn.all_values
 
     if i % 100 == 0:
         fig.suptitle(f"nug, dga and hn (nz={nz}): {i*timestep/3600:.1f} hours")

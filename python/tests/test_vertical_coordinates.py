@@ -97,7 +97,6 @@ class TestAdaptive(unittest.TestCase):
         try:
             vc = pygetm.vertical_coordinates.Adaptive(
                 grid.nz,
-                60.0,
                 cnpar=1.0,
                 ddu=ddu,
                 ddl=ddl,
@@ -130,7 +129,7 @@ class TestAdaptive(unittest.TestCase):
             )
             logger = logging.getLogger(__name__)
             vc.initialize(grid, logger=logger)
-            vc(grid.D[...], grid.hn[...])
+            vc.update(60.0)
             i = 10
             self.assertAlmostEqual(
                 grid.D[0, i], grid.hn[:, 0, i].sum(), places=7, msg=None, delta=None
