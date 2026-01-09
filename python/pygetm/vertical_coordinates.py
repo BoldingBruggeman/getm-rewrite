@@ -366,6 +366,7 @@ class Adaptive(Base):
             attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
             fill_value=FILL_VALUE
         )
+        self.nug.open_boundaries = ArrayOpenBoundaries(self.nug, type=ZERO_GRADIENT)
 
         self.ga = tgrid.array(
             name="ga",
@@ -455,6 +456,7 @@ class Adaptive(Base):
         # apply horizontal filtering from ~/python/src/filters.F90
         # requires halo updates
         for _ in range(self.nhfilter):
+            self.nug.open_boundaries.update()
             self.nug.update_halos()
             _pygetm.horizontal_filter(self.nug, self.hfilter)
 
