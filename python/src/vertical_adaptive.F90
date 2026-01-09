@@ -41,7 +41,7 @@ module m_adaptive
 contains
 
 subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
-                             mask, H, Do, D, &
+                             mask, H, D, &
                              ho, NN, SS, nu, &
                              decay, hpow, &
                              chsurf, hsurf, &
@@ -60,7 +60,6 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
 #define _2D_  -halox+1:nx+halox,-haloy+1:ny+haloy
    integer(c_int), intent(in) :: mask(_2D_)
    real(c_double), intent(in) :: H(_2D_)
-   real(c_double), intent(in) :: Do(_2D_)
    real(c_double), intent(in) :: D(_2D_)
    real(c_double), intent(in) :: ho(_2D_,nz)
    real(c_double), intent(in) :: NN(_2D_,0:nz)
@@ -162,12 +161,11 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    end if
 
    ! set up ratio between old and new layer heights
-   do j=jmin,jmax
-      do i=imin,imax
-         !if (mask(i,j) /= 1 ) cycle
-         if (mask(i,j) < 1 ) cycle
-
-         haux(i,j,:)=D(i,j)*ho(i,j,:)/Do(i,j)
+   do k=1,kmax
+      do j=jmin,jmax
+         do i=imin,imax
+            if (mask(i,j) == 1) haux(i,j,k)=D(i,j)*(ga(i,j,k) - ga(i,j,k-1))
+         end do
       end do
    end do
 
@@ -374,35 +372,6 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    ! 2. Vertical filtering - done in Python
 
    ! 3. Lateral filtering - done in Python
-
-   ! Calculate gamma
-   gamma: block
-   real(c_double) :: iDo(imin:imax,jmin:jmax)
-   do j=jmin,jmax
-      do i=imin,imax
-         !if (mask(i,j) /= 1) cycle
-         if (mask(i,j) < 1 ) cycle
-
-         iDo(i,j) = 1._rk/Do(i,j)
-      end do
-   end do
-   ga(imin:imax,jmin:jmax,0) = -1._rk
-   do k=1,kmax-1
-      do j=jmin,jmax
-         do i=imin,imax
-            !if (mask(i,j) /= 1) cycle
-            if (mask(i,j) < 1 ) cycle
-
-            if (i == 54 .and. j == 33 ) then
-               write(67,*) sum(ho(i,j,:)),Do(i,j),D(i,j)
-            end if
-
-            ga(i,j,k) = ga(i,j,k-1) + ho(i,j,k)*iDo(i,j)
-         end do
-      end do
-   end do
-   ga(imin:imax,jmin:jmax,kmax) = 0._rk
-   end block gamma
 
 end subroutine c_update_adaptive
 

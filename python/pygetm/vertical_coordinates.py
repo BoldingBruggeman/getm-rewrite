@@ -199,9 +199,6 @@ class Adaptive(Base):
 
     Known issues:
 
-    1: initialse self.Do correctly - if from restart read it else set it to D (Dclip)
-       but that require knowledge if it is a restart
-    2: Dclip does not seem to be available when initialize is called - check around line 396
     3: use zero-gradient boundary for ga - this implies changes in cycle statements in
        .../src/vertical_adaptive.F90 and .../src/tridiagonal.F90 - in this file seach for
        self.ga.open_boundaries
@@ -379,15 +376,6 @@ class Adaptive(Base):
         if False:
             self.ga.open_boundaries = ArrayOpenBoundaries(self.ga, type=ZERO_GRADIENT)
 
-        self.Do = tgrid.array(
-            name="Do",
-            units="m",
-            long_name="elevation at previous macro time step",
-            attrs=dict(
-                _part_of_state=True, _time_varying=TimeVarying.MACRO
-            ),
-        )
-
         # Obtain additional fields used by adaptive coordinates
         # NN and SS should maybe be interpolated to centers
         self.NN = tgrid.fields["NN"]
@@ -408,9 +396,13 @@ class Adaptive(Base):
                 1 - f_gvc
             ) * self.tgrid.hn.all_values + f_gvc * self.hn_gvc.all_values
 
-            self.Do.all_values = self.tgrid.Dclip.all_values  # or D?
-
             return
+
+        # Reconstruct old sigma positions (0 at surface, -1 at bottom)
+        # from interface coordinates
+        Do = self.tgrid.zf.all_values[-1] - self.tgrid.zf.all_values[0]
+        np.subtract(self.tgrid.zf.all_values, self.tgrid.zf.all_values[-1], out=self.ga.all_values)
+        self.ga.all_values *= 1.0 / Do
 
         # first add contributions to the grid diffusion field that are
         # handled by python
@@ -427,7 +419,6 @@ class Adaptive(Base):
         _pygetm.update_adaptive(
             self.nug,
             self.ga,
-            self.Do.all_values,
             self.NN.all_values,
             self.SS.all_values,
             self.decay,
@@ -482,10 +473,6 @@ class Adaptive(Base):
 
         # np.where(self.dga_t < 0, self.dga_t, 0)
         self.dga_t.update_halos()
-
-        self.Do.all_values = self.tgrid.Dclip.all_values
-        # print(self.Do.shape, D.shape)
-        # self.Do[...] = D[...]
 
         # Interpolate dga from T grid to other grids
         for dga in self.dga_other:

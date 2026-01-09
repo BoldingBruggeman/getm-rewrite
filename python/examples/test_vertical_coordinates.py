@@ -3,6 +3,7 @@ import logging
 
 from pygetm import domain
 from pygetm import vertical_coordinates
+from pygetm import _pygetm
 from pygetm.constants import CENTERS, INTERFACES
 
 import matplotlib.pyplot as plt
@@ -104,16 +105,17 @@ midd = []
 bott = []
 for i in range(10000):
     #vc(grid.D[...], grid.hn[...])
+    _pygetm.thickness2vertical_coordinates(grid.mask, grid.H, grid.hn, grid.zc, grid.zf)
     vc.update(timestep)
     grid.ho.all_values = grid.hn.all_values
 
     if i % 100 == 0:
         fig.suptitle(f"nug, dga and hn (nz={nz}): {i*timestep/3600:.1f} hours")
         f0 = axs[0][0].plot(
-            vc.nug[1:, 0, ::10], -np.cumsum(grid.hn[:, 0, ::10], axis=0), marker=None
+            vc.nug[:, 0, ::10], -np.cumsum(grid.hn[:, 0, ::10], axis=0), marker=None
         )
         f1 = axs[0][1].pcolormesh(
-            x[1:], -np.cumsum(grid.hn[:, 0, :], axis=0), vc.nug[1:, 0, :]
+            x[1:], -np.cumsum(grid.hn[:, 0, :], axis=0), vc.nug[:, 0, :]
         )
         if first:
             plt.colorbar(f1, ax=axs[0][1])
