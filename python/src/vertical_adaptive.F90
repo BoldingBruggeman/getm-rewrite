@@ -4,6 +4,8 @@ module m_adaptive
 
    use iso_c_binding, only: c_int, c_double
 
+   use pygetm, only: g, rho0
+
    implicit none
 
 !! @note
@@ -42,7 +44,7 @@ contains
 
 subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
                              mask, H, D, &
-                             ho, NN, SS, nu, &
+                             NN, SS, nu, &
                              decay, hpow, &
                              chsurf, hsurf, &
                              chmidd, hmidd, &
@@ -61,7 +63,6 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    integer(c_int), intent(in) :: mask(_2D_)
    real(c_double), intent(in) :: H(_2D_)
    real(c_double), intent(in) :: D(_2D_)
-   real(c_double), intent(in) :: ho(_2D_,nz)
    real(c_double), intent(in) :: NN(_2D_,0:nz)
    real(c_double), intent(in) :: SS(_2D_,0:nz)
    real(c_double), intent(inout) :: nu(_2D_,1:nz)
@@ -282,13 +283,13 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
       end block neighbor_cell_limitation
    end if
 
-   ! 1.5.1 bouyancy
+   ! 1.5.1 buoyancy
    if (cNN > ceps) then
-      bouyancy: block
+      buoyancy: block
       real(c_double) :: idNN
       real(c_double) :: x,y
 
-      idNN = 1025._rk/(9.81_rk*drho)/kmax
+      idNN = rho0/(g*drho)/kmax
       do j=jmin,jmax
          do i=imin,imax
             !if (mask(i,j) /= 1) cycle
@@ -301,7 +302,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             end do
          end do
       end do
-      end block bouyancy
+      end block buoyancy
    end if
 
    ! 1.5.2 shear

@@ -46,6 +46,7 @@ cdef extern void c_momentum_diffusion(void* ugrid, void* vgrid, void* uugrid, vo
 cdef extern void c_exponential_profile_1band_interfaces(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* initial, int up, double* out) nogil
 cdef extern void c_exponential_profile_1band_centers(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* k, double* top, double* out) nogil
 cdef extern void c_thickness2center_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
+cdef extern void c_thickness2interface_depth(int nx, int ny, int nz, int istart, int istop, int jstart, int jstop, int* mask, double* h, double* out) nogil
 cdef extern void c_thickness2vertical_coordinates(int nx, int ny, int nz, int* mask, double* bottom_depth, double* h, double* zc, double* zf) nogil
 cdef extern void c_alpha(int n, double* D, double Dmin, double Dcrit, int* mask, double* alpha) nogil
 cdef extern void c_elevation2depth(int n, const double* z, const double* H, double Dmin, const int* mask, double* D) nogil
@@ -67,7 +68,7 @@ cdef extern void c_shchepetkin_mcwilliams(int nx, int ny, int nz, int imin, int 
 cdef extern void c_vertical_advection_to_sources(int nx, int ny, int nz, int halox, int haloy, const int* mask, const double* c, const double* w, const double* h, double* s)
 cdef extern void c_update_gvc(int nx, int ny, int nz, double dsigma, const double* dbeta, double Dgamma, int kk, const double* D, const int* mask, double* h)
 
-cdef extern void c_update_adaptive(int nx, int ny, int nz, int halox, int haloy, const int* mask, const double* H, const double* D, const double* ho, const double* NN, const double* SS, const double* nu, double decay, int hpow, double chsurf, double hsurf, double chmidd, double hmidd, double chbott, double hbott, double cneigh, double rneigh, double cNN, double drho, double cSS, double dvel, double chmin, double hmin, const double* ga) nogil
+cdef extern void c_update_adaptive(int nx, int ny, int nz, int halox, int haloy, const int* mask, const double* H, const double* D, const double* NN, const double* SS, double* nu, double decay, int hpow, double chsurf, double hsurf, double chmidd, double hmidd, double chbott, double hbott, double cneigh, double rneigh, double cNN, double drho, double cSS, double dvel, double chmin, double hmin, const double* ga) nogil
 cdef extern void c_tridiagonal(int nx, int ny, int nz, int halox,  int haloy, double cnpar, double dt, const int* mask, const double* nu, const double* var ) nogil
 
 cdef class FortranArrayContainer:
@@ -365,11 +366,21 @@ def exponential_profile_1band_centers(Array mask not None, Array h not None, Arr
     c_exponential_profile_1band_centers(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, 1 + mask.grid.halox, mask.grid.nx_ - mask.grid.halox, 1 + mask.grid.haloy, mask.grid.ny_ - mask.grid.haloy, <int *>mask.p, <double *>h.p, <double *>k.p, <double *>top.p, <double *>out.p)
 
 def thickness2center_depth(Array mask not None, Array h not None, Array out=None):
+    """Depth below water surface (positive) of layer centers"""
     assert mask.grid is h.grid and h.z == CENTERS
     if out is None:
         out = h.grid.array(z=CENTERS)
     assert mask.grid is out.grid and out.z == CENTERS
     c_thickness2center_depth(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, 1 + mask.grid.halox, mask.grid.nx_ - mask.grid.halox, 1 + mask.grid.haloy, mask.grid.ny_ - mask.grid.haloy, <int *>mask.p, <double *>h.p, <double *>out.p)
+    return out
+
+def thickness2interface_depth(Array mask not None, Array h not None, Array out=None):
+    """Depth below water surface (positive) of layer interfaces"""
+    assert mask.grid is h.grid and h.z == CENTERS
+    if out is None:
+        out = h.grid.array(z=INTERFACES)
+    assert mask.grid is out.grid and out.z == INTERFACES
+    c_thickness2interface_depth(mask.grid.nx_, mask.grid.ny_, mask.grid.nz_, 1 + mask.grid.halox, mask.grid.nx_ - mask.grid.halox, 1 + mask.grid.haloy, mask.grid.ny_ - mask.grid.haloy, <int *>mask.p, <double *>h.p, <double *>out.p)
     return out
 
 def thickness2vertical_coordinates(Array mask not None, Array H not None, Array h not None, Array zc not None, Array zf not None):
@@ -617,11 +628,10 @@ def update_adaptive(Array f not None, Array ga not None, const double [:, :, ::1
     cdef Array mask = f.grid.mask
     cdef Array H = f.grid.H
     cdef Array D = f.grid.Dclip
-    cdef Array ho = f.grid.ho
     #assert mask.shape[0] == ny and mask.shape[1] == nx
     assert f.shape[0] == nz and f.shape[1] == ny and f.shape[2] == nx
     assert ga.shape[0] == nz+1 and ga.shape[1] == ny and ga.shape[2] == nx
-    c_update_adaptive(nx, ny, nz, halox, haloy, <int*>mask.p, <double*>H.p, <double*>D.p, <double*>ho.p, &NN[0, 0, 0], &SS[0, 0, 0], <double*>f.p, decay, hpow, chsurf, hsurf, chmidd, hmidd, chbott, hbott, cneigh, rneigh, cNN, drho, cSS, dvel, chmin, hmin, <double*>ga.p)
+    c_update_adaptive(nx, ny, nz, halox, haloy, <int*>mask.p, <double*>H.p, <double*>D.p, &NN[0, 0, 0], &SS[0, 0, 0], <double*>f.p, decay, hpow, chsurf, hsurf, chmidd, hmidd, chbott, hbott, cneigh, rneigh, cNN, drho, cSS, dvel, chmin, hmin, <double*>ga.p)
 
 def tridiagonal(Array nu not None, Array var not None, double cnpar, double dt):
     cdef int nx = nu.grid.nx

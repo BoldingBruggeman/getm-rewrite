@@ -406,6 +406,20 @@ contains
       end do
    end subroutine
 
+   subroutine c_thickness2interface_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
+      integer(c_int), intent(in)        :: mask(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz)
+      real(c_double), intent(inout)     :: out(nx, ny, 0:nz)
+
+      integer :: k
+
+      where (mask /= 0) out(:,:,nz) = 0.0_c_double
+      do k=nz-1,0,-1
+         where (mask /= 0) out(:,:,k) = out(:,:,k+1) + h(:,:,k+1)
+      end do
+   end subroutine
+
    subroutine c_thickness2vertical_coordinates(nx, ny, nz, mask, bottom_depth, h, zc, zf) bind(c)
       integer(c_int), intent(in), value :: nx, ny, nz
       integer(c_int), intent(in)        :: mask(nx, ny)

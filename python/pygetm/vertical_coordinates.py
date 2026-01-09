@@ -398,11 +398,14 @@ class Adaptive(Base):
 
             return
 
-        # Reconstruct old sigma positions (0 at surface, -1 at bottom)
-        # from interface coordinates
-        Do = self.tgrid.zf.all_values[-1] - self.tgrid.zf.all_values[0]
-        np.subtract(self.tgrid.zf.all_values, self.tgrid.zf.all_values[-1], out=self.ga.all_values)
-        self.ga.all_values *= 1.0 / Do
+        # Reconstruct old sigma positions (from -1 at bottom to 0 at surface)
+        # NB the values of ga will usually not be identical to those produced
+        # by the previous call to "update" due to river inflow and precipitation.
+        # Therefore we compute it anew from old layer thicknesses,
+        # which already incorporate these freshwater inputs (unlike, for
+        # example, the grid's interface coordinates zf!)
+        _pygetm.thickness2interface_depth(self.tgrid.mask, self.tgrid.ho, self.ga)
+        self.ga.all_values *= -1.0 / self.ga.all_values[0]
 
         # first add contributions to the grid diffusion field that are
         # handled by python

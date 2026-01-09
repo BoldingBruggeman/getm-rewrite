@@ -105,7 +105,6 @@ midd = []
 bott = []
 for i in range(10000):
     #vc(grid.D[...], grid.hn[...])
-    _pygetm.thickness2vertical_coordinates(grid.mask, grid.H, grid.hn, grid.zc, grid.zf)
     vc.update(timestep)
     grid.ho.all_values = grid.hn.all_values
 
