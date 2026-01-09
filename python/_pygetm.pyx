@@ -619,7 +619,8 @@ def update_adaptive(Array f not None, Array ga not None, const double [:, ::1] D
     cdef Array D = f.grid.Dclip
     cdef Array ho = f.grid.ho
     #assert mask.shape[0] == ny and mask.shape[1] == nx
-    #assert nu.shape[0] == nz and nu.shape[1] == ny and nu.shape[2] == nx
+    assert f.shape[0] == nz and f.shape[1] == ny and f.shape[2] == nx
+    assert ga.shape[0] == nz+1 and ga.shape[1] == ny and ga.shape[2] == nx
     c_update_adaptive(nx, ny, nz, halox, haloy, <int*>mask.p, <double*>H.p, &Do[0, 0], <double*>D.p, <double*>ho.p, &NN[0, 0, 0], &SS[0, 0, 0], <double*>f.p, decay, hpow, chsurf, hsurf, chmidd, hmidd, chbott, hbott, cneigh, rneigh, cNN, drho, cSS, dvel, chmin, hmin, <double*>ga.p)
 
 def tridiagonal(Array nu not None, Array var not None, double cnpar, double dt):

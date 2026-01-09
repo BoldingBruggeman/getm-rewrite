@@ -1,11 +1,10 @@
 from typing import Optional, Union
 import logging
-import warnings
 
 import numpy as np
 import numpy.typing as npt
 
-from .constants import CENTERS, INTERFACES, TimeVarying, ZERO_GRADIENT
+from .constants import CENTERS, INTERFACES, TimeVarying, ZERO_GRADIENT, FILL_VALUE
 from . import core
 from . import _pygetm
 from .open_boundaries import ArrayOpenBoundaries
@@ -88,7 +87,6 @@ def calculate_sigma(nz: int, ddl: float = 0.0, ddu: float = 0.0) -> np.ndarray:
     ga[1:-1] /= np.tanh(ddl) + np.tanh(ddu)
     dga = ga[1:] - ga[:-1]
     assert (dga > 0.0).all(), f"ga not monotonically increasing: {ga}"
-    assert dga.size == nz
     return dga
 
 
@@ -207,7 +205,7 @@ class Adaptive(Base):
     3: use zero-gradient boundary for ga - this implies changes in cycle statements in
        .../src/vertical_adaptive.F90 and .../src/tridiagonal.F90 - in this file seach for
        self.ga.open_boundaries
-    4: 
+    4:
     """
 
     def __init__(
@@ -275,7 +273,7 @@ class Adaptive(Base):
             nhfilter: number of horizontal Dgrid filter iterations [0:]
             hfilter: strength of horizontal filter-of-Dgrid [0:~0.5]
             split: Take this many partial-steps for for vertical filtering == 1 for now
-            timescale: time scale of grid adaptation [s-1]
+            timescale: time scale of grid adaptation (s)
         """
 
         if csigma <= 0.0 and cgvc <= 0.0:
@@ -284,12 +282,6 @@ class Adaptive(Base):
             raise Exception("Dgamma must be a positive number")
         if timescale <= 0.0:
             raise Exception("timescale must be a positive value")
-
-        if csigma > 0.0 and cgvc > 0.0:
-            warnings.warn(
-                f"Both csigma and cgvc > 0: overriding csigma={csigma} using cgvc={cgvc}"
-            )
-            csigma = -csigma
 
         if vfilter <= 0.0:
             nvfilter = 0
@@ -334,8 +326,6 @@ class Adaptive(Base):
             self._sigma = Sigma(nz, ddu=self.ddu, ddl=self.ddl)
 
         if self.cgvc > 0.0:
-            if ddl < 0.0 and ddu < 0.0:
-                raise Exception("ddl and/or ddu must be a positive number")
             self._gvc = GVC(
                 nz,
                 ddu=self.ddu,
@@ -351,43 +341,40 @@ class Adaptive(Base):
         logger: logging.Logger,
     ):
         super().initialize(tgrid, *other_grids, logger=logger)
-        self.logger.info(f"Initialize Adaptive coordinates")
+        logger.warning("Support for adaptive vertical coordinates is experimental.")
+
+        if self._sigma and self._gvc:
+            logger.warning(f"Relaxing to both sigma and gvc coordinates.")
 
         if self._sigma:
             self._sigma.initialize(tgrid, logger=logger)
         if self._gvc:
             self._gvc.initialize(tgrid, logger=logger)
-            self.hn_gvc = tgrid.array(
-                z=CENTERS,
-                attrs=dict(_require_halos=True, _time_varying=True, _mask_output=True),
-            )
+            self.hn_gvc = tgrid.array(z=CENTERS)
 
         self.other_grids = other_grids
         self.dga_t = tgrid.array(
             name="dga",
             z=CENTERS,
-            attrs=dict(_require_halos=True, _time_varying=True, _mask_output=True),
+            attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
         )
         self.dga_other = tuple(grid.array(z=CENTERS) for grid in other_grids)
 
         self.tgrid = tgrid
         self.nug = tgrid.array(
             name="nug",
-            units="m2 s-1",
+            units="s-1",
             long_name="vertical grid diffusivity",
-            z=INTERFACES,
-            attrs=dict(_require_halos=True, _time_varying=True, _mask_output=True),
+            z=CENTERS,
+            attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
+            fill_value=FILL_VALUE
         )
-        # Should catch if illegal values are used
-        # self.nug.all_values[0, ...] = np.nan
-        # ERROR:root:Field nug has 5968 non-finite values (out of 185008 unmasked values).
-        self.nug.all_values[0, ...] = -999.0
 
         self.ga = tgrid.array(
             name="ga",
             long_name="gamma coordinate",
             z=INTERFACES,
-            attrs=dict(_require_halos=True, _time_varying=True, _mask_output=True),
+            attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
         )
         if False:
             self.ga.open_boundaries = ArrayOpenBoundaries(self.ga, type=ZERO_GRADIENT)
@@ -397,10 +384,7 @@ class Adaptive(Base):
             units="m",
             long_name="elevation at previous macro time step",
             attrs=dict(
-                _part_of_state=True,
-                _require_halos=True,
-                _time_varying=TimeVarying.MACRO,
-                _mask_output=True,
+                _part_of_state=True, _time_varying=TimeVarying.MACRO
             ),
         )
 
@@ -409,40 +393,34 @@ class Adaptive(Base):
         self.NN = tgrid.fields["NN"]
         self.SS = tgrid.fields["SS"]
 
+    def update(self, timestep: float = 0.0):
 
-    def update(self, timestep: float=0.0):
+        if self._gvc:
+            self._gvc(self.tgrid.Dclip.all_values, self.hn_gvc.all_values)
 
         if timestep == 0.0:
+            # Simulation is initializing
             if self._sigma:
-                # this is only needed if we are not starting from a restart in which case
-                # we will have tgrid.hn - maybe there is a better way to do this
-                self._sigma(self.tgrid.D.all_values, self.tgrid.hn.all_values)
+                self._sigma(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
 
-            if self._gvc:
-                # this is only needed if we are not starting from a restart in which case
-                # we will have tgrid.hn - maybe there is a better way to do this
-                self._gvc(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
+            f_gvc = self.cgvc / (self.csigma + self.cgvc)
+            self.tgrid.hn.all_values = (
+                1 - f_gvc
+            ) * self.tgrid.hn.all_values + f_gvc * self.hn_gvc.all_values
 
-            self.Do.all_values = self.tgrid.Dclip.all_values # or D?
+            self.Do.all_values = self.tgrid.Dclip.all_values  # or D?
 
             return
 
         # first add contributions to the grid diffusion field that are
         # handled by python
 
-        if self.csigma > 0:
-            self.nug[1:, ...] = self.csigma
-        else:
-            self.nug.all_values = np.nan
-            self.nug.all_values = -999.0
+        self.nug.all_values = self.csigma
 
         # Here we need to have hn_gvc - and the scaling has to depend
         # on the value of gamma_surf - needs fix
-        if self.cgvc > 0:
-            self._gvc(self.tgrid.D.all_values, self.hn_gvc.all_values)
-            self.nug[1:, :, :] = self.cgvc * (
-                np.divide(self.hn_gvc[-1, :, :], self.hn_gvc[:, :, :])
-            )
+        if self._gvc:
+            self.nug += self.cgvc * np.divide(self.hn_gvc[-1], self.hn_gvc)
 
         # then add contributions handled by Fortran
 
@@ -469,10 +447,6 @@ class Adaptive(Base):
             self.chmin,
             self.hmin,
         )
-        # all contributions to nug are now added
-        #print('ho ',self.tgrid.ho.values)
-        #print('hn ',self.tgrid.hn.values)
-        #quit()
 
         # apply diffusion timescale
         self.nug.all_values *= 1.0 / self.timescale
@@ -510,8 +484,8 @@ class Adaptive(Base):
         self.dga_t.update_halos()
 
         self.Do.all_values = self.tgrid.Dclip.all_values
-        #print(self.Do.shape, D.shape)
-        #self.Do[...] = D[...]
+        # print(self.Do.shape, D.shape)
+        # self.Do[...] = D[...]
 
         # Interpolate dga from T grid to other grids
         for dga in self.dga_other:
@@ -523,5 +497,5 @@ class Adaptive(Base):
         all_dga = (self.dga_t,) + self.dga_other
         for grid, dga in zip(all_grids, all_dga):
             np.multiply(
-                dga, grid.D.all_values, where=grid._water, out=grid.hn.all_values
+                dga, grid.Dclip.all_values, where=grid._water, out=grid.hn.all_values
             )

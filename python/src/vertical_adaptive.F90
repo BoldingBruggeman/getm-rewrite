@@ -65,7 +65,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    real(c_double), intent(in) :: ho(_2D_,nz)
    real(c_double), intent(in) :: NN(_2D_,0:nz)
    real(c_double), intent(in) :: SS(_2D_,0:nz)
-   real(c_double), intent(inout) :: nu(_2D_,0:nz)
+   real(c_double), intent(inout) :: nu(_2D_,1:nz)
    real(c_double), intent(inout) :: ga(_2D_,0:nz)
 #undef _2D_
    real(c_double), intent(in), value :: decay

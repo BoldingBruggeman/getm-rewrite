@@ -26,7 +26,7 @@ subroutine c_tridiagonal(nx, ny, nz, halox, haloy, &
    real(c_double), intent(in), value :: cnpar,dt
 #define _D2_ -halox+1:nx+halox,-haloy+1:ny+haloy
    integer(c_int), intent(in) :: mask(_D2_)
-   real(c_double), intent(in) :: nu(_D2_,0:nz)
+   real(c_double), intent(in) :: nu(_D2_,1:nz)
    real(c_double), intent(inout) :: var(_D2_,0:nz)
 #undef _D2_
 
