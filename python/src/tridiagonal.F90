@@ -32,14 +32,12 @@ subroutine c_tridiagonal(nx, ny, nz, halox, haloy, &
 
  !  Local variables
 #ifdef _USE_3D_
-#define _D2_ -halox+1:nx+halox,-haloy+1:ny+haloy
    real(c_double),allocatable :: auxo(:,:,:)
    real(c_double),allocatable :: auxn(:,:,:)
    real(c_double),allocatable :: a1(:,:,:)
    real(c_double),allocatable :: a2(:,:,:)
    real(c_double),allocatable :: a3(:,:,:)
    real(c_double),allocatable :: a4(:,:,:)
-#undef _D2_
 #else
    real(c_double) :: auxo(0:nz)
    real(c_double) :: auxn(0:nz)
