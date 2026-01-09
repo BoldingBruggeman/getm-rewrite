@@ -293,8 +293,8 @@ class Adaptive(Base):
         self.Dgamma = Dgamma
         self.decay = decay
         self.hpow = hpow
-        self.csigma = csigma
-        self.cgvc = cgvc
+        self.csigma = max(0.0, csigma)
+        self.cgvc = max(0.0, cgvc)
         self.chsurf = chsurf
         self.chbott = chbott
         self.chmidd = chmidd
@@ -373,8 +373,7 @@ class Adaptive(Base):
             z=INTERFACES,
             attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
         )
-        if False:
-            self.ga.open_boundaries = ArrayOpenBoundaries(self.ga, type=ZERO_GRADIENT)
+        self.ga.open_boundaries = ArrayOpenBoundaries(self.ga, type=ZERO_GRADIENT)
 
         # Obtain additional fields used by adaptive coordinates
         # NN and SS should maybe be interpolated to centers
@@ -396,6 +395,10 @@ class Adaptive(Base):
                 1 - f_gvc
             ) * self.tgrid.hn.all_values + f_gvc * self.hn_gvc.all_values
 
+            self.dga_t.all_values = self.tgrid.hn.all_values / self.tgrid.Dclip.all_values
+
+            self.update_other_grids()
+
             return
 
         # Reconstruct old sigma positions (from -1 at bottom to 0 at surface)
@@ -415,7 +418,7 @@ class Adaptive(Base):
         # Here we need to have hn_gvc - and the scaling has to depend
         # on the value of gamma_surf - needs fix
         if self._gvc:
-            self.nug += self.cgvc * np.divide(self.hn_gvc[-1], self.hn_gvc)
+            self.nug.all_values += self.cgvc * np.divide(self.hn_gvc.all_values[-1], self.hn_gvc.all_values)
 
         # then add contributions handled by Fortran
 
@@ -459,27 +462,23 @@ class Adaptive(Base):
         _pygetm.tridiagonal(self.nug, self.ga, self.cnpar, timestep)
 
         # assure consistent ga on boundaries
-        if False:
-            self.ga.open_boundaries.update()
+        self.ga.open_boundaries.update()
 
         # To get dga - that can be used to interpolate to
         # other grids for the calculation of layer heights
-        np.subtract(self.ga[1:], self.ga[:-1], out=self.dga_t)
-        if False:
-            print("Values less than 0 =", self.dga_t[...][self.dga_t[...] < 0.0])
-            print("Their indices are ", np.nonzero(self.dga_t[...] < 0.0))
-        if False:
-            print("AAAA0 ", self.nug[:, 32, 53])
-            print("AAAA1 ", self.ga[:, 32, 53])
-            print("AAAA2 ", self.dga_t[:, 32, 53])
-            print("AAAA3 ", np.sum(self.dga_t[:, 32, 53]))
+        np.subtract(self.ga.all_values[1:], self.ga.all_values[:-1], out=self.dga_t.all_values)
 
         # np.where(self.dga_t < 0, self.dga_t, 0)
         self.dga_t.update_halos()
 
+        self.update_other_grids()
+
+    def update_other_grids(self):
+        """Update layer thicknesses hn for all other grids"""
         # Interpolate dga from T grid to other grids
         for dga in self.dga_other:
             self.dga_t.interp(dga)
+            dga.mirror()
             dga.update_halos()
 
         # From dga to layer thicknesses in m [hn]
