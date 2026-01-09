@@ -80,7 +80,6 @@ class BaseSimulation:
         "output_manager",
         "input_manager",
         "default_time_reference",
-        "_initialized_variables",
         "timestep",
         "macrotimestep",
         "split_factor",
@@ -120,7 +119,6 @@ class BaseSimulation:
         )
 
         self.default_time_reference: Optional[cftime.datetime] = None
-        self._initialized_variables = set()
         self._cached_check_finite_info = None
 
     def __getitem__(self, key: str) -> core.Array:
@@ -192,24 +190,25 @@ class BaseSimulation:
 
             # Load all fields that are part of the model state
             missing = []
+            initialized_variables = set()
             for name, field in self.output_manager.fields.items():
                 if field.attrs.get("_part_of_state", False):
                     if name not in ds:
                         missing.append(name)
                     else:
                         field.set(ds[name], on_grid=pygetm.input.OnGrid.ALL, mask=True)
-                        self._initialized_variables.add(name)
+                        initialized_variables.add(name)
             if missing:
                 raise Exception(
                     "The following field(s) are part of the model state but not found "
                     f"in {path!r}: {', '.join(missing)}"
                 )
 
-        self._after_restart()
+        self._after_restart(initialized_variables)
 
         return time_coord[itime]
 
-    def _after_restart(self):
+    def _after_restart(self, initialized_variables: set[str]):
         pass
 
     @log_exceptions
@@ -975,13 +974,14 @@ class Simulation(BaseSimulation):
 
         # Derive old and new elevations, water depths and thicknesses from current
         # surface elevation on T grid. This must be done after self.pres.saved is set
-        self.update_depth(_3d=runtype > RunType.BAROTROPIC_2D)
-        self.update_depth(_3d=runtype > RunType.BAROTROPIC_2D)
+        self.initialize_depth()
 
-    def _after_restart(self):
+    def _after_restart(self, initialized_variables: set[str]):
         if self.runtype > RunType.BAROTROPIC_2D:
             # Restore elevation from before open boundary condition was applied
             self.T.z.all_values = self.T.zin.all_values
+
+        self.initialize_depth(keep_all_z=True, keep_ho="hot" in initialized_variables)
 
     def _start(self):
         self.momentum.start()
@@ -1000,11 +1000,36 @@ class Simulation(BaseSimulation):
         for grid in (self.U, self.V):
             edges = grid._edge_x | grid._edge_y
             grid.D.all_values[edges] = FILL_VALUE
+            for _ in range(2):
+                grid.D.mirror()
             if grid.hn is not None:
                 grid.hn.all_values[..., edges] = FILL_VALUE
+                grid.ho.all_values[..., edges] = FILL_VALUE
+                for _ in range(2):
+                    grid.ho.mirror()
+                    grid.hn.mirror()
 
         if self.fabm:
             self.fabm.start(self.macrotimestep, self.time)
+
+        if self.runtype > RunType.BAROTROPIC_2D:
+            self.momentum.update_diagnostics(
+                            self.macrotimestep, self.vertical_mixing.num
+                        )
+
+    def initialize_depth(self, keep_all_z: bool=False, keep_ho: bool = False):
+        """Initialize elevations, water depths, layer thicknesses and vertical
+        coordinates on all grids, and where applicable, on old and new time levels.
+        These are derived from the current surface elevation on the T grid
+        (:attr:`self.T.z`).
+        
+        Args:
+            keep_all_z: if True, preserve values of elevation for the old
+                barotropic time level (:attr:`self.T.zo`), and old and new elevations
+                for the old baroclinic time level (:attr:`self.T.zio`, :attr:`self.T.zin`)
+            keep_ho: if True, preserve values of layer thickness at the old
+                baroclinic time level (:attr:`self.T.ho`)
+        """
 
         def clip_z(z: core.Array, valid_min: np.ndarray):
             shallow = (z.all_values < valid_min) & self.T._water
@@ -1019,12 +1044,18 @@ class Simulation(BaseSimulation):
         # Ensure elevations are valid (not shallower than minimum depth)
         minz = -self.T.H.all_values + self.Dmin
         clip_z(self.T.z, minz)
-        clip_z(self.T.zo, minz)
-        if self.runtype > RunType.BAROTROPIC_2D:
-            clip_z(self.T.zin, minz)
-            clip_z(self.T.zio, minz)
+        if keep_all_z:
+            clip_z(self.T.zo, minz)
+            if self.runtype > RunType.BAROTROPIC_2D:
+                clip_z(self.T.zin, minz)
+                clip_z(self.T.zio, minz)
+        else:
+            self.T.zo.all_values = self.T.z.all_values
+            if self.runtype > RunType.BAROTROPIC_2D:
+                self.T.zin.all_values = self.T.z.all_values
+                self.T.zio.all_values = self.T.z.all_values
 
-        # First (out of two) 2D depth update based on old elevations zo
+        # First (out of two) 2D depth updates based on old elevations zo
         z_backup = self.T.z.all_values.copy()
         self.T.z.all_values = self.T.zo.all_values
         self.update_depth(_3d=False)
@@ -1055,18 +1086,14 @@ class Simulation(BaseSimulation):
             # (ho/zio) for U, V, X grids will still be NaN and should not be used.
             self.T.z.all_values = zin_backup
 
-            if "hot" in self._initialized_variables:
+            if keep_ho:
                 self.T.hn.all_values = ho_T_backup
 
             # this moves our zin backup into zin, and at the same time moves the
             # current zin (originally zio) to zio
-            self.update_depth(_3d=True, timestep=self.macrotimestep)
-            self.momentum.update_diagnostics(
-                self.macrotimestep, self.vertical_mixing.num
-            )
+            self.update_depth(_3d=True)
 
-        # Update all forcing, which includes the final 2D depth update based on
-        # (original) z
+        # Restore original elevation
         self.T.z.all_values = z_backup
 
     def _advance_state(self, macro_active: bool):
