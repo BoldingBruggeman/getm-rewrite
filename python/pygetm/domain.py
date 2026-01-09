@@ -1605,11 +1605,11 @@ class Domain:
 
         if show_rivers and self.rivers:
             self.rivers.map_to_grid(self._tlocator(mask))
-            for river in self.rivers.global_rivers:
+            for name, river in self.rivers.items():
                 i_sup, j_sup = 1 + river.i * 2, 1 + river.j * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]
                 ax.plot([river_x], [river_y], ".r")
-                ax.text(river_x, river_y, river.name, color="r")
+                ax.text(river_x, river_y, name, color="r")
 
         if show_open_boundaries:
             x_X, y_X = x[::2, ::2], y[::2, ::2]
