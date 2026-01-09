@@ -1000,8 +1000,14 @@ class Simulation(BaseSimulation):
         for grid in (self.U, self.V):
             edges = grid._edge_x | grid._edge_y
             grid.D.all_values[edges] = FILL_VALUE
+            for _ in range(2):
+                grid.D.mirror()
             if grid.hn is not None:
                 grid.hn.all_values[..., edges] = FILL_VALUE
+                grid.ho.all_values[..., edges] = FILL_VALUE
+                for _ in range(2):
+                    grid.ho.mirror()
+                    grid.hn.mirror()
 
         if self.fabm:
             self.fabm.start(self.macrotimestep, self.time)
