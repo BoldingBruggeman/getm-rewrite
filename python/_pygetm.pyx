@@ -640,6 +640,8 @@ def tridiagonal(Array nu not None, Array var not None, double cnpar, double dt):
     cdef int halox = nu.grid.halox
     cdef int haloy = nu.grid.haloy
     cdef Array mask = nu.grid.mask
+    assert var.shape[0] == nz+1 and var.shape[1] == ny and var.shape[2] == nx
+    assert nu.shape[0] == nz and nu.shape[1] == ny and nu.shape[2] == nx
     c_tridiagonal(nx, ny, nz, halox, haloy, cnpar, dt, <int*> mask.p, <double*>nu.p, <double*>var.p)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
