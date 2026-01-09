@@ -17,7 +17,7 @@ contains
 #define _D2_  -halox+1:nx+halox,-haloy+1:ny+haloy
       integer(c_int), intent(in) :: mask(_D2_)
       real(c_double), intent(in), value :: w
-      real(c_double), intent(inout) :: var(_D2_,0:nz)
+      real(c_double), intent(inout) :: var(_D2_,nz)
 #undef _D2_
 
       real(c_double), allocatable :: x(:,:,:)
@@ -63,10 +63,10 @@ contains
 #define _D2_  -halox+1:nx+halox,-haloy+1:ny+haloy
       integer(c_int), intent(in) :: mask(_D2_)
       real(c_double), intent(in), value :: w
-      real(c_double), intent(inout) :: var(_D2_, 0:nz)
+      real(c_double), intent(inout) :: var(_D2_, nz)
 #undef _D2_
 
-      real(c_double) :: col(0:nz)
+      real(c_double) :: col(nz)
       real(c_double) :: wc,wn
       integer :: imin=1, jmin=1, imax, jmax, kmax
       integer :: i, j, k, n
