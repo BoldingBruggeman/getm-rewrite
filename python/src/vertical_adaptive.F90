@@ -265,7 +265,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
 
             relh(1)=haux(i,j,1)/haux(i,j,2)
             do k=2,kmax-1
-               relh(k)=haux(i,j,k-1)/haux(i,j,k+1)
+               relh(k)=haux(i,j,k)/min(haux(i,j,k-1),haux(i,j,k+1))
             end do
             relh(kmax)=haux(i,j,kmax)/haux(i,j,kmax-1)
             relh(:)=max(0._rk, relh(:)-1._rk)
