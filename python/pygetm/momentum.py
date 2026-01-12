@@ -696,13 +696,14 @@ class Momentum:
         # Mirror transports (restarts may not include mirrored points)
         # This is done twice because some external mirrored points (MIRROR_EXT)
         # are mirrored from internal mirrored points (MIRROR_INT)
-        self.U.mirror()
-        self.V.mirror()
-        if self.runtype > RunType.BAROTROPIC_2D:
-            self.pk.mirror()
-            self.qk.mirror()
-            self.Ui.mirror()
-            self.Vi.mirror()
+        for _ in range(2):
+            self.U.mirror()
+            self.V.mirror()
+            if self.runtype > RunType.BAROTROPIC_2D:
+                self.pk.mirror()
+                self.qk.mirror()
+                self.Ui.mirror()
+                self.Vi.mirror()
 
         # If horizontal diffusivity [damping] is specified, interpolate it to
         # U and V grids

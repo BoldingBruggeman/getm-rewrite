@@ -1042,12 +1042,11 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         nx, ny = grid.nx_, grid.ny_
 
         class Mirror:
-            def __init__(self, to_self: bool = False):
+            def __init__(self):
                 self.i_in = []
                 self.j_in = []
                 self.i_out = []
                 self.j_out = []
-                self.to_self = to_self
 
             def append(self, i_in, j_in, i_out, j_out, where, check=None, value=None):
                 i_in, j_in, i_out, j_out = np.broadcast_arrays(i_in, j_in, i_out, j_out)
@@ -1068,19 +1067,10 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                     j_in = np.concatenate(self.j_in, dtype=np.intp)
                     i_out = np.concatenate(self.i_out, dtype=np.intp)
                     j_out = np.concatenate(self.j_out, dtype=np.intp)
-                    if self.to_self:
-                        while True:
-                            imatch =i_in == i_out[:, np.newaxis]
-                            jmatch = j_in == j_out[:, np.newaxis]
-                            (ind_out, ind_in) = (imatch & jmatch).nonzero()
-                            if ind_out.size == 0:
-                                break
-                            i_in[ind_in] = i_in[ind_out]
-                            j_in[ind_in] = j_in[ind_out]
                     return (Ellipsis, j_in, i_in), (Ellipsis, j_out, i_out)
 
-        mirror_U = Mirror(to_self=True)
-        mirror_V = Mirror(to_self=True)
+        mirror_U = Mirror()
+        mirror_V = Mirror()
         mirror_TU = Mirror()
         mirror_TV = Mirror()
         tmask = grid.mask.all_values
