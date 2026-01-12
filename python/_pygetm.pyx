@@ -69,7 +69,7 @@ cdef extern void c_vertical_advection_to_sources(int nx, int ny, int nz, int hal
 cdef extern void c_update_gvc(int nx, int ny, int nz, double dsigma, const double* dbeta, double Dgamma, int kk, const double* D, const int* mask, double* h)
 
 cdef extern void c_update_adaptive(int nx, int ny, int nz, int halox, int haloy, const int* mask, const double* H, const double* D, const double* NN, const double* SS, double* nu, double decay, int hpow, double chsurf, double hsurf, double chmidd, double hmidd, double chbott, double hbott, double cneigh, double rneigh, double cNN, double drho, double cSS, double dvel, double chmin, double hmin, const double* ga) nogil
-cdef extern void c_tridiagonal(int nx, int ny, int nz, int halox,  int haloy, double cnpar, double dt, const int* mask, const double* nu, const double* var ) nogil
+cdef extern void c_tridiagonal(int nx, int ny, int nz, int halox,  int haloy, double dt, const int* mask, const double* nu, double* var) nogil
 
 cdef class FortranArrayContainer:
     cdef void* p
@@ -633,7 +633,7 @@ def update_adaptive(Array f not None, Array ga not None, const double [:, :, ::1
     assert ga.shape[0] == nz+1 and ga.shape[1] == ny and ga.shape[2] == nx
     c_update_adaptive(nx, ny, nz, halox, haloy, <int*>mask.p, <double*>H.p, <double*>D.p, &NN[0, 0, 0], &SS[0, 0, 0], <double*>f.p, decay, hpow, chsurf, hsurf, chmidd, hmidd, chbott, hbott, cneigh, rneigh, cNN, drho, cSS, dvel, chmin, hmin, <double*>ga.p)
 
-def tridiagonal(Array nu not None, Array var not None, double cnpar, double dt):
+def tridiagonal(Array nu not None, Array var not None, double dt):
     cdef int nx = nu.grid.nx
     cdef int ny = nu.grid.ny
     cdef int nz = nu.grid.nz
@@ -642,7 +642,7 @@ def tridiagonal(Array nu not None, Array var not None, double cnpar, double dt):
     cdef Array mask = nu.grid.mask
     assert var.shape[0] == nz+1 and var.shape[1] == ny and var.shape[2] == nx
     assert nu.shape[0] == nz and nu.shape[1] == ny and nu.shape[2] == nx
-    c_tridiagonal(nx, ny, nz, halox, haloy, cnpar, dt, <int*> mask.p, <double*>nu.p, <double*>var.p)
+    c_tridiagonal(nx, ny, nz, halox, haloy, dt, <int*> mask.p, <double*>nu.p, <double*>var.p)
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function

@@ -195,28 +195,21 @@ class GVC(PerGrid):
 
 class Adaptive(Base):
     """
-    Adaptive coordinates
-
-    Known issues:
-
-    3: use zero-gradient boundary for ga - this implies changes in cycle statements in
-       .../src/vertical_adaptive.F90 and .../src/tridiagonal.F90 - in this file seach for
-       self.ga.open_boundaries
-    4:
+    Adaptive vertical coordinates based on `Hofmeister et al. (2010)
+    <https://doi.org/10.1016/j.ocemod.2009.12.003>`_ and `their GETM
+    implementation <https://sourceforge.net/p/getm/code/ci/iow/tree/src/3d/adaptive_coordinates_6.F90>`_
     """
 
     def __init__(
         self,
         nz: int,
         *,
-        cnpar: float = 1.0,
         ddu: float = 0.0,
         ddl: float = 0.0,
         gamma_surf: bool = True,
         Dgamma: float = 0.0,
-        csigma: float = -1.0,  # 0.01
-        cgvc: float = -1.0,  # 0.01
-        decay: float = 2.0 / 3.0,
+        csigma: float = 0.01,
+        cgvc: float = 0.0,
         hpow: int = 3,
         chsurf: float = 0.5,
         hsurf: float = 0.5,
@@ -224,6 +217,7 @@ class Adaptive(Base):
         hmidd: float = -4.0,
         chbott: float = 0.3,
         hbott: float = -0.25,
+        decay: float = 2.0 / 3.0,
         cneigh: float = 0.1,
         rneigh: float = 0.25,
         cNN: float = -1.0,
@@ -242,21 +236,25 @@ class Adaptive(Base):
         """
         Args:
             nz: number of layers
-            cnpar: Crank Nicolson implicitness parameter
             ddu: zoom factor at surface (0: no zooming, 2: strong zooming)
             ddl: zoom factor at bottom (0: no zooming, 2: strong zooming)
             gamma_surf: use layers of constant thickness `Dgamma/nz` at surface (otherwise, at bottom)
             Dgamma: water depth below which to use equal layer thicknesses
-            decay: surface/bottom effect - decay by layer
             hpow: exponent for growth of Dgrid (ramp between 0 and c* tendencies)
             csigma: tendency to uniform sigma
             cgvc: tendency to "standard" gvc (w/ddu,ddl)
             chsurf: tendency to keep surface layer bounded
-            hsurf: reference thickness, surface layer (relative to avg cell)
+            hsurf: reference thickness for surface layer
+                (absolute thickness in m if >0, relative to average thickness D/nz if <0)
             chmidd: tendency to keep all layers bounded
-            hmidd: reference thickness, other layers (relative to avg cell
+            hmidd: reference thickness for other layers
+                (absolute thickness in m if >0, relative to average thickness D/nz if <0)
             chbott: tendency to keep bottom layer bounded
-            hbott: reference thickness, bottom layer (relative to avg cell)
+            hbott: reference thickness for bottom layer
+                (absolute thickness in m if >0, relative to average thickness D/nz if <0)
+            decay: fraction of surface/bottom tendencies (controlled by chsurf, chbott)
+                to preserve for each additional layer away from surface/bottom
+                (0: only apply tendency in targeted layer, 1: apply same tendency in all layers)
             cneigh: tendency to keep neighbors of similar size
             rneigh: reference relative growth between neighbors
             cNN: dependence on NN (density zooming)
@@ -265,32 +263,45 @@ class Adaptive(Base):
             dvel: reference value for SS absolute shear between neighbor cells
             chmin: internal nug coeff for shallow-water regions
             hmin: minimum depth
-            nvfilter: number of vertical Dgrid filter iterations [0:]
+            nvfilter: number of vertical filter iterations
             vfilter: strength of vertical filter-of-Dgrid [0:~0.5]
-            nhfilter: number of horizontal Dgrid filter iterations [0:]
+            nhfilter: number of horizontal filter iterations
             hfilter: strength of horizontal filter-of-Dgrid [0:~0.5]
             split: Take this many partial-steps for for vertical filtering == 1 for now
             timescale: time scale of grid adaptation (s)
         """
 
-        if csigma <= 0.0 and cgvc <= 0.0:
-            raise Exception("either csigma or cgvc must be a positive number")
-        if Dgamma <= 0.0:
-            raise Exception("Dgamma must be a positive number")
         if timescale <= 0.0:
             raise Exception("timescale must be a positive value")
+        if decay < 0.0 or decay > 1.0:
+            raise Exception("decay must be between 0 and 1")
+        if chsurf < 0.0:
+            raise Exception("chsurf must be non-negative")
+        if chbott < 0.0:
+            raise Exception("chbott must be non-negative")
+        if chmidd < 0.0:
+            raise Exception("chmidd must be non-negative")
+        if chsurf > 0.0 and hsurf == 0.0:
+            raise Exception("hsurf must be non-zero when chsurf is positive")
+        if chbott > 0.0 and hbott == 0.0:
+            raise Exception("hbott must be non-zero when chbott is positive")
+        if chmidd > 0.0 and hmidd == 0.0:
+            raise Exception("hmidd must be non-zero when chmidd is positive")
+        if nvfilter < 0:
+            raise Exception("nvfilter must be non-negative")
+        if nhfilter < 0:
+            raise Exception("nhfilter must be non-negative")
+        if vfilter < 0:
+            raise Exception("vfilter must be non-negative")
+        if hfilter < 0:
+            raise Exception("hfilter must be non-negative")
 
-        if vfilter <= 0.0:
+        if vfilter == 0.0:
             nvfilter = 0
-        if hfilter <= 0.0:
+        if hfilter == 0.0:
             nhfilter = 0
 
         super().__init__(nz)
-        self.cnpar = cnpar
-        self.ddl = ddl
-        self.ddu = ddu
-        self.gamma_surf = gamma_surf
-        self.Dgamma = Dgamma
         self.decay = decay
         self.hpow = hpow
         self.csigma = max(0.0, csigma)
@@ -317,19 +328,10 @@ class Adaptive(Base):
         self.split = 1
         self.timescale = timescale
 
-        self._sigma: Optional[Sigma] = None
-        self._gvc: Optional[GVC] = None
-        if self.csigma > 0.0:
-            self._sigma = Sigma(nz, ddu=self.ddu, ddl=self.ddl)
-
-        if self.cgvc > 0.0:
-            self._gvc = GVC(
-                nz,
-                ddu=self.ddu,
-                ddl=self.ddl,
-                gamma_surf=self.gamma_surf,
-                Dgamma=self.Dgamma,
-            )
+        if (ddl <= 0.0 and ddu <= 0.0) or Dgamma <= 0.0:
+            self._gvc = Sigma(nz, ddl=ddl, ddu=ddu)
+        else:
+            self._gvc = GVC(nz, ddu=ddu, ddl=ddl, gamma_surf=gamma_surf, Dgamma=Dgamma)
 
     def initialize(
         self,
@@ -340,14 +342,14 @@ class Adaptive(Base):
         super().initialize(tgrid, *other_grids, logger=logger)
         logger.warning("Support for adaptive vertical coordinates is experimental.")
 
-        if self._sigma and self._gvc:
+        if self.csigma > 0.0 and self.cgvc > 0.0:
             logger.warning(f"Relaxing to both sigma and gvc coordinates.")
+        elif self.csigma == 0.0 and self.cgvc == 0.0:
+            logger.warning(
+                f"Not relaxing to any background layer distribution (sigma or gvc)."
+            )
 
-        if self._sigma:
-            self._sigma.initialize(tgrid, logger=logger)
-        if self._gvc:
-            self._gvc.initialize(tgrid, logger=logger)
-            self.hn_gvc = tgrid.array(z=CENTERS)
+        self._gvc.initialize(tgrid, logger=logger)
 
         self.other_grids = other_grids
         self.dga_t = tgrid.array(
@@ -364,9 +366,8 @@ class Adaptive(Base):
             long_name="vertical grid diffusivity",
             z=CENTERS,
             attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
-            fill_value=FILL_VALUE
+            fill_value=FILL_VALUE,
         )
-        self.nug.open_boundaries = ArrayOpenBoundaries(self.nug, type=ZERO_GRADIENT)
 
         self.ga = tgrid.array(
             name="ga",
@@ -374,7 +375,12 @@ class Adaptive(Base):
             z=INTERFACES,
             attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
         )
-        self.ga.open_boundaries = ArrayOpenBoundaries(self.ga, type=ZERO_GRADIENT)
+
+        if hasattr(self.tgrid, "open_boundaries"):
+            self.nug.open_boundaries = ArrayOpenBoundaries(self.nug, type=ZERO_GRADIENT)
+            self.dga_t.open_boundaries = ArrayOpenBoundaries(
+                self.dga_t, type=ZERO_GRADIENT
+            )
 
         # Obtain additional fields used by adaptive coordinates
         # NN and SS should maybe be interpolated to centers
@@ -383,20 +389,12 @@ class Adaptive(Base):
 
     def update(self, timestep: float = 0.0):
 
-        if self._gvc:
-            self._gvc(self.tgrid.Dclip.all_values, self.hn_gvc.all_values)
-
         if timestep == 0.0:
             # Simulation is initializing
-            if self._sigma:
-                self._sigma(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
-
-            f_gvc = self.cgvc / (self.csigma + self.cgvc)
-            self.tgrid.hn.all_values = (
-                1 - f_gvc
-            ) * self.tgrid.hn.all_values + f_gvc * self.hn_gvc.all_values
-
-            self.dga_t.all_values = self.tgrid.hn.all_values / self.tgrid.Dclip.all_values
+            self._gvc(self.tgrid.Dclip.all_values, self.hn.all_values)
+            self.dga_t.all_values = (
+                self.tgrid.hn.all_values / self.tgrid.Dclip.all_values
+            )
 
             self.update_other_grids()
 
@@ -411,18 +409,35 @@ class Adaptive(Base):
         _pygetm.thickness2interface_depth(self.tgrid.mask, self.tgrid.ho, self.ga)
         self.ga.all_values *= -1.0 / self.ga.all_values[0]
 
-        # first add contributions to the grid diffusion field that are
-        # handled by python
+        # Construct the grid diffusivity, which is defined per layer, and equal
+        # to the relative rate (tendency, in s-1) at which the layer "gives" its
+        # thickness to each neighbor. That is, interior layers (non-surface/bottom)
+        # will lose thickness delta_sigma over both interfaces, at a combined rate
+        # 2*nug*delta_sigma. Simultaneously they will gain thickness from both of
+        # their neighbors at rates nug(k-1)*delta_sigma(k-1) and
+        # nug(k+1)*delta_sigma(k+1).
+        # While constructing the tendencies, we use dimensionless rates (csigma etc.)
+        # These are later divided by the adaptation timescale to obtain
+        # the final nug in s-1.
 
+        # Tendency towards pure (non-zoomed) sigma coordinates
+        # This is constant for all layers in order to ensure that an equilibrium
+        # distribution (equal thickness fluxes in and out) is reached when all
+        # layers have equal thickness.
         self.nug.all_values = self.csigma
 
-        # Here we need to have hn_gvc - and the scaling has to depend
-        # on the value of gamma_surf - needs fix
-        if self._gvc:
-            self.nug.all_values += self.cgvc * np.divide(self.hn_gvc.all_values[-1], self.hn_gvc.all_values)
+        # Tendency towards Generalized Vertical Coordinates (incl. zoomed sigma)
+        # NB the stationary solution of AVC has thicknesses proportional to
+        # the inverse of diffusivity (nug). The division by hn below is
+        # therefore necessary; its scaling with surface thicknesses only
+        # ensures the tendency equals exactly cgvc at the surface.
+        if self.cgvc > 0.0:
+            self._gvc(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
+            self.nug.all_values += np.divide(
+                self.cgvc * self.tgrid.hn.all_values[-1], self.tgrid.hn.all_values
+            )
 
         # then add contributions handled by Fortran
-
         _pygetm.update_adaptive(
             self.nug,
             self.ga,
@@ -456,21 +471,25 @@ class Adaptive(Base):
         # apply horizontal filtering from ~/python/src/filters.F90
         # requires halo updates
         for _ in range(self.nhfilter):
-            self.nug.open_boundaries.update()
+            if self.nug.open_boundaries is not None:
+                self.nug.open_boundaries.update()
             self.nug.update_halos()
             _pygetm.horizontal_filter(self.nug, self.hfilter)
 
         # now the grid diffusion field is ready to be applied
-        _pygetm.tridiagonal(self.nug, self.ga, self.cnpar, timestep)
+        _pygetm.tridiagonal(self.nug, self.ga, timestep)
 
         # assure consistent ga on boundaries
         self.ga.open_boundaries.update()
 
-        # To get dga - that can be used to interpolate to
-        # other grids for the calculation of layer heights
-        np.subtract(self.ga.all_values[1:], self.ga.all_values[:-1], out=self.dga_t.all_values)
+        # Calculate sigma thicknesses from interface positions
+        np.subtract(
+            self.ga.all_values[1:], self.ga.all_values[:-1], out=self.dga_t.all_values
+        )
 
-        # np.where(self.dga_t < 0, self.dga_t, 0)
+        # assure consistent dga on boundaries and in halo zones
+        if self.dga_t.open_boundaries is not None:
+            self.dga_t.open_boundaries.update()
         self.dga_t.update_halos()
 
         self.update_other_grids()

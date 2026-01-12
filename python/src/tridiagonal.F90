@@ -17,13 +17,12 @@ contains
 ! doing a simple test using 3D local variables is about 4% faster then
 ! using 1D - KB 2024-12-16
 
-subroutine c_tridiagonal(nx, ny, nz, halox, haloy, &
-                         cnpar, dt, mask, nu, var) bind(c)
+subroutine c_tridiagonal(nx, ny, nz, halox, haloy, dt, mask, nu, var) bind(c)
 
 !  Subroutine arguments
    integer(c_int), intent(in), value :: nx, ny, nz
    integer(c_int), intent(in), value :: halox, haloy
-   real(c_double), intent(in), value :: cnpar,dt
+   real(c_double), intent(in), value :: dt
 #define _D2_ -halox+1:nx+halox,-haloy+1:ny+haloy
    integer(c_int), intent(in) :: mask(_D2_)
    real(c_double), intent(in) :: nu(_D2_,1:nz)
@@ -32,15 +31,11 @@ subroutine c_tridiagonal(nx, ny, nz, halox, haloy, &
 
  !  Local variables
 #ifdef _USE_3D_
-   real(c_double),allocatable :: auxo(:,:,:)
-   real(c_double),allocatable :: auxn(:,:,:)
    real(c_double),allocatable :: a1(:,:,:)
    real(c_double),allocatable :: a2(:,:,:)
    real(c_double),allocatable :: a3(:,:,:)
    real(c_double),allocatable :: a4(:,:,:)
 #else
-   real(c_double) :: auxo(0:nz)
-   real(c_double) :: auxn(0:nz)
    real(c_double) :: a1(0:nz)
    real(c_double) :: a2(0:nz)
    real(c_double) :: a3(0:nz)
@@ -57,8 +52,6 @@ subroutine c_tridiagonal(nx, ny, nz, halox, haloy, &
 
 #ifdef _USE_3D_
 #define _D2_ -halox+1:nx+halox,-haloy+1:ny+haloy
-   allocate(auxo(_D2_,0:nz))
-   allocate(auxn(_D2_,0:nz))
    allocate(a1(_D2_,0:nz))
    allocate(a2(_D2_,0:nz))
    allocate(a3(_D2_,0:nz))
