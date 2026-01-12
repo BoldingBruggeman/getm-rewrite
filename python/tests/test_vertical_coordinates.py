@@ -74,69 +74,72 @@ class TestGVC(unittest.TestCase):
 
 
 class TestAdaptive(unittest.TestCase):
+    def _get_grid(self, nz: int):
+        dom = pygetm.domain.create_cartesian(
+            x=[-0.5, 0.5],
+            y=[-0.5, 0.5],
+            interfaces=True,
+            f=0.0,
+            H=100.0,
+            logger=pygetm.parallel.get_logger(level="ERROR"),
+        )
+        grid = dom.create_grids(nz, 0, 0)
+        NN = grid.array(name="NN", z=pygetm.constants.INTERFACES)
+        SS = grid.array(name="SS", z=pygetm.constants.INTERFACES)
+        grid.ho = grid.array(z=pygetm.constants.CENTERS)
+        NN.all_values.fill(np.nan)
+        SS.all_values.fill(np.nan)
+        return grid, dom.logger.getChild("vertical_coordinates")
+
     def test(self):
-        Dgamma = 20.0
-        gamma_surf = True
-        for csigma in (-1.0, 0.0, 0.001, 0.0001):
-            for cgvc in (-1.0, 0.0, 0.001, 0.0001):
-                for ddu in (0.75, 1.5):
-                    for ddl in (0.75, 1.5):
-                        self._test(ddu, ddl, Dgamma, gamma_surf, csigma, cgvc)
+        kwargs = dict(
+            csigma=0.0,
+            cgvc=0.0,
+            ddu=0.0,
+            ddl=0.0,
+            chsurf=0.0,
+            chmidd=0.0,
+            chbott=0.0,
+            cneigh=0.0,
+            cNN=0.0,
+            cSS=0.0,
+            chmin=0.0,
+            hmin=0.0,
+            nhfilter=0,
+            nvfilter=0,
+            decay=0.0,
+            hpow=1.0,
+        )
 
-    def _test(self, ddu, ddl, Dgamma, gamma_surf, csigma, cgvc):
-        import logging
+        for ddu in (0.0, 0.75, 1.5):
+            for ddl in (0.0, 0.75, 1.5):
+                with self.subTest(ddu=ddu, ddl=ddl):
+                    kwargs["ddu"] = ddu
+                    kwargs["ddl"] = ddl
+                    if ddu == 0.0 and ddl == 0.0:
+                        kwargs["csigma"] = 0.1
+                        kwargs["cgvc"] = 0.0
+                    else:
+                        kwargs["csigma"] = 0.0
+                        kwargs["cgvc"] = 0.1
+                    self._test(**kwargs)
 
-        grid = create_grid()
+    def _test(self, **kwargs):
+        c = pygetm.vertical_coordinates.Adaptive(30, **kwargs)
+        grid, logger = self._get_grid(c.nz)
+        c.initialize(grid, logger=logger)
 
-        # print(csigma, cgvc, ddl, ddu)
+        # Calculate initial thicknesses (GVC or sigma) and verify
+        # that is stays unmodified if we only use GVC tendency
+        # for grid diffusivity
+        c.update()
+        h_ini = grid.hn.all_values.copy()
+        grid.ho.all_values = grid.hn.all_values
+        c.update(timestep=600.0)
 
-        #grid.zo = grid.array(fill_value=0.0)
-        grid.array(name="NN", fill_value=0.0, z=INTERFACES)
-        grid.array(name="SS", fill_value=0.0, z=INTERFACES)
-
-        try:
-            vc = pygetm.vertical_coordinates.Adaptive(
-                grid.nz,
-                cnpar=1.0,
-                ddu=ddu,
-                ddl=ddl,
-                gamma_surf=gamma_surf,
-                Dgamma=Dgamma,
-                csigma=csigma,
-                cgvc=cgvc,
-                hpow=3,
-                chsurf=-0.001,
-                hsurf=1.5,
-                chmidd=-0.1,
-                hmidd=0.5,
-                chbott=-0.001,
-                hbott=1.5,
-                cneigh=-0.1,
-                rneigh=0.25,
-                decay=2.0 / 3.0,
-                cNN=-1.0,
-                drho=0.3,
-                cSS=-1.0,
-                dvel=0.1,
-                chmin=-0.1,
-                hmin=2.5,
-                nvfilter=-1,
-                vfilter=0.2,
-                nhfilter=-1,
-                hfilter=0.1,
-                split=1,
-                timescale=1 * 3600.0,
-            )
-            logger = logging.getLogger(__name__)
-            vc.initialize(grid, logger=logger)
-            vc.update(60.0)
-            i = 10
-            self.assertAlmostEqual(
-                grid.D[0, i], grid.hn[:, 0, i].sum(), places=7, msg=None, delta=None
-            )
-        except Exception:
-            # print(ddl,ddu)
-            pass
+        self.assertGreaterEqual(c.nug.all_values.min(), 0.0)
+        maxabsdiff = np.abs(grid.hn.all_values - h_ini).max()
+        self.assertLessEqual(maxabsdiff, 1e-15 * grid.H[0, 0])
 
 
 if __name__ == "__main__":

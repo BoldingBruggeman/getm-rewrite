@@ -391,7 +391,7 @@ class Adaptive(Base):
 
         if timestep == 0.0:
             # Simulation is initializing
-            self._gvc(self.tgrid.Dclip.all_values, self.hn.all_values)
+            self._gvc(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
             self.dga_t.all_values = (
                 self.tgrid.hn.all_values / self.tgrid.Dclip.all_values
             )
