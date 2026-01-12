@@ -96,62 +96,62 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    imax=nx; jmax=ny; kmax=nz
 
    if (first) then
-      if ( chsurf > ceps .or. chmidd > ceps .or. chbott > ceps) then
-         allocate(ihmax(nx,ny,3))
-      end if
-      if ( decay > ceps) then
-         allocate(sdecay(1:kmax))
-         allocate(bdecay(1:kmax))
-      end if
       allocate(haux(-halox+1:nx+halox,-haloy+1:ny+haloy,nz))
 
-      do j=jmin,jmax
-         do i=imin,imax
-            !if (mask(i,j) /= 1 ) cycle
-            if (mask(i,j) < 1 ) cycle
+      if ( chsurf > ceps .or. chmidd > ceps .or. chbott > ceps) then
+         allocate(ihmax(nx,ny,3))
+         do j=jmin,jmax
+            do i=imin,imax
+               !if (mask(i,j) /= 1 ) cycle
+               if (mask(i,j) < 1 ) cycle
 
-            ! surface
-            if (chsurf > ceps) then
-               if (abs(hsurf) < ceps) then
-                  ihmax(i,j,surface) = 1._rk
-               else if (hsurf > 0) then
-                  ihmax(i,j,surface) = 1._rk/hsurf
-               else
-                  ihmax(i,j,surface) = kmax/(-hsurf*H(i,j))
+               ! surface
+               if (chsurf > ceps) then
+                  if (abs(hsurf) < ceps) then
+                     ihmax(i,j,surface) = 1._rk
+                  else if (hsurf > 0) then
+                     ihmax(i,j,surface) = 1._rk/hsurf
+                  else
+                     ihmax(i,j,surface) = kmax/(-hsurf*H(i,j))
+                  end if
                end if
-            end if
 
-            ! interior
-            if (chmidd > ceps) then
-               if (abs(hmidd) < ceps) then
-                  ihmax(i,j,interior) = 1._rk
-               else if (hmidd > 0) then
-                  ihmax(i,j,interior) = 1._rk/hmidd
-               else
-                  ihmax(i,j,interior) = kmax/(-hmidd*H(i,j))
+               ! interior
+               if (chmidd > ceps) then
+                  if (abs(hmidd) < ceps) then
+                     ihmax(i,j,interior) = 1._rk
+                  else if (hmidd > 0) then
+                     ihmax(i,j,interior) = 1._rk/hmidd
+                  else
+                     ihmax(i,j,interior) = kmax/(-hmidd*H(i,j))
+                  end if
                end if
-            end if
 
-            ! bottom
-            if (chbott > ceps) then
-               if (abs(hbott) < ceps) then
-                  ihmax(i,j,bottom) = 1._rk
-               else if (hbott > 0) then
-                  ihmax(i,j,bottom) = 1._rk/hbott
-               else
-                  ihmax(i,j,bottom) = kmax/(-hbott*H(i,j))
+               ! bottom
+               if (chbott > ceps) then
+                  if (abs(hbott) < ceps) then
+                     ihmax(i,j,bottom) = 1._rk
+                  else if (hbott > 0) then
+                     ihmax(i,j,bottom) = 1._rk/hbott
+                  else
+                     ihmax(i,j,bottom) = kmax/(-hbott*H(i,j))
+                  end if
                end if
-            end if
+            end do
          end do
-      end do
+      end if
 
       ! surface and bottm wall decay
-      if (decay > ceps) then
+      if ( chsurf > ceps) then
+         allocate(sdecay(1:kmax))
          sdecay(kmax) = 1._rk ! or sdecay(kmax1)
          do k=kmax-1,1,-1 ! or kmax-1,1,-1
             sdecay(k) = sdecay(k+1)*decay
          end do
+      end if
 
+      if (chbott > ceps) then
+         allocate(bdecay(1:kmax))
          bdecay(1) = 1._rk
          do k=2,kmax
             bdecay(k) = bdecay(k-1)*decay
