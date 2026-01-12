@@ -49,7 +49,10 @@ add_library(cgetm
   src/radiation.F90
   src/interpolation.F90
   src/gradient.F90
+  src/filters.F90
+  src/tridiagonal.F90
   src/internal_pressure.F90
+  src/vertical_adaptive.F90
 )
 
 target_link_libraries(cgetm getm_domain getm_operators)
