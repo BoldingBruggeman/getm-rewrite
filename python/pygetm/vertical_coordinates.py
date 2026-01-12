@@ -479,9 +479,6 @@ class Adaptive(Base):
         # now the grid diffusion field is ready to be applied
         _pygetm.tridiagonal(self.nug, self.ga, timestep)
 
-        # assure consistent ga on boundaries
-        self.ga.open_boundaries.update()
-
         # Calculate sigma thicknesses from interface positions
         np.subtract(
             self.ga.all_values[1:], self.ga.all_values[:-1], out=self.dga_t.all_values
