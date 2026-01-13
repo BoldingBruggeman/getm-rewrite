@@ -234,15 +234,23 @@ class Adaptive(Base):
         timescale: float = 14400.0,
     ):
         """
+        Initial layer thicknesses are based on Generalized Vertical Coordinates
+        (:class:`GVC`), parameterized by `ddu`, `ddl`, `gamma_surf`, and `Dgamma`.
+        This is equivalent to uniform sigma coordinates when both `ddu` and `ddl`,
+        are zero, and to zoomed sigma coordinates when `Dgamma` is zero.
+
+
         Args:
             nz: number of layers
             ddu: zoom factor at surface (0: no zooming, 2: strong zooming)
             ddl: zoom factor at bottom (0: no zooming, 2: strong zooming)
             gamma_surf: use layers of constant thickness `Dgamma/nz` at surface (otherwise, at bottom)
             Dgamma: water depth below which to use equal layer thicknesses
-            hpow: exponent for growth of Dgrid (ramp between 0 and c* tendencies)
+            hpow: exponent for ramp of tendencies focused on reference thicknesses,
+                that is, the tendencies controlled by `chsurf`, `chbott`, `chmidd`.
             csigma: tendency to uniform sigma
-            cgvc: tendency to "standard" gvc (w/ddu,ddl)
+            cgvc: tendency to "standard" gvc parameterized by `ddu`, `ddl`,
+                `gamma_surf`, `Dgamma`
             chsurf: tendency to keep surface layer bounded
             hsurf: reference thickness for surface layer
                 (absolute thickness in m if >0, relative to average thickness D/nz if <0)
@@ -252,15 +260,21 @@ class Adaptive(Base):
             chbott: tendency to keep bottom layer bounded
             hbott: reference thickness for bottom layer
                 (absolute thickness in m if >0, relative to average thickness D/nz if <0)
-            decay: fraction of surface/bottom tendencies (controlled by chsurf, chbott)
-                to preserve for each additional layer away from surface/bottom
-                (0: only apply tendency in targeted layer, 1: apply same tendency in all layers)
+            decay: fraction of surface/bottom zooming tendencies (controlled by `chsurf`,
+                `chbott`) to preserve for each additional layer away from surface/bottom.
+                It must range between 0 (only apply tendency in targeted layer) and
+                1 (apply same tendency in all layers)
             cneigh: tendency to keep neighbors of similar size
-            rneigh: reference relative growth between neighbors
-            cNN: dependence on NN (density zooming)
-            drho: reference value for NN density between neighbor cells
-            cSS: dependence on SS (shear zooming)
-            dvel: reference value for SS absolute shear between neighbor cells
+            rneigh: relative difference with the thinnest neighbor where
+                size-ratio-limiting tendency reaches its maximum value `cneigh`
+            cNN: tendency to zoom towards (stable) density gradients
+            drho: local density difference over distance D/nz (average layer thickness)
+                where zooming towards density gradients reaches its maximum value of
+                `cNN`
+            cSS: tendency to zoom towards horizontal velocity gradients (shear)
+            dvel: local difference in horizontal velocity over distance D/nz (average
+                layer thickness) where zooming towards velocity gradients reaches its
+                maximum value of `cSS`
             chmin: internal nug coeff for shallow-water regions
             hmin: minimum depth
             nvfilter: number of vertical filter iterations
@@ -287,6 +301,20 @@ class Adaptive(Base):
             raise Exception("hbott must be non-zero when chbott is positive")
         if chmidd > 0.0 and hmidd == 0.0:
             raise Exception("hmidd must be non-zero when chmidd is positive")
+        if cneigh < 0.0:
+            raise Exception("cneigh must be non-negative")
+        if cneigh > 0.0 and rneigh <= 0.0:
+            raise Exception("rneigh must be positive when cneigh is positive")
+        if hmin < 0.0:
+            raise Exception("hmin must be non-negative")
+        if cNN < 0.0:
+            raise Exception("cNN must be non-negative")
+        if cNN > 0.0 and drho <= 0.0:
+            raise Exception("drho must be positive when cNN is positive")
+        if cSS < 0.0:
+            raise Exception("cSS must be non-negative")
+        if cSS > 0.0 and dvel <= 0.0:
+            raise Exception("dvel must be positive when cSS is positive")
         if nvfilter < 0:
             raise Exception("nvfilter must be non-negative")
         if nhfilter < 0:

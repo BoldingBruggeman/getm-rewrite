@@ -165,7 +165,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    do k=1,kmax
       do j=jmin,jmax
          do i=imin,imax
-            if (mask(i,j) == 1) haux(i,j,k)=D(i,j)*(ga(i,j,k) - ga(i,j,k-1))
+            if (mask(i,j) == 1) haux(i,j,k) = D(i,j) * (ga(i,j,k) - ga(i,j,k-1))
          end do
       end do
    end do
@@ -179,7 +179,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    ! 1.3 - chmidd
    if (chmidd > ceps) then
       large_cell_limitation: block
-      real(c_double) :: relh(kmax)
+      real(c_double) :: relh
       real(c_double) :: wwh
 
       do j=imin,jmax
@@ -187,14 +187,10 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1 ) cycle
 
-            relh(:)=haux(i,j,:)*ihmax(i,j,interior)-0.5_rk
             do k=1,kmax
-               if (relh(k) > 0._rk .and. relh(k) < 1._rk) then
-                  wwh=relh(k)**hpow
-               else
-                  wwh=0.5_rk+sign(0.5_rk,relh(k))
-               end if
-               nu(i,j,k)=nu(i,j,k)+chmidd*wwh
+               relh = haux(i,j,k) * ihmax(i,j,interior) - 0.5_rk
+               wwh = max(0.0_rk, min(1.0_rk, relh))**hpow
+               nu(i,j,k) = nu(i,j,k) + chmidd * wwh
             end do
          end do
       end do
@@ -212,14 +208,9 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1 ) cycle
 
-            relh=haux(i,j,kmax)*ihmax(i,j,surface)-0.5_rk
-            if (relh > 0._rk .and. relh < 1._rk) then
-               wwh=relh**hpow
-            else
-               wwh=0.5_rk+sign(0.5_rk,relh)
-            end if
-
-            nu(i,j,1:kmax)=nu(i,j,1:kmax)+chsurf*wwh*sdecay(:kmax)
+            relh = haux(i,j,kmax) * ihmax(i,j,surface) - 0.5_rk
+            wwh = max(0.0_rk, min(1.0_rk, relh))**hpow
+            nu(i,j,1:kmax) = nu(i,j,1:kmax) + chsurf * wwh * sdecay(:kmax)
          end do
       end do
       end block surface_cell_limitation
@@ -236,14 +227,9 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1 ) cycle
 
-            relh=haux(i,j,1)*ihmax(i,j,bottom)-0.5_rk
-            if (relh > 0._rk .and. relh < 1._rk) then
-               wwh=relh**hpow
-            else
-               wwh=0.5_rk+sign(0.5_rk,relh)
-            end if
-
-            nu(i,j,1:kmax)=nu(i,j,1:kmax)+chbott*wwh*bdecay(:kmax)
+            relh = haux(i,j,1) * ihmax(i,j,bottom) - 0.5_rk
+            wwh = max(0.0_rk, min(1.0_rk, relh))**hpow
+            nu(i,j,1:kmax) = nu(i,j,1:kmax) + chbott * wwh * bdecay(:kmax)
          end do
       end do
       end block bottom_cell_limitation
@@ -254,8 +240,6 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
       neighbor_cell_limitation: block
       real(c_double) :: irneigh
       real(c_double) :: relh(kmax)
-      real(c_double) :: wwh(kmax)
-!KB   real(c_double) :: wwh
 
       irneigh = 1._rk/rneigh
       do j=jmin,jmax
@@ -268,16 +252,8 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
                relh(k)=haux(i,j,k)/min(haux(i,j,k-1),haux(i,j,k+1))
             end do
             relh(kmax)=haux(i,j,kmax)/haux(i,j,kmax-1)
-            relh(:)=max(0._rk, relh(:)-1._rk)
-#if 0
-            wwh(:)=min(1._rk,irneigh*relh(:))
-            wwh(:) = wwh(:)**hpow
-            do k=1,kmax-1
-               nu(i,j,k)=nu(i,j,k)+cneigh*wwh(k)
-            end do
-#else
-            nu(i,j,1:kmax)=nu(i,j,1:kmax)+cneigh*min(1._rk,irneigh*relh(:))**hpow
-#endif
+            relh(:) = max(0.0_rk, relh(:)-1.0_rk)
+            nu(i,j,1:kmax) = nu(i,j,1:kmax) + cneigh * min(1.0_rk, irneigh * relh(:))**hpow
          end do
       end do
       end block neighbor_cell_limitation
@@ -289,7 +265,16 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
       real(c_double) :: idNN
       real(c_double) :: x,y
 
-      idNN = rho0/(g*drho)/kmax
+      ! Squared buoyancy frequency NN needs to be scaled with rho0/g to obtain
+      ! the negative density gradient (> 0 if density increases towards bottom,
+      ! i.e., under stable stratification). We futher want to scale the density
+      ! gradient bya reference value (where the maximum tendency cNN is reached).
+      ! This reference value if parameterized as a density difference drho over
+      ! a distance D/nz (average layer thickness). The reference density *gradient*
+      ! thus is drho/(D/nz) = drho*nz/D. The final NN thus needs to be scaled by
+      ! rho0/(g*drho*nz)*D. Total water depth D varies in the horizontal; its
+      ! scaling is therefore applied only within the horizontal loops.
+      idNN = rho0 / (g * drho * kmax)
       do j=jmin,jmax
          do i=imin,imax
             !if (mask(i,j) /= 1) cycle
@@ -297,8 +282,8 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
 
             x = idNN*D(i,j)
             do k=1,kmax
-               y = min(1._rk, x*max(0._rk, 0.5_rk*(NN(i,j,k)+NN(i,j,k-1))))
-               nu(i,j,k)=nu(i,j,k)+cNN*y
+               y = min(1.0_rk, x*max(0.0_rk, 0.5_rk*(NN(i,j,k)+NN(i,j,k-1))))
+               nu(i,j,k) = nu(i,j,k) + cNN * y
             end do
          end do
       end do
@@ -311,16 +296,16 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
       real(c_double) :: idvel
       real(c_double) :: x,y
 
-      idvel = 1._rk/dvel/kmax
+      idvel = 1.0_rk / (dvel * kmax)
       do j=jmin,jmax
          do i=imin,imax
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1 ) cycle
 
-            x = idvel*D(i,j)
+            x = idvel * D(i,j)
             do k=1,kmax
-               y = min(1._rk, x*sqrt(max(0._rk, 0.5_rk*(SS(i,j,k)+SS(i,j,k-1)))))
-               nu(i,j,k)=nu(i,j,k)+cSS*y
+               y = min(1.0_rk, x*sqrt(max(0.0_rk, 0.5_rk*(SS(i,j,k)+SS(i,j,k-1)))))
+               nu(i,j,k) = nu(i,j,k) + cSS * y
             end do
          end do
       end do
@@ -328,20 +313,23 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    end if
 
    ! 1.6.1 - small-cell limiter
+   ! This reduces the total tendency by applying a scale factor between 0 and 1.
+   ! It starts to operate when the cell thickness drops below 1.5 * hmin.
+   ! It reaches full strength (factor = 0) when the cell thickness is hmin.
    small_cell_limiter: block
    real(c_double) :: f, ihmin
 
    if (hmin > ceps) then
-      ihmin=1._rk/hmin
+      ihmin = 1.0_rk / hmin
       do j=jmin,jmax
          do i=imin,imax
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1 ) cycle
 
             do k=1,kmax
-               f=2._rk * (haux(i,j,k)*ihmin - 1._rk)
-               f = max(0._rk, min(1._rk, f))
-               nu(i,j,k) = f*nu(i,j,k)
+               f = 2.0_rk * (haux(i,j,k)*ihmin - 1.0_rk)
+               f = max(0.0_rk, min(1.0_rk, f))
+               nu(i,j,k) = f * nu(i,j,k)
             end do
          end do
       end do
@@ -349,6 +337,9 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    end block small_cell_limiter
 
    ! 1.6.2 - shallow-water effect
+   ! Adds tendency to uniform sigma when average water depth D/nz
+   ! drops below hmin. Maximum tendency chmin is reached at
+   ! D/nz = 2/3 * hmin
    if (chmin > ceps) then
       shallow_water_limiter: block
       real(c_double) :: relh
@@ -359,12 +350,8 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             if (mask(i,j) < 1 ) cycle
 
             ! havg=D(i,j)/kmax => hmin/havg = hmin*kmax/D(i,j)
-            relh = 2._rk*(hmin*kmax/D(i,j) - 1._rk)
-            if (relh < 0._rk .or. relh > 1._rk) then
-               relh=(0.5_rk+sign(0.5_rk,relh))
-            end if
-
-            nu(i,j,1:kmax)=nu(i,j,1:kmax)+chmin*relh
+            relh = 2.0_rk * (hmin*kmax/D(i,j) - 1.0_rk)
+            nu(i,j,1:kmax) = nu(i,j,1:kmax) + chmin * max(0.0_rk, min(1.0_rk, relh))
          end do
       end do
       end block shallow_water_limiter
@@ -377,9 +364,3 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
 end subroutine c_update_adaptive
 
 end module
-
-#ifdef _KKKKK_
-! A copy of the adaptive coordinate coordinates as implemented by Bjarne
-! Büchmann.
-#include "adaptive_coordinates_6.F90"
-#endif
