@@ -210,7 +210,6 @@ class Adaptive(Base):
         Dgamma: float = 0.0,
         csigma: float = 0.01,
         cgvc: float = 0.0,
-        hpow: int = 3,
         chsurf: float = 0.5,
         hsurf: float = 0.5,
         chmidd: float = 0.2,
@@ -218,6 +217,7 @@ class Adaptive(Base):
         chbott: float = 0.3,
         hbott: float = -0.25,
         decay: float = 2.0 / 3.0,
+        hpow: int = 3,
         cneigh: float = 0.1,
         rneigh: float = 0.25,
         cNN: float = -1.0,
@@ -234,33 +234,47 @@ class Adaptive(Base):
         timescale: float = 14400.0,
     ):
         """
+        Initial layer thicknesses are based on Generalized Vertical Coordinates
+        (:class:`GVC`), parameterized by `ddu`, `ddl`, `gamma_surf`, and `Dgamma`.
+        This is equivalent to uniform sigma coordinates when both `ddu` and `ddl`,
+        are zero, and to zoomed sigma coordinates when `Dgamma` is zero.
+
+
         Args:
             nz: number of layers
             ddu: zoom factor at surface (0: no zooming, 2: strong zooming)
             ddl: zoom factor at bottom (0: no zooming, 2: strong zooming)
             gamma_surf: use layers of constant thickness `Dgamma/nz` at surface (otherwise, at bottom)
             Dgamma: water depth below which to use equal layer thicknesses
-            hpow: exponent for growth of Dgrid (ramp between 0 and c* tendencies)
-            csigma: tendency to uniform sigma
-            cgvc: tendency to "standard" gvc (w/ddu,ddl)
-            chsurf: tendency to keep surface layer bounded
+            csigma: tendency towards uniform sigma
+            cgvc: tendency towards "standard" Generalized Vertical Coordinates,
+                as parameterized by `ddu`, `ddl`, `gamma_surf`, `Dgamma`
+            chsurf: tendency to zoom in (prefer thinner layers) towards the surface
             hsurf: reference thickness for surface layer
                 (absolute thickness in m if >0, relative to average thickness D/nz if <0)
             chmidd: tendency to keep all layers bounded
             hmidd: reference thickness for other layers
                 (absolute thickness in m if >0, relative to average thickness D/nz if <0)
-            chbott: tendency to keep bottom layer bounded
+            chbott: tendency to zoom in (prefer thinner layers) towards the bottom
             hbott: reference thickness for bottom layer
                 (absolute thickness in m if >0, relative to average thickness D/nz if <0)
-            decay: fraction of surface/bottom tendencies (controlled by chsurf, chbott)
-                to preserve for each additional layer away from surface/bottom
-                (0: only apply tendency in targeted layer, 1: apply same tendency in all layers)
+            decay: fraction of surface/bottom zooming tendencies (controlled by `chsurf`,
+                `chbott`) to preserve for each additional layer away from surface/bottom.
+                It must range between 0 (only apply tendency in targeted layer) and
+                1 (apply same tendency in all layers)
+            hpow: exponent for ramp of tendencies focused on reference thicknesses,
+                that is, the tendencies controlled by `chsurf`, `chbott`, `chmidd`.
             cneigh: tendency to keep neighbors of similar size
-            rneigh: reference relative growth between neighbors
-            cNN: dependence on NN (density zooming)
-            drho: reference value for NN density between neighbor cells
-            cSS: dependence on SS (shear zooming)
-            dvel: reference value for SS absolute shear between neighbor cells
+            rneigh: relative difference with the thinnest neighbor where
+                size-ratio-limiting tendency reaches its maximum value `cneigh`
+            cNN: tendency to zoom towards (stable) density gradients
+            drho: local density difference over distance D/nz (average layer thickness)
+                where zooming towards density gradients reaches its maximum value of
+                `cNN`
+            cSS: tendency to zoom towards horizontal velocity gradients (shear)
+            dvel: local difference in horizontal velocity over distance D/nz (average
+                layer thickness) where zooming towards velocity gradients reaches its
+                maximum value of `cSS`
             chmin: internal nug coeff for shallow-water regions
             hmin: minimum depth
             nvfilter: number of vertical filter iterations
@@ -271,10 +285,6 @@ class Adaptive(Base):
             timescale: time scale of grid adaptation (s)
         """
 
-        if timescale <= 0.0:
-            raise Exception("timescale must be a positive value")
-        if decay < 0.0 or decay > 1.0:
-            raise Exception("decay must be between 0 and 1")
         if chsurf < 0.0:
             raise Exception("chsurf must be non-negative")
         if chbott < 0.0:
@@ -287,14 +297,36 @@ class Adaptive(Base):
             raise Exception("hbott must be non-zero when chbott is positive")
         if chmidd > 0.0 and hmidd == 0.0:
             raise Exception("hmidd must be non-zero when chmidd is positive")
-        if nvfilter < 0:
-            raise Exception("nvfilter must be non-negative")
-        if nhfilter < 0:
-            raise Exception("nhfilter must be non-negative")
-        if vfilter < 0:
+        if decay < 0.0 or decay > 1.0:
+            raise Exception("decay must be between 0 and 1")
+        if hpow < 1:
+            raise Exception("hpow must be a positive integer")
+        if cneigh < 0.0:
+            raise Exception("cneigh must be non-negative")
+        if cneigh > 0.0 and rneigh <= 0.0:
+            raise Exception("rneigh must be positive when cneigh is positive")
+        if hmin < 0.0:
+            raise Exception("hmin must be non-negative")
+        if chmin < 0.0:
+            raise Exception("chmin must be non-negative")
+        if cNN < 0.0:
+            raise Exception("cNN must be non-negative")
+        if cNN > 0.0 and drho <= 0.0:
+            raise Exception("drho must be positive when cNN is positive")
+        if cSS < 0.0:
+            raise Exception("cSS must be non-negative")
+        if cSS > 0.0 and dvel <= 0.0:
+            raise Exception("dvel must be positive when cSS is positive")
+        if vfilter < 0.0:
             raise Exception("vfilter must be non-negative")
-        if hfilter < 0:
+        if vfilter > 0.0 and nvfilter < 0:
+            raise Exception("nvfilter must be non-negative when vfilter is positive")
+        if hfilter < 0.0:
             raise Exception("hfilter must be non-negative")
+        if hfilter > 0.0 and nhfilter < 0:
+            raise Exception("nhfilter must be non-negative when hfilter is positive")
+        if timescale <= 0.0:
+            raise Exception("timescale must be a positive value")
 
         if vfilter == 0.0:
             nvfilter = 0
@@ -462,7 +494,7 @@ class Adaptive(Base):
         )
 
         # apply diffusion timescale
-        self.nug.all_values *= 1.0 / self.timescale
+        self.nug.all_values *= 2.0 / self.timescale
 
         # apply vertical filtering from ~/python/src/filters.F90
         if self.nvfilter > 0:

@@ -93,7 +93,7 @@ class TestAdaptive(unittest.TestCase):
 
     def test(self):
         kwargs = dict(
-            csigma=0.0,
+            csigma=0.1,
             cgvc=0.0,
             ddu=0.0,
             ddl=0.0,
@@ -109,7 +109,12 @@ class TestAdaptive(unittest.TestCase):
             nvfilter=0,
             decay=0.0,
             hpow=1.0,
+            timescale=3600.0 * 4,
         )
+
+        c = self._test(**kwargs)
+        nug_tgt = 0.1 / (3600.0 * 4) * 2.0
+        self.assertTrue(np.abs(c.nug.all_values - nug_tgt).max() < 1e-15 * nug_tgt)
 
         for ddu in (0.0, 0.75, 1.5):
             for ddl in (0.0, 0.75, 1.5):
@@ -124,7 +129,7 @@ class TestAdaptive(unittest.TestCase):
                         kwargs["cgvc"] = 0.1
                     self._test(**kwargs)
 
-    def _test(self, **kwargs):
+    def _test(self, **kwargs) -> pygetm.vertical_coordinates.Adaptive:
         c = pygetm.vertical_coordinates.Adaptive(30, **kwargs)
         grid, logger = self._get_grid(c.nz)
         c.initialize(grid, logger=logger)
@@ -140,6 +145,7 @@ class TestAdaptive(unittest.TestCase):
         self.assertGreaterEqual(c.nug.all_values.min(), 0.0)
         maxabsdiff = np.abs(grid.hn.all_values - h_ini).max()
         self.assertLessEqual(maxabsdiff, 1e-15 * grid.H[0, 0])
+        return c
 
 
 if __name__ == "__main__":
