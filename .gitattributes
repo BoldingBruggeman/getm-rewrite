@@ -1,0 +1,3 @@
+# allow sourcing install in WSL where code is clone on Windows
+install text eol=lf
+install.bat text eol=crlf

@@ -319,7 +319,7 @@ contains
       real(c_double), allocatable :: flux(:,:)
 
       allocate(flux(UG%l(1):UG%u(1), UG%l(2):UG%u(2)))
-   
+
       ! Central for dx(2*Am*dx(U/DU))
       do j=UUG%jmin,UUG%jmax
          do i=UUG%imin-1,UUG%imax ! shear defined on T-points
@@ -337,7 +337,7 @@ contains
             end if
          end do
       end do
-   
+
       ! Central for dy(Am*(dy(U/DU)+dx(V/DV)))
       do j=UVG%jmin-1,UVG%jmax ! work2d defined on X-points
          do i=UVG%imin,UVG%imax
@@ -354,7 +354,7 @@ contains
             end if
          end do
       end do
-   
+
       ! Central for dx(Am*(dy(U/DU)+dx(V/DV)))
       do j=VUG%jmin,VUG%jmax
          do i=VUG%imin-1,VUG%imax ! work2d defined on X-points
@@ -372,7 +372,7 @@ contains
             end if
          end do
       end do
-   
+
       ! Central for dy(2*Am*dy(V/DV))
       do j=VVG%jmin-1,VVG%jmax ! work2d defined on T-points
          do i=VVG%imin,VVG%imax
@@ -389,7 +389,7 @@ contains
             end if
          end do
       end do
-   
+
    end subroutine horizontal_momentum_diffusion
 
    subroutine c_thickness2center_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)
@@ -403,6 +403,20 @@ contains
       where (mask /= 0) out(:,:,nz) = 0.5_c_double * h(:,:,nz)
       do k=nz-1,1,-1
          where (mask /= 0) out(:,:,k) = out(:,:,k+1) + 0.5_c_double * (h(:,:,k) + h(:,:,k+1))
+      end do
+   end subroutine
+
+   subroutine c_thickness2interface_depth(nx, ny, nz, istart, istop, jstart, jstop, mask, h, out) bind(c)
+      integer(c_int), intent(in), value :: nx, ny, nz, istart, istop, jstart, jstop
+      integer(c_int), intent(in)        :: mask(nx, ny)
+      real(c_double), intent(in)        :: h(nx, ny, nz)
+      real(c_double), intent(inout)     :: out(nx, ny, 0:nz)
+
+      integer :: k
+
+      where (mask /= 0) out(:,:,nz) = 0.0_c_double
+      do k=nz-1,0,-1
+         where (mask /= 0) out(:,:,k) = out(:,:,k+1) + h(:,:,k+1)
       end do
    end subroutine
 
@@ -540,7 +554,7 @@ contains
 
       integer :: i, j
       real(real64) :: zp, zm
-   
+
       real(real64), parameter :: gammai = 1._real64/(g * rho0)
 
       do j = jmin, jmax
