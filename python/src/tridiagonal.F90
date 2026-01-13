@@ -45,7 +45,6 @@ subroutine c_tridiagonal(nx, ny, nz, halox, haloy, dt, mask, nu, var) bind(c)
    real(c_double) :: qu(0:nz)
    integer :: imin=1, jmin=1, imax, jmax, kmax
    integer(c_int) :: i,j,k
-   real(c_double) :: x
 
 !-----------------------------------------------------------------------
    imax=nx; jmax=ny; kmax=nz
@@ -67,16 +66,15 @@ subroutine c_tridiagonal(nx, ny, nz, halox, haloy, dt, mask, nu, var) bind(c)
    a2(:,:,kmax) = 1._c_double
    a1(:,:,kmax) = 0._c_double
    a4(:,:,kmax) = 0._c_double
-   x = 2._c_double*dt
    do k=1,kmax-1
       do j=jmin,jmax
          do i=imin,imax
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1) cycle
 
-            a1(i,j,k) = -x*nu(i,j,k)
-            a3(i,j,k) = -x*nu(i,j,k+1)
-            a2(i,j,k) = 1._c_double + x*nu(i,j,k) + x*nu(i,j,k+1)
+            a1(i,j,k) = -dt*nu(i,j,k)
+            a3(i,j,k) = -dt*nu(i,j,k+1)
+            a2(i,j,k) = 1._c_double + dt*nu(i,j,k) + dt*nu(i,j,k+1)
             a4(i,j,k) = var(i,j,k)
          end do
       end do
@@ -120,16 +118,15 @@ subroutine c_tridiagonal(nx, ny, nz, halox, haloy, dt, mask, nu, var) bind(c)
    a3(0) = 0._c_double
    a2(0) = 1._c_double
    a4(0) = -1._c_double
-   x = 2._c_double*dt
    do j=jmin,jmax
       do i=imin,imax
          !if (mask(i,j) /= 1) cycle
          if (mask(i,j) /= 1) cycle
 
          do k=1,kmax-1
-            a1(k) = -x*nu(i,j,k)
-            a3(k) = -x*nu(i,j,k+1)
-            a2(k) = 1._c_double + x*nu(i,j,k) + x*nu(i,j,k+1)
+            a1(k) = -dt*nu(i,j,k)
+            a3(k) = -dt*nu(i,j,k+1)
+            a2(k) = 1._c_double + dt*nu(i,j,k) + dt*nu(i,j,k+1)
             a4(k) = var(i,j,k)
          end do
 

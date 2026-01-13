@@ -494,7 +494,7 @@ class Adaptive(Base):
         )
 
         # apply diffusion timescale
-        self.nug.all_values *= 1.0 / self.timescale
+        self.nug.all_values *= 2.0 / self.timescale
 
         # apply vertical filtering from ~/python/src/filters.F90
         if self.nvfilter > 0:
