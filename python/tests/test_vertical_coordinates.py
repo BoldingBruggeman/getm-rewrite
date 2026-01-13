@@ -74,7 +74,7 @@ class TestGVC(unittest.TestCase):
 
 
 class TestAdaptive(unittest.TestCase):
-    def _get_grid(self, nz: int):
+    def _get_grid(self, nz: int, halox: int = 0, haloy: int = 0):
         dom = pygetm.domain.create_cartesian(
             x=[-0.5, 0.5],
             y=[-0.5, 0.5],
@@ -83,7 +83,7 @@ class TestAdaptive(unittest.TestCase):
             H=100.0,
             logger=pygetm.parallel.get_logger(level="ERROR"),
         )
-        grid = dom.create_grids(nz, 0, 0)
+        grid = dom.create_grids(nz, halox, haloy)
         NN = grid.array(name="NN", z=pygetm.constants.INTERFACES)
         SS = grid.array(name="SS", z=pygetm.constants.INTERFACES)
         grid.ho = grid.array(z=pygetm.constants.CENTERS)
@@ -91,7 +91,26 @@ class TestAdaptive(unittest.TestCase):
         SS.all_values.fill(np.nan)
         return grid, dom.logger.getChild("vertical_coordinates")
 
-    def test(self):
+    def test_default_parameterization(self):
+        c = pygetm.vertical_coordinates.Adaptive(30)
+        grid, logger = self._get_grid(c.nz, halox=0, haloy=0)
+        grid.fields["NN"].fill(0.0)
+        grid.fields["SS"].fill(0.0)
+        c.initialize(grid, logger=logger)
+        c.update()
+        grid.ho.all_values = grid.hn.all_values
+        c.update(timestep=600.0)
+
+        c = pygetm.vertical_coordinates.Adaptive(30)
+        grid, logger = self._get_grid(c.nz, halox=2, haloy=2)
+        grid.fields["NN"].fill(0.0)
+        grid.fields["SS"].fill(0.0)
+        c.initialize(grid, logger=logger)
+        c.update()
+        grid.ho.all_values = grid.hn.all_values
+        c.update(timestep=600.0)
+
+    def test_analytical_solutions(self):
         kwargs = dict(
             csigma=0.1,
             cgvc=0.0,
@@ -116,6 +135,8 @@ class TestAdaptive(unittest.TestCase):
         nug_tgt = 0.1 / (3600.0 * 4) * 2.0
         self.assertTrue(np.abs(c.nug.all_values - nug_tgt).max() < 1e-15 * nug_tgt)
 
+        c = self._test(halox=2, haloy=2, **kwargs)
+
         for ddu in (0.0, 0.75, 1.5):
             for ddl in (0.0, 0.75, 1.5):
                 with self.subTest(ddu=ddu, ddl=ddl):
@@ -129,9 +150,11 @@ class TestAdaptive(unittest.TestCase):
                         kwargs["cgvc"] = 0.1
                     self._test(**kwargs)
 
-    def _test(self, **kwargs) -> pygetm.vertical_coordinates.Adaptive:
+    def _test(
+        self, halox: int = 0, haloy: int = 0, **kwargs
+    ) -> pygetm.vertical_coordinates.Adaptive:
         c = pygetm.vertical_coordinates.Adaptive(30, **kwargs)
-        grid, logger = self._get_grid(c.nz)
+        grid, logger = self._get_grid(c.nz, halox=halox, haloy=haloy)
         c.initialize(grid, logger=logger)
 
         # Calculate initial thicknesses (GVC or sigma) and verify

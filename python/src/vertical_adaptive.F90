@@ -43,12 +43,12 @@ module m_adaptive
 contains
 
 subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
-                             mask, H, D, &
+                             mask, D, &
                              NN, SS, nu, &
-                             decay, hpow, &
-                             chsurf, hsurf, &
-                             chmidd, hmidd, &
-                             chbott, hbott, &
+                             sdecay, bdecay, hpow, &
+                             chsurf, ihsurf, &
+                             chmidd, ihmidd, &
+                             chbott, ihbott, &
                              cneigh, rneigh, &
                              cNN, drho, &
                              cSS, dvel, &
@@ -61,105 +61,36 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
    integer(c_int), intent(in), value :: halox, haloy
 #define _2D_  -halox+1:nx+halox,-haloy+1:ny+haloy
    integer(c_int), intent(in) :: mask(_2D_)
-   real(c_double), intent(in) :: H(_2D_)
    real(c_double), intent(in) :: D(_2D_)
    real(c_double), intent(in) :: NN(_2D_,0:nz)
    real(c_double), intent(in) :: SS(_2D_,0:nz)
+   real(c_double), intent(in) :: ihsurf(_2D_)
+   real(c_double), intent(in) :: ihmidd(_2D_)
+   real(c_double), intent(in) :: ihbott(_2D_)
    real(c_double), intent(inout) :: nu(_2D_,1:nz)
    real(c_double), intent(inout) :: ga(_2D_,0:nz)
 #undef _2D_
-   real(c_double), intent(in), value :: decay
+   real(c_double), intent(in) :: sdecay(1:nz), bdecay(1:nz)
    integer(c_int), intent(in), value :: hpow
-   real(c_double), intent(in), value :: chsurf, hsurf
-   real(c_double), intent(in), value :: chmidd, hmidd
-   real(c_double), intent(in), value :: chbott, hbott
+   real(c_double), intent(in), value :: chsurf
+   real(c_double), intent(in), value :: chmidd
+   real(c_double), intent(in), value :: chbott
    real(c_double), intent(in), value :: cneigh, rneigh
    real(c_double), intent(in), value :: cNN, drho
    real(c_double), intent(in), value :: cSS, dvel
    real(c_double), intent(in), value :: chmin, hmin
 
-!  Local constants
-   integer, parameter ::surface=1, interior=2, bottom=3
-
 !  Local variables
    integer, parameter :: rk=c_double
    integer :: i,j,k
-   integer :: imin=1, jmin=1, imax, jmax, kmax
-   real(c_double), allocatable, save :: ihmax(:,:,:)
-   real(c_double), allocatable, save :: sdecay(:)
-   real(c_double), allocatable, save :: bdecay(:)
-   real(c_double), allocatable, save :: haux(:,:,:)
+   integer, parameter :: imin=1, jmin=1
+   integer :: imax, jmax, kmax
+   real(c_double), allocatable :: haux(:,:,:)
    real(c_double), parameter :: ceps = 1._rk/100000._rk
-   logical, save :: first=.true.
 
 !-----------------------------------------------------------------------------
    imax=nx; jmax=ny; kmax=nz
-
-   if (first) then
-      allocate(haux(-halox+1:nx+halox,-haloy+1:ny+haloy,nz))
-
-      if ( chsurf > ceps .or. chmidd > ceps .or. chbott > ceps) then
-         allocate(ihmax(nx,ny,3))
-         do j=jmin,jmax
-            do i=imin,imax
-               !if (mask(i,j) /= 1 ) cycle
-               if (mask(i,j) < 1 ) cycle
-
-               ! surface
-               if (chsurf > ceps) then
-                  if (abs(hsurf) < ceps) then
-                     ihmax(i,j,surface) = 1._rk
-                  else if (hsurf > 0) then
-                     ihmax(i,j,surface) = 1._rk/hsurf
-                  else
-                     ihmax(i,j,surface) = kmax/(-hsurf*H(i,j))
-                  end if
-               end if
-
-               ! interior
-               if (chmidd > ceps) then
-                  if (abs(hmidd) < ceps) then
-                     ihmax(i,j,interior) = 1._rk
-                  else if (hmidd > 0) then
-                     ihmax(i,j,interior) = 1._rk/hmidd
-                  else
-                     ihmax(i,j,interior) = kmax/(-hmidd*H(i,j))
-                  end if
-               end if
-
-               ! bottom
-               if (chbott > ceps) then
-                  if (abs(hbott) < ceps) then
-                     ihmax(i,j,bottom) = 1._rk
-                  else if (hbott > 0) then
-                     ihmax(i,j,bottom) = 1._rk/hbott
-                  else
-                     ihmax(i,j,bottom) = kmax/(-hbott*H(i,j))
-                  end if
-               end if
-            end do
-         end do
-      end if
-
-      ! surface and bottm wall decay
-      if ( chsurf > ceps) then
-         allocate(sdecay(1:kmax))
-         sdecay(kmax) = 1._rk ! or sdecay(kmax1)
-         do k=kmax-1,1,-1 ! or kmax-1,1,-1
-            sdecay(k) = sdecay(k+1)*decay
-         end do
-      end if
-
-      if (chbott > ceps) then
-         allocate(bdecay(1:kmax))
-         bdecay(1) = 1._rk
-         do k=2,kmax
-            bdecay(k) = bdecay(k-1)*decay
-         end do
-      end if
-
-      first = .false.
-   end if
+   allocate(haux(1:nx,1:ny,kmax))
 
    ! set up ratio between old and new layer heights
    do k=1,kmax
@@ -188,7 +119,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             if (mask(i,j) < 1 ) cycle
 
             do k=1,kmax
-               relh = haux(i,j,k) * ihmax(i,j,interior) - 0.5_rk
+               relh = haux(i,j,k) * ihmidd(i,j) - 0.5_rk
                wwh = max(0.0_rk, min(1.0_rk, relh))**hpow
                nu(i,j,k) = nu(i,j,k) + chmidd * wwh
             end do
@@ -208,7 +139,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1 ) cycle
 
-            relh = haux(i,j,kmax) * ihmax(i,j,surface) - 0.5_rk
+            relh = haux(i,j,kmax) * ihsurf(i,j) - 0.5_rk
             wwh = max(0.0_rk, min(1.0_rk, relh))**hpow
             nu(i,j,1:kmax) = nu(i,j,1:kmax) + chsurf * wwh * sdecay(:kmax)
          end do
@@ -227,7 +158,7 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
             !if (mask(i,j) /= 1) cycle
             if (mask(i,j) < 1 ) cycle
 
-            relh = haux(i,j,1) * ihmax(i,j,bottom) - 0.5_rk
+            relh = haux(i,j,1) * ihbott(i,j) - 0.5_rk
             wwh = max(0.0_rk, min(1.0_rk, relh))**hpow
             nu(i,j,1:kmax) = nu(i,j,1:kmax) + chbott * wwh * bdecay(:kmax)
          end do

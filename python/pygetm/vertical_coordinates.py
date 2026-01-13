@@ -220,11 +220,11 @@ class Adaptive(Base):
         hpow: int = 3,
         cneigh: float = 0.1,
         rneigh: float = 0.25,
-        cNN: float = -1.0,
+        cNN: float = 0.5,
         drho: float = 0.3,
-        cSS: float = -1.0,
+        cSS: float = 0.25,
         dvel: float = 0.1,
-        chmin: float = -0.1,
+        chmin: float = 0.5,
         hmin: float = 0.3,
         nvfilter: int = 1,
         vfilter: float = 0.2,
@@ -419,6 +419,21 @@ class Adaptive(Base):
         self.NN = tgrid.fields["NN"]
         self.SS = tgrid.fields["SS"]
 
+        havg = tgrid.H.all_values / self.nz  # ignoring elevation!
+        self.ihsurf = self.ihbott = self.ihmidd = tgrid._work.all_values
+        if self.chsurf > 0.0:
+            hsurf = self.hsurf if self.hsurf > 0.0 else -self.hsurf * havg
+            self.ihsurf = np.full_like(tgrid.H.all_values, 1.0 / hsurf)
+        if self.chbott > 0.0:
+            hbott = self.hbott if self.hbott > 0.0 else -self.hbott * havg
+            self.ihbott = np.full_like(tgrid.H.all_values, 1.0 / hbott)
+        if self.chmidd > 0.0:
+            hmidd = self.hmidd if self.hmidd > 0.0 else -self.hmidd * havg
+            self.ihmidd = np.full_like(tgrid.H.all_values, 1.0 / hmidd)
+
+        self.sdecay = self.decay ** np.arange(self.nz)[::-1]
+        self.bdecay = self.decay ** np.arange(self.nz)
+
     def update(self, timestep: float = 0.0):
 
         if timestep == 0.0:
@@ -462,7 +477,7 @@ class Adaptive(Base):
         # NB the stationary solution of AVC has thicknesses proportional to
         # the inverse of diffusivity (nug). The division by hn below is
         # therefore necessary; its scaling with surface thicknesses only
-        # ensures the tendency equals exactly cgvc at the surface.
+        # ensures the tendency (rate of convergence) equals cgvc at the surface.
         if self.cgvc > 0.0:
             self._gvc(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
             self.nug.all_values += np.divide(
@@ -473,16 +488,17 @@ class Adaptive(Base):
         _pygetm.update_adaptive(
             self.nug,
             self.ga,
-            self.NN.all_values,
-            self.SS.all_values,
-            self.decay,
+            self.NN,
+            self.SS,
+            self.sdecay,
+            self.bdecay,
             self.hpow,
             self.chsurf,
-            self.hsurf,
+            self.ihsurf,
             self.chmidd,
-            self.hmidd,
+            self.ihmidd,
             self.chbott,
-            self.hbott,
+            self.ihbott,
             self.cneigh,
             self.rneigh,
             self.cNN,
@@ -492,6 +508,9 @@ class Adaptive(Base):
             self.chmin,
             self.hmin,
         )
+
+        min_nug = self.nug.ma.min()
+        assert min_nug >= 0.0, f"Negative nug values encountered: min={min_nug}"
 
         # apply diffusion timescale
         self.nug.all_values *= 2.0 / self.timescale
@@ -508,15 +527,15 @@ class Adaptive(Base):
             self.nug.update_halos()
             _pygetm.horizontal_filter(self.nug, self.hfilter)
 
-        # now the grid diffusion field is ready to be applied
+        # Diffuse the interface positions using the calculated tendencies
         _pygetm.tridiagonal(self.nug, self.ga, timestep)
 
-        # Calculate sigma thicknesses from interface positions
+        # Calculate sigma thicknesses from updated interface positions
         np.subtract(
             self.ga.all_values[1:], self.ga.all_values[:-1], out=self.dga_t.all_values
         )
 
-        # assure consistent dga on boundaries and in halo zones
+        # Ensure thicknesses are up to date on open boundaries and in halo zones
         if self.dga_t.open_boundaries is not None:
             self.dga_t.open_boundaries.update()
         self.dga_t.update_halos()
@@ -525,13 +544,13 @@ class Adaptive(Base):
 
     def update_other_grids(self):
         """Update layer thicknesses hn for all other grids"""
-        # Interpolate dga from T grid to other grids
+        # Interpolate relative thicknesses from T grid to other grids
         for dga in self.dga_other:
             self.dga_t.interp(dga)
             dga.mirror()
             dga.update_halos()
 
-        # From dga to layer thicknesses in m [hn]
+        # From relative (sigma) thicknesses to layer thicknesses in m
         all_grids = (self.tgrid,) + self.other_grids
         all_dga = (self.dga_t,) + self.dga_other
         for grid, dga in zip(all_grids, all_dga):
