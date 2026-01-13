@@ -537,6 +537,7 @@ class Adaptive(Base):
 
         # Ensure thicknesses are up to date on open boundaries and in halo zones
         if self.dga_t.open_boundaries is not None:
+            self.dga_t.all_values[self.tgrid.open_boundaries.slice] = 0.0
             self.dga_t.open_boundaries.update()
         self.dga_t.update_halos()
 
