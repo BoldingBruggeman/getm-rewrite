@@ -1084,6 +1084,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         mirror_V = Mirror(to_self=True)
         mirror_TU = Mirror()
         mirror_TV = Mirror()
+        mirror_T = Mirror(to_self=True)
         tmask = grid.mask.all_values
         umask = grid.ugrid.mask.all_values
         vmask = grid.vgrid.mask.all_values
@@ -1136,10 +1137,22 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                     i, boundary.j, i, j_out, tsel, vmask, CellType.MIRROR_EXT
                 )
 
+            if boundary.side in (Side.WEST, Side.EAST):
+                j = boundary.j
+                i_in = boundary.i[0] + {Side.WEST: 1, Side.EAST: -1}[boundary.side]
+                i_out = boundary.i[0]
+                mirror_T.append(i_in, j, i_out, j, tsel)
+            else:
+                i = boundary.i
+                j_in = boundary.j[0] + {Side.SOUTH: 1, Side.NORTH: -1}[boundary.side]
+                j_out = boundary.j[0]
+                mirror_T.append(i, j_in, i, j_out, tsel)
+
         grid.ugrid._mirrors[grid.ugrid] = mirror_U.get_slices()
         grid.vgrid._mirrors[grid.vgrid] = mirror_V.get_slices()
         grid._mirrors[grid.ugrid] = mirror_TU.get_slices()
         grid._mirrors[grid.vgrid] = mirror_TV.get_slices()
+        grid._mirrors[grid] = mirror_T.get_slices()
 
     def start(
         self,
