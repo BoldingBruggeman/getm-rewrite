@@ -19,6 +19,7 @@ class Base:
         if nz <= 0:
             raise Exception("Number of layers nz must be a positive number")
         self.nz = nz
+        self.prescribed_hn: Optional[npt.NDArray[np.float64]] = None
 
     def initialize(
         self, ref_grid: core.Grid, *other_grids: core.Grid, logger: logging.Logger
@@ -36,6 +37,7 @@ class PerGrid(Base):
 
     def initialize(self, *grids: core.Grid, logger: logging.Logger):
         super().initialize(*grids, logger=logger)
+        self.tgrid = grids[0]
         self.grid_info = [self.prepare_update_args(grid) for grid in grids]
 
     def prepare_update_args(self, grid: core.Grid):
@@ -47,6 +49,9 @@ class PerGrid(Base):
         """Update all grids"""
         for gi in self.grid_info:
             self(*gi)
+
+        if self.prescribed_hn is not None:
+            self.tgrid.hn.all_values[...] = self.prescribed_hn
 
     def __call__(
         self,
@@ -214,7 +219,10 @@ class FromTGrid(Base):
         self.dga_other = tuple(grid.array(z=CENTERS) for grid in other_grids)
 
     def update(self, timestep: float = 0.0):
-        self.update_T_grid(timestep, self.dga_t)
+        if self.prescribed_hn is not None:
+            self.tgrid.hn.all_values[...] = self.prescribed_hn
+        else:
+            self.update_T_grid(timestep, self.dga_t)
 
         # Ensure thicknesses are up to date on open boundaries and in halo zones
         self.dga_t.mirror()
