@@ -929,9 +929,10 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         # (T grid, for arrays that INclude halos)
         self.i = np.concatenate(all_i, dtype=np.intp)
         self.j = np.concatenate(all_j, dtype=np.intp)
+        self.slice = (Ellipsis, self.j, self.i)
         assert (
             global_collection.allow_on_land
-            or (grid.mask.all_values[self.j, self.i] == CellType.BOUNDARY).all()
+            or (grid.mask.all_values[self.slice] == CellType.BOUNDARY).all()
         )
 
         # Global indices of open boundary points within local subdomain
