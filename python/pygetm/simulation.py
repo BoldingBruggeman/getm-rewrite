@@ -1647,8 +1647,9 @@ class Simulation(BaseSimulation):
             self.U.ho.all_values = self.U.hn.all_values
             self.V.ho.all_values = self.V.hn.all_values
 
-            # Update layer thicknesses (hn) on all grids, using bathymetry H and new
-            # elevations zin (on the 3D timestep)
+            # Update layer thicknesses hn using new total water depth D.
+            # This updates all grids provided to vertical_coordinates upon
+            # initialization, i.e., T, U, V, X
             self.vertical_coordinates.update(timestep)
 
             # Update vertical coordinates, used for e.g., output, internal pressure,
