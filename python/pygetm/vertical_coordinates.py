@@ -317,12 +317,12 @@ class Adaptive(Base):
             raise Exception("cSS must be non-negative")
         if cSS > 0.0 and dvel <= 0.0:
             raise Exception("dvel must be positive when cSS is positive")
-        if vfilter < 0.0:
-            raise Exception("vfilter must be non-negative")
+        if vfilter < 0.0 or vfilter > 0.5:
+            raise Exception("vfilter must be between 0 and 0.5")
         if vfilter > 0.0 and nvfilter < 0:
             raise Exception("nvfilter must be non-negative when vfilter is positive")
-        if hfilter < 0.0:
-            raise Exception("hfilter must be non-negative")
+        if hfilter < 0.0 or hfilter > 0.5:
+            raise Exception("hfilter must be between 0 and 0.5")
         if hfilter > 0.0 and nhfilter < 0:
             raise Exception("nhfilter must be non-negative when hfilter is positive")
         if timescale <= 0.0:

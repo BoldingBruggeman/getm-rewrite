@@ -10,7 +10,7 @@ contains
                                   mask, w, var) bind(c)
 
      !! Simple horizontal filter where the central value is weighted by
-     !! w and the avarage of the - active - neighbors by 1-w.
+     !! w and the average of the - active - neighbors by 1-w.
 
       integer(c_int), intent(in), value :: nx, ny, nz
       integer(c_int), intent(in), value :: halox, haloy
@@ -26,8 +26,6 @@ contains
       integer :: imin=1, jmin=1, imax, jmax, kmax
       integer :: i, j, k
 
-      if (w < 0._c_double .or. w > 0.25_c_double) return
-
       imax=nx; jmax=ny; kmax=nz
 
       allocate(x, source=var, stat=rc)
@@ -41,11 +39,13 @@ contains
             n3=min(1,mask(i,j-1))
             n4=min(1,mask(i,j+1))
             n5=n1+n2+n3+n4
-            var(i,j,1:kmax) = (1._c_double-w)*var(i,j,1:kmax) &
-                              +w*(n1*x(i-1,j,1:kmax) &
-                                 +n2*x(i+1,j,1:kmax) &
-                                 +n3*x(i,j-1,1:kmax) &
-                                 +n4*x(i,j+1,1:kmax))/n5
+            if (n5 /= 0) then
+               var(i,j,1:kmax) = (1._c_double-w)*var(i,j,1:kmax)
+               if (n1 /= 0) var(i,j,1:kmax) = var(i,j,1:kmax) + (w/n5)*x(i-1,j,1:kmax)
+               if (n2 /= 0) var(i,j,1:kmax) = var(i,j,1:kmax) + (w/n5)*x(i+1,j,1:kmax)
+               if (n3 /= 0) var(i,j,1:kmax) = var(i,j,1:kmax) + (w/n5)*x(i,j-1,1:kmax)
+               if (n4 /= 0) var(i,j,1:kmax) = var(i,j,1:kmax) + (w/n5)*x(i,j+1,1:kmax)
+            end if
          end do
       end do
    end subroutine
@@ -73,8 +73,6 @@ contains
 
 !----------------------------------------------------------------------
       imax=nx; jmax=ny; kmax=nz
-
-      if (nfilter < 1 .or. (w < 0._c_double .or. w > 1._c_double)) return
 
       wc = 1._c_double-w
       wn = w/2._c_double
