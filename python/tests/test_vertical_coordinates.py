@@ -3,7 +3,6 @@ import unittest
 import numpy as np
 
 import pygetm
-from pygetm.constants import INTERFACES
 
 
 def create_grid():
@@ -86,7 +85,7 @@ class TestAdaptive(unittest.TestCase):
         grid = dom.create_grids(nz, halox, haloy)
         NN = grid.array(name="NN", z=pygetm.constants.INTERFACES)
         SS = grid.array(name="SS", z=pygetm.constants.INTERFACES)
-        grid.ho = grid.array(z=pygetm.constants.CENTERS)
+        grid.ho = grid.array(z=pygetm.constants.CENTERS, fill_value=pygetm.constants.FILL_VALUE)
         NN.all_values.fill(np.nan)
         SS.all_values.fill(np.nan)
         return grid, dom.logger.getChild("vertical_coordinates")
@@ -116,6 +115,8 @@ class TestAdaptive(unittest.TestCase):
             cgvc=0.0,
             ddu=0.0,
             ddl=0.0,
+            Dgamma=10.0,
+            gamma_surf=True,
             chsurf=0.0,
             chmidd=0.0,
             chbott=0.0,
@@ -131,17 +132,28 @@ class TestAdaptive(unittest.TestCase):
             timescale=3600.0 * 4,
         )
 
+        # Tendency towards sigma only (no halos)
         c = self._test(**kwargs)
         nug_tgt = 0.1 / (3600.0 * 4) * 2.0
         self.assertTrue(np.abs(c.nug.all_values - nug_tgt).max() < 1e-15 * nug_tgt)
 
+        # Tendency towards sigma only (with halos)
         c = self._test(halox=2, haloy=2, **kwargs)
+        self.assertTrue(np.abs(c.nug.values - nug_tgt).max() < 1e-15 * nug_tgt)
+
+        # Tendency towards sigma and gvc
+        kwargs["cgvc"] = 0.1
+        kwargs["ddu"] = 1.
+        kwargs["ddl"] = 0.0
+        self._test(**kwargs)
+        self._test(halox=2, haloy=2, **kwargs)
 
         for ddu in (0.0, 0.75, 1.5):
             for ddl in (0.0, 0.75, 1.5):
                 with self.subTest(ddu=ddu, ddl=ddl):
                     kwargs["ddu"] = ddu
                     kwargs["ddl"] = ddl
+                    kwargs["gamma_surf"] = ddl <= ddu
                     if ddu == 0.0 and ddl == 0.0:
                         kwargs["csigma"] = 0.1
                         kwargs["cgvc"] = 0.0
@@ -161,12 +173,12 @@ class TestAdaptive(unittest.TestCase):
         # that is stays unmodified if we only use GVC tendency
         # for grid diffusivity
         c.update()
-        h_ini = grid.hn.all_values.copy()
+        h_ini = grid.hn.values.copy()
         grid.ho.all_values = grid.hn.all_values
         c.update(timestep=600.0)
 
-        self.assertGreaterEqual(c.nug.all_values.min(), 0.0)
-        maxabsdiff = np.abs(grid.hn.all_values - h_ini).max()
+        self.assertGreaterEqual(c.nug.values.min(), 0.0)
+        maxabsdiff = np.abs(grid.hn.values - h_ini).max()
         self.assertLessEqual(maxabsdiff, 1e-15 * grid.H[0, 0])
         return c
 
