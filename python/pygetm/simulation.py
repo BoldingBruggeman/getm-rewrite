@@ -645,8 +645,14 @@ class Simulation(BaseSimulation):
                     attrs=dict(_valid_at=grid.hn.attrs["_valid_at"]),
                 )
 
-            # On T grid, ho cannot be computed from zio,
-            # because rivers modify ho-from-zio before it is stored
+            # Make old and new layer thicknessnes on the T grid part of the model state
+            # For old thicknesses, this is essential as ho cannot be computed from zio,
+            # because rivers modify ho-from-zio before it is stored.
+            # For adaptive vertical coordinates, hn also must be part of the model state.
+            # (it cannot be calculated from zin alone). To accomodate all vertical
+            # coordinate types and to make it easier to switch between them, we always
+            # include hn as part of the model state.
+            self.T.hn.attrs["_part_of_state"] = True
             self.T.ho.attrs["_part_of_state"] = True
         else:
             # In 2D barotropic runs, bottom roughness is updated iteratively
@@ -981,7 +987,9 @@ class Simulation(BaseSimulation):
             # Restore elevation from before open boundary condition was applied
             self.T.z.all_values = self.T.zin.all_values
 
-        self.initialize_depth(keep_all_z=True, keep_ho="hot" in initialized_variables)
+        keep_ho = "hot" in initialized_variables
+        keep_hn = "hnt" in initialized_variables
+        self.initialize_depth(keep_all_z=True, keep_ho=keep_ho, keep_hn=keep_hn)
 
     def _start(self):
         """Perform final initialization steps before starting the time-stepping loop.
@@ -1025,10 +1033,12 @@ class Simulation(BaseSimulation):
 
         if self.runtype > RunType.BAROTROPIC_2D:
             self.momentum.update_diagnostics(
-                            self.macrotimestep, self.vertical_mixing.num
-                        )
+                self.macrotimestep, self.vertical_mixing.num
+            )
 
-    def initialize_depth(self, keep_all_z: bool=False, keep_ho: bool = False):
+    def initialize_depth(
+        self, keep_all_z: bool = False, keep_ho: bool = False, keep_hn: bool = False
+    ):
         """Initialize elevations, water depths, layer thicknesses and vertical
         coordinates on all grids, and where applicable, on old and new time levels.
         By default, these are all derived from the current surface elevation on
@@ -1048,6 +1058,8 @@ class Simulation(BaseSimulation):
                 for the old macro time level (:attr:`self.T.zio`, :attr:`self.T.zin`)
             keep_ho: if True, preserve values of layer thickness at the old
                 macro time level (:attr:`self.T.ho`)
+            keep_hn: if True, preserve values of layer thickness at the new
+                macro time level (:attr:`self.T.hn`)
         """
 
         def clip_z(z: core.Array, valid_min: np.ndarray):
@@ -1081,7 +1093,7 @@ class Simulation(BaseSimulation):
 
         if self.runtype > RunType.BAROTROPIC_2D:
             zin_backup = self.T.zin.all_values.copy()
-            ho_T_backup = self.T.ho.all_values.copy()
+            hn_T_backup = self.T.hn.all_values.copy()
 
             # First (out of two) 3D depth/thickness update based on zio.
             # This serves to generate T.ho when T.zio is set, but T.ho is not available.
@@ -1092,25 +1104,24 @@ class Simulation(BaseSimulation):
             self.T.z.all_values = (
                 self.T.zio.all_values
             )  # to become T.zin when update_depth is called
+            if keep_ho:
+                self.vertical_coordinates.prescribed_hn = self.T.ho.all_values.copy()
             self.T.zio.fill(np.nan)
             self.T.ho.fill(np.nan)
             self.update_depth(_3d=True)
+            self.vertical_coordinates.prescribed_hn = None
 
             # Second 3D depth/thickness update based on zin.
-            # Override T.ho with user-provided value if available, since this may
-            # incorporate river inflow impacts that our previously calculated ho cannot
-            # account for.
+            # This moves our zin backup into zin, and at the same time moves the
+            # current zin (originally zio) to zio
             # New metrics for U, V, X grids will be calculated from valid old and new
             # metrics on T grid; therefore they will be valid too. However, old metrics
             # (ho/zio) for U, V, X grids will still be NaN and should not be used.
             self.T.z.all_values = zin_backup
-
-            if keep_ho:
-                self.T.hn.all_values = ho_T_backup
-
-            # this moves our zin backup into zin, and at the same time moves the
-            # current zin (originally zio) to zio
+            if keep_hn:
+                self.vertical_coordinates.prescribed_hn = hn_T_backup
             self.update_depth(_3d=True)
+            self.vertical_coordinates.prescribed_hn = None
 
         # Restore original elevation
         self.T.z.all_values = z_backup
@@ -1647,8 +1658,9 @@ class Simulation(BaseSimulation):
             self.U.ho.all_values = self.U.hn.all_values
             self.V.ho.all_values = self.V.hn.all_values
 
-            # Update layer thicknesses (hn) on all grids, using bathymetry H and new
-            # elevations zin (on the 3D timestep)
+            # Update layer thicknesses hn using new total water depth D.
+            # This updates all grids provided to vertical_coordinates upon
+            # initialization, i.e., T, U, V, X
             self.vertical_coordinates.update(timestep)
 
             # Update vertical coordinates, used for e.g., output, internal pressure,

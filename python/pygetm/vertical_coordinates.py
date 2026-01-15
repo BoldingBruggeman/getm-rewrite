@@ -7,7 +7,6 @@ import numpy.typing as npt
 from .constants import CENTERS, INTERFACES, TimeVarying, ZERO_GRADIENT, FILL_VALUE
 from . import core
 from . import _pygetm
-from .open_boundaries import ArrayOpenBoundaries
 
 
 class Base:
@@ -20,6 +19,7 @@ class Base:
         if nz <= 0:
             raise Exception("Number of layers nz must be a positive number")
         self.nz = nz
+        self.prescribed_hn: Optional[npt.NDArray[np.float64]] = None
 
     def initialize(
         self, ref_grid: core.Grid, *other_grids: core.Grid, logger: logging.Logger
@@ -37,6 +37,7 @@ class PerGrid(Base):
 
     def initialize(self, *grids: core.Grid, logger: logging.Logger):
         super().initialize(*grids, logger=logger)
+        self.tgrid = grids[0]
         self.grid_info = [self.prepare_update_args(grid) for grid in grids]
 
     def prepare_update_args(self, grid: core.Grid):
@@ -48,6 +49,9 @@ class PerGrid(Base):
         """Update all grids"""
         for gi in self.grid_info:
             self(*gi)
+
+        if self.prescribed_hn is not None:
+            self.tgrid.hn.all_values[...] = self.prescribed_hn
 
     def __call__(
         self,
@@ -193,7 +197,57 @@ class GVC(PerGrid):
         return out
 
 
-class Adaptive(Base):
+class FromTGrid(Base):
+    def __init__(self, nz):
+        super().__init__(nz)
+
+    def initialize(
+        self,
+        tgrid: core.Grid,
+        *other_grids: core.Grid,
+        logger: logging.Logger,
+    ):
+        super().initialize(tgrid, *other_grids, logger=logger)
+        self.tgrid = tgrid
+        self.other_grids = other_grids
+
+        self.dga_t = tgrid.array(
+            name="dga",
+            z=CENTERS,
+            attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
+        )
+        self.dga_other = tuple(grid.array(z=CENTERS) for grid in other_grids)
+
+    def update(self, timestep: float = 0.0):
+        if self.prescribed_hn is not None:
+            self.tgrid.hn.all_values[...] = self.prescribed_hn
+        else:
+            self.update_T_grid(timestep, self.dga_t)
+
+        # Ensure thicknesses are up to date on open boundaries and in halo zones
+        self.dga_t.mirror()
+        self.dga_t.update_halos()
+
+        # Interpolate relative thicknesses from T grid to other grids
+        for dga in self.dga_other:
+            self.dga_t.interp(dga)
+            dga.mirror()
+            dga.update_halos()
+
+        # From relative (sigma) thicknesses to layer thicknesses in m
+        all_grids = (self.tgrid,) + self.other_grids
+        all_dga = (self.dga_t,) + self.dga_other
+        for grid, dga in zip(all_grids, all_dga):
+            np.multiply(
+                dga, grid.Dclip.all_values, where=grid._water, out=grid.hn.all_values
+            )
+
+    def update_T_grid(self, timestep: float, dga: core.Array):
+        """Update sigma thicknesses for T grid"""
+        raise NotImplementedError
+
+
+class Adaptive(FromTGrid):
     """
     Adaptive vertical coordinates based on `Hofmeister et al. (2010)
     <https://doi.org/10.1016/j.ocemod.2009.12.003>`_ and `their GETM
@@ -285,6 +339,10 @@ class Adaptive(Base):
             timescale: time scale of grid adaptation (s)
         """
 
+        if csigma < 0.0:
+            raise Exception("csigma must be non-negative")
+        if cgvc < 0.0:
+            raise Exception("cgvc must be non-negative")
         if chsurf < 0.0:
             raise Exception("chsurf must be non-negative")
         if chbott < 0.0:
@@ -317,12 +375,12 @@ class Adaptive(Base):
             raise Exception("cSS must be non-negative")
         if cSS > 0.0 and dvel <= 0.0:
             raise Exception("dvel must be positive when cSS is positive")
-        if vfilter < 0.0:
-            raise Exception("vfilter must be non-negative")
+        if vfilter < 0.0 or vfilter > 0.5:
+            raise Exception("vfilter must be between 0 and 0.5")
         if vfilter > 0.0 and nvfilter < 0:
             raise Exception("nvfilter must be non-negative when vfilter is positive")
-        if hfilter < 0.0:
-            raise Exception("hfilter must be non-negative")
+        if hfilter < 0.0 or hfilter > 0.5:
+            raise Exception("hfilter must be between 0 and 0.5")
         if hfilter > 0.0 and nhfilter < 0:
             raise Exception("nhfilter must be non-negative when hfilter is positive")
         if timescale <= 0.0:
@@ -336,8 +394,8 @@ class Adaptive(Base):
         super().__init__(nz)
         self.decay = decay
         self.hpow = hpow
-        self.csigma = max(0.0, csigma)
-        self.cgvc = max(0.0, cgvc)
+        self.csigma = csigma
+        self.cgvc = cgvc
         self.chsurf = chsurf
         self.chbott = chbott
         self.chmidd = chmidd
@@ -360,10 +418,10 @@ class Adaptive(Base):
         self.split = 1
         self.timescale = timescale
 
-        if (ddl <= 0.0 and ddu <= 0.0) or Dgamma <= 0.0:
-            self._gvc = Sigma(nz, ddl=ddl, ddu=ddu)
-        else:
+        if self.cgvc > 0.0:
             self._gvc = GVC(nz, ddu=ddu, ddl=ddl, gamma_surf=gamma_surf, Dgamma=Dgamma)
+        else:
+            self._gvc = None
 
     def initialize(
         self,
@@ -374,24 +432,14 @@ class Adaptive(Base):
         super().initialize(tgrid, *other_grids, logger=logger)
         logger.warning("Support for adaptive vertical coordinates is experimental.")
 
-        if self.csigma > 0.0 and self.cgvc > 0.0:
-            logger.warning(f"Relaxing to both sigma and gvc coordinates.")
-        elif self.csigma == 0.0 and self.cgvc == 0.0:
+        if self.csigma == 0.0 and self.cgvc == 0.0:
             logger.warning(
                 f"Not relaxing to any background layer distribution (sigma or gvc)."
             )
 
-        self._gvc.initialize(tgrid, logger=logger)
+        if self._gvc:
+            self._gvc.initialize(tgrid, logger=logger)
 
-        self.other_grids = other_grids
-        self.dga_t = tgrid.array(
-            name="dga",
-            z=CENTERS,
-            attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
-        )
-        self.dga_other = tuple(grid.array(z=CENTERS) for grid in other_grids)
-
-        self.tgrid = tgrid
         self.nug = tgrid.array(
             name="nug",
             units="s-1",
@@ -407,12 +455,6 @@ class Adaptive(Base):
             z=INTERFACES,
             attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
         )
-
-        if hasattr(self.tgrid, "open_boundaries"):
-            self.nug.open_boundaries = ArrayOpenBoundaries(self.nug, type=ZERO_GRADIENT)
-            self.dga_t.open_boundaries = ArrayOpenBoundaries(
-                self.dga_t, type=ZERO_GRADIENT
-            )
 
         # Obtain additional fields used by adaptive coordinates
         # NN and SS should maybe be interpolated to centers
@@ -434,28 +476,13 @@ class Adaptive(Base):
         self.sdecay = self.decay ** np.arange(self.nz)[::-1]
         self.bdecay = self.decay ** np.arange(self.nz)
 
-    def update(self, timestep: float = 0.0):
+        self.D = tgrid.Dclip
+        self.hn = tgrid.hn
+        self.ho = tgrid.ho
+        self.mask = tgrid.mask
 
-        if timestep == 0.0:
-            # Simulation is initializing
-            self._gvc(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
-            self.dga_t.all_values = (
-                self.tgrid.hn.all_values / self.tgrid.Dclip.all_values
-            )
-
-            self.update_other_grids()
-
-            return
-
-        # Reconstruct old sigma positions (from -1 at bottom to 0 at surface)
-        # NB the values of ga will usually not be identical to those produced
-        # by the previous call to "update" due to river inflow and precipitation.
-        # Therefore we compute it anew from old layer thicknesses,
-        # which already incorporate these freshwater inputs (unlike, for
-        # example, the grid's interface coordinates zf!)
-        _pygetm.thickness2interface_depth(self.tgrid.mask, self.tgrid.ho, self.ga)
-        self.ga.all_values *= -1.0 / self.ga.all_values[0]
-
+    def update_T_grid(self, timestep: float, dga: core.Array):
+        """Update sigma thicknesses for T grid"""
         # Construct the grid diffusivity, which is defined per layer, and equal
         # to the relative rate (tendency, in s-1) at which the layer "gives" its
         # thickness to each neighbor. That is, interior layers (non-surface/bottom)
@@ -471,18 +498,42 @@ class Adaptive(Base):
         # This is constant for all layers in order to ensure that an equilibrium
         # distribution (equal thickness fluxes in and out) is reached when all
         # layers have equal thickness.
-        self.nug.all_values = self.csigma
+        self.nug.all_values.fill(self.csigma)
 
         # Tendency towards Generalized Vertical Coordinates (incl. zoomed sigma)
         # NB the stationary solution of AVC has thicknesses proportional to
         # the inverse of diffusivity (nug). The division by hn below is
-        # therefore necessary; its scaling with surface thicknesses only
+        # therefore necessary; its scaling with surface/bottom thickness only
         # ensures the tendency (rate of convergence) equals cgvc at the surface.
-        if self.cgvc > 0.0:
-            self._gvc(self.tgrid.Dclip.all_values, self.tgrid.hn.all_values)
+        if self._gvc:
+            self._gvc(self.D.all_values, out=self.hn.all_values)
             self.nug.all_values += np.divide(
-                self.cgvc * self.tgrid.hn.all_values[-1], self.tgrid.hn.all_values
+                self.cgvc * self.hn.all_values[self._gvc.k_ref], self.hn.all_values
             )
+
+        if timestep == 0.0:
+            # Equilibrium thicknesses are inversely proportional to nug.
+            # Use this to set initial thicknesses based on constant nug contributions.
+            # This supports mixtures of sigma and gvc (csigma > 0 and cgvc > 0).
+            if self.csigma == 0.0 and self.cgvc == 0.0:
+                self.logger.warning(
+                    "Initializing without background distribution (csigma=cgvc=0)."
+                    " Initial layer thicknesses will be uniform."
+                )
+                dga.all_values = 1.0 / self.nz
+            else:
+                dga.all_values = 1.0 / self.nug.all_values
+                dga.all_values /= dga.all_values.sum(axis=0)
+            return
+
+        # Reconstruct old sigma positions (from -1 at bottom to 0 at surface)
+        # NB the values of ga will usually not be identical to those produced
+        # by the previous adaptive coordinate update due to river inflow and
+        # precipitation. Therefore we compute it anew from old layer thicknesses,
+        # which already incorporate these freshwater inputs (unlike, for
+        # example, the grid's interface coordinates zf!)
+        _pygetm.thickness2interface_depth(self.mask, self.ho, self.ga)
+        self.ga.all_values *= -1.0 / self.ga.all_values[0]
 
         # then add contributions handled by Fortran
         _pygetm.update_adaptive(
@@ -522,8 +573,7 @@ class Adaptive(Base):
         # apply horizontal filtering from ~/python/src/filters.F90
         # requires halo updates
         for _ in range(self.nhfilter):
-            if self.nug.open_boundaries is not None:
-                self.nug.open_boundaries.update()
+            self.nug.mirror()
             self.nug.update_halos()
             _pygetm.horizontal_filter(self.nug, self.hfilter)
 
@@ -531,30 +581,4 @@ class Adaptive(Base):
         _pygetm.tridiagonal(self.nug, self.ga, timestep)
 
         # Calculate sigma thicknesses from updated interface positions
-        np.subtract(
-            self.ga.all_values[1:], self.ga.all_values[:-1], out=self.dga_t.all_values
-        )
-
-        # Ensure thicknesses are up to date on open boundaries and in halo zones
-        if self.dga_t.open_boundaries is not None:
-            self.dga_t.all_values[self.tgrid.open_boundaries.slice] = 0.0
-            self.dga_t.open_boundaries.update()
-        self.dga_t.update_halos()
-
-        self.update_other_grids()
-
-    def update_other_grids(self):
-        """Update layer thicknesses hn for all other grids"""
-        # Interpolate relative thicknesses from T grid to other grids
-        for dga in self.dga_other:
-            self.dga_t.interp(dga)
-            dga.mirror()
-            dga.update_halos()
-
-        # From relative (sigma) thicknesses to layer thicknesses in m
-        all_grids = (self.tgrid,) + self.other_grids
-        all_dga = (self.dga_t,) + self.dga_other
-        for grid, dga in zip(all_grids, all_dga):
-            np.multiply(
-                dga, grid.Dclip.all_values, where=grid._water, out=grid.hn.all_values
-            )
+        np.subtract(self.ga.all_values[1:], self.ga.all_values[:-1], out=dga.all_values)
