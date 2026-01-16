@@ -262,29 +262,28 @@ class Adaptive(FromTGrid):
         ddl: float = 0.0,
         gamma_surf: bool = True,
         Dgamma: float = 0.0,
-        csigma: float = 0.01,
-        cgvc: float = 0.0,
-        chsurf: float = 0.5,
+        csigma: float = 0.0,
+        cgvc: float = 1.0,
+        chsurf: float = 0.0,
         hsurf: float = 0.5,
-        chmidd: float = 0.2,
+        chmidd: float = 0.0,
         hmidd: float = -4.0,
-        chbott: float = 0.3,
+        chbott: float = 0.0,
         hbott: float = -0.25,
         decay: float = 2.0 / 3.0,
         hpow: int = 3,
-        cneigh: float = 0.1,
+        cneigh: float = 0.0,
         rneigh: float = 0.25,
-        cNN: float = 0.5,
+        cNN: float = 0.0,
         drho: float = 0.3,
-        cSS: float = 0.25,
+        cSS: float = 0.0,
         dvel: float = 0.1,
-        chmin: float = 0.5,
+        chmin: float = 0.0,
         hmin: float = 0.3,
         nvfilter: int = 1,
-        vfilter: float = 0.2,
+        vfilter: float = 0.3,
         nhfilter: int = 1,
-        hfilter: float = 0.1,
-        split: int = 1,
+        hfilter: float = 0.4,
         timescale: float = 14400.0,
     ):
         """
@@ -300,9 +299,12 @@ class Adaptive(FromTGrid):
             ddl: zoom factor at bottom (0: no zooming, 2: strong zooming)
             gamma_surf: use layers of constant thickness `Dgamma/nz` at surface (otherwise, at bottom)
             Dgamma: water depth below which to use equal layer thicknesses
-            csigma: tendency towards uniform sigma
-            cgvc: tendency towards "standard" Generalized Vertical Coordinates,
-                as parameterized by `ddu`, `ddl`, `gamma_surf`, `Dgamma`
+            csigma: tendency towards equal layer thicknesses (uniform sigma)
+                DEPRECATED: for (zoomed) sigma, background, use cgvc>0.0 with Dgamma=0 instead
+            cgvc: tendency towards Generalized Vertical Coordinates (:class:`GVC`),
+                as parameterized by `ddu`, `ddl`, `gamma_surf`, `Dgamma`.
+                LEAVE AT 1, so that all other tendencies are relative to this background,
+                and tune timescale to adjust the rate of convergence
             chsurf: tendency to zoom in (prefer thinner layers) towards the surface
             hsurf: reference thickness for surface layer
                 (absolute thickness in m if >0, relative to average thickness D/nz if <0)
@@ -329,13 +331,14 @@ class Adaptive(FromTGrid):
             dvel: local difference in horizontal velocity over distance D/nz (average
                 layer thickness) where zooming towards velocity gradients reaches its
                 maximum value of `cSS`
-            chmin: internal nug coeff for shallow-water regions
+            chmin: tendency to uniform sigma in shallow-water regions, maximized when
+                average layer thickness drops below 2/3 hmin, and reduced to zero when
+                average layer thickness exceeds hmin
             hmin: minimum depth
             nvfilter: number of vertical filter iterations
             vfilter: strength of vertical filter-of-Dgrid [0:~0.5]
             nhfilter: number of horizontal filter iterations
             hfilter: strength of horizontal filter-of-Dgrid [0:~0.5]
-            split: Take this many partial-steps for for vertical filtering == 1 for now
             timescale: time scale of grid adaptation (s)
         """
 
@@ -418,10 +421,12 @@ class Adaptive(FromTGrid):
         self.split = 1
         self.timescale = timescale
 
-        if self.cgvc > 0.0:
-            self._gvc = GVC(nz, ddu=ddu, ddl=ddl, gamma_surf=gamma_surf, Dgamma=Dgamma)
-        else:
+        if self.cgvc == 0.0:
             self._gvc = None
+        elif Dgamma == 0.0:
+            self._gvc = Sigma(nz, ddu=ddu, ddl=ddl)
+        else:
+            self._gvc = GVC(nz, ddu=ddu, ddl=ddl, gamma_surf=gamma_surf, Dgamma=Dgamma)
 
     def initialize(
         self,
