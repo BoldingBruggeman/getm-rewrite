@@ -423,12 +423,16 @@ class Adaptive(FromTGrid):
         logger: logging.Logger,
     ):
         super().initialize(tgrid, *other_grids, logger=logger)
-        logger.warning("Support for adaptive vertical coordinates is experimental.")
+        logger.warning("Support for adaptive vertical coordinates is experimental")
 
         if self.csigma == 0.0 and self.cgvc == 0.0:
             logger.warning(
                 f"Not relaxing to any background layer distribution (sigma or gvc)."
             )
+
+        if tgrid.halox < 1 or tgrid.haloy < 1:
+            logger.warning("Disabling horizontal filter because grid has no halo zones")
+            self.nhfilter = 0
 
         if self._gvc:
             self._gvc.initialize(tgrid, logger=logger)
