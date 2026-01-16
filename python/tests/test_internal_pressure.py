@@ -40,6 +40,8 @@ class TestInternalPressure(unittest.TestCase):
         )
         vc = pygetm.vertical_coordinates.Sigma(nz, ddu=ddu)
         T = domain.create_grids(vc.nz, halox=2, haloy=2, velocity_grids=1)
+        T.ho = T.array(z=pygetm.CENTERS)
+        T.hhalf = T.array(z=pygetm.CENTERS)
         U, V = T.ugrid, T.vgrid
         vc.initialize(
             T, U, V, logger=domain.root_logger.getChild("vertical_coordinates")
