@@ -430,7 +430,7 @@ class Adaptive(FromTGrid):
                 f"Not relaxing to any background layer distribution (sigma or gvc)."
             )
 
-        if tgrid.halox < 1 or tgrid.haloy < 1:
+        if self.hfilter > 0.0 and (tgrid.halox < 1 or tgrid.haloy < 1):
             logger.warning("Disabling horizontal filter because grid has no halo zones")
             self.nhfilter = 0
 
