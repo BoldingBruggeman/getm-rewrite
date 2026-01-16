@@ -300,7 +300,7 @@ class Adaptive(FromTGrid):
             gamma_surf: use layers of constant thickness `Dgamma/nz` at surface (otherwise, at bottom)
             Dgamma: water depth below which to use equal layer thicknesses
             csigma: tendency towards equal layer thicknesses (uniform sigma)
-                DEPRECATED: for (zoomed) sigma, background, use cgvc>0.0 with Dgamma=0 instead
+                DEPRECATED: for (zoomed) sigma background, use cgvc>0.0 with Dgamma=0 instead
             cgvc: tendency towards Generalized Vertical Coordinates (:class:`GVC`),
                 as parameterized by `ddu`, `ddl`, `gamma_surf`, `Dgamma`.
                 LEAVE AT 1, so that all other tendencies are relative to this background,
@@ -425,6 +425,7 @@ class Adaptive(FromTGrid):
             self._gvc = None
         elif Dgamma == 0.0:
             self._gvc = Sigma(nz, ddu=ddu, ddl=ddl)
+            self._gvc.k_ref = -1 if ddu >= ddl else 0
         else:
             self._gvc = GVC(nz, ddu=ddu, ddl=ddl, gamma_surf=gamma_surf, Dgamma=Dgamma)
 

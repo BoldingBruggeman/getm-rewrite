@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 
 import pygetm
+from pygetm.constants import CENTERS, INTERFACES, FILL_VALUE
 
 
 def create_grid():
@@ -83,9 +84,10 @@ class TestAdaptive(unittest.TestCase):
             logger=pygetm.parallel.get_logger(level="ERROR"),
         )
         grid = dom.create_grids(nz, halox, haloy)
-        NN = grid.array(name="NN", z=pygetm.constants.INTERFACES)
-        SS = grid.array(name="SS", z=pygetm.constants.INTERFACES)
-        grid.ho = grid.array(z=pygetm.constants.CENTERS, fill_value=pygetm.constants.FILL_VALUE)
+        NN = grid.array(name="NN", z=INTERFACES)
+        SS = grid.array(name="SS", z=INTERFACES)
+        grid.ho = grid.array(z=CENTERS, fill_value=FILL_VALUE)
+        grid.hhalf = grid.array(z=CENTERS, fill_value=FILL_VALUE)
         NN.all_values.fill(np.nan)
         SS.all_values.fill(np.nan)
         return grid, dom.logger.getChild("vertical_coordinates")
@@ -143,7 +145,7 @@ class TestAdaptive(unittest.TestCase):
 
         # Tendency towards sigma and gvc
         kwargs["cgvc"] = 0.1
-        kwargs["ddu"] = 1.
+        kwargs["ddu"] = 1.0
         kwargs["ddl"] = 0.0
         self._test(**kwargs)
         self._test(halox=2, haloy=2, **kwargs)
