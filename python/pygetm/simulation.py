@@ -483,7 +483,6 @@ class Simulation(BaseSimulation):
         "rivers",
         "open_boundaries",
         "vertical_coordinates",
-        "h_T_half",
         "depth",
     )
 
@@ -679,7 +678,7 @@ class Simulation(BaseSimulation):
 
             # Thicknesses on T grid that lag 1/2 time step behind tracer
             # (i.e., they are in sync with U, V, X grids)
-            self.h_T_half = self.T.array(fill=np.nan, z=CENTERS)
+            self.T.hhalf = self.T.array(fill=np.nan, z=CENTERS)
 
             self.depth = self.T.array(
                 z=CENTERS,
@@ -1646,8 +1645,8 @@ class Simulation(BaseSimulation):
         _pygetm.elevation2depth(z_T_half, self.T.H, self.Dmin, D_T_half)
         self.U.ugrid.D.all_values[:, :-1] = D_T_half.all_values[:, 1:]
         self.V.vgrid.D.all_values[:-1, :] = D_T_half.all_values[1:, :]
-        self.U.vgrid.D.all_values[:, :] = self.X.D.all_values[1:, 1:]
-        self.V.ugrid.D.all_values[:, :] = self.U.vgrid.D.all_values
+        self.U.vgrid.D.all_values = self.X.D.all_values[1:, 1:]
+        self.V.ugrid.D.all_values = self.U.vgrid.D.all_values
 
         if _3d:
             # Store previous layer thicknesses
@@ -1663,26 +1662,23 @@ class Simulation(BaseSimulation):
             # initialization, i.e., T, U, V, X
             self.vertical_coordinates.update(timestep)
 
+            # Update thicknesses on advection grids. These must be at time=n+1/2
+            # That's already the case for hn on the X grid, but for the T grid
+            # (now at t=n+1) we use hhalf=0.5*(ho+hn)
+            # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips,
+            # respectively (the last strip of values within their halos);
+            # fortunately these values are not needed for advection.
+            self.U.ugrid.hn.all_values[:, :, :-1] = self.T.hhalf.all_values[:, :, 1:]
+            self.V.vgrid.hn.all_values[:, :-1, :] = self.T.hhalf.all_values[:, 1:, :]
+            self.U.vgrid.hn.all_values = self.X.hn.all_values[:, 1:, 1:]
+            self.V.ugrid.hn.all_values = self.U.vgrid.hn.all_values
+
             # Update vertical coordinates, used for e.g., output, internal pressure,
             # vertical interpolation of open boundary forcing of tracers
             for grid in (self.T, self.U, self.V):
                 _pygetm.thickness2vertical_coordinates(
                     grid.mask, grid.H, grid.hn, grid.zc, grid.zf
                 )
-
-            # Update thicknesses on advection grids. These must be at time=n+1/2
-            # That's already the case for the X grid, but for the T grid (now at t=n+1)
-            # we explicitly compute thicknesses at time=n+1/2.
-            # Note that UU.hn and VV.hn will miss the x=-1 and y=-1 strips,
-            # respectively (the last strip of values within their halos);
-            # fortunately these values are not needed for advection.
-            self.h_T_half.all_values = 0.5 * (
-                self.T.ho.all_values + self.T.hn.all_values
-            )
-            self.U.ugrid.hn.all_values[:, :, :-1] = self.h_T_half.all_values[:, :, 1:]
-            self.V.vgrid.hn.all_values[:, :-1, :] = self.h_T_half.all_values[:, 1:, :]
-            self.U.vgrid.hn.all_values[:, :, :] = self.X.hn.all_values[:, 1:, 1:]
-            self.V.ugrid.hn.all_values[:, :, :] = self.U.vgrid.hn.all_values
 
             if self.depth.saved:
                 # Update depth-below-surface at layer centers.

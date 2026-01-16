@@ -22,9 +22,11 @@ class Base:
         self.prescribed_hn: Optional[npt.NDArray[np.float64]] = None
 
     def initialize(
-        self, ref_grid: core.Grid, *other_grids: core.Grid, logger: logging.Logger
+        self, tgrid: core.Grid, *other_grids: core.Grid, logger: logging.Logger
     ):
         self.logger = logger
+        self.tgrid = tgrid
+        self.other_grids = other_grids
 
     def update(self, timestep: float):
         """Update layer thicknesses hn for all grids"""
@@ -37,7 +39,6 @@ class PerGrid(Base):
 
     def initialize(self, *grids: core.Grid, logger: logging.Logger):
         super().initialize(*grids, logger=logger)
-        self.tgrid = grids[0]
         self.grid_info = [self.prepare_update_args(grid) for grid in grids]
 
     def prepare_update_args(self, grid: core.Grid):
@@ -51,7 +52,11 @@ class PerGrid(Base):
             self(*gi)
 
         if self.prescribed_hn is not None:
-            self.tgrid.hn.all_values[...] = self.prescribed_hn
+            self.tgrid.hn.all_values = self.prescribed_hn
+
+        self.tgrid.hhalf.all_values = 0.5 * (
+            self.tgrid.ho.all_values + self.tgrid.hn.all_values
+        )
 
     def __call__(
         self,
@@ -198,52 +203,28 @@ class GVC(PerGrid):
 
 
 class FromTGrid(Base):
-    def __init__(self, nz):
-        super().__init__(nz)
-
-    def initialize(
-        self,
-        tgrid: core.Grid,
-        *other_grids: core.Grid,
-        logger: logging.Logger,
-    ):
-        super().initialize(tgrid, *other_grids, logger=logger)
-        self.tgrid = tgrid
-        self.other_grids = other_grids
-
-        self.dga_t = tgrid.array(
-            name="dga",
-            z=CENTERS,
-            attrs=dict(_time_varying=TimeVarying.MACRO, _mask_output=True),
-        )
-        self.dga_other = tuple(grid.array(z=CENTERS) for grid in other_grids)
-
     def update(self, timestep: float = 0.0):
         if self.prescribed_hn is not None:
             self.tgrid.hn.all_values[...] = self.prescribed_hn
         else:
-            self.update_T_grid(timestep, self.dga_t)
+            self.update_T_grid(timestep)
 
-        # Ensure thicknesses are up to date on open boundaries and in halo zones
-        self.dga_t.mirror()
-        self.dga_t.update_halos()
+        # Calculate thicknesses at time levels halfway in between old and new
+        self.tgrid.hhalf.all_values = 0.5 * (
+            self.tgrid.ho.all_values + self.tgrid.hn.all_values
+        )
 
-        # Interpolate relative thicknesses from T grid to other grids
-        for dga in self.dga_other:
-            self.dga_t.interp(dga)
-            dga.mirror()
-            dga.update_halos()
+        # Interpolate thicknesses from T grid to other grids
+        # Use hhalf as other grids are assumed to be half a timestep behind T grid
+        for grid in self.other_grids:
+            self.tgrid.hhalf.interp(grid.hn)
+            self.tgrid.hhalf.mirror(grid.hn)
+            grid.hn.all_values *= grid.Dclip.all_values / grid.hn.all_values.sum(axis=0)
+            grid.hn.all_values[..., grid._land] = FILL_VALUE  # for land-water interface
+            grid.hn.update_halos()
 
-        # From relative (sigma) thicknesses to layer thicknesses in m
-        all_grids = (self.tgrid,) + self.other_grids
-        all_dga = (self.dga_t,) + self.dga_other
-        for grid, dga in zip(all_grids, all_dga):
-            np.multiply(
-                dga, grid.Dclip.all_values, where=grid._water, out=grid.hn.all_values
-            )
-
-    def update_T_grid(self, timestep: float, dga: core.Array):
-        """Update sigma thicknesses for T grid"""
+    def update_T_grid(self, timestep: float):
+        """Update thicknesses `hn` for T grid"""
         raise NotImplementedError
 
 
@@ -487,8 +468,8 @@ class Adaptive(FromTGrid):
         self.ho = tgrid.ho
         self.mask = tgrid.mask
 
-    def update_T_grid(self, timestep: float, dga: core.Array):
-        """Update sigma thicknesses for T grid"""
+    def update_T_grid(self, timestep: float):
+        """Update thicknesses `hn` for T grid"""
         # Construct the grid diffusivity, which is defined per layer, and equal
         # to the relative rate (tendency, in s-1) at which the layer "gives" its
         # thickness to each neighbor. That is, interior layers (non-surface/bottom)
@@ -526,10 +507,13 @@ class Adaptive(FromTGrid):
                     "Initializing without background distribution (csigma=cgvc=0)."
                     " Initial layer thicknesses will be uniform."
                 )
-                dga.all_values = 1.0 / self.nz
+                self.hn.fill(self.D.all_values / self.nz)
             else:
-                dga.all_values = 1.0 / self.nug.all_values
-                dga.all_values /= dga.all_values.sum(axis=0)
+                self.hn.all_values = 1.0 / self.nug.all_values
+                self.hn.mirror()
+                self.hn.update_halos()
+                scale = self.D.all_values / self.hn.all_values.sum(axis=0)
+                self.hn.fill(self.hn.all_values * scale)
             return
 
         # Reconstruct old sigma positions (from -1 at bottom to 0 at surface)
@@ -587,4 +571,12 @@ class Adaptive(FromTGrid):
         _pygetm.tridiagonal(self.nug, self.ga, timestep)
 
         # Calculate sigma thicknesses from updated interface positions
-        np.subtract(self.ga.all_values[1:], self.ga.all_values[:-1], out=dga.all_values)
+        np.subtract(
+            self.ga.all_values[1:], self.ga.all_values[:-1], out=self.hn.all_values
+        )
+
+        # Ensure sigma thicknesses are up to date on open boundaries and in halo zones
+        self.hn.mirror()
+        self.hn.update_halos()
+
+        self.hn.all_values *= self.D.all_values
