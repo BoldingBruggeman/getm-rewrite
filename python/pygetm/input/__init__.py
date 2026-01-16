@@ -168,6 +168,9 @@ def from_nc(
             paths = map(Path, paths)
         else:
             # A URL or a single file path (PathLike)
+            if isinstance(paths, os.PathLike):
+                if not os.path.exists(paths):
+                    raise FileNotFoundError(f"File not found: {paths}")
             paths = (paths,)
 
     arrays = []
