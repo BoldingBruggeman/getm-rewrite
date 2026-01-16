@@ -48,15 +48,18 @@ class PerGrid(Base):
 
     def update(self, timestep: float):
         """Update all grids"""
-        for gi in self.grid_info:
-            self(*gi)
-
         if self.prescribed_hn is not None:
             self.tgrid.hn.all_values = self.prescribed_hn
+        else:
+            self(*self.grid_info[0])
 
-        self.tgrid.hhalf.all_values = 0.5 * (
-            self.tgrid.ho.all_values + self.tgrid.hn.all_values
-        )
+        if self.other_grids:
+            for gi in self.grid_info[1:]:
+                self(*gi)
+
+            self.tgrid.hhalf.all_values = 0.5 * (
+                self.tgrid.ho.all_values + self.tgrid.hn.all_values
+            )
 
     def __call__(
         self,
@@ -208,6 +211,9 @@ class FromTGrid(Base):
             self.tgrid.hn.all_values[...] = self.prescribed_hn
         else:
             self.update_T_grid(timestep)
+
+        if not self.other_grids:
+            return
 
         # Calculate thicknesses at time levels halfway in between old and new
         self.tgrid.hhalf.all_values = 0.5 * (
