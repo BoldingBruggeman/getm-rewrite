@@ -323,18 +323,18 @@ class Adaptive(FromTGrid):
             cneigh: tendency to keep neighbors of similar size
             rneigh: relative difference with the thinnest neighbor where
                 size-ratio-limiting tendency reaches its maximum value `cneigh`
-            cNN: tendency to zoom towards (stable) density gradients
+            cNN: tendency to zoom in on stable density gradients
             drho: local density difference over distance D/nz (average layer thickness)
-                where zooming towards density gradients reaches its maximum value of
-                `cNN`
-            cSS: tendency to zoom towards horizontal velocity gradients (shear)
+                where to stop zooming in further on stable density gradients.
+                There the tendency reaches its maximum value of `cNN`
+            cSS: tendency to zoom in on horizontal velocity gradients (shear)
             dvel: local difference in horizontal velocity over distance D/nz (average
-                layer thickness) where zooming towards velocity gradients reaches its
-                maximum value of `cSS`
-            chmin: tendency to uniform sigma in shallow-water regions, maximized when
-                average layer thickness drops below 2/3 hmin, and reduced to zero when
-                average layer thickness exceeds hmin
-            hmin: minimum depth
+                layer thickness) where to stop zooming in further on velocity gradients.
+                There the tendency reaches its maximum value of `cSS`
+            chmin: tendency towards equal layer thicknesses in shallow-water regions,
+                maximized when average layer thickness D/nz drops below 2/3 hmin,
+                and reduced to zero when average layer thickness exceeds hmin
+            hmin: minimum layer thickness (m)
             nvfilter: number of vertical filter iterations
             vfilter: strength of vertical filter-of-Dgrid [0:~0.5]
             nhfilter: number of horizontal filter iterations
