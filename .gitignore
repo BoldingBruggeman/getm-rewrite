@@ -33,6 +33,7 @@ ford/
 
 # Example output files
 /python/examples/*.prof
+/python/examples/*.prof.stats
 /python/examples/*.log
 /python/examples/*.nc
 
