@@ -26,7 +26,11 @@ contains
       integer :: imin=1, jmin=1, imax, jmax, kmax
       integer :: i, j, k
 
-      imax=nx; jmax=ny; kmax=nz
+      imin = max(1, -halox+2)
+      jmin = max(1, -haloy+2)
+      imax = min(nx, nx+halox-1)
+      jmax = min(ny, ny+haloy-1)
+      kmax=nz
 
       allocate(x, source=var, stat=rc)
       if (rc /= 0) stop 'c_horizontal_filter: Error allocating x'

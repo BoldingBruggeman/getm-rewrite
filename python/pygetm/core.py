@@ -310,6 +310,7 @@ class Grid(_pygetm.Grid):
         "zin",
         "zio",
         "ho",
+        "hhalf",
         "open_boundaries",
         "input_manager",
         "default_output_transforms",
