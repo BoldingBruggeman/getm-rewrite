@@ -198,8 +198,8 @@ subroutine c_update_adaptive(nx, ny, nz, halox, haloy, &
 
       ! Squared buoyancy frequency NN needs to be scaled with rho0/g to obtain
       ! the negative density gradient (> 0 if density increases towards bottom,
-      ! i.e., under stable stratification). We futher want to scale the density
-      ! gradient bya reference value (where the maximum tendency cNN is reached).
+      ! i.e., under stable stratification). We further want to scale the density
+      ! gradient by a reference value (where the maximum tendency cNN is reached).
       ! This reference value if parameterized as a density difference drho over
       ! a distance D/nz (average layer thickness). The reference density *gradient*
       ! thus is drho/(D/nz) = drho*nz/D. The final NN thus needs to be scaled by
