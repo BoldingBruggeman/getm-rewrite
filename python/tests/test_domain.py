@@ -1,5 +1,8 @@
 import unittest
 import logging
+import os
+from pathlib import Path
+import sys
 
 import numpy as np
 import netCDF4
@@ -396,6 +399,28 @@ class TestDomain(unittest.TestCase):
         self.assertEqual(T.nx, 0)
         self.assertEqual(T.ny, 0)
 
+    def test_plot(self):
+        sys.path.append(os.path.join(os.path.dirname(__file__), "../examples"))
+
+        import north_sea
+
+        setups_dir = os.environ.get("GETM_SETUPS_DIR", "../../../getm-setups")
+        d = north_sea.create_domain(
+            Path(setups_dir) / "NorthSea",
+            logger=pygetm.parallel.get_logger(level="ERROR"),
+        )
+        fig = d.plot()
+        self.assertTrue(pygetm.parallel.MPI.COMM_WORLD.rank != 0 or fig is not None)
+
+        fig = d.plot(show_mesh=True)
+        self.assertTrue(pygetm.parallel.MPI.COMM_WORLD.rank != 0 or fig is not None)
+
+        fig = d.plot(show_mask=True)
+        self.assertTrue(pygetm.parallel.MPI.COMM_WORLD.rank != 0 or fig is not None)
+
+        tiling = d.create_tiling()
+        fig = d.plot(show_subdomains=True, tiling=tiling)
+        self.assertTrue(pygetm.parallel.MPI.COMM_WORLD.rank != 0 or fig is not None)
 
 if __name__ == "__main__":
     unittest.main()
