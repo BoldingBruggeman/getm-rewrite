@@ -14,7 +14,7 @@ class Jerlov(enum.Enum):
     (non-visible; fast attenuating), the attenuation length (m) of band 1,
     and the attenuation length (m) of band 2 (visible; slowly attenuating).
     Taken from Table 2 of `Paulson & Simpson (1977)
-    <https://doi.org/10.1175/1520-0485(1977)007%3C0952:IMITUO%3E2.0.CO;2>`_,
+    <https://doi.org/10.1175/1520-0485(1977)007%3C0952:IMITUO%3E2.0.CO;2>`_.
     """
 
     Type_I = (0.58, 0.35, 23.0)
