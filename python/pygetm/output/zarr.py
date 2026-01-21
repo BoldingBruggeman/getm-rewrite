@@ -158,12 +158,18 @@ class ZarrGroup(File):
                     self._schedule(
                         _add_time_coordinate(self.root, "time", attrs, self._chunk_size)
                     )
-                # if needs_time_av:
-                #     self.time_av_array = _add_time_coordinate(
-                #         self.root, "time_av", attrs
-                #     )
+                if needs_time_av:
+                    self._schedule(
+                        _add_time_coordinate(
+                            self.root, "time_av", attrs, self._chunk_size
+                        )
+                    )
+                    self.previous_seconds_passed = seconds_passed
 
                 arrays = self._complete_scheduled_tasks()
+                if needs_time_av:
+                    self._time_av_cache = np.empty((self._chunk_size,), dtype=float)
+                    self._cache.append((arrays.pop(), self._time_av_cache))
                 if needs_time:
                     self._time_cache = np.empty((self._chunk_size,), dtype=float)
                     self._cache.append((arrays.pop(), self._time_cache))
@@ -185,6 +191,11 @@ class ZarrGroup(File):
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if self._time_cache is not None:
             self._time_cache[self._ncache] = self.time_offset + seconds_passed
+        if self._time_av_cache is not None:
+            self._time_av_cache[self._ncache] = self.time_offset + 0.5 * (
+                self.previous_seconds_passed + seconds_passed
+            )
+            self.previous_seconds_passed = seconds_passed
         for field, cache in self._varying_fields:
             field.get(cache[self._ncache, ...])
         self.itime += 1
