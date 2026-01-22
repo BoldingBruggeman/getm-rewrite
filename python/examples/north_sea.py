@@ -178,19 +178,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--meteo_dir", type=Path, help="Path to ERA5 meteo forcing files"
     )
-    # parser.add_argument('--input_dir', type=Path, help='Path to input files', default='input' )
     parser.add_argument(
         "--tpxo9_dir", type=Path, help="Path to TPXO9 configuration files"
     )
-    parser.add_argument(
-        "--tiling", type=argparse.FileType("r"), help="Path to tiling pickle file"
-    )
-    parser.add_argument(
-        "--initial",
-        action="store_true",
-        help="Read initial salinity and temperature from file",
-    )
-    # parser.add_argument('--no_meteo', action='store_true', help='No meteo forcing')
     parser.add_argument(
         "--no_boundaries",
         action="store_false",
@@ -207,9 +197,10 @@ if __name__ == "__main__":
         help="Do not save any results to NetCDF",
     )
     parser.add_argument(
-        "--debug_output", action="store_true", help="Do not save any results to NetCDF"
+        "--debug_output",
+        action="store_true",
+        help="Add additional variables to output for debugging purposes",
     )
-    parser.add_argument("--rotate", action="store_true", help="Transpose domain")
     parser.add_argument("--profile", help="File to save profiling report to")
     parser.add_argument(
         "--runtype",
@@ -228,8 +219,6 @@ if __name__ == "__main__":
 
     simstart = datetime.datetime.strptime(args.start, "%Y-%m-%d %H:%M:%S")
     simstop = datetime.datetime.strptime(args.stop, "%Y-%m-%d %H:%M:%S")
-
-    tiling = args.tiling if args.tiling is not None else None
 
     domain = create_domain(args.setup_dir, args.boundaries, args.rivers)
 
