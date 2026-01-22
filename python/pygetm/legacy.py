@@ -148,6 +148,15 @@ def load_bdyinfo(
 def load_riverinfo(domain: pygetm.domain.Domain, path: Union[str, os.PathLike[str]]):
     """Add rivers from riverinfo.dat to domain
 
+    Rivers that appear multiple times in the file are meant to be split over multiple
+    cells. For each entry of such rivers, an index is appended to the river name to
+    generate a unique name for the cell-specific "river mouth". The original river
+    name and the number of cells it is split over are stored as attributes
+    ``original_name`` and ``split``. These attributes can be used when accessing
+    river forcing for all mouths combined, for instance, the combined flow rate
+    stored under ``original_name`` can be divided by ``split`` to get the
+    flow rate for each mouth.
+
     Args:
         domain: domain to add rivers to
         path: data file with river information
@@ -186,11 +195,18 @@ def load_riverinfo(domain: pygetm.domain.Domain, path: Union[str, os.PathLike[st
             if name2split[name] > 1:
                 # This river is split over multiple cells; append an index to its name
                 imouth = name2count.get(name, 0)
-                mouth_name = f"{name}[{imouth}]"
+                mouth_name = f"{name}_{imouth}"
                 name2count[name] = imouth + 1
 
             # Note: we convert from 1-based indices to 0-based indices!
-            river = domain.rivers.add_by_index(mouth_name, i - 1, j - 1, zl=zl, zu=zu)
-
-            river.split = name2split[name]  # number of cells this river is split over
-            river.original_name = name  # the original river name (without index)
+            # For rivers split over multiple cells, record their original name and
+            # the number of cells they are split over
+            domain.rivers.add_by_index(
+                mouth_name,
+                i - 1,
+                j - 1,
+                zl=zl,
+                zu=zu,
+                original_name=name,
+                split=name2split[name],
+            )

@@ -1483,12 +1483,9 @@ class Domain:
             x, y = r.x, r.y
             if r.coordinate_type == CoordinateType.IJ:
                 x, y = y, self.nx - 1 - x
-            rot_r = rotated_domain.rivers.add_by_location(
-                r.name, x, y, r.coordinate_type, zl=r.zl, zu=r.zu
+            rotated_domain.rivers.add_by_location(
+                r.name, x, y, r.coordinate_type, zl=r.zl, zu=r.zu, **r.attrs
             )
-            for att in ("original_name", "split"):
-                if hasattr(r, att):
-                    setattr(rot_r, att, getattr(r, att))
         return rotated_domain
 
     @apply_on_root_and_bcast
