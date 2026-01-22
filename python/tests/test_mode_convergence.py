@@ -46,17 +46,17 @@
 #   converge
 
 import sys
-import os.path
+import os
 import unittest
 import datetime
+from pathlib import Path
 
 import cftime
 import numpy as np
 
 import pygetm
-import pygetm.util.compare_nc
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../examples"))
+sys.path.append(str(Path(__file__).parent / "../examples"))
 
 import north_sea
 
@@ -64,10 +64,8 @@ import north_sea
 @unittest.skip("only supported if changes listed at top of module are implemented")
 class TestConvergence(unittest.TestCase):
     def setUp(self) -> None:
-        setups_dir = "../../../getm-setups"
-        if "GETM_SETUPS_DIR" in os.environ:
-            setups_dir = os.environ["GETM_SETUPS_DIR"]
-        self.setup_dir = os.path.join(setups_dir, "NorthSea")
+        setups_dir = os.environ.get("GETM_SETUPS_DIR", "../../../getm-setups")
+        self.setup_dir = Path(setups_dir) / "NorthSea"
         self.domain = north_sea.create_domain(
             self.setup_dir,
             nlev=1,
