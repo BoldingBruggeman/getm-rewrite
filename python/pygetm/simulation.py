@@ -1425,6 +1425,10 @@ class Simulation(BaseSimulation):
         """Update layer thicknesses and tracer concentrations to account for
         precipitation, evaporation and river inflow.
         """
+        # Start updating halos for the net freshwater flux, as we need to ensure that
+        # the layer heights updated as a result remain valid in the halos.
+        self.airsea.pe.update_halos_start()
+
         # Local names for river-related variables
         slc = self.rivers.slice
 
@@ -1452,9 +1456,7 @@ class Simulation(BaseSimulation):
             tracer.all_values[slc] *= h_new_inv
 
         # Precipitation and evaporation (surface layer only)
-        # First update halos for the net freshwater flux, as we need to ensure that the
-        # layer heights updated as a result remain valid in the halos.
-        self.airsea.pe.update_halos()
+        self.airsea.pe.update_halos_finish()
         unmasked = self.T._water
         z_add_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
         h_sf = self.T.hn.all_values[-1, :, :]
@@ -1463,15 +1465,14 @@ class Simulation(BaseSimulation):
         for tracer in self.tracers:
             if not tracer.precipitation_follows_target_cell:
                 tracer.all_values[-1, :, :] *= dilution
+
+            # Start tracer halo exchange (to prepare for advection)
+            tracer.update_halos_start(self.tracers._advection.halo1)
         h_sf[:, :] = h_sf_new
 
         # Update elevation (first add river contribution to z_add_fwf)
         np.add.at(z_add_fwf, slc, z_add)
         self.T.zin.all_values += z_add_fwf
-
-        # Start tracer halo exchange (to prepare for advection)
-        for tracer in self.tracers:
-            tracer.update_halos_start(self.tracers._advection.halo1)
 
         self._int_river_flow.fill(0.0)
 
