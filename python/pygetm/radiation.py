@@ -127,6 +127,15 @@ class TwoBand(Radiation):
             fill_value=FILL_VALUE,
             attrs=dict(standard_name="downwelling_shortwave_flux_in_sea_water"),
         )
+        self.rad_ct = grid.array(
+            name="rad_ct",
+            units="W m-2",
+            long_name="shortwave radiation",
+            fabm_standard_name="downwelling_shortwave_flux",
+            z=CENTERS,
+            fill_value=FILL_VALUE,
+            attrs=dict(standard_name="downwelling_shortwave_flux_in_sea_water"),
+        )
         self.par = grid.array(
             name="par",
             units="W m-2",
@@ -211,6 +220,13 @@ class TwoBand(Radiation):
             self.grid.mask, self.grid.hn, self._kc, self._swr, up=False, out=self.rad
         )
 
+        if self.rad_ct.saved:
+            # Total shortwave at centers is saved by user or needed for biogeochemistry.
+            # Calculate the non-visible part first
+            _pygetm.exponential_profile_1band_centers(
+                self.grid.mask, self.grid.hn, self._kc, top=self._swr, out=self.rad_ct
+            )
+
         # Non-visible band - upward
         if self.reflect_at_bottom:
             np.multiply(
@@ -269,9 +285,13 @@ class TwoBand(Radiation):
             # Visible part of shortwave radiation just below sea surface
             # (i.e., reflection/albedo already accounted for)
             self.par0.all_values = self._swr.all_values
-        if self.par.saved:
+        if self.par.saved or self.rad_ct.saved:
             # Visible part of shortwave radiation at layer centers,
-            # often used by biogeochemistry
+            # often used by biogeochemistry (FABM)
             _pygetm.exponential_profile_1band_centers(
                 self.grid.mask, self.grid.hn, self._kc, top=self._swr, out=self.par
             )
+            if self.rad_ct.saved:
+                # Total shortwave at centers is needed. Combine previously
+                # calculated non-visible part with the visible part
+                self.rad_ct.all_values += self.par.all_values
