@@ -1,5 +1,5 @@
 import enum
-from typing import Optional, Mapping, Union, Iterable
+from typing import Optional, Mapping, Union, Iterable, Any
 import operator
 import logging
 
@@ -73,6 +73,7 @@ class GlobalRiver:
         zu: Optional[float] = None,
         vertical_position: VerticalPosition = VerticalPosition.DistanceFromSurface,
         coordinate_type: CoordinateType = CoordinateType.IJ,
+        **attrs,
     ):
         """
         Args:
@@ -87,6 +88,7 @@ class GlobalRiver:
                 from the surface or from the bottom
             coordinate_type: coordinate type of x and y
                 (LONLAT spherical, XY for Cartesian coordinates)
+            **attrs: additional attributes for this river
         """
         self.name = name
         self.x = x
@@ -110,6 +112,7 @@ class GlobalRiver:
         self.zl = zl
         self.zu = zu
         self.vertical_position = vertical_position
+        self.attrs = attrs
         self.i: Optional[int] = None
         self.j: Optional[int] = None
 
@@ -145,11 +148,12 @@ class GlobalRiver:
             zl=self.zl,
             zu=self.zu,
             vertical_position=self.vertical_position,
+            **self.attrs,
         )
-        for att in ("original_name", "split"):
-            if hasattr(self, att):
-                setattr(river, att, getattr(self, att))
         return river
+
+    def __getattr__(self, name: str) -> Any:
+        return self.attrs[name]
 
 
 class LocalRiver(Mapping[str, RiverTracer]):
@@ -167,6 +171,7 @@ class LocalRiver(Mapping[str, RiverTracer]):
         zl: float,
         zu: float,
         vertical_position: VerticalPosition,
+        **attrs,
     ):
         self.name = name
         self.i = i
@@ -174,6 +179,7 @@ class LocalRiver(Mapping[str, RiverTracer]):
         self.zl = zl
         self.zu = zu
         self.vertical_position = vertical_position
+        self.attrs = attrs
         self._tracers: Mapping[str, RiverTracer] = {}
         self.flow = core.Array(
             grid=grid,
@@ -190,6 +196,9 @@ class LocalRiver(Mapping[str, RiverTracer]):
 
     def __iter__(self):
         return iter(self._tracers)
+
+    def __getattr__(self, name: str) -> Any:
+        return self.attrs[name]
 
 
 class LocalRiverCollection(Mapping[str, LocalRiver]):
@@ -299,8 +308,6 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
         Returns:
             river instance
         """
-        assert i >= 0 and i < self.nx
-        assert j >= 0 and j < self.ny
         return self.add_by_location(
             name, i, j, coordinate_type=CoordinateType.IJ, **kwargs
         )
@@ -321,7 +328,7 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
             y: y coordinate of river
             coordinate_type: coordinate type of x and y
                 (LONLAT for spherical, XY for Cartesian coordinates,
-                IJ for indices into the global tracer grid)
+                IJ for 0-based indices into the global tracer grid)
             **kwargs: additional keyword arguments passed to :class:`GlobalRiver`
 
         Returns:
@@ -329,6 +336,13 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
         """
         if coordinate_type is None:
             coordinate_type = self.default_coordinate_type
+        if coordinate_type == CoordinateType.IJ:
+            x = int(round(x))
+            y = int(round(y))
+            assert x > -self.nx and x < self.nx
+            assert y > -self.ny and y < self.ny
+            x = x % self.nx
+            y = y % self.ny
         river = GlobalRiver(name, x, y, coordinate_type=coordinate_type, **kwargs)
         self._rivers.append(river)
         return river

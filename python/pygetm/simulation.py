@@ -126,7 +126,10 @@ class BaseSimulation:
 
     @log_exceptions
     def load_restart(
-        self, path: str, time: Optional[cftime.datetime] = None, **kwargs
+        self,
+        path: Union[str, os.PathLike[str]],
+        time: Optional[cftime.datetime] = None,
+        **kwargs,
     ) -> cftime.datetime:
         """Load the model state from a restart file.
         This must be called before :meth:`start`.
@@ -174,13 +177,13 @@ class BaseSimulation:
                 (itimes,) = (time_coord == time).nonzero()
                 if itimes.size == 0:
                     raise Exception(
-                        f"Requested restart time {time} not found in {path!r},"
+                        f'Requested restart time {time} not found in "{path}",'
                         f" which spans {time_coord[0]} - {time_coord[-1]}"
                     )
                 itime = itimes[0]
             elif time_coord.size > 1:
                 self.logger.info(
-                    f"Restart file {path!r} contains {time_coord.size} time points."
+                    f'Restart file "{path}" contains {time_coord.size} time points.'
                     f" Using last: {time_coord[-1]}"
                 )
 
@@ -201,7 +204,7 @@ class BaseSimulation:
             if missing:
                 raise Exception(
                     "The following field(s) are part of the model state but not found "
-                    f"in {path!r}: {', '.join(missing)}"
+                    f'in "{path}": {", ".join(missing)}'
                 )
 
         self._after_restart(initialized_variables)

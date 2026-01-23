@@ -2,8 +2,7 @@
 
 import argparse
 import datetime
-import os.path
-import pathlib
+from pathlib import Path
 from typing import Optional
 
 import cftime
@@ -14,18 +13,18 @@ from pygetm.input import tpxo
 
 
 def create_domain(
-    setup_dir: str, use_boundaries: bool = True, use_rivers: bool = True, **kwargs
+    setup_dir: Path, use_boundaries: bool = True, use_rivers: bool = True, **kwargs
 ) -> pygetm.domain.Domain:
     final_kwargs = dict(z0=0.001)
     final_kwargs.update(kwargs)
     domain = pygetm.legacy.domain_from_topo(
-        os.path.join(setup_dir, "Topo/NS6nm.v01.nc"), **final_kwargs
+        setup_dir / "Topo/NS6nm.v01.nc", **final_kwargs
     )
 
     if use_boundaries:
-        pygetm.legacy.load_bdyinfo(domain, os.path.join(setup_dir, "bdyinfo.dat"))
+        pygetm.legacy.load_bdyinfo(domain, setup_dir / "bdyinfo.dat")
     if use_rivers:
-        pygetm.legacy.load_riverinfo(domain, os.path.join(setup_dir, "riverinfo.dat"))
+        pygetm.legacy.load_riverinfo(domain, setup_dir / "riverinfo.dat")
 
     return domain
 
@@ -33,9 +32,9 @@ def create_domain(
 def create_simulation(
     domain: pygetm.domain.Domain,
     runtype: pygetm.RunType,
-    setup_dir: str,
-    meteo_dir: Optional[str] = None,
-    tpxo9_dir: Optional[str] = None,
+    setup_dir: Path,
+    meteo_dir: Optional[Path] = None,
+    tpxo9_dir: Optional[Path] = None,
     **kwargs
 ) -> pygetm.simulation.Simulation:
     humidity_measure = pygetm.HumidityMeasure.SPECIFIC_HUMIDITY
@@ -51,7 +50,7 @@ def create_simulation(
 
     final_kwargs = dict(
         advection_scheme=pygetm.AdvectionScheme.SUPERBEE,
-        gotm=os.path.join(setup_dir, "gotmturb.nml"),
+        gotm=setup_dir / "gotmturb.nml",
         airsea=airsea,
         internal_pressure=pygetm.internal_pressure.ShchepetkinMcwilliams(),
         delay_slow_ip=True,
@@ -68,7 +67,7 @@ def create_simulation(
         sim.open_boundaries.sponge.tmrlx = True
         if not tpxo9_dir:
             sim.logger.info("Reading 2D boundary data from file")
-            bdy_2d_path = os.path.join(setup_dir, "Forcing/2D/bdy.2d.2006.nc")
+            bdy_2d_path = setup_dir / "Forcing/2D/bdy.2d.2006.nc"
             sim.open_boundaries.z.set(pygetm.input.from_nc(bdy_2d_path, "elev"))
             sim.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
             sim.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
@@ -85,7 +84,7 @@ def create_simulation(
             )
 
         if sim.runtype == pygetm.RunType.BAROCLINIC:
-            bdy_3d_path = os.path.join(setup_dir, "Forcing/3D/bound_3D.CFSR.2006.nc")
+            bdy_3d_path = setup_dir / "Forcing/3D/bound_3D.CFSR.2006.nc"
             sim.temp.open_boundaries.type = pygetm.SPONGE
             sim.temp.open_boundaries.values.set(
                 pygetm.input.from_nc(bdy_3d_path, "temp")
@@ -95,8 +94,9 @@ def create_simulation(
                 pygetm.input.from_nc(bdy_3d_path, "salt")
             )
 
-    river_path = os.path.join(setup_dir, "Forcing/River/rivers.nc")
+    river_path = setup_dir / "Forcing/River/rivers.nc"
     for river in sim.rivers.values():
+        # Note: "original_name" and "split" were added by legacy.load_riverinfo
         river.flow.set(
             pygetm.input.from_nc(river_path, river.original_name) / river.split
         )
@@ -114,7 +114,7 @@ def create_simulation(
 
     if meteo_dir:
         sim.logger.info("Setting up ERA5 meteorological forcing")
-        ERA_path = os.path.join(meteo_dir, "era5_2006.nc")
+        ERA_path = meteo_dir / "era5_2006.nc"
         sim.airsea.u10.set(pygetm.input.from_nc(ERA_path, "u10"))
         sim.airsea.v10.set(pygetm.input.from_nc(ERA_path, "v10"))
         sim.airsea.t2m.set(pygetm.input.from_nc(ERA_path, "t2m") - 273.15)
@@ -124,7 +124,7 @@ def create_simulation(
         sim.airsea.tp.set(pygetm.input.from_nc(ERA_path, "tp") / 3600.0)
     else:
         sim.logger.info("Setting up NS original meteorological forcing")
-        met_path = os.path.join(setup_dir, "Forcing/Meteo/CFSR.daymean.2006.nc")
+        met_path = setup_dir / "Forcing/Meteo/CFSR.daymean.2006.nc"
         sim.airsea.tcc.set(pygetm.input.from_nc(met_path, "tcc"))
         sim.airsea.t2m.set(pygetm.input.from_nc(met_path, "t2"))
         sim.airsea.qa.set(pygetm.input.from_nc(met_path, "sh"))
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "setup_dir",
-        type=pathlib.Path,
+        type=Path,
         help="Path to configuration files (NorthSea directory from https://sourceforge.net/p/getm/getm-setups)",
         default=".",
     )
@@ -176,21 +176,11 @@ if __name__ == "__main__":
         default="2007-01-01 00:00:00",
     )
     parser.add_argument(
-        "--meteo_dir", type=pathlib.Path, help="Path to ERA5 meteo forcing files"
-    )
-    # parser.add_argument('--input_dir', type=pathlib.Path, help='Path to input files', default='input' )
-    parser.add_argument(
-        "--tpxo9_dir", type=pathlib.Path, help="Path to TPXO9 configuration files"
+        "--meteo_dir", type=Path, help="Path to ERA5 meteo forcing files"
     )
     parser.add_argument(
-        "--tiling", type=argparse.FileType("r"), help="Path to tiling pickle file"
+        "--tpxo9_dir", type=Path, help="Path to TPXO9 configuration files"
     )
-    parser.add_argument(
-        "--initial",
-        action="store_true",
-        help="Read initial salinity and temperature from file",
-    )
-    # parser.add_argument('--no_meteo', action='store_true', help='No meteo forcing')
     parser.add_argument(
         "--no_boundaries",
         action="store_false",
@@ -207,9 +197,10 @@ if __name__ == "__main__":
         help="Do not save any results to NetCDF",
     )
     parser.add_argument(
-        "--debug_output", action="store_true", help="Do not save any results to NetCDF"
+        "--debug_output",
+        action="store_true",
+        help="Add additional variables to output for debugging purposes",
     )
-    parser.add_argument("--rotate", action="store_true", help="Transpose domain")
     parser.add_argument("--profile", help="File to save profiling report to")
     parser.add_argument(
         "--runtype",
@@ -228,8 +219,6 @@ if __name__ == "__main__":
 
     simstart = datetime.datetime.strptime(args.start, "%Y-%m-%d %H:%M:%S")
     simstop = datetime.datetime.strptime(args.stop, "%Y-%m-%d %H:%M:%S")
-
-    tiling = args.tiling if args.tiling is not None else None
 
     domain = create_domain(args.setup_dir, args.boundaries, args.rivers)
 
