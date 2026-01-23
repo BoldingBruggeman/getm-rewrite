@@ -1,6 +1,5 @@
-import sys
-import argparse
 import unittest
+import gc
 
 import numpy as np
 
@@ -22,6 +21,7 @@ class Test3DBarotropic(unittest.TestCase):
                         self._test(
                             tau_x, tau_y, apply_bottom_friction=apply_bottom_friction
                         )
+                        gc.collect()
 
     def _test(
         self,

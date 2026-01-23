@@ -1,10 +1,10 @@
 from typing import Optional
 import unittest
+import gc
 
 import numpy as np
 
 import pygetm
-import pygetm.vertical_coordinates
 
 
 class TestFlowSymmetry(unittest.TestCase):
@@ -162,6 +162,7 @@ class TestFlowSymmetry(unittest.TestCase):
                         tau_x=tau,
                         apply_bottom_friction=apply_bottom_friction,
                     )
+                    gc.collect()
 
     def test_periodic_y(self):
         for tau in (-0.01, 0.01):
@@ -173,6 +174,7 @@ class TestFlowSymmetry(unittest.TestCase):
                         tau_y=tau,
                         apply_bottom_friction=apply_bottom_friction,
                     )
+                    gc.collect()
 
 
 if __name__ == "__main__":

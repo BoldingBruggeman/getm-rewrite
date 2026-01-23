@@ -1,4 +1,5 @@
 import unittest
+import gc
 
 import numpy as np
 
@@ -32,6 +33,7 @@ class Test2DTransport(unittest.TestCase):
                             periodic_y=tau_y != 0.0,
                             apply_bottom_friction=apply_bottom_friction,
                         )
+                        gc.collect()
 
     def _test(
         self,
