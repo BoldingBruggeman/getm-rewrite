@@ -1,4 +1,5 @@
 import unittest
+import gc
 
 import numpy as np
 import pygetm
@@ -15,6 +16,7 @@ class TestInternalPressure(unittest.TestCase):
                     self._test(
                         pygetm.internal_pressure.BlumbergMellor(), ddu=ddu, nz=nz
                     )
+                    gc.collect()
 
     def test_shchepetkin_mcwilliams(self):
         for nz in (1, 10, 30):
@@ -23,6 +25,7 @@ class TestInternalPressure(unittest.TestCase):
                     self._test(
                         pygetm.internal_pressure.ShchepetkinMcwilliams(), ddu=ddu, nz=nz
                     )
+                    gc.collect()
 
     def _test(self, ip: pygetm.internal_pressure.Base, H=100.0, nz=30, ddu=0.0):
         rho_min = 1020.0

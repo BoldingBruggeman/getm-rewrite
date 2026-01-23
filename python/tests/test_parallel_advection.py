@@ -5,6 +5,7 @@ import unittest
 from typing import Optional
 import sys
 import hashlib
+import gc
 
 import numpy as np
 import pygetm
@@ -45,6 +46,7 @@ class TestParallelAdvection(unittest.TestCase):
                     tiling = pygetm.parallel.Tiling(nrow, ncol, ncpus=nrow * ncol)
                     kwargs["output"] = "par_adv_%ix%i.nc" % (nrow, ncol)
                     self._test(tiling, scheme=scheme, **kwargs)
+                    gc.collect()
                     if tiling.rank == 0:
                         if ref_output is None:
                             ref_output = kwargs["output"]

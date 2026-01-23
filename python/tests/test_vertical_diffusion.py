@@ -2,6 +2,7 @@ import unittest
 import logging
 from functools import wraps
 from typing import Optional
+import gc
 
 import numpy as np
 
@@ -15,31 +16,34 @@ logging.basicConfig(handlers=(handler,))
 rng = np.random.default_rng()
 
 
+def create_grid(**kwargs) -> pygetm.core.Grid:
+    EXTENT = 50000
+    domain = pygetm.domain.create_cartesian(
+        np.linspace(0, EXTENT, 25),
+        np.linspace(0, EXTENT, 26),
+        f=0,
+        H=50.0,
+        logger=pygetm.parallel.get_logger(level="ERROR"),
+    )
+    # randomly mask half of the domain
+    domain.mask = rng.random(domain.mask.shape) > 0.5
+    kwargs.setdefault("nz", 25)
+    vc = pygetm.vertical_coordinates.Sigma(**kwargs)
+    T = domain.create_grids(vc.nz, halox=2, haloy=2, velocity_grids=0)
+    vc.initialize(T, logger=domain.root_logger.getChild("vertical_coordinates"))
+    vc.update(0.0)
+    T.ho = T.array(z=T.hn.z)
+    T.ho.all_values[:, :, :] = T.hn.all_values
+    return T
+
+
 def for_each_grid(test_func):
     @wraps(test_func)
     def wrapper(self: unittest.TestCase, *args, **kwargs):
         for grid_args in ({}, {"ddu": 1}, {"ddl": 1}):
             with self.subTest(grid=grid_args):
-                EXTENT = 50000
-                domain = pygetm.domain.create_cartesian(
-                    np.linspace(0, EXTENT, 50),
-                    np.linspace(0, EXTENT, 52),
-                    f=0,
-                    H=50.0,
-                    logger=pygetm.parallel.get_logger(level="ERROR"),
-                    comm=pygetm.parallel.MPI.COMM_WORLD,
-                )
-                # randomly mask half of the domain
-                domain.mask = rng.random(domain.mask.shape) > 0.5
-                vc = pygetm.vertical_coordinates.Sigma(25, **grid_args)
-                T = domain.create_grids(vc.nz, halox=2, haloy=2, velocity_grids=0)
-                vc.initialize(
-                    T, logger=domain.root_logger.getChild("vertical_coordinates")
-                )
-                vc.update(0.0)
-                T.ho = T.array(z=T.hn.z)
-                T.ho.all_values[:, :, :] = T.hn.all_values
-                test_func(self, T, *args, **kwargs)
+                test_func(self, create_grid(**grid_args), *args, **kwargs)
+                gc.collect()
 
     return wrapper
 
