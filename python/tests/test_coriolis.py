@@ -1,4 +1,5 @@
 import unittest
+import gc
 
 import numpy as np
 import pygetm
@@ -10,6 +11,7 @@ class TestCoriolis(unittest.TestCase):
             for u in (-5, -0.0, 5.0):
                 for v in (-5, -0.0, 5.0):
                     self._test(u, v, lat)
+                    gc.collect()
 
     def _test(self, u, v, lat):
         H = 100.0
