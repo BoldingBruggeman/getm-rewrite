@@ -692,7 +692,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if x was not provided
+        This attribute is None on non-root MPI nodes or if ``x`` was not provided
         at domain creation (for instance, for spherical domains).
         """
         return self._x
@@ -705,7 +705,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if y was not provided
+        This attribute is None on non-root MPI nodes or if ``y`` was not provided
         at domain creation (for instance, for spherical domains).
         """
         return self._y
@@ -718,7 +718,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if lon was not provided
+        This attribute is None on non-root MPI nodes or if ``lon`` was not provided
         at domain creation (for instance, for Cartesian domains).
         """
         return self._lon
@@ -731,7 +731,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if lat was not provided
+        This attribute is None on non-root MPI nodes or if ``lat`` was not provided
         at domain creation (for instance, for Cartesian domains with prescribed
         Coriolis parameter).
         """
@@ -745,8 +745,8 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if f was not provided
-        at domain creation. In the latter case, it will be calculated from lat.
+        This attribute is None on non-root MPI nodes or if ``f`` was not provided
+        at domain creation. In the latter case, it will be calculated from :attr:`lat`.
         """
         return self._f
 
@@ -1441,29 +1441,86 @@ class Domain:
         jstop_T = 1 + 2 * jstop
         self.mask[jstart_T:jstop_T, istart_T:istop_T] = mask_value
 
+    def _transform(self, nx: int, ny: int, tf, **kwargs) -> "Domain":
+        kwargs.setdefault("coordinate_type", self.coordinate_type)
+        kwargs.setdefault("comm", self.comm)
+        kwargs.setdefault("logger", self.root_logger)
+        if self.comm.rank == 0:
+            kwargs.update(
+                lon=tf(self._lon),
+                lat=tf(self._lat),
+                x=tf(self._x),
+                y=tf(self._y),
+                mask=np.minimum(tf(self._mask), 1),
+                H=tf(self._H),
+                z0=tf(self._z0),
+                f=tf(self._f),
+            )
+        return Domain(nx, ny, **kwargs)
+
+    def extract_rectangle(
+        self, istart: int, istop: int, jstart: int, jstop: int
+    ) -> "Domain":
+        """Return a copy of the domain corresponding to the specified rectangle.
+        Indices must be provided for the T grid. Negative indices can be used
+        to indicate positions relative to the end of the domain. For example,
+        istart=1, istop=-1, jstart=1, jstop=-1 removes the outermost strip of cells,
+        and thus shrinks the domain by two cells in each direction.
+
+        Args:
+            istart: lower x index (first that is included)
+            istop: upper x index (first that is EXcluded)
+            jstart: lower y index (first that is included)
+            jstop: upper y index (first that is EXcluded)
+        Returns:
+            Domain corresponding to the specified rectangle
+        """
+        assert istart >= -self.nx and istart < self.nx
+        assert istop > -self.nx and istop <= self.nx
+        assert jstart >= -self.ny and jstart < self.ny
+        assert jstop > -self.ny and jstop <= self.ny
+        istart %= self.nx
+        istop %= self.nx
+        jstart %= self.ny
+        jstop %= self.ny
+        slc = (slice(2 * jstart, 2 * jstop + 1), slice(2 * istart, 2 * istop + 1))
+
+        def extract(array):
+            return None if array is None else array[slc]
+
+        subdomain = self._transform(istop - istart, jstop - jstart, extract)
+        for b in self.open_boundaries:
+            if b.side in (open_boundaries.Side.NORTH, open_boundaries.Side.SOUTH):
+                moffset, loffset = istart, jstart
+            else:
+                moffset, loffset = jstart, istart
+            subdomain.open_boundaries.add_by_index(
+                b.side,
+                b.l - loffset,
+                b.mstart - moffset,
+                b.mstop - moffset,
+                type_2d=b.type_2d,
+                type_3d=b.type_3d,
+            )
+        for r in self.rivers.values():
+            x, y = r.x, r.y
+            if r.coordinate_type == CoordinateType.IJ:
+                if x < istart or x >= istop or y < jstart or y >= jstop:
+                    continue
+                x -= istart
+                y -= jstart
+            subdomain.rivers.add_by_location(
+                r.name, x, y, r.coordinate_type, zl=r.zl, zu=r.zu, **r.attrs
+            )
+        return subdomain
+
     def rotate(self) -> "Domain":
         """Return a copy of the domain rotated 90° clockwise"""
 
         def tp(array):
             return None if array is None else np.transpose(array)[::-1, :]
 
-        kwargs = dict(
-            coordinate_type=self.coordinate_type,
-            comm=self.comm,
-            logger=self.root_logger,
-        )
-        if self.comm.rank == 0:
-            kwargs.update(
-                lon=tp(self._lon),
-                lat=tp(self._lat),
-                x=tp(self._x),
-                y=tp(self._y),
-                mask=np.minimum(tp(self._mask), 1),
-                H=tp(self._H),
-                z0=tp(self._z0),
-                f=tp(self._f),
-            )
-        rotated_domain = Domain(self.ny, self.nx, **kwargs)
+        rotated_domain = self._transform(self.ny, self.nx, tp)
         MAP = {
             open_boundaries.Side.WEST: open_boundaries.Side.NORTH,
             open_boundaries.Side.NORTH: open_boundaries.Side.EAST,
