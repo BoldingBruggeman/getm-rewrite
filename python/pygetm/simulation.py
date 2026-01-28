@@ -1125,6 +1125,13 @@ class Simulation(BaseSimulation):
             self.update_depth(_3d=True)
             self.vertical_coordinates.prescribed_hn = None
 
+            self.open_boundaries.zc.all_values = self.T.zc.all_values[
+                self.open_boundaries.slice
+            ].T
+            self.open_boundaries.zf.all_values = self.T.zf.all_values[
+                self.open_boundaries.slice
+            ].T
+
         # Restore original elevation
         self.T.z.all_values = z_backup
 
