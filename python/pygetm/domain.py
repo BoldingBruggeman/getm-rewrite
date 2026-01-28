@@ -692,7 +692,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if x was not provided
+        This attribute is None on non-root MPI nodes or if ``x`` was not provided
         at domain creation (for instance, for spherical domains).
         """
         return self._x
@@ -705,7 +705,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if y was not provided
+        This attribute is None on non-root MPI nodes or if ``y`` was not provided
         at domain creation (for instance, for spherical domains).
         """
         return self._y
@@ -718,7 +718,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if lon was not provided
+        This attribute is None on non-root MPI nodes or if ``lon`` was not provided
         at domain creation (for instance, for Cartesian domains).
         """
         return self._lon
@@ -731,7 +731,7 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if lat was not provided
+        This attribute is None on non-root MPI nodes or if ``lat`` was not provided
         at domain creation (for instance, for Cartesian domains with prescribed
         Coriolis parameter).
         """
@@ -745,8 +745,8 @@ class Domain:
         Cell centers (T points) are at ``[1::2, 1::2]``, interfaces at ``[1::2, ::2]``
         (U points) and ``[::2, 1::2]`` (V points), corners (X points) at ``[::2, ::2]``.
 
-        This attribute is None on non-root MPI nodes or if f was not provided
-        at domain creation. In the latter case, it will be calculated from lat.
+        This attribute is None on non-root MPI nodes or if ``f`` was not provided
+        at domain creation. In the latter case, it will be calculated from :attr:`lat`.
         """
         return self._f
 
