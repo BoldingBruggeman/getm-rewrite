@@ -153,15 +153,16 @@ class FABM:
 
         # Required inputs: mask and cell thickness
         if model.fabm.mask_type != 0:
+            self.masks_interior: list[np.ndarray] = []
             if hasattr(grid, "mask3d"):
-                model.link_mask(
-                    grid.mask3d.all_values.reshape(model.interior_domain_shape),
-                    grid.mask.all_values.reshape(model.horizontal_domain_shape),
+                self.masks_interior.append(
+                    grid.mask3d.all_values.reshape(model.interior_domain_shape)
                 )
-            else:
-                model.link_mask(
-                    grid.mask.all_values.reshape(model.horizontal_domain_shape)
-                )
+            self.masks_interior.append(
+                grid.mask.all_values.reshape(model.horizontal_domain_shape)
+            )
+            self.masks_plus_bdy = [m.clip(max=1) for m in self.masks_interior]
+            model.link_mask(*self.masks_interior)
         if hasattr(grid, "bottom_indices"):
             bottom_indices = grid.bottom_indices.all_values
             model.link_bottom_index(
@@ -359,7 +360,9 @@ class FABM:
                 self._nyear.value = timedelta.total_seconds() / 86400.0
         if self._yearday:
             self._yearday.value = (time - self._yearstart).total_seconds() / 86400.0
+        self.model.link_mask(*self.masks_plus_bdy)
         valid = self.model.check_state(self.repair)
+        self.model.link_mask(*self.masks_interior)
         if not (valid or self.repair):
             raise Exception("FABM state contains invalid values.")
         self.model.get_sources(
