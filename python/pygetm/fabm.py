@@ -228,7 +228,8 @@ class FABM:
         # Tell FABM which diagnostics are saved. FABM will allocate and manage memory
         # only for those that are. This MUST be done before calling self.model.start
         for variable in self.model.diagnostic_variables:
-            variable.save = self._variable2array[variable].saved
+            if variable in self._variable2array:
+                variable.save = self._variable2array[variable].saved
 
         # Transfer GETM fields with a standard name to FABM
         for field in self.grid.fields.values():
