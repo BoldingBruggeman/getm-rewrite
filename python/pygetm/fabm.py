@@ -61,8 +61,8 @@ class FABM:
         self._nyear: Optional[pyfabm.Dependency] = None
         self._yearstart: Optional[cftime.datetime] = None
 
-        self.masks_interior: Optional[list[np.ndarray]] = None
-        self.masks_plus_bdy: Optional[list[np.ndarray]] = None
+        self.masks_interior: list[np.ndarray] = []
+        self.masks_plus_bdy: list[np.ndarray] = []
 
     def initialize(
         self,
@@ -363,10 +363,10 @@ class FABM:
                 self._nyear.value = timedelta.total_seconds() / 86400.0
         if self._yearday:
             self._yearday.value = (time - self._yearstart).total_seconds() / 86400.0
-        if self.masks_plus_bdy is not None:
+        if self.masks_plus_bdy:
             self.model.link_mask(*self.masks_plus_bdy)
         valid = self.model.check_state(self.repair)
-        if self.masks_interior is not None:
+        if self.masks_interior:
             self.model.link_mask(*self.masks_interior)
         if not (valid or self.repair):
             raise Exception("FABM state contains invalid values.")
