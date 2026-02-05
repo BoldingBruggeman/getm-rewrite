@@ -16,7 +16,11 @@ SPLIT_FACTOR = 30
 
 class TestFABM(unittest.TestCase):
     def setup(
-        self, fabm_yaml, bioshade_feedback: bool = False, repair: bool = True
+        self,
+        fabm_yaml,
+        bioshade_feedback: bool = False,
+        repair: bool = True,
+        mask: bool = False,
     ) -> tuple[pygetm.domain.Domain, pygetm.Simulation]:
         domain = pygetm.domain.create_cartesian(
             np.linspace(0, 100e3, 50),
@@ -26,6 +30,8 @@ class TestFABM(unittest.TestCase):
             f=0.0,
             logger=pygetm.parallel.get_logger(level="ERROR"),
         )
+        if mask:
+            domain.mask = np.random.rand(domain.ny, domain.nx) < 0.5
         sim = pygetm.Simulation(
             domain,
             airsea=pygetm.airsea.Fluxes(),
@@ -150,9 +156,24 @@ class TestFABM(unittest.TestCase):
             sim.fabm.update_sources(0.0)
 
         domain, sim = self.setup(fabm_yaml, repair=True)
+        mask = sim["tracer_c"].all_mask
         sim["tracer_c"].set(-1.0)
         sim.fabm.update_sources(0.0)
         self.assertTrue((sim["tracer_c"].ma == 0.0).all())
+        self.assertTrue(
+            (sim["tracer_c"].all_values[mask] == sim["tracer_c"].fill_value).all()
+        )
+
+        # Verify that check_state leaves masked values unchanged when repair=True
+        # For that purpose, we set the masked values to a known fill value.
+        domain, sim = self.setup(fabm_yaml, repair=True, mask=True)
+        mask = sim["tracer_c"].all_mask
+        FILL_CHECK = -2.0
+        sim["tracer_c"].all_values.fill(FILL_CHECK)
+        sim["tracer_c"].all_values[~mask] = -1.0
+        sim.fabm.update_sources(0.0)
+        self.assertTrue((sim["tracer_c"].ma == 0.0).all())
+        self.assertTrue((sim["tracer_c"].all_values[mask] == FILL_CHECK).all())
 
 
 if __name__ == "__main__":
