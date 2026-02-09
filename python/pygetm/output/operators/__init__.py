@@ -21,7 +21,13 @@ import pygetm.core
 import pygetm._pygetm
 import pygetm.util.interpolate
 import pygetm.parallel
-from pygetm.constants import CENTERS, INTERFACES, TimeVarying, CoordinateType
+from pygetm.constants import (
+    CENTERS,
+    INTERFACES,
+    TimeVarying,
+    CoordinateType,
+    EdgeTreatment,
+)
 
 
 class GridInfo(NamedTuple):
@@ -203,7 +209,7 @@ class FieldCollection(Mapping[str, Base]):
         mask: Optional[bool] = None,
         time_average: bool = False,
         grid: Optional[pygetm.core.Grid] = None,
-        z: Optional[Literal[None, CENTERS, INTERFACES]] = None,
+        z: Union[None, CENTERS, INTERFACES, float, Iterable[float]] = None,
         generate_unique_name: bool = False,
         transforms: Iterable[type["UnivariateTransform"]] = (),
     ) -> tuple[str, ...]:
@@ -220,6 +226,12 @@ class FieldCollection(Mapping[str, Base]):
                 saving. If this argument is not provided, masking behavior is determined
                 by the array's _mask_output flag.
             time_average: whether to time-average the field
+            grid: if provided, the field will be regridded to this grid before saving
+            z: if provided, the field will be interpolated to these z levels before saving.
+                This can be CENTERS or INTERFACES to indicate interpolation to the center
+                or interfaces of the model grid, a 1D array of custom z levels, or a single
+                float indicating the z level to interpolate to. Note that z levels are
+                negative downward, with the bottom being -H.
             generate_unique_name: whether to generate a unique output name for requested
                 fields if a field with the same name has previously been added to the
                 collection. If this is not set and a field with this name was added
@@ -631,13 +643,20 @@ class InterpZ(UnivariateTransformWithData):
     to ``Z``. This coordinate must have the same shape as the source array.
     """
 
-    __slots__ = ("z_src", "z_tgt", "z_dim")
+    __slots__ = ("z_src", "z_tgt", "z_dim", "edges")
 
-    def __init__(self, source: Base, z: ArrayLike, dim: str):
+    def __init__(
+        self,
+        source: Base,
+        z: ArrayLike,
+        dim: str,
+        edges: EdgeTreatment = EdgeTreatment.MISSING,
+    ):
         self.z_tgt = np.asarray(z, dtype=float)
         shape = (self.z_tgt.size,) + source.shape[1:]
         dims = (dim,) + source.dims[1:]
         self.z_dim = dim
+        self.edges = edges
         expression = f"{self.__class__.__name__}({source.expression}, z={self.z_tgt})"
         super().__init__(source, shape=shape, dims=dims, expression=expression)
         for c in source.coords:
@@ -651,7 +670,7 @@ class InterpZ(UnivariateTransformWithData):
         self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
     ) -> ArrayLike:
         ip = pygetm.util.interpolate.LinearVectorized1D(
-            self.z_tgt, self.z_src, 0, self.fill_value
+            self.z_tgt, self.z_src, 0, self.fill_value, edges=self.edges
         )
         self.values[...] = ip(self._source.get())
         return super().get(out, slice_spec)

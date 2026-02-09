@@ -11,19 +11,11 @@ from . import core
 from . import parallel
 from . import rivers
 from . import open_boundaries
-from .constants import CoordinateType, CellType, GRAVITY
+from .constants import CoordinateType, CellType, GRAVITY, EdgeTreatment
 
 if TYPE_CHECKING:
     import matplotlib.figure
     import matplotlib.colors
-
-
-class EdgeTreatment(enum.Enum):
-    MISSING = enum.auto()
-    CLAMP = enum.auto()
-    PERIODIC = enum.auto()
-    EXTRAPOLATE = enum.auto()
-    EXTRAPOLATE_PERIODIC = enum.auto()
 
 
 def _get_rectangle_overlap(

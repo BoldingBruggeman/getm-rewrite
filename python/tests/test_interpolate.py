@@ -3,7 +3,12 @@ import unittest
 import numpy as np
 import scipy.interpolate
 
-from pygetm.util.interpolate import Linear2DGridInterpolator, interp_1d
+from pygetm.util.interpolate import (
+    Linear2DGridInterpolator,
+    LinearVectorized1D,
+    interp_1d,
+)
+from pygetm.constants import EdgeTreatment
 
 
 def generate_random_horizontal_grid(nx=99, ny=100):
@@ -214,6 +219,74 @@ class TestInterpolate(unittest.TestCase):
                             f[make_slice(i, j)], f_check, rtol=self.EPS, atol=self.EPS
                         ).all()
                     )
+
+    def test_linear_vectorized_1d(self):
+        x = np.array([0.0, -50.0, -100.0])
+        rng = np.random.default_rng()
+        H_mean = 100.0
+        h = H_mean / 0.5 / 30.0 * rng.random((30, 10, 11))
+        elev = rng.random(h.shape[1:]) - 0.5
+        H = h.sum(axis=0) - elev
+        z = np.zeros((h.shape[0] + 1,) + h.shape[1:])
+        z[1:] = h.cumsum(axis=0)
+        assert ((z[1:] - z[:-1]) > 0.0).all()
+        z -= H
+        FILL_VALUE = -999.0
+        Z_FILL_VALUE = -9999.0
+        values = rng.random(z.shape)
+        for mask in (True, False):
+            masked = rng.random(H.shape) < 0.5 if mask else False
+            masked = np.broadcast_to(masked, H.shape)
+            z_masked = np.where(masked, Z_FILL_VALUE, z)
+            for edge in (EdgeTreatment.MISSING, EdgeTreatment.CLAMP):
+                with self.subTest(mask=mask, edge=edge):
+                    ip = LinearVectorized1D(
+                        x,
+                        z_masked,
+                        axis=0,
+                        fill_value=FILL_VALUE,
+                        mask=z_masked == Z_FILL_VALUE,
+                        edges=edge,
+                    )
+                    f = ip(values)
+                    assert f.shape[0] == x.size
+                    for x_ip, v_ip in zip(x, f):
+                        too_deep = (x_ip < z_masked[0]) & ~masked
+                        too_shallow = (x_ip > z_masked[-1]) & ~masked
+                        valid = ~(too_deep | too_shallow | masked)
+                        deep_oob = (
+                            FILL_VALUE if edge == EdgeTreatment.MISSING else values[0]
+                        )
+                        shallow_oob = (
+                            FILL_VALUE if edge == EdgeTreatment.MISSING else values[-1]
+                        )
+                        self.assertTrue((v_ip == deep_oob).all(where=too_deep))
+                        self.assertTrue((v_ip == shallow_oob).all(where=too_shallow))
+                        self.assertTrue((v_ip == FILL_VALUE).all(where=masked))
+                        self.assertTrue((v_ip != FILL_VALUE).all(where=valid))
+                    for i in range(z.shape[-1]):
+                        for j in range(z.shape[-2]):
+                            if masked[j, i]:
+                                self.assertTrue((f[:, j, i] == FILL_VALUE).all())
+                            else:
+                                oob = (
+                                    None if edge == EdgeTreatment.CLAMP else FILL_VALUE
+                                )
+                                f_check = np.interp(
+                                    x,
+                                    z_masked[:, j, i],
+                                    values[:, j, i],
+                                    left=oob,
+                                    right=oob,
+                                )
+                                self.assertTrue(
+                                    np.isclose(
+                                        f[:, j, i],
+                                        f_check,
+                                        rtol=self.EPS,
+                                        atol=self.EPS,
+                                    ).all()
+                                )
 
 
 if __name__ == "__main__":
