@@ -209,7 +209,9 @@ class FieldCollection(Mapping[str, Base]):
         mask: Optional[bool] = None,
         time_average: bool = False,
         grid: Optional[pygetm.core.Grid] = None,
-        z: Union[None, CENTERS, INTERFACES, float, Iterable[float]] = None,
+        z: Union[
+            None, Literal[CENTERS], Literal[INTERFACES], float, Iterable[float]
+        ] = None,
         generate_unique_name: bool = False,
         transforms: Iterable[type["UnivariateTransform"]] = (),
     ) -> tuple[str, ...]:
