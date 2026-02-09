@@ -1457,7 +1457,7 @@ class Domain:
         Indices must be provided for the T grid. Negative indices can be used
         to indicate positions relative to the end of the domain. For example,
         istart=1, istop=-1, jstart=1, jstop=-1 removes the outermost strip of cells,
-        and thus shrinks the domain by two cells in each direction.
+        and thus shrinks the domain by two cells in both x- and y-direction.
 
         Args:
             istart: lower x index (first that is included)
