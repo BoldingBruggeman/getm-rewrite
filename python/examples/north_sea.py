@@ -53,7 +53,6 @@ def create_simulation(
         gotm=setup_dir / "gotmturb.nml",
         airsea=airsea,
         internal_pressure=pygetm.internal_pressure.ShchepetkinMcwilliams(),
-        delay_slow_ip=True,
         Dcrit=0.2,
         Dmin=0.05,
         vertical_coordinates=pygetm.vertical_coordinates.GVC(
