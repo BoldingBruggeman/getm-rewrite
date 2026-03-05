@@ -227,7 +227,7 @@ def get_global_pco2(
         ds.close()
 
 
-def get_meteo(
+def get(
     minlon: float,
     maxlon: float,
     minlat: float,
@@ -248,7 +248,6 @@ def get_meteo(
         da_subset = pygetm.input.limit_region(
             da, minlon, maxlon, minlat, maxlat, periodic_lon=True
         )
-        print(da_subset)
         logger.info(f"  saving")
         ds = da_subset.to_dataset(name=name)
         pygetm.input.util.configure_chunking_and_compression(ds, complevel=complevel)
@@ -306,7 +305,7 @@ if __name__ == "__main__":
     if args.list:
         list_available_models()
     else:
-        get_meteo(
+        get(
             args.minlon,
             args.maxlon,
             args.minlat,
