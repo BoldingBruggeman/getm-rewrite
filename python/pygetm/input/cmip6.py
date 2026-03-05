@@ -248,10 +248,11 @@ def get(
         da_subset = pygetm.input.limit_region(
             da, minlon, maxlon, minlat, maxlat, periodic_lon=True
         )
-        logger.info(f"  saving")
+        path = target_dir / f"{name}.nc"
+        logger.info(f"  saving to {path}")
         ds = da_subset.to_dataset(name=name)
         pygetm.input.util.configure_chunking_and_compression(ds, complevel=complevel)
-        ds.chunk(time=1000).to_netcdf(target_dir / f"{name}.nc")
+        ds.chunk(time=1000).to_netcdf(path)
 
     if target == "pco2":
         with get_global_pco2(
