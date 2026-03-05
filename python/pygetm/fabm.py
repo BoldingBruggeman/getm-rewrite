@@ -150,6 +150,8 @@ class FABM:
             variable_to_array(variable, shape=grid.hn.shape)
         for variable in model.horizontal_diagnostic_variables:
             variable_to_array(variable, shape=grid.H.shape)
+        for variable in model.scalar_diagnostic_variables:
+            variable_to_array(variable, shape=())
 
         # Required inputs: mask and cell thickness
         if model.fabm.mask_type != 0:
@@ -273,22 +275,15 @@ class FABM:
 
         # Fill GETM placeholder arrays for all FABM diagnostics that will be
         # computed/saved.
-        def get_diagnostic_values(diagnostic_variables, shape):
-            for variable in diagnostic_variables:
-                array = self._variable2array[variable]
-                if array.saved:
-                    # Provide the array with data (NB it has been registered before)
-                    array.wrap_ndarray(variable.value.reshape(shape), register=False)
-                else:
-                    # Remove the array from the list of available fields
-                    del self.grid.fields[array.name]
-
-        get_diagnostic_values(
-            self.model.interior_diagnostic_variables, self.grid.hn.all_values.shape
-        )
-        get_diagnostic_values(
-            self.model.horizontal_diagnostic_variables, self.grid.H.all_values.shape
-        )
+        for variable in self.model.diagnostic_variables:
+            array = self._variable2array[variable]
+            if array.saved:
+                # Provide the array with data (NB it has been registered before)
+                values = variable.value.reshape(array.all_shape)
+                array.wrap_ndarray(values, register=False)
+            else:
+                # Remove the array from the list of available fields
+                del self.grid.fields[array.name]
 
         # Apply mask to all state variables (interior, bottom, surface)
         for variable in self.model.state_variables:
@@ -296,9 +291,8 @@ class FABM:
             array.all_values[array.all_mask] = variable.missing_value
 
         if self._kc_variable is not None:
-            data = self._kc_variable.value
-            data = data.reshape(self.grid.hn.all_values.shape)
-            self.kc.wrap_ndarray(data, register=False)
+            values = self._kc_variable.value.reshape(self.kc.all_shape)
+            self.kc.wrap_ndarray(values, register=False)
 
     def has_dependency(self, name: str) -> bool:
         try:

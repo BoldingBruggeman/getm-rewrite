@@ -2,6 +2,8 @@ from typing import Optional
 import numpy as np
 import numpy.typing as npt
 
+from pygetm.constants import EdgeTreatment
+
 
 class Linear2DGridInterpolator:
     def __init__(
@@ -173,15 +175,27 @@ class LinearVectorized1D:
         xp: npt.ArrayLike,
         axis: int = 0,
         fill_value: float = np.nan,
+        mask: Optional[npt.ArrayLike] = None,
+        edges: EdgeTreatment = EdgeTreatment.MISSING,
     ):
-        x = np.asarray(x)
-        xp = np.asarray(xp)
+        x = np.asarray(x, dtype=float)
+        xp = np.asarray(xp, dtype=float)
         assert x.ndim == 1
         assert axis >= -xp.ndim and axis < xp.ndim
         xp_slice = [slice(None)] * xp.ndim
         final_shape = list(xp.shape)
         final_shape[axis] = x.size
         ix_left = np.empty(final_shape, dtype=np.intp)
+        if mask is not None:
+            masked_xp = np.broadcast_to(np.asarray(mask, dtype=bool), xp.shape)
+            any_valid_xp = ~masked_xp.all(axis=axis)
+            # start_skip = np.logical_and.accumulate(masked_xp, axis=axis).sum(axis=axis)
+            # stop_skip = np.logical_and.accumulate(
+            #     np.flip(masked_xp, axis=axis), axis=axis
+            # ).sum(axis=axis)
+            # assert (start_skip + stop_skip == masked_xp.sum(axis=axis)).all(
+            #     where=any_valid_xp
+            # )
         for ix, cur_x in enumerate(x):
             xp_slice[axis] = ix
             ix_left_cur = (xp < cur_x).sum(axis=axis) - 1
@@ -209,8 +223,15 @@ class LinearVectorized1D:
         self.ix_right = ix_right
         self.w_left = w_left
         self.axis = axis
-        self.valid = valid
+        if edges == EdgeTreatment.MISSING:
+            self.valid = valid
+        elif mask is not None:
+            self.valid = any_valid_xp
+        else:
+            self.valid = True
         self.fill_value = fill_value
+        assert edges in (EdgeTreatment.MISSING, EdgeTreatment.CLAMP)
+        self.edges = edges
 
     def __call__(self, yp) -> np.ndarray:
         yp = np.asarray(yp)

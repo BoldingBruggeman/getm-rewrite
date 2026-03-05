@@ -52,3 +52,11 @@ class CellType(enum.IntEnum):
     EDGE_Y = (
         -2
     )  #: edge between actively modeled and unresolved points (e.g., coastlines)
+
+
+class EdgeTreatment(enum.Enum):
+    MISSING = enum.auto()
+    CLAMP = enum.auto()
+    PERIODIC = enum.auto()
+    EXTRAPOLATE = enum.auto()
+    EXTRAPOLATE_PERIODIC = enum.auto()

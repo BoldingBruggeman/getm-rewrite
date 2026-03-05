@@ -541,6 +541,11 @@ class Simulation(BaseSimulation):
                 f" = {2.5 * Dmin} m"
             )
             raise Exception("Dcrit < 2.5*Dmin")
+        if delay_slow_ip:
+            self.logger.warning(
+                "Improvements from January 2026 are thought to have made"
+                " delay_slow_ip unnecessary. Use at your own risk."
+            )
 
         HALO = 2
 

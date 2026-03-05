@@ -11,19 +11,11 @@ from . import core
 from . import parallel
 from . import rivers
 from . import open_boundaries
-from .constants import CoordinateType, CellType, GRAVITY
+from .constants import CoordinateType, CellType, GRAVITY, EdgeTreatment
 
 if TYPE_CHECKING:
     import matplotlib.figure
     import matplotlib.colors
-
-
-class EdgeTreatment(enum.Enum):
-    MISSING = enum.auto()
-    CLAMP = enum.auto()
-    PERIODIC = enum.auto()
-    EXTRAPOLATE = enum.auto()
-    EXTRAPOLATE_PERIODIC = enum.auto()
 
 
 def _get_rectangle_overlap(
@@ -1465,7 +1457,7 @@ class Domain:
         Indices must be provided for the T grid. Negative indices can be used
         to indicate positions relative to the end of the domain. For example,
         istart=1, istop=-1, jstart=1, jstop=-1 removes the outermost strip of cells,
-        and thus shrinks the domain by two cells in each direction.
+        and thus shrinks the domain by two cells in both x- and y-direction.
 
         Args:
             istart: lower x index (first that is included)
@@ -1559,6 +1551,55 @@ class Domain:
         return self._tlocator()(
             x, y, coordinate_type=coordinate_type, valid_cell_types=valid_cell_types
         )
+
+    @apply_on_root_and_bcast
+    def contains(
+        self,
+        x: float,
+        y: float,
+        coordinate_type: Optional[CoordinateType] = None,
+    ) -> bool:
+        """Determine whether the domain contains the specified point.
+
+        Args:
+            x: x coordinate
+            y: y coordinate
+            coordinate_type: coordinate system of the provided coordinates
+
+        Returns:
+            True if the point falls within the domain, False otherwise
+        """
+        if coordinate_type is None:
+            coordinate_type = self.coordinate_type
+        if coordinate_type == CoordinateType.LONLAT:
+            allx, ally = self._lon, self._lat
+        elif coordinate_type == CoordinateType.XY:
+            allx, ally = self._x, self._y
+        else:
+            return x >= 0 and x < self.nx and y >= 0 and y < self.ny
+
+        ny, nx = allx.shape
+
+        def get_boundary(c):
+            return np.concatenate(
+                (c[0, :-1], c[:-1, -1], c[-1, nx - 1 : 0 : -1], c[ny - 1 : 0 : -1, 0])
+            )
+
+        # Determine whether point falls within current subdomain
+        # based on https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html
+        x_bnd = get_boundary(allx)
+        y_bnd = get_boundary(ally)
+        assert not np.isnan(x_bnd).any(), f"Invalid x boundary: {x_bnd}."
+        assert not np.isnan(y_bnd).any(), f"Invalid y boundary: {y_bnd}."
+        assert x_bnd.size == 2 * ny + 2 * nx - 4
+        inside = False
+        for i, (vertxi, vertyi) in enumerate(zip(x_bnd, y_bnd)):
+            vertxj, vertyj = x_bnd[i - 1], y_bnd[i - 1]
+            if (vertyi > y) != (vertyj > y) and x < (vertxj - vertxi) * (y - vertyi) / (
+                vertyj - vertyi
+            ) + vertxi:
+                inside = not inside
+        return inside
 
     def plot(
         self,
@@ -1809,69 +1850,3 @@ class Domain:
         if self.periodic_y:
             attrs["periodic_y"] = 1
         return xr.Dataset(data_vars=data_vars, coords=coords, attrs=attrs)
-
-
-#     def contains(
-#         self,
-#         x: float,
-#         y: float,
-#         include_halos: bool = False,
-#         spherical: Optional[bool] = None,
-#     ) -> bool:
-#         """Determine whether the domain contains the specified point.
-
-#         Args:
-#             x: native x coordinate (longitude for spherical grids, Cartesian coordinate
-#                 in m otherwise)
-#             y: native y coordinate (latitude for spherical grids, Cartesian coordinate
-#                 in m otherwise)
-#             include_halos: whether to also search the halos
-
-#         Returns:
-#             True if the point falls within the domain, False otherwise
-#         """
-#         if spherical is None:
-#             spherical = self.spherical
-#         local_slice, _, _, _ = self.tiling.subdomain2slices(
-#             halox_sub=2 * self.halox,
-#             haloy_sub=2 * self.haloy,
-#             halox_glob=2 * self.halox,
-#             haloy_glob=2 * self.haloy,
-#             scale=2,
-#             share=1,
-#             exclude_halos=not include_halos,
-#             exclude_global_halos=True,
-#         )
-#         allx, ally = (self.lon_, self.lat_) if spherical else (self.x_, self.y_)
-#         allx, ally = allx[local_slice], ally[local_slice]
-#         ny, nx = allx.shape
-
-#         # Determine whether point falls within current subdomain
-#         # based on https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html
-#         x_bnd = np.concatenate(
-#             (
-#                 allx[0, :-1],
-#                 allx[:-1, -1],
-#                 allx[-1, nx - 1 : 0 : -1],
-#                 allx[ny - 1 : 0 : -1, 0],
-#             )
-#         )
-#         y_bnd = np.concatenate(
-#             (
-#                 ally[0, :-1],
-#                 ally[:-1, -1],
-#                 ally[-1, nx - 1 : 0 : -1],
-#                 ally[ny - 1 : 0 : -1, 0],
-#             )
-#         )
-#         assert not np.isnan(x_bnd).any(), f"Invalid x boundary: {x_bnd}."
-#         assert not np.isnan(y_bnd).any(), f"Invalid y boundary: {y_bnd}."
-#         assert x_bnd.size == 2 * ny + 2 * nx - 4
-#         inside = False
-#         for i, (vertxi, vertyi) in enumerate(zip(x_bnd, y_bnd)):
-#             vertxj, vertyj = x_bnd[i - 1], y_bnd[i - 1]
-#             if (vertyi > y) != (vertyj > y) and x < (vertxj - vertxi) * (y - vertyi) / (
-#                 vertyj - vertyi
-#             ) + vertxi:
-#                 inside = not inside
-#         return inside

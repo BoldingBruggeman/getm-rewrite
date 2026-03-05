@@ -498,7 +498,7 @@ class Grid(_pygetm.Grid):
         the specified values.
 
         Args:
-            values: mask values to include
+            values: cell types that should not be masked
             z: if CENTERS or INTERFACES, return a 3D mask for the specified
                 vertical coordinate type
         """
