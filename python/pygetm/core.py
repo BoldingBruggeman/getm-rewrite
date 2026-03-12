@@ -64,11 +64,12 @@ class Rotator:
 class Locator:
     def __init__(
         self,
+        *,
         mask: np.ndarray,
-        x: Optional[np.ndarray],
-        y: Optional[np.ndarray],
-        lon: Optional[np.ndarray],
-        lat: Optional[np.ndarray],
+        x: Optional[np.ndarray] = None,
+        y: Optional[np.ndarray] = None,
+        lon: Optional[np.ndarray] = None,
+        lat: Optional[np.ndarray] = None,
     ):
         assert mask.ndim == 2
         self.mask = mask

@@ -317,12 +317,44 @@ class TestDomain(unittest.TestCase):
         t2d = pygetm.open_boundaries.FLATHER_ELEV
         t3d = pygetm.open_boundaries.ZERO_GRADIENT
 
+        self.assertTrue(len(domain.open_boundaries) == 0)
+        self.assertTrue(domain.open_boundaries.i.shape == (0,))
+        self.assertTrue(domain.open_boundaries.j.shape == (0,))
+        self.assertTrue(domain.open_boundaries.i.dtype == np.intp)
+        self.assertTrue(domain.open_boundaries.j.dtype == np.intp)
+        if domain.lon is not None:
+            self.assertTrue(domain.open_boundaries.lon.shape == (0,))
+            self.assertTrue(domain.open_boundaries.lat.shape == (0,))
+            self.assertTrue(domain.open_boundaries.lon.dtype == float)
+            self.assertTrue(domain.open_boundaries.lat.dtype == float)
+        else:
+            self.assertTrue(domain.open_boundaries.lon is None)
+            self.assertTrue(domain.open_boundaries.lat is None)
+        self.assertTrue(domain.open_boundaries.x is None)
+        self.assertTrue(domain.open_boundaries.y is None)
+
         # Entire outer edge of domain
         domain.open_boundaries.add_left_boundary("W", 0, 0, ny, t2d, t3d)
         domain.open_boundaries.add_top_boundary("N", ny - 1, 1, nx, t2d, t3d)
         domain.open_boundaries.add_right_boundary("E", nx - 1, 0, ny - 1, t2d, t3d)
         domain.open_boundaries.add_bottom_boundary("S", 0, 1, nx - 1, t2d, t3d)
         domain.create_grids(10, halox=2, haloy=2, velocity_grids=2)
+
+        self.assertTrue(len(domain.open_boundaries) == 4)
+        self.assertTrue(domain.open_boundaries.i.shape == (2 * nx + 2 * ny - 4,))
+        self.assertTrue(domain.open_boundaries.j.shape == (2 * nx + 2 * ny - 4,))
+        self.assertTrue(domain.open_boundaries.i.dtype == np.intp)
+        self.assertTrue(domain.open_boundaries.j.dtype == np.intp)
+        if domain.lon is not None:
+            self.assertTrue(domain.open_boundaries.lon.shape == (2 * nx + 2 * ny - 4,))
+            self.assertTrue(domain.open_boundaries.lat.shape == (2 * nx + 2 * ny - 4,))
+            self.assertTrue(domain.open_boundaries.lon.dtype == float)
+            self.assertTrue(domain.open_boundaries.lat.dtype == float)
+        else:
+            self.assertTrue(domain.open_boundaries.lon is None)
+            self.assertTrue(domain.open_boundaries.lat is None)
+        self.assertTrue(domain.open_boundaries.x is None)
+        self.assertTrue(domain.open_boundaries.y is None)
 
         domain = pygetm.domain.create_spherical(lon, lat, H=10.0, logger=logger)
 
@@ -421,6 +453,7 @@ class TestDomain(unittest.TestCase):
         tiling = d.create_tiling()
         fig = d.plot(show_subdomains=True, tiling=tiling)
         self.assertTrue(pygetm.parallel.MPI.COMM_WORLD.rank != 0 or fig is not None)
+
 
 if __name__ == "__main__":
     unittest.main()

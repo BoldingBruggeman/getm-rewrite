@@ -70,6 +70,13 @@ class OpenBoundary:
         self.inflow_sign = 1.0 if side in (Side.WEST, Side.SOUTH) else -1.0
         self.np = (mstop - mstart) // self.mstep
 
+        ms = np.arange(mstart, mstop, self.mstep, dtype=np.intp)
+        ls = np.broadcast_to(np.array(l, dtype=np.intp), ms.shape)
+        if side in (Side.WEST, Side.EAST):
+            self.i, self.j = ls, ms
+        else:
+            self.i, self.j = ms, ls
+
     def __repr__(self) -> str:
         return (
             f"{__class__.__name__}({self.name!r}, {self.side.name},"
@@ -129,14 +136,10 @@ class LocalOpenBoundary(OpenBoundary):
         super().__init__(name, side, l, mstart, mstop, type_2d, type_3d)
         self.mskip = mskip
         mslice = slice(mstart, mstop, self.mstep)
-        ms = np.arange(mstart, mstop, self.mstep, dtype=np.intp)
-        ls = np.broadcast_to(np.array(l, dtype=np.intp), ms.shape)
         if side in (Side.WEST, Side.EAST):
-            self.i, self.j = ls, ms
             self.slice_t = (Ellipsis, mslice, l)
             self.slice_uv_in = (Ellipsis, mslice, l if side == Side.WEST else l - 1)
         else:
-            self.i, self.j = ms, ls
             self.slice_t = (Ellipsis, l, mslice)
             self.slice_uv_in = (Ellipsis, l if side == Side.SOUTH else l - 1, mslice)
 
@@ -694,12 +697,47 @@ class ArrayOpenBoundaries:
 
 
 class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
-    def __init__(self, nx: int, ny: int, logger: logging.Logger):
+    def __init__(self, nx: int, ny: int, logger: logging.Logger, **kwargs: np.ndarray):
         self.nx = nx
         self.ny = ny
         self.logger = logger
         self.allow_on_land = False
         self._boundaries: list[OpenBoundary] = []
+        self._coords = kwargs
+
+    @property
+    def i(self) -> np.ndarray:
+        initial = np.empty((0,), dtype=np.intp)
+        return np.concatenate([initial] + [b.i for b in self._boundaries])
+
+    @property
+    def j(self) -> np.ndarray:
+        initial = np.empty((0,), dtype=np.intp)
+        return np.concatenate([initial] + [b.j for b in self._boundaries])
+
+    @property
+    def lon(self) -> Optional[np.ndarray]:
+        if "lon" in self._coords:
+            return self._coords["lon"][self.j, self.i]
+        return None
+
+    @property
+    def lat(self) -> Optional[np.ndarray]:
+        if "lat" in self._coords:
+            return self._coords["lat"][self.j, self.i]
+        return None
+
+    @property
+    def x(self) -> Optional[np.ndarray]:
+        if "x" in self._coords:
+            return self._coords["x"][self.j, self.i]
+        return None
+
+    @property
+    def y(self) -> Optional[np.ndarray]:
+        if "y" in self._coords:
+            return self._coords["y"][self.j, self.i]
+        return None
 
     def add_by_index(
         self,
@@ -1071,7 +1109,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                     j_out = np.concatenate(self.j_out, dtype=np.intp)
                     if self.to_self:
                         while True:
-                            imatch =i_in == i_out[:, np.newaxis]
+                            imatch = i_in == i_out[:, np.newaxis]
                             jmatch = j_in == j_out[:, np.newaxis]
                             (ind_out, ind_in) = (imatch & jmatch).nonzero()
                             if ind_out.size == 0:
