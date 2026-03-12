@@ -504,8 +504,87 @@ class Domain:
         self.root_logger = logger or parallel.get_logger()
         self.logger = self.root_logger.getChild("domain")
 
+        if self.comm.rank != 0:
+            self._x = self._y = self._lon = self._lat = None
+            self._mask = self._H = self._z0 = None
+            self._dx = self._dy = self._rotation = self._f = self._area = None
+        else:
+            self._x = self._map_array(x, edges=EdgeTreatment.EXTRAPOLATE)
+            self._y = self._map_array(y, edges=EdgeTreatment.EXTRAPOLATE)
+            if lon is not None and np.shape(lon) != (1 + ny * 2, 1 + nx * 2):
+                # Interpolate longitude in cos-sin space to handle periodic boundary
+                # condition, but skip this if longitude is already provided on supergrid
+                # (no interpolation needed) to improve accuracy of rotation tests.
+                lon = np.asarray(lon).astype(float, copy=False)
+                lon_rad = DEG2RAD * lon
+                coslon = np.cos(lon_rad)
+                sinlon = np.sin(lon_rad)
+                coslon = self._map_array(coslon, edges=EdgeTreatment.EXTRAPOLATE)
+                sinlon = self._map_array(sinlon, edges=EdgeTreatment.EXTRAPOLATE)
+                self._lon = np.arctan2(sinlon, coslon) * RAD2DEG
+                central_lon = 0.5 * (lon.min() + lon.max())
+                wrap_lon = central_lon - 180.0
+                self._lon = (self._lon - wrap_lon) % 360.0 + wrap_lon
+            else:
+                self._lon = self._map_array(lon)
+            self._lat = self._map_array(lat, edges=EdgeTreatment.EXTRAPOLATE)
+            self._f = self._map_array(f)
+            self.mask = mask
+            self.H = H
+            self.z0 = z0
+
+            kwargs_expand = {}
+            if self.periodic_x:
+                kwargs_expand["edges_x"] = EdgeTreatment.EXTRAPOLATE_PERIODIC
+            if self.periodic_y:
+                kwargs_expand["edges_y"] = EdgeTreatment.EXTRAPOLATE_PERIODIC
+            if has_xy:
+                # Expand x, y by 1 in each direction to calculate dx, dy, rotation
+                x_ex = expand_2d(self._x, **kwargs_expand)
+                y_ex = expand_2d(self._y, **kwargs_expand)
+            if has_lonlat:
+                # Expand lon, lat by 1 in each direction to calculate dx, dy, rotation
+                lon_rad_ex = DEG2RAD * expand_2d(self._lon, **kwargs_expand)
+                lat_rad_ex = DEG2RAD * expand_2d(self._lat, **kwargs_expand)
+
+            if has_xy:
+                dx_x = x_ex[1:-1, 2:] - x_ex[1:-1, :-2]
+                dy_x = y_ex[1:-1, 2:] - y_ex[1:-1, :-2]
+                dx_y = x_ex[2:, 1:-1] - x_ex[:-2, 1:-1]
+                dy_y = y_ex[2:, 1:-1] - y_ex[:-2, 1:-1]
+                scale = 1.0
+            else:
+                dlon_rad_x = lon_rad_ex[1:-1, 2:] - lon_rad_ex[1:-1, :-2]
+                dlat_rad_x = lat_rad_ex[1:-1, 2:] - lat_rad_ex[1:-1, :-2]
+                coslat_x = np.cos(0.5 * (lat_rad_ex[1:-1, 2:] + lat_rad_ex[1:-1, :-2]))
+                dx_x = coslat_x * np.sin(0.5 * dlon_rad_x)
+                dy_x = np.sin(0.5 * dlat_rad_x) * np.cos(0.5 * dlon_rad_x)
+                dlon_rad_y = lon_rad_ex[2:, 1:-1] - lon_rad_ex[:-2, 1:-1]
+                dlat_rad_y = lat_rad_ex[2:, 1:-1] - lat_rad_ex[:-2, 1:-1]
+                coslat_y = np.cos(0.5 * (lat_rad_ex[2:, 1:-1] + lat_rad_ex[:-2, 1:-1]))
+                dx_y = coslat_y * np.sin(0.5 * dlon_rad_y)
+                dy_y = np.sin(0.5 * dlat_rad_y) * np.cos(0.5 * dlon_rad_y)
+                scale = R_EARTH * 2.0
+            self._dx = scale * np.hypot(dx_x, dy_x)
+            self._dy = scale * np.hypot(dx_y, dy_y)
+
+            if has_lonlat and not (
+                (self._lat == self._lat[0, 0]).any()
+                and (self._lon == self._lon[0, 0]).any()
+                and has_xy
+            ):
+                # Proper rotation with respect to true North
+                rotation = _rotation(lon_rad_ex, lat_rad_ex)
+            else:
+                # Rotation with respect to y-axis - assumes y-axis always points to
+                # true North (can be valid only for infinitesimally small domain)
+                rotation = _rotation(x_ex, y_ex)
+            self._rotation = rotation if rotation[1:-1, 1:-1].any() else None
+
+            self._area = self._dx * self._dy
+
         self.open_boundaries = open_boundaries.GlobalOpenBoundaryCollection(
-            nx, ny, self.logger.getChild("open_boundaries")
+            nx, ny, self.logger.getChild("open_boundaries"), **self._tcoords()
         )
         self.rivers = rivers.GlobalRiverCollection(
             nx, ny, coordinate_type, self.logger.getChild("rivers")
@@ -514,94 +593,17 @@ class Domain:
         self.extra_output_coordinates = []
         self.input_grid_mappers = []
 
-        if self.comm.rank != 0:
-            self._x = self._y = self._lon = self._lat = None
-            self._mask = self._H = self._z0 = None
-            self._dx = self._dy = self._rotation = self._f = self._area = None
-            return
-
-        self._x = self._map_array(x, edges=EdgeTreatment.EXTRAPOLATE)
-        self._y = self._map_array(y, edges=EdgeTreatment.EXTRAPOLATE)
-        if lon is not None and np.shape(lon) != (1 + ny * 2, 1 + nx * 2):
-            # Interpolate longitude in cos-sin space to handle periodic boundary
-            # condition, but skip this if longitude is already provided on supergrid
-            # (no interpolation needed) to improve accuracy of rotation tests.
-            lon = np.asarray(lon).astype(float, copy=False)
-            lon_rad = DEG2RAD * lon
-            coslon = np.cos(lon_rad)
-            sinlon = np.sin(lon_rad)
-            coslon = self._map_array(coslon, edges=EdgeTreatment.EXTRAPOLATE)
-            sinlon = self._map_array(sinlon, edges=EdgeTreatment.EXTRAPOLATE)
-            self._lon = np.arctan2(sinlon, coslon) * RAD2DEG
-            central_lon = 0.5 * (lon.min() + lon.max())
-            wrap_lon = central_lon - 180.0
-            self._lon = (self._lon - wrap_lon) % 360.0 + wrap_lon
-        else:
-            self._lon = self._map_array(lon)
-        self._lat = self._map_array(lat, edges=EdgeTreatment.EXTRAPOLATE)
-        self._f = self._map_array(f)
-        self.mask = mask
-        self.H = H
-        self.z0 = z0
-
-        kwargs_expand = {}
-        if self.periodic_x:
-            kwargs_expand["edges_x"] = EdgeTreatment.EXTRAPOLATE_PERIODIC
-        if self.periodic_y:
-            kwargs_expand["edges_y"] = EdgeTreatment.EXTRAPOLATE_PERIODIC
-        if has_xy:
-            # Expand x, y by 1 in each direction to calculate dx, dy, rotation
-            x_ex = expand_2d(self._x, **kwargs_expand)
-            y_ex = expand_2d(self._y, **kwargs_expand)
-        if has_lonlat:
-            # Expand lon, lat by 1 in each direction to calculate dx, dy, rotation
-            lon_rad_ex = DEG2RAD * expand_2d(self._lon, **kwargs_expand)
-            lat_rad_ex = DEG2RAD * expand_2d(self._lat, **kwargs_expand)
-
-        if has_xy:
-            dx_x = x_ex[1:-1, 2:] - x_ex[1:-1, :-2]
-            dy_x = y_ex[1:-1, 2:] - y_ex[1:-1, :-2]
-            dx_y = x_ex[2:, 1:-1] - x_ex[:-2, 1:-1]
-            dy_y = y_ex[2:, 1:-1] - y_ex[:-2, 1:-1]
-            scale = 1.0
-        else:
-            dlon_rad_x = lon_rad_ex[1:-1, 2:] - lon_rad_ex[1:-1, :-2]
-            dlat_rad_x = lat_rad_ex[1:-1, 2:] - lat_rad_ex[1:-1, :-2]
-            coslat_x = np.cos(0.5 * (lat_rad_ex[1:-1, 2:] + lat_rad_ex[1:-1, :-2]))
-            dx_x = coslat_x * np.sin(0.5 * dlon_rad_x)
-            dy_x = np.sin(0.5 * dlat_rad_x) * np.cos(0.5 * dlon_rad_x)
-            dlon_rad_y = lon_rad_ex[2:, 1:-1] - lon_rad_ex[:-2, 1:-1]
-            dlat_rad_y = lat_rad_ex[2:, 1:-1] - lat_rad_ex[:-2, 1:-1]
-            coslat_y = np.cos(0.5 * (lat_rad_ex[2:, 1:-1] + lat_rad_ex[:-2, 1:-1]))
-            dx_y = coslat_y * np.sin(0.5 * dlon_rad_y)
-            dy_y = np.sin(0.5 * dlat_rad_y) * np.cos(0.5 * dlon_rad_y)
-            scale = R_EARTH * 2.0
-        self._dx = scale * np.hypot(dx_x, dy_x)
-        self._dy = scale * np.hypot(dx_y, dy_y)
-
-        if has_lonlat and not (
-            (self._lat == self._lat[0, 0]).any()
-            and (self._lon == self._lon[0, 0]).any()
-            and has_xy
-        ):
-            # Proper rotation with respect to true North
-            rotation = _rotation(lon_rad_ex, lat_rad_ex)
-        else:
-            # Rotation with respect to y-axis - assumes y-axis always points to
-            # true North (can be valid only for infinitesimally small domain)
-            rotation = _rotation(x_ex, y_ex)
-        self._rotation = rotation if rotation[1:-1, 1:-1].any() else None
-
-        self._area = self._dx * self._dy
-
-    def _tlocator(self, mask: Optional[np.ndarray] = None) -> core.Locator:
-        """Locator for T points (cell centers)"""
-        x = None if self._x is None else self._x[1::2, 1::2]
-        y = None if self._y is None else self._y[1::2, 1::2]
-        lon = None if self._lon is None else self._lon[1::2, 1::2]
-        lat = None if self._lat is None else self._lat[1::2, 1::2]
-        tmask = (self._mask if mask is None else mask)[1::2, 1::2]
-        return core.Locator(mask=tmask, x=x, y=y, lon=lon, lat=lat)
+    def _tcoords(self, **kwargs: np.ndarray) -> Mapping[str, np.ndarray]:
+        """Coordinates for T points (cell centers)"""
+        if self._x is not None:
+            kwargs.setdefault("x", self._x)
+        if self._y is not None:
+            kwargs.setdefault("y", self._y)
+        if self._lon is not None:
+            kwargs.setdefault("lon", self._lon)
+        if self._lat is not None:
+            kwargs.setdefault("lat", self._lat)
+        return {n: c[1::2, 1::2] for n, c in kwargs.items()}
 
     def _map_array(
         self,
@@ -899,7 +901,7 @@ class Domain:
                 raise Exception("Water depth at rest (H) has not been provided")
 
             # Map river coordinates to global grid indices
-            self.rivers.map_to_grid(self._tlocator(final_mask))
+            self.rivers.map_to_grid(core.Locator(**self._tcoords(mask=final_mask)))
 
         if tiling is None:
             tiling = self.create_tiling()
@@ -1548,7 +1550,7 @@ class Domain:
     ) -> tuple[int, int]:
         if coordinate_type is None:
             coordinate_type = self.coordinate_type
-        return self._tlocator()(
+        return core.Locator(**self._tcoords(mask=self._mask))(
             x, y, coordinate_type=coordinate_type, valid_cell_types=valid_cell_types
         )
 
@@ -1699,7 +1701,7 @@ class Domain:
             cb.set_label(label)
 
         if show_rivers and self.rivers:
-            self.rivers.map_to_grid(self._tlocator(mask))
+            self.rivers.map_to_grid(core.Locator(**self._tcoords(mask=mask)))
             for name, river in self.rivers.items():
                 i_sup, j_sup = 1 + river.i * 2, 1 + river.j * 2
                 river_x, river_y = x[j_sup, i_sup], y[j_sup, i_sup]
