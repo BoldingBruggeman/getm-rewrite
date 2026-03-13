@@ -697,13 +697,25 @@ class ArrayOpenBoundaries:
 
 
 class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
-    def __init__(self, nx: int, ny: int, logger: logging.Logger, **kwargs: np.ndarray):
+    def __init__(
+        self,
+        nx: int,
+        ny: int,
+        logger: logging.Logger,
+        x: Optional[np.ndarray] = None,
+        y: Optional[np.ndarray] = None,
+        lon: Optional[np.ndarray] = None,
+        lat: Optional[np.ndarray] = None,
+    ):
         self.nx = nx
         self.ny = ny
         self.logger = logger
         self.allow_on_land = False
         self._boundaries: list[OpenBoundary] = []
-        self._coords = kwargs
+        self._x = x
+        self._y = y
+        self._lon = lon
+        self._lat = lat
 
     @property
     def i(self) -> np.ndarray:
@@ -717,27 +729,19 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
 
     @property
     def lon(self) -> Optional[np.ndarray]:
-        if "lon" in self._coords:
-            return self._coords["lon"][self.j, self.i]
-        return None
+        return None if self._lon is None else self._lon[self.j, self.i]
 
     @property
     def lat(self) -> Optional[np.ndarray]:
-        if "lat" in self._coords:
-            return self._coords["lat"][self.j, self.i]
-        return None
+        return None if self._lat is None else self._lat[self.j, self.i]
 
     @property
     def x(self) -> Optional[np.ndarray]:
-        if "x" in self._coords:
-            return self._coords["x"][self.j, self.i]
-        return None
+        return None if self._x is None else self._x[self.j, self.i]
 
     @property
     def y(self) -> Optional[np.ndarray]:
-        if "y" in self._coords:
-            return self._coords["y"][self.j, self.i]
-        return None
+        return None if self._y is None else self._y[self.j, self.i]
 
     def add_by_index(
         self,
