@@ -169,6 +169,11 @@ class Linear2DGridInterpolator:
 
 
 class LinearVectorized1D:
+    """One-dimensional linear interpolation along a given axis,
+    for nD source coordinates and 1D target coordinates.
+    For instance, to go from 3D depths to a z grid (1D)
+    """
+
     def __init__(
         self,
         x: npt.ArrayLike,
@@ -178,6 +183,26 @@ class LinearVectorized1D:
         mask: Optional[npt.ArrayLike] = None,
         edges: EdgeTreatment = EdgeTreatment.MISSING,
     ):
+        """Initialize the interpolator. It can subsequently be called multiple times
+        with different source values but the same coordinates.
+
+        Args:
+            x: Target coordinate values (1D)
+            xp: Source coordinate values (nD)
+            axis: Axis along which to interpolate
+            fill_value: Value to use for out-of-bounds target coordinates
+                (if `edges` is `MISSING`) and for locations where there
+                are no valid source points along the interpolated dimension
+                (if `mask` is given)
+            mask: Optional boolean array of the same shape as `xp` indicating
+                masked (invalid) source points. It is currently only used
+                to detect locations where there are no valid source points
+                along the interpolated dimension. There, `fill_value` will be used
+                independent of the `edges` setting.
+            edges: How to treat target coordinates that fall outside the range
+                of valid source coordinates. If `MISSING`, these will be assigned `fill_value`.
+                If `CLAMP`, these will be assigned the nearest valid source value.
+        """
         x = np.asarray(x, dtype=float)
         xp = np.asarray(xp, dtype=float)
         assert x.ndim == 1
@@ -245,7 +270,10 @@ class LinearVectorized1D:
 def interp_1d(
     x: npt.ArrayLike, xp: npt.ArrayLike, fp: npt.ArrayLike, axis: int = 0
 ) -> np.ndarray:
-    """Vectorized 1D linear interpolation along a given axis
+    """One-dimensional linear interpolation along a given axis
+    for 1D source coordinates and nD target coordinates.
+    For instance, to interpolate from 3D values defined at z coordinates (1D)
+    to 3D values at depth coordinates that vary in the horizontal.
 
     Source values may contain NaNs or masked values at the beginning or end
     of the interpolated dimension; these will be skipped during interpolation.
