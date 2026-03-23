@@ -536,7 +536,9 @@ class Concatenate(Operator):
                 slices[axis] -= array.shape[axis]
             raise IndexError
         else:
-            assert isinstance(slices[axis], slice)
+            assert isinstance(
+                slices[axis], slice
+            ), f"Invalid slice for concatenation axis {axis}: {slices[axis]!r}"
             outaxis = axis
             for s in slices[:axis]:
                 if isinstance(s, (int, np.integer)):
