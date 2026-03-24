@@ -86,7 +86,7 @@ def _create_logger() -> logging.Logger:
 
 
 @contextlib.contextmanager
-def get_global_meteo(
+def get_global_cmip6(
     source_id: str = "GFDL-ESM4",
     experiment_id: str = "ssp245",
     logger: Optional[logging.Logger] = None,
@@ -147,7 +147,12 @@ def _get_catalog(
         cache_dir = tempfile.mkdtemp(prefix="esgf_cache_")
     cache_dir = Path(cache_dir)
     logger.info(f"Using temporary directory {cache_dir} for ESGF cache")
-    intake_esgf.conf.set(local_cache=cache_dir)  # all_indices=True,
+    intake_esgf.conf.set(
+        local_cache=cache_dir,
+        all_indices=True,
+        # indices={"esgf.ceda.ac.uk": True},
+        # no_indices=True,
+    )
 
     def on_rm_error(function, path, excinfo):
         logger.warning(f"Failed to remove {path}: {excinfo}")
@@ -196,7 +201,7 @@ def get_global_pco2(
         return ds
 
     fn = EXPERIMENT2CO2ATM[experiment_id]
-    source_id = (
+    kwargs["source_id"] = (
         fn.split("_GHGConcentrations_", 1)[1].split("_", 1)[1].split("_gr-", 1)[0]
     )
 
@@ -205,7 +210,6 @@ def get_global_pco2(
             project="input4MIPs",
             grid_label="gr-0p5x360deg",
             variable="mole_fraction_of_carbon_dioxide_in_air",
-            source_id=source_id,
             **kwargs,
         )
         paths = cat.to_path_dict(prefer_streaming=prefer_streaming)
@@ -233,7 +237,6 @@ def get(
     minlat: float,
     maxlat: float,
     source_id: str = "GFDL-ESM4",
-    experiment_id: str = "ssp245",
     target_dir: Union[os.PathLike[str], str] = ".",
     logger: Optional[logging.Logger] = None,
     complevel: int = 0,
@@ -255,15 +258,22 @@ def get(
         ds.chunk(time=1000).to_netcdf(path)
 
     if target == "pco2":
-        with get_global_pco2(
-            experiment_id=experiment_id, logger=logger, **kwargs
-        ) as da:
+        with get_global_pco2(logger=logger, **kwargs) as da:
             _save(da, "pco2")
+    if target == "ts":
+        for name in ("thetao", "so"):
+            with get_global_cmip6(
+                variables=[name],
+                source_id=source_id,
+                frequency="mon",
+                grid_label="gr",
+                logger=logger,
+                **kwargs,
+            ) as ds:
+                _save(ds[name], name)
     else:
         for name in METEO_VARS:
-            with get_global_meteo(
-                source_id, experiment_id, logger, variables=[name], **kwargs
-            ) as ds:
+            with get_global_cmip6(source_id, logger, variables=[name], **kwargs) as ds:
                 _save(ds[name], name)
 
 
@@ -298,7 +308,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t",
         "--target",
-        choices=["meteo", "pco2"],
+        choices=["meteo", "pco2", "ts"],
         default="meteo",
         help="which data to download",
     )
