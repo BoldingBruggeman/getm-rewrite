@@ -285,6 +285,29 @@ class TestOutput(unittest.TestCase):
                         save_initial,
                     )
 
+    def test_indexxy(self):
+        sim = self.create(full=True, mask_3d=False)
+        T_2d = sim.T.array(name="T_2d", fill_value=-2e20)
+        i, j = 5, 5
+        T_2d[i, j] = 1.0
+        transform = pygetm.output.operators.IndexXY.parameterize(
+            x=sim.T.x[0, i], y=sim.T.y[j, 0], coordinate_type=pygetm.CoordinateType.XY
+        )
+        output = sim.output_manager.add_netcdf_file(
+            "test.nc", interval=datetime.timedelta(days=1)
+        )
+        output.request(T_2d, transforms=[transform])
+
+        start = cftime.datetime(2000, 1, 1)
+        stop = cftime.datetime(2000, 2, 1)
+        sim.start(start, 3600.0, 24)
+        while sim.time < stop:
+            sim.advance()
+        sim.finish()
+
+        with netCDF4.Dataset("test.nc") as nc:
+            self.assertTrue((nc["T_2d"][...] == 1.0).all())
+
 
 if __name__ == "__main__":
     unittest.main()
