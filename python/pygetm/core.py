@@ -64,8 +64,8 @@ class Rotator:
 class Locator:
     def __init__(
         self,
-        *,
         mask: np.ndarray,
+        *,
         x: Optional[np.ndarray] = None,
         y: Optional[np.ndarray] = None,
         lon: Optional[np.ndarray] = None,

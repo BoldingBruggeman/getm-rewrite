@@ -716,7 +716,9 @@ class IndexXY(UnivariateTransform):
             all_y = None if grid.y is None else grid.y.attrs["_global_values"]
             all_lon = None if grid.lon is None else grid.lon.attrs["_global_values"]
             all_lat = None if grid.lat is None else grid.lat.attrs["_global_values"]
-            loc = pygetm.core.Locator(all_mask, all_x, all_y, all_lon, all_lat)
+            loc = pygetm.core.Locator(
+                all_mask, x=all_x, y=all_y, lon=all_lon, lat=all_lat
+            )
             self._i[...], self._j[...] = loc(x, y, coordinate_type=coordinate_type)
         grid.tiling.comm.Bcast(self._i)
         grid.tiling.comm.Bcast(self._j)
