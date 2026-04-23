@@ -1691,13 +1691,12 @@ class InputManager:
         else:
             target[...] = value
             finite = np.isfinite(target)
-            if array.ndim == 0 or array.on_boundary:
-                unmasked = np.broadcast_to(True, target.shape)
-            else:
-                unmasked = np.broadcast_to(grid._water[target_slice], target.shape)
-                if array.fill_value is not None:
-                    keep_mask = unmasked if mask else unmasked | finite
-                    target[~keep_mask] = array.fill_value
+            unmasked = ~array.all_mask[target_slice]
+            if array.fill_value is not None:
+                # Fill masked points with the fill value. Either we fill all masked
+                # points (if mask=True) or only those that are not finite.
+                keep_values = unmasked if mask else unmasked | finite
+                target[~keep_values] = array.fill_value
             if not finite.all(where=unmasked):
                 n_unmasked = unmasked.sum()
                 n_bad = n_unmasked - finite.sum(where=unmasked)
