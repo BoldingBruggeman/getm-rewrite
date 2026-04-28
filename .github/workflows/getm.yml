@@ -36,7 +36,7 @@ jobs:
               git clone https://git.code.sf.net/p/getm/getm-setups
            env:
               GIT_CLONE_PROTECTION_ACTIVE: false
-         - uses: conda-incubator/setup-miniconda@v3
+         - uses: conda-incubator/setup-miniconda@v4
            with:
               auto-update-conda: true
               python-version: ${{ matrix.python-version }}
