@@ -26,6 +26,7 @@ VARIABLES = {
     "sp": "surface_pressure",
     "tcc": "total_cloud_cover",
     "tp": "total_precipitation",
+    "e": "evaporation",
     "ssr": "surface_net_solar_radiation",
     "ssrd": "surface_solar_radiation_downwards",
     "str": "surface_net_thermal_radiation",
