@@ -115,13 +115,13 @@ class GlobalRiver:
         self.attrs = attrs
         self.i: Optional[int] = None
         self.j: Optional[int] = None
+        if self.coordinate_type == CoordinateType.IJ:
+            self.i, self.j = int(round(self.x)), int(round(self.y))
 
     def locate(self, locator: core.Locator):
         """If this river position is specified by (lon, lat) or (x, y), map it
         to the nearest non-masked grid cell."""
-        if self.coordinate_type == CoordinateType.IJ:
-            self.i, self.j = int(round(self.x)), int(round(self.y))
-        else:
+        if self.coordinate_type != CoordinateType.IJ:
             self.i, self.j = locator(
                 self.x,
                 self.y,
