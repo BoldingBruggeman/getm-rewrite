@@ -1503,9 +1503,7 @@ class Domain:
                     continue
                 x -= istart
                 y -= jstart
-            subdomain.rivers.add_by_location(
-                r.name, x, y, r.coordinate_type, zl=r.zl, zu=r.zu, **r.attrs
-            )
+            subdomain.rivers.add_by_location(r.name, x, y, r.coordinate_type, **r.attrs)
         return subdomain
 
     def rotate(self) -> "Domain":
@@ -1535,7 +1533,7 @@ class Domain:
             if r.coordinate_type == CoordinateType.IJ:
                 x, y = y, self.nx - 1 - x
             rotated_domain.rivers.add_by_location(
-                r.name, x, y, r.coordinate_type, zl=r.zl, zu=r.zu, **r.attrs
+                r.name, x, y, r.coordinate_type, **r.attrs
             )
         return rotated_domain
 

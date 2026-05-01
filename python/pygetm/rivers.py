@@ -69,9 +69,6 @@ class GlobalRiver:
         name: str,
         x: Union[int, float],
         y: Union[int, float],
-        zl: Optional[float] = None,
-        zu: Optional[float] = None,
-        vertical_position: VerticalPosition = VerticalPosition.DistanceFromSurface,
         coordinate_type: CoordinateType = CoordinateType.IJ,
         **attrs,
     ):
@@ -80,12 +77,6 @@ class GlobalRiver:
             name: unique name for this river
             x: x coordinate of river
             y: y coordinate of river
-            zl: lower limit (deepest point) of river penetration (m; >=0).
-                Defaults to bottom
-            zu: upper limit of river penetration (m; >=0).
-                Defaults to surface
-            vertical_position: whether depth limits zl and zu are distances
-                from the surface or from the bottom
             coordinate_type: coordinate type of x and y
                 (LONLAT spherical, XY for Cartesian coordinates)
             **attrs: additional attributes for this river
@@ -94,24 +85,6 @@ class GlobalRiver:
         self.x = x
         self.y = y
         self.coordinate_type = coordinate_type
-        if vertical_position == VerticalPosition.DistanceFromBottom:
-            zl = 0.0 if zl is None else zl
-            zu = np.inf if zu is None else zu
-            if zl > zu:
-                raise ValueError("For DistanceFromBottom, zl must be <= zu")
-        else:
-            zl = np.inf if zl is None else zl
-            zu = 0.0 if zu is None else zu
-            if zl < zu:
-                raise ValueError("For DistanceFromSurface, zl must be >= zu")
-        if zl < 0.0:
-            raise ValueError("zl must be non-negative")
-        if zu < 0.0:
-            raise ValueError("zu must be non-negative")
-
-        self.zl = zl
-        self.zu = zu
-        self.vertical_position = vertical_position
         self.attrs = attrs
         self.i: Optional[int] = None
         self.j: Optional[int] = None
@@ -140,17 +113,7 @@ class GlobalRiver:
         i_loc, j_loc = grid.global_to_local(self.i, self.j, include_halos=True)
         if i_loc is None or j_loc is None:
             return None
-        river = LocalRiver(
-            grid,
-            self.name,
-            i_loc,
-            j_loc,
-            zl=self.zl,
-            zu=self.zu,
-            vertical_position=self.vertical_position,
-            **self.attrs,
-        )
-        return river
+        return LocalRiver(grid, self.name, i_loc, j_loc, **self.attrs)
 
     def __getattr__(self, name: str) -> Any:
         return self.attrs[name]
@@ -303,7 +266,7 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
             name: river name
             i: global domain index in x-direction (0-based)
             j: global domain index in y-direction (0-based)
-            **kwargs: additional keyword arguments passed to :class:`GlobalRiver`
+            **kwargs: additional keyword arguments passed to :meth:`add_by_location`
 
         Returns:
             river instance
@@ -318,7 +281,10 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
         x: Union[int, float],
         y: Union[int, float],
         coordinate_type: Optional[CoordinateType] = None,
-        **kwargs,
+        zl: Optional[float] = None,
+        zu: Optional[float] = None,
+        vertical_position: VerticalPosition = VerticalPosition.DistanceFromSurface,
+        **attrs,
     ) -> GlobalRiver:
         """Add a river at a location specified by the nearest coordinates
 
@@ -329,7 +295,13 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
             coordinate_type: coordinate type of x and y
                 (LONLAT for spherical, XY for Cartesian coordinates,
                 IJ for 0-based indices into the global tracer grid)
-            **kwargs: additional keyword arguments passed to :class:`GlobalRiver`
+            zl: lower limit (deepest point) of river penetration (m; >=0).
+                Defaults to bottom
+            zu: upper limit of river penetration (m; >=0).
+                Defaults to surface
+            vertical_position: whether depth limits zl and zu are distances
+                from the surface or from the bottom
+            **attrs: additional attributes for this river
 
         Returns:
             river instance
@@ -343,7 +315,32 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
             assert y > -self.ny and y < self.ny
             x = x % self.nx
             y = y % self.ny
-        river = GlobalRiver(name, x, y, coordinate_type=coordinate_type, **kwargs)
+
+        if vertical_position == VerticalPosition.DistanceFromBottom:
+            zl = 0.0 if zl is None else zl
+            zu = np.inf if zu is None else zu
+            if zl > zu:
+                raise ValueError("For DistanceFromBottom, zl must be <= zu")
+        else:
+            zl = np.inf if zl is None else zl
+            zu = 0.0 if zu is None else zu
+            if zl < zu:
+                raise ValueError("For DistanceFromSurface, zl must be >= zu")
+        if zl < 0.0:
+            raise ValueError("zl must be non-negative")
+        if zu < 0.0:
+            raise ValueError("zu must be non-negative")
+
+        river = GlobalRiver(
+            name,
+            x,
+            y,
+            coordinate_type=coordinate_type,
+            zl=zl,
+            zu=zu,
+            vertical_position=vertical_position,
+            **attrs,
+        )
         self._rivers.append(river)
         return river
 
