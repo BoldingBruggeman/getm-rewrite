@@ -1685,9 +1685,13 @@ class Domain:
                 field = np.ma.array(self._H, mask=self._mask == 0)
                 label = "undisturbed water depth (m)"
 
+        if field.shape == (self.ny, self.nx):
+            xplt, yplt = x[::2, ::2], y[::2, ::2]
+        else:
+            xplt, yplt = x, y
         c = ax.pcolormesh(
-            x,
-            y,
+            xplt,
+            yplt,
             field,
             alpha=0.5 if show_mesh else 1,
             shading="auto",
