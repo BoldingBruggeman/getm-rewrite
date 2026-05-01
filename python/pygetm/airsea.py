@@ -208,10 +208,14 @@ class FluxesFromMeteo(Fluxes):
                 calling :meth:`pygetm.core.Array.set` on :attr:`pe`.
         """
         super().__init__()
+        if shortwave_method not in (NET_FLUX, DOWNWARD_FLUX):
+            shortwave_method = ShortwaveMethod(shortwave_method)
+        if longwave_method not in (NET_FLUX, DOWNWARD_FLUX):
+            longwave_method = awex.LongwaveMethod(longwave_method)
         self.shortwave_method = shortwave_method
         self.longwave_method = longwave_method
-        self.albedo_method = albedo_method
-        self.humidity_measure = humidity_measure
+        self.albedo_method = AlbedoMethod(albedo_method)
+        self.humidity_measure = HumidityMeasure(humidity_measure)
         self.calculate_evaporation = calculate_evaporation
 
     def initialize(self, grid: core.Grid, logger: logging.Logger):
