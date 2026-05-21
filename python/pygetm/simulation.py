@@ -404,11 +404,13 @@ class BaseSimulation:
                     f"Field {field.name} has {bad_count} non-finite values"
                     f" (out of {unmasked_count} unmasked values)."
                 )
-        nsub = np.empty((self.tiling.n,), dtype=int)
-        nsub[self.tiling.rank] = len(bad_fields)
-        self.tiling.comm.Allgather(parallel.MPI.IN_PLACE, nsub)
-        fail = nsub.any()
+        local_bad_count = len(bad_fields)
+        fail = np.array(local_bad_count > 0, dtype=np.int8)
+        self.tiling.comm.Allreduce(parallel.MPI.IN_PLACE, fail, op=parallel.MPI.MAX)
         if fail:
+            nsub = np.empty((self.tiling.n,), dtype=int)
+            nsub[self.tiling.rank] = local_bad_count
+            self.tiling.comm.Allgather(parallel.MPI.IN_PLACE, nsub)
             sublist = (f"{i} ({n} fields)" for i, n in enumerate(nsub) if n > 0)
             self.logger.error(
                 f"Non-finite values found in {(nsub > 0).sum()} subdomains"
