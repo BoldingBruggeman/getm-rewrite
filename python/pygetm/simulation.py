@@ -375,8 +375,8 @@ class BaseSimulation:
         """
 
         def _collect_info():
-            microchecks = []
-            macrochecks = []
+            microchecks: list[tuple[core.Array, np.ndarray]] = []
+            macrochecks: list[tuple[core.Array, np.ndarray]] = []
             for field in self._fields.values():
                 if field.ndim == 0:
                     continue
