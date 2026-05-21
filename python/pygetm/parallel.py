@@ -583,6 +583,57 @@ GROUP2PARTS = {
 }
 
 
+class BaseHaloUpdater:
+    def start(self):
+        return
+
+    def finish(self):
+        return
+
+    def __call__(self):
+        return
+
+    def __add__(self, other: "BaseHaloUpdater") -> "BaseHaloUpdater":
+        return self
+
+
+class HaloUpdater(BaseHaloUpdater):
+    def __init__(self, send_reqs, recv_reqs, send_data, recv_data):
+        self.send_reqs = send_reqs
+        self.recv_reqs = recv_reqs
+        self.send_data = send_data
+        self.recv_data = recv_data
+        self.all_reqs = send_reqs + recv_reqs
+
+    def start(self):
+        for inner, cache in self.send_data:
+            cache[...] = inner
+        Startall(self.all_reqs)
+
+    def finish(self):
+        Waitall(self.all_reqs)
+        for outer, cache in self.recv_data:
+            outer[...] = cache
+
+    def __call__(self):
+        Startall(self.recv_reqs)
+        for inner, cache in self.send_data:
+            cache[...] = inner
+        Startall(self.send_reqs)
+        Waitall(self.recv_reqs)
+        for outer, cache in self.recv_data:
+            outer[...] = cache
+        Waitall(self.send_reqs)
+
+    def __add__(self, other: "HaloUpdater") -> "HaloUpdater":
+        return HaloUpdater(
+            self.send_reqs + other.send_reqs,
+            self.recv_reqs + other.recv_reqs,
+            self.send_data + other.send_data,
+            self.recv_data + other.recv_data,
+        )
+
+
 class DistributedArray:
     # This seems a good candidate for using MPI's derived datatypes (DDT),
     # which allow sending/receiving halos that are non-contiguous in memory
@@ -721,6 +772,10 @@ class DistributedArray:
         for outer, cache in recv_data:
             outer[...] = cache
         Waitall(send_reqs)
+
+    def get_halo_updater(self, group: Neighbor = Neighbor.ALL) -> HaloUpdater:
+        send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
+        return HaloUpdater(send_reqs, recv_reqs, send_data, recv_data)
 
     def update_halos_start(self, group: Neighbor = Neighbor.ALL):
         send_reqs, recv_reqs, send_data, _ = self.group2task[group]

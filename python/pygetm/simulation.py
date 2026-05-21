@@ -489,6 +489,7 @@ class Simulation(BaseSimulation):
         "open_boundaries",
         "vertical_coordinates",
         "depth",
+        "airsea_halo_update",
     )
 
     @log_exceptions
@@ -723,6 +724,12 @@ class Simulation(BaseSimulation):
             f" but is {type(self.airsea)}"
         )
         self.airsea.initialize(self.T, self.logger.getChild("airsea"))
+
+        self.airsea_halo_update = (
+            self.airsea.sp.get_halo_updater(parallel.Neighbor.TOP_AND_RIGHT)
+            + self.airsea.taux.get_halo_updater(parallel.Neighbor.RIGHT)
+            + self.airsea.tauy.get_halo_updater(parallel.Neighbor.TOP)
+        )
 
         self.ice = pygetm.ice.Ice()
         self.ice.initialize(self.T, self.logger.getChild("ice"))
@@ -1285,20 +1292,9 @@ class Simulation(BaseSimulation):
             # Update density, buoyancy and internal pressure to keep them in sync with
             # T and S.
             self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
-
-            # Update density halos: valid rho around all U and V needed for internal
-            # pressure; not yet valid because T&S were not valid in halos when rho was
-            # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
-            self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)
-            self.buoy.all_values = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-            self.internal_pressure(self.buoy)
-            if not self.delay_slow_ip:
-                self.internal_pressure.idpdx.all_values.sum(
-                    axis=0, out=self.momentum.SxB.all_values
-                )
-                self.internal_pressure.idpdy.all_values.sum(
-                    axis=0, out=self.momentum.SyB.all_values
-                )
+            self.rho.update_halos_start(
+                parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
+            )
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
@@ -1311,6 +1307,22 @@ class Simulation(BaseSimulation):
             self.density.get_buoyancy_frequency(
                 self.salt, self.temp, p=self.pres, out=self.NN
             )
+
+            # Update density halos: valid rho around all U and V needed for internal
+            # pressure; not yet valid because T&S were not valid in halos when rho was
+            # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
+            self.rho.update_halos_finish(
+                parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
+            )
+            self.buoy.all_values = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
+            self.internal_pressure(self.buoy)
+            if not self.delay_slow_ip:
+                self.internal_pressure.idpdx.all_values.sum(
+                    axis=0, out=self.momentum.SxB.all_values
+                )
+                self.internal_pressure.idpdy.all_values.sum(
+                    axis=0, out=self.momentum.SyB.all_values
+                )
 
         # Update water depth D on all grids.
         # For grids lagging 1/2 a timestep behind (U, V, X grids), the
@@ -1349,6 +1361,8 @@ class Simulation(BaseSimulation):
         # heat and momentum
         self.ice(update_baroclinic, self.temp_sf, self.salt_sf, self.airsea)
 
+        self.airsea_halo_update.start()
+
         # Update depth-integrated freshwater fluxes:
         # precipitation/evaporation/condensation from the airsea module, plus rivers
         self.fwf.all_values = self.airsea.pe.all_values
@@ -1368,13 +1382,11 @@ class Simulation(BaseSimulation):
         # valid in the halos, which is guaranteed for elevation (halo exchange happens
         # just after update), and for air pressure if it is managed by the input
         # manager (e.g. read from file)
-        self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
+        self.airsea_halo_update.finish()
         self.update_surface_pressure_gradient(self.T.z, self.airsea.sp)
 
         # Interpolate surface stresses from T to U and V grids
-        self.airsea.taux.update_halos(parallel.Neighbor.RIGHT)
         self.airsea.taux.interp(self.tausx)
-        self.airsea.tauy.update_halos(parallel.Neighbor.TOP)
         self.airsea.tauy.interp(self.tausy)
 
         if update_3d:

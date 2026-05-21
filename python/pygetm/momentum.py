@@ -757,8 +757,9 @@ class Momentum:
                 timestep,
             )
             self.U.mirror()
-            self.U.update_halos()
+            self.U.update_halos_start()
             self.coriolis(self.U, self.corV, True)
+            self.U.update_halos_finish()
 
         def v():
             pygetm._pygetm.advance_2d_transport(
@@ -777,8 +778,9 @@ class Momentum:
                 timestep,
             )
             self.V.mirror()
-            self.V.update_halos()
+            self.V.update_halos_start()
             self.coriolis(self.V, self.corU, False)
+            self.V.update_halos_finish()
 
         # Update 2D transports from t-1/2 to t+1/2.
         # This uses advection, diffusion, damping and bottom friction terms

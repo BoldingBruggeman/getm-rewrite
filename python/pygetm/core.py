@@ -761,6 +761,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "update_halos",
         "update_halos_start",
         "update_halos_finish",
+        "get_halo_updater",
         "compare_halos",
         "open_boundaries",
     )
@@ -841,6 +842,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             self.update_halos_start = _noop
             self.update_halos_finish = _noop
             self.compare_halos = _noop
+            self.get_halo_updater = lambda group: parallel.BaseHaloUpdater()
         else:
             self.update_halos = functools.partial(self._distribute, "update_halos")
             self.update_halos_start = functools.partial(
@@ -850,6 +852,9 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                 self._distribute, "update_halos_finish"
             )
             self.compare_halos = functools.partial(self._distribute, "compare_halos")
+            self.get_halo_updater = functools.partial(
+                self._distribute, "get_halo_updater"
+            )
 
     def register(self):
         assert self.grid is not None
@@ -864,7 +869,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
 
-    def _distribute(self, method: str, *args, **kwargs) -> parallel.DistributedArray:
+    def _distribute(self, method: str, *args, **kwargs):
         dist = parallel.DistributedArray(
             self.grid.tiling,
             self.all_values,
@@ -876,7 +881,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self.update_halos_start = dist.update_halos_start
         self.update_halos_finish = dist.update_halos_finish
         self.compare_halos = dist.compare_halos
-        getattr(self, method)(*args, **kwargs)
+        self.get_halo_updater = dist.get_halo_updater
+        return getattr(self, method)(*args, **kwargs)
 
     def scatter(self, global_data: Optional[np.ndarray]):
         if self.grid.tiling.n == 1:
