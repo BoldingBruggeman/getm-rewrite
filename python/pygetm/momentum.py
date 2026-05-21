@@ -757,9 +757,8 @@ class Momentum:
                 timestep,
             )
             self.U.mirror()
-            self.U.update_halos_start()
+            self.U.update_halos()
             self.coriolis(self.U, self.corV, True)
-            self.U.update_halos_finish()
 
         def v():
             pygetm._pygetm.advance_2d_transport(
@@ -778,9 +777,8 @@ class Momentum:
                 timestep,
             )
             self.V.mirror()
-            self.V.update_halos_start()
+            self.V.update_halos()
             self.coriolis(self.V, self.corU, False)
-            self.V.update_halos_finish()
 
         # Update 2D transports from t-1/2 to t+1/2.
         # This uses advection, diffusion, damping and bottom friction terms
@@ -865,6 +863,9 @@ class Momentum:
             idpdy: internal pressure gradient (m2 s-2) in y-direction
             viscosity: turbulent viscosity (m2 s-1)
         """
+        # Do the halo exchange for viscosity, as this needs to be interpolated
+        # to the U and V grids. For that, information from the halos is used.
+        viscosity.update_halos_start(parallel.Neighbor.TOP_AND_RIGHT)
 
         # Depth-integrated transports have been summed over all microtimesteps.
         # Average them, then reset depth-integrated transports that will be incremented
@@ -876,7 +877,7 @@ class Momentum:
 
         # Do the halo exchange for viscosity, as this needs to be interpolated
         # to the U and V grids. For that, information from the halos is used.
-        viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
+        viscosity.update_halos_finish(parallel.Neighbor.TOP_AND_RIGHT)
 
         def u():
             self.advance_3d_transport(
@@ -1203,6 +1204,8 @@ class Momentum:
 
         Args:
             U: 2d or 3d transport in x- or y-direction (m2 s-1)
+                This will be interpolated to the complementary velocity grid,
+                and therefore needs to be valid in the halos.
             out: array to store change in complementary transport (y or x-direction)
                 due to Coriolis force (m2 s-2)
         """
