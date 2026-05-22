@@ -629,7 +629,6 @@ class HaloUpdater(BaseHaloUpdater):
     ):
         self.send_reqs.append(req)
         self.send_data.append((inner, cache))
-        self.all_reqs.append(req)
 
     def add_recv(
         self, neighbor: str, req: MPI.Prequest, outer: np.ndarray, cache: np.ndarray
@@ -637,7 +636,9 @@ class HaloUpdater(BaseHaloUpdater):
         self.halo2name[id(outer)] = neighbor
         self.recv_reqs.append(req)
         self.recv_data.append((outer, cache))
-        self.all_reqs.append(req)
+
+    def freeze(self):
+        self.all_reqs = self.recv_reqs + self.send_reqs
 
     def start(self):
         """Start halo exchange.
@@ -699,7 +700,7 @@ class HaloUpdater(BaseHaloUpdater):
         combined.recv_reqs = self.recv_reqs + other.recv_reqs
         combined.send_data = self.send_data + other.send_data
         combined.recv_data = self.recv_data + other.recv_data
-        combined.all_reqs = combined.send_reqs + combined.recv_reqs
+        combined.freeze()
         return combined
 
 
@@ -820,6 +821,8 @@ def create_halo_updaters(
             slice(nx - in_stopx, nx - in_startx),
         ),
     )
+    for updater in updaters:
+        updater.freeze()
     return updaters
 
 

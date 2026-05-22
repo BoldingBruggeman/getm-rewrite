@@ -1164,7 +1164,7 @@ class Simulation(BaseSimulation):
         # pressure gradients defined at time=0
         # Inputs and outputs are on U and V grids. Stresses and pressure gradients have
         # already been updated by the call to _update_forcing_and_diagnostics at the end
-        #  of the previous time step.
+        # of the previous time step.
         self.momentum.advance_depth_integrated(
             self.timestep, self.tausx, self.tausy, self.dpdx, self.dpdy
         )
