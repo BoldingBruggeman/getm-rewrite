@@ -1,4 +1,4 @@
-from typing import Iterable, Mapping, Optional, Union, Any
+from typing import Iterable, Mapping, Optional, Union, Any, TypeVar
 import logging
 import functools
 import pickle
@@ -43,7 +43,10 @@ def get_logger(level=logging.INFO, comm=MPI.COMM_WORLD) -> logging.Logger:
     return logger
 
 
-def mpi4py_autofree(obj):
+T = TypeVar("T")
+
+
+def mpi4py_autofree(obj: T) -> T:
     # Ensure underlying MPI memory is freed when obj is garbage-collected
     # https://github.com/mpi4py/mpi4py/issues/32
     def callfree(fromhandle, handle):
@@ -597,6 +600,11 @@ class BaseHaloUpdater:
 
 
 class HaloUpdater(BaseHaloUpdater):
+    """Class to manage halo exchange for a single variable.
+    It creates the data buffers and persistent requests for MPI communication,
+    and it provides methods to start and finish the halo exchange.
+    """
+
     __slots__ = [
         "rank",
         "halo2name",
@@ -632,16 +640,28 @@ class HaloUpdater(BaseHaloUpdater):
         self.all_reqs.append(req)
 
     def start(self):
+        """Start halo exchange.
+        This can be used to overlap communication with computation.
+        :meth:`finish` must be called after the computation to ensure that the halo
+        exchange is completed and the target array is updated with the received data.
+        """
         for inner, cache in self.send_data:
             cache[...] = inner
         Startall(self.all_reqs)
 
     def finish(self):
+        """Finish halo exchange by waiting for all communication to complete and updating
+        the target arrays with the received data. This must be called after :meth:`start`
+        """
         Waitall(self.all_reqs)
         for outer, cache in self.recv_data:
             outer[...] = cache
 
     def __call__(self):
+        """Perform halo exchange by starting all communication, waiting for it to
+        complete, and updating the target arrays with the received data. This is
+        equivalent to calling :meth:`start` followed by :meth:`finish`.
+        """
         Startall(self.recv_reqs)
         for inner, cache in self.send_data:
             cache[...] = inner
@@ -651,7 +671,10 @@ class HaloUpdater(BaseHaloUpdater):
             outer[...] = cache
         Waitall(self.send_reqs)
 
-    def compare(self):
+    def compare(self) -> bool:
+        """Verify that values in halos are in sync with the corresponding inner values of the
+        neighboring subdomains. This can be used for debugging purposes.
+        """
         Startall(self.recv_reqs)
         for inner, cache in self.send_data:
             cache[...] = inner

@@ -1302,9 +1302,16 @@ class Simulation(BaseSimulation):
             self.ssv_V.interp(self.ssv)
 
         if update_baroclinic:
-            # Update density, buoyancy and internal pressure to keep them in sync with
-            # T and S.
+            # Update variables that are functions of temperature and salinity:
+            # density, buoyancy and internal pressure
+            # Note that T&S are not valid in the halos at this point.
+
+            # Update density
             self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
+
+            # Update density halos: valid rho around all U and V needed for internal
+            # pressure; not yet valid because T&S were not valid in halos when rho was
+            # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
             self.rho.halo_updaters[
                 parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
             ].start()
@@ -1321,12 +1328,12 @@ class Simulation(BaseSimulation):
                 self.salt, self.temp, p=self.pres, out=self.NN
             )
 
-            # Update density halos: valid rho around all U and V needed for internal
-            # pressure; not yet valid because T&S were not valid in halos when rho was
-            # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
+            # Ensure density halos are now valid
             self.rho.halo_updaters[
                 parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
             ].finish()
+
+            # Calculate buoyancy and use that to update the internal pressure gradient
             self.buoy.all_values = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
             self.internal_pressure(self.buoy)
             if not self.delay_slow_ip:
@@ -1499,6 +1506,7 @@ class Simulation(BaseSimulation):
 
         self._int_river_flow.fill(0.0)
 
+        # Ensure the freshwater flux is valid in the halos
         self.airsea.pe.halo_updaters[parallel.Neighbor.ALL].finish()
 
         # Precipitation and evaporation (surface layer only)
