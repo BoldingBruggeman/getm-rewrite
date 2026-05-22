@@ -733,6 +733,7 @@ class Simulation(BaseSimulation):
         )
         self.airsea.initialize(self.T, self.logger.getChild("airsea"))
 
+        # Halo update for airsea fields that will be interpolated from T to U and V
         self.airsea_halo_update = (
             self.airsea.sp.get_halo_updater(parallel.Neighbor.TOP_AND_RIGHT)
             + self.airsea.taux.get_halo_updater(parallel.Neighbor.RIGHT)
@@ -1174,9 +1175,12 @@ class Simulation(BaseSimulation):
         self.advance_surface_elevation(
             self.timestep, self.momentum.U, self.momentum.V, self.fwf
         )
+        self.T.z.update_halos_start()
 
         # Track cumulative river inflow (m3) over the current macrotimestep
         self._int_river_flow += self.rivers.flow * self.timestep
+
+        self.T.z.update_halos_finish()
 
         if self.runtype > RunType.BAROTROPIC_2D and macro_active:
             # Use previous source terms for biogeochemistry (valid for the start of the
@@ -1369,6 +1373,7 @@ class Simulation(BaseSimulation):
         # heat and momentum
         self.ice(update_baroclinic, self.temp_sf, self.salt_sf, self.airsea)
 
+        # Start airsea halo update now that all surface fluxes are final
         self.airsea_halo_update.start()
 
         # Update depth-integrated freshwater fluxes:
@@ -1385,12 +1390,14 @@ class Simulation(BaseSimulation):
         # This will last until the next call to update_depth!
         self.T.z.open_boundaries.update()
 
+        # Ensure relevant airsea fields (sp, taux, tauy) are valid in the halos
+        self.airsea_halo_update.finish()
+
         # Calculate the surface pressure gradient in the U and V points.
         # Note: this requires elevation and surface air pressure (both on T grid) to be
         # valid in the halos, which is guaranteed for elevation (halo exchange happens
         # just after update), and for air pressure if it is managed by the input
         # manager (e.g. read from file)
-        self.airsea_halo_update.finish()
         self.update_surface_pressure_gradient(self.T.z, self.airsea.sp)
 
         # Interpolate surface stresses from T to U and V grids
@@ -1581,14 +1588,12 @@ class Simulation(BaseSimulation):
             V: depth-integrated velocity in y-direction (m2 s-1)
             fwf: freshwater flux (m s-1)
 
-        This also updates the surface elevation halos.
         This method does `not` update elevation on the U, V, X grids, nor water depths,
         layer thicknesses or vertical coordinates.
         This is done by :meth:`~update_depth` instead.
         """
         self.T.zo.all_values[:, :] = self.T.z.all_values
         _pygetm.advance_surface_elevation(timestep, self.T.z, U, V, fwf)
-        self.T.z.update_halos()
 
     def update_surface_pressure_gradient(self, z: core.Array, sp: core.Array):
         _pygetm.surface_pressure_gradient(z, sp, self.dpdx, self.dpdy, self.Dmin)
