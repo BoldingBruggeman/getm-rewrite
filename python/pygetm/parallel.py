@@ -678,6 +678,9 @@ class HaloUpdater(BaseHaloUpdater):
         return combined
 
 
+no_op_updater = BaseHaloUpdater()
+
+
 def create_halo_updaters(
     tiling: Optional[Tiling],
     field: np.ndarray,
@@ -696,8 +699,8 @@ def create_halo_updaters(
     # (halo size=2). MPI implementations do not seem to optimize well for this
     # scenario. Therefore, with stick with persistent requests + manual
     # copying for now, as recommended by Nölp & Oden.
-    if tiling is None or tiling.n == 1:
-        return [BaseHaloUpdater()] * (max(Neighbor) + 1)
+    if tiling is None or not (tiling.n > 1 or tiling.periodic_x or tiling.periodic_y):
+        return [no_op_updater] * (max(Neighbor) + 1)
 
     updaters: list[BaseHaloUpdater] = [
         HaloUpdater(tiling.rank) for _ in range(max(Neighbor) + 1)
