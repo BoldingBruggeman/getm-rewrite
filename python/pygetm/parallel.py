@@ -581,6 +581,8 @@ GROUP2PARTS = {
 
 
 class BaseHaloUpdater:
+    __slots__ = ()
+
     def start(self):
         return
 
