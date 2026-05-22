@@ -709,9 +709,10 @@ class Simulation(BaseSimulation):
         # Halo exchange for water depth on U, V grids, needed because the very last
         # points in the halos (x=-1 for U, y=-1 for V) are not valid after
         # interpolating elevation from the T grid.
-        self.D_halo_update = self.U.D.get_halo_updater(
-            parallel.Neighbor.RIGHT
-        ) + self.V.D.get_halo_updater(parallel.Neighbor.TOP)
+        self.D_halo_update = (
+            self.U.D.halo_updaters[parallel.Neighbor.RIGHT]
+            + self.V.D.halo_updaters[parallel.Neighbor.TOP]
+        )
 
         # Configure momentum provider
         if momentum is None:
@@ -735,9 +736,9 @@ class Simulation(BaseSimulation):
 
         # Halo update for airsea fields that will be interpolated from T to U and V
         self.airsea_halo_update = (
-            self.airsea.sp.get_halo_updater(parallel.Neighbor.TOP_AND_RIGHT)
-            + self.airsea.taux.get_halo_updater(parallel.Neighbor.RIGHT)
-            + self.airsea.tauy.get_halo_updater(parallel.Neighbor.TOP)
+            self.airsea.sp.halo_updaters[parallel.Neighbor.TOP_AND_RIGHT]
+            + self.airsea.taux.halo_updaters[parallel.Neighbor.RIGHT]
+            + self.airsea.tauy.halo_updaters[parallel.Neighbor.TOP]
         )
 
         self.ice = pygetm.ice.Ice()

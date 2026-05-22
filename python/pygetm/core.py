@@ -758,11 +758,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "_size",
         "_dtype",
         "values",
-        "update_halos",
-        "update_halos_start",
-        "update_halos_finish",
-        "get_halo_updater",
-        "compare_halos",
+        "halo_updaters",
         "open_boundaries",
     )
     grid: Grid
@@ -806,6 +802,24 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._dtype = dtype
         self.values = None
 
+        class retriever:
+            def __init__(self, target: "Array", att):
+                self.target = target
+                self.att = att
+
+            def __getitem__(self, key):
+                updaters = parallel.create_halo_updaters(
+                    self.target.grid.tiling,
+                    self.target.all_values,
+                    self.target.grid.halox,
+                    self.target.grid.haloy,
+                    overlap=self.target.grid.overlap,
+                )
+                setattr(self.target, self.att, updaters)
+                return updaters[key]
+
+        self.halo_updaters = retriever(self, "halo_updaters")
+
     def set_fabm_standard_name(self, fabm_standard_name):
         self.attrs.setdefault("_fabm_standard_names", set()).add(fabm_standard_name)
 
@@ -837,24 +851,17 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._shape = self.values.shape
         self._size = self.values.size
 
-        if not self.grid.tiling:
-            self.update_halos = _noop
-            self.update_halos_start = _noop
-            self.update_halos_finish = _noop
-            self.compare_halos = _noop
-            self.get_halo_updater = lambda group: parallel.BaseHaloUpdater()
-        else:
-            self.update_halos = functools.partial(self._distribute, "update_halos")
-            self.update_halos_start = functools.partial(
-                self._distribute, "update_halos_start"
-            )
-            self.update_halos_finish = functools.partial(
-                self._distribute, "update_halos_finish"
-            )
-            self.compare_halos = functools.partial(self._distribute, "compare_halos")
-            self.get_halo_updater = functools.partial(
-                self._distribute, "get_halo_updater"
-            )
+    def update_halos(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
+        self.halo_updaters[group]()
+
+    def update_halos_start(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
+        self.halo_updaters[group].start()
+
+    def update_halos_finish(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
+        self.halo_updaters[group].finish()
+
+    def compare_halos(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
+        return self.halo_updaters[group].compare()
 
     def register(self):
         assert self.grid is not None
@@ -868,21 +875,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
-
-    def _distribute(self, method: str, *args, **kwargs):
-        dist = parallel.DistributedArray(
-            self.grid.tiling,
-            self.all_values,
-            self.grid.halox,
-            self.grid.haloy,
-            overlap=self.grid.overlap,
-        )
-        self.update_halos = dist.update_halos
-        self.update_halos_start = dist.update_halos_start
-        self.update_halos_finish = dist.update_halos_finish
-        self.compare_halos = dist.compare_halos
-        self.get_halo_updater = dist.get_halo_updater
-        return getattr(self, method)(*args, **kwargs)
 
     def scatter(self, global_data: Optional[np.ndarray]):
         if self.grid.tiling.n == 1:
