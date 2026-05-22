@@ -1176,12 +1176,12 @@ class Simulation(BaseSimulation):
         self.advance_surface_elevation(
             self.timestep, self.momentum.U, self.momentum.V, self.fwf
         )
-        self.T.z.update_halos_start()
+        self.T.z.halo_updaters[parallel.Neighbor.ALL].start()
 
         # Track cumulative river inflow (m3) over the current macrotimestep
         self._int_river_flow += self.rivers.flow * self.timestep
 
-        self.T.z.update_halos_finish()
+        self.T.z.halo_updaters[parallel.Neighbor.ALL].finish()
 
         if self.runtype > RunType.BAROTROPIC_2D and macro_active:
             # Use previous source terms for biogeochemistry (valid for the start of the
@@ -1305,9 +1305,9 @@ class Simulation(BaseSimulation):
             # Update density, buoyancy and internal pressure to keep them in sync with
             # T and S.
             self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
-            self.rho.update_halos_start(
+            self.rho.halo_updaters[
                 parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
-            )
+            ].start()
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
@@ -1324,9 +1324,9 @@ class Simulation(BaseSimulation):
             # Update density halos: valid rho around all U and V needed for internal
             # pressure; not yet valid because T&S were not valid in halos when rho was
             # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
-            self.rho.update_halos_finish(
+            self.rho.halo_updaters[
                 parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
-            )
+            ].finish()
             self.buoy.all_values = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
             self.internal_pressure(self.buoy)
             if not self.delay_slow_ip:
@@ -1469,7 +1469,7 @@ class Simulation(BaseSimulation):
         """
         # Start updating halos for the net freshwater flux, as we need to ensure that
         # the layer heights updated as a result remain valid in the halos.
-        self.airsea.pe.update_halos_start()
+        self.airsea.pe.halo_updaters[parallel.Neighbor.ALL].start()
 
         # Local names for river-related variables
         slc = self.rivers.slice
@@ -1497,8 +1497,11 @@ class Simulation(BaseSimulation):
             np.add.at(tracer.all_values, slc, tracer_add)
             tracer.all_values[slc] *= h_new_inv
 
+        self._int_river_flow.fill(0.0)
+
+        self.airsea.pe.halo_updaters[parallel.Neighbor.ALL].finish()
+
         # Precipitation and evaporation (surface layer only)
-        self.airsea.pe.update_halos_finish()
         unmasked = self.T._water
         z_add_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
         h_sf = self.T.hn.all_values[-1, :, :]
@@ -1509,14 +1512,12 @@ class Simulation(BaseSimulation):
                 tracer.all_values[-1, :, :] *= dilution
 
             # Start tracer halo exchange (to prepare for advection)
-            tracer.update_halos_start(self.tracers._advection.halo1)
+            tracer.halo_updaters[self.tracers._advection.halo1].start()
         h_sf[:, :] = h_sf_new
 
         # Update elevation (first add river contribution to z_add_fwf)
         np.add.at(z_add_fwf, slc, z_add)
         self.T.zin.all_values += z_add_fwf
-
-        self._int_river_flow.fill(0.0)
 
     @property
     def totals(

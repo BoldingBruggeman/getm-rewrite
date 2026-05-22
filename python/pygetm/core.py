@@ -854,12 +854,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
     def update_halos(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
         self.halo_updaters[group]()
 
-    def update_halos_start(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
-        self.halo_updaters[group].start()
-
-    def update_halos_finish(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
-        self.halo_updaters[group].finish()
-
     def compare_halos(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
         return self.halo_updaters[group].compare()
 

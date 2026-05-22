@@ -165,13 +165,13 @@ class Advection(_pygetm.Advection):
         for var in vars:
             self.h[...] = current_h
             if not skip_initial_halo_exchange:
-                var.update_halos_finish(self.halo1)
+                var.halo_updaters[self.halo1].finish()
             adv1(var)
-            var.update_halos_start(self.halo2)
+            var.halo_updaters[self.halo2].start()
         current_h[...] = self.h
         for var in vars:
             self.h[...] = current_h
-            var.update_halos_finish(self.halo2)
+            var.halo_updaters[self.halo2].finish()
             adv2(var)
         current_h[...] = self.h
         for var in vars:
@@ -179,17 +179,17 @@ class Advection(_pygetm.Advection):
             assert w_var.grid is self.grid and w_var.z == INTERFACES
             self.h[...] = current_h
             self.w_3d(w, w_var, timestep, var)
-            var.update_halos_start(self.halo2)
+            var.halo_updaters[self.halo2].start()
         current_h[...] = self.h
         for var in vars:
             self.h[...] = current_h
-            var.update_halos_finish(self.halo2)
+            var.halo_updaters[self.halo2].finish()
             adv2(var)
-            var.update_halos_start(self.halo1)
+            var.halo_updaters[self.halo1].start()
         current_h[...] = self.h
         for var in vars:
             self.h[...] = current_h
-            var.update_halos_finish(self.halo1)
+            var.halo_updaters[self.halo1].finish()
             adv1(var)
 
 
