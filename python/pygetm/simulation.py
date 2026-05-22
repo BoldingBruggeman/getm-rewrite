@@ -490,6 +490,7 @@ class Simulation(BaseSimulation):
         "vertical_coordinates",
         "depth",
         "airsea_halo_update",
+        "D_halo_update",
     )
 
     @log_exceptions
@@ -704,6 +705,13 @@ class Simulation(BaseSimulation):
         unmasked = self.T.mask == CellType.ACTIVE
         self.total_volume_ref = (self.T.H * self.T.area).global_sum(where=unmasked)
         self.total_area = self.T.area.global_sum(where=unmasked)
+
+        # Halo exchange for water depth on U, V grids, needed because the very last
+        # points in the halos (x=-1 for U, y=-1 for V) are not valid after
+        # interpolating elevation from the T grid.
+        self.D_halo_update = self.U.D.get_halo_updater(
+            parallel.Neighbor.RIGHT
+        ) + self.V.D.get_halo_updater(parallel.Neighbor.TOP)
 
         # Configure momentum provider
         if momentum is None:
@@ -1639,30 +1647,30 @@ class Simulation(BaseSimulation):
         np.add(zo_T.all_values, z_T.all_values, out=z_T_half.all_values)
         z_T_half.all_values *= 0.5
 
-        # Total water depth D on U grid
+        # Total water depth D on U grid, interpolated from T grid
+        # (rightmost points in halos will be invalid)
         z_T_half.interp(z_U)
         z_T_half.mirror(z_U)
         _pygetm.elevation2depth(z_U, self.U.H, self.Dmin, self.U.D)
 
-        # Total water depth D on V grid
+        # Total water depth D on V grid, interpolated from T grid
+        # (topmost points in halos will be invalid)
         z_T_half.interp(z_V)
         z_T_half.mirror(z_V)
         _pygetm.elevation2depth(z_V, self.V.H, self.Dmin, self.V.D)
 
-        # Total water depth D on X grid
-        z_T_half.interp(z_X)
-        _pygetm.elevation2depth(z_X, self.X.H, self.Dmin, self.X.D)
-
-        # Halo exchange for water depth on U, V grids, needed because the very last
-        # points in the halos (x=-1 for U, y=-1 for V) are not valid after
-        # interpolating elevation from the T grid above.
+        # Halo exchange for water depth on U, V grids.
         # These depths are needed to later compute velocities from transports
         # These velocities will be advected, and therefore need to be valid througout
         # the halos. We do not need to halo-exchange elevation on the X grid, since
         # that needs to be be valid at the innermost halo point only, which is ensured
         # by z_T exchange.
-        self.U.D.update_halos(parallel.Neighbor.RIGHT)
-        self.V.D.update_halos(parallel.Neighbor.TOP)
+        self.D_halo_update.start()
+
+        # Total water depth D on X grid, interpolated from T grid
+        # (outermost points in halos will be invalid but are not used)
+        z_T_half.interp(z_X)
+        _pygetm.elevation2depth(z_X, self.X.H, self.Dmin, self.X.D)
 
         # Update dampening factor (0-1) for shallow water
         _pygetm.alpha(self.U.D, 2 * self.Dmin, self.Dcrit, self.U.alpha)
@@ -1677,6 +1685,8 @@ class Simulation(BaseSimulation):
         self.V.vgrid.D.all_values[:-1, :] = D_T_half.all_values[1:, :]
         self.U.vgrid.D.all_values = self.X.D.all_values[1:, 1:]
         self.V.ugrid.D.all_values = self.U.vgrid.D.all_values
+
+        self.D_halo_update.finish()
 
         if _3d:
             # Store previous layer thicknesses
