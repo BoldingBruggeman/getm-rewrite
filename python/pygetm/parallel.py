@@ -1,9 +1,10 @@
-from typing import Iterable, Mapping, Optional, Union, Any
+from typing import Optional, Union, Any, TypeVar
 import logging
 import functools
 import pickle
 import enum
 import weakref
+from collections.abc import Iterable, Mapping, Sequence
 
 import mpi4py
 
@@ -43,7 +44,10 @@ def get_logger(level=logging.INFO, comm=MPI.COMM_WORLD) -> logging.Logger:
     return logger
 
 
-def mpi4py_autofree(obj):
+T = TypeVar("T")
+
+
+def mpi4py_autofree(obj: T) -> T:
     # Ensure underlying MPI memory is freed when obj is garbage-collected
     # https://github.com/mpi4py/mpi4py/issues/32
     def callfree(fromhandle, handle):
@@ -297,9 +301,6 @@ class Tiling:
     def __bool__(self) -> bool:
         """Return True if the curent subdomain has any neighbors, False otherwise."""
         return self.n_neigbors > 0
-
-    def wrap(self, *args, **kwargs) -> "DistributedArray":
-        return DistributedArray(self, *args, **kwargs)
 
     def subdomain2rawslices(
         self,
@@ -583,7 +584,137 @@ GROUP2PARTS = {
 }
 
 
-class DistributedArray:
+class BaseHaloUpdater:
+    __slots__ = ()
+
+    def start(self):
+        return
+
+    def finish(self):
+        return
+
+    def __call__(self):
+        return
+
+    def __add__(self, other: "BaseHaloUpdater") -> "BaseHaloUpdater":
+        return self
+
+
+class HaloUpdater(BaseHaloUpdater):
+    """Class to manage halo exchange for a single variable.
+    It creates the data buffers and persistent requests for MPI communication,
+    and it provides methods to start and finish the halo exchange.
+    """
+
+    __slots__ = [
+        "rank",
+        "halo2name",
+        "send_reqs",
+        "recv_reqs",
+        "send_data",
+        "recv_data",
+        "all_reqs",
+    ]
+
+    def __init__(self, rank: int):
+        self.rank = rank
+        self.halo2name: dict[int, str] = {}
+        self.send_reqs: list[MPI.Prequest] = []
+        self.recv_reqs: list[MPI.Prequest] = []
+        self.send_data: list[tuple[np.ndarray, np.ndarray]] = []
+        self.recv_data: list[tuple[np.ndarray, np.ndarray]] = []
+        self.all_reqs: list[MPI.Prequest] = []
+
+    def add_send(
+        self, neighbor: str, req: MPI.Prequest, inner: np.ndarray, cache: np.ndarray
+    ):
+        self.send_reqs.append(req)
+        self.send_data.append((inner, cache))
+
+    def add_recv(
+        self, neighbor: str, req: MPI.Prequest, outer: np.ndarray, cache: np.ndarray
+    ):
+        self.halo2name[id(outer)] = neighbor
+        self.recv_reqs.append(req)
+        self.recv_data.append((outer, cache))
+
+    def freeze(self):
+        self.all_reqs = self.recv_reqs + self.send_reqs
+
+    def start(self):
+        """Start halo exchange.
+        This can be used to overlap communication with computation.
+        :meth:`finish` must be called after the computation to ensure that the halo
+        exchange is completed and the target array is updated with the received data.
+        """
+        for inner, cache in self.send_data:
+            cache[...] = inner
+        Startall(self.all_reqs)
+
+    def finish(self):
+        """Finish halo exchange by waiting for all communication to complete and updating
+        the target arrays with the received data. This must be called after :meth:`start`
+        """
+        Waitall(self.all_reqs)
+        for outer, cache in self.recv_data:
+            outer[...] = cache
+
+    def __call__(self):
+        """Perform halo exchange by starting all communication, waiting for it to
+        complete, and updating the target arrays with the received data. This is
+        equivalent to calling :meth:`start` followed by :meth:`finish`.
+        """
+        Startall(self.recv_reqs)
+        for inner, cache in self.send_data:
+            cache[...] = inner
+        Startall(self.send_reqs)
+        Waitall(self.recv_reqs)
+        for outer, cache in self.recv_data:
+            outer[...] = cache
+        Waitall(self.send_reqs)
+
+    def compare(self) -> bool:
+        """Verify that values in halos are in sync with the corresponding inner values of the
+        neighboring subdomains. This can be used for debugging purposes.
+        """
+        Startall(self.recv_reqs)
+        for inner, cache in self.send_data:
+            cache[...] = inner
+        Startall(self.send_reqs)
+        Waitall(self.recv_reqs)
+        match = True
+        for outer, cache in self.recv_data:
+            if not np.array_equal(outer, cache, equal_nan=True):
+                delta = outer - cache
+                print(
+                    f"Rank {self.rank}: mismatch in {self.halo2name[id(outer)]} halo!"
+                    f" Maximum absolute difference: {np.abs(delta).max()}."
+                    f" Current {outer} vs. received {cache}"
+                )
+                match = False
+        Waitall(self.send_reqs)
+        return match
+
+    def __add__(self, other: "HaloUpdater") -> "HaloUpdater":
+        combined = HaloUpdater(self.rank)
+        combined.send_reqs = self.send_reqs + other.send_reqs
+        combined.recv_reqs = self.recv_reqs + other.recv_reqs
+        combined.send_data = self.send_data + other.send_data
+        combined.recv_data = self.recv_data + other.recv_data
+        combined.freeze()
+        return combined
+
+
+no_op_updater = BaseHaloUpdater()
+
+
+def create_halo_updaters(
+    tiling: Optional[Tiling],
+    field: np.ndarray,
+    halox: int,
+    haloy: int,
+    overlap: int = 0,
+) -> Sequence[BaseHaloUpdater]:
     # This seems a good candidate for using MPI's derived datatypes (DDT),
     # which allow sending/receiving halos that are non-contiguous in memory
     # without requiring data copying. However, experiments with DDTs (e.g.,
@@ -595,164 +726,106 @@ class DistributedArray:
     # (halo size=2). MPI implementations do not seem to optimize well for this
     # scenario. Therefore, with stick with persistent requests + manual
     # copying for now, as recommended by Nölp & Oden.
-    __slots__ = ["rank", "group2task", "halo2name"]
+    if not tiling:
+        # No tiling provided, or no neighbors
+        return [no_op_updater] * (max(Neighbor) + 1)
 
-    def __init__(
-        self,
-        tiling: Tiling,
-        field: np.ndarray,
-        halox: int,
-        haloy: int,
-        overlap: int = 0,
+    updaters: list[BaseHaloUpdater] = [
+        HaloUpdater(tiling.rank) for _ in range(max(Neighbor) + 1)
+    ]
+
+    def add_task(
+        recvtag: Neighbor,
+        sendtag: Neighbor,
+        outer_slice: tuple[slice, slice],
+        inner_slice: tuple[slice, slice],
     ):
-        self.rank = tiling.rank
-        self.group2task: list[
-            tuple[
-                list[MPI.Prequest],
-                list[MPI.Prequest],
-                list[tuple[np.ndarray, np.ndarray]],
-                list[tuple[np.ndarray, np.ndarray]],
-            ]
-        ] = [([], [], [], []) for _ in range(max(Neighbor) + 1)]
-        self.halo2name = {}
-
-        def add_task(
-            recvtag: Neighbor,
-            sendtag: Neighbor,
-            outer_slice: tuple[slice, slice],
-            inner_slice: tuple[slice, slice],
-        ):
-            outer = field[(Ellipsis,) + outer_slice]
-            inner = field[(Ellipsis,) + inner_slice]
-            name = recvtag.name.lower()
-            neighbor = getattr(tiling, name)
-            assert isinstance(neighbor, int), (
-                f"Wrong type for neighbor {name}:"
-                f" {neighbor} (type {type(neighbor)})"
+        outer = field[(Ellipsis,) + outer_slice]
+        inner = field[(Ellipsis,) + inner_slice]
+        name = recvtag.name.lower()
+        neighbor = getattr(tiling, name)
+        assert isinstance(neighbor, int), (
+            f"Wrong type for neighbor {name}:" f" {neighbor} (type {type(neighbor)})"
+        )
+        assert inner.shape == outer.shape, f"{inner.shape!r} vs {outer.shape!r}"
+        if neighbor != -1 and inner.size > 0:
+            inner_cache = np.empty_like(inner)
+            outer_cache = np.empty_like(outer)
+            send_req = mpi4py_autofree(
+                tiling.comm.Send_init(inner_cache, neighbor, sendtag)
             )
-            assert inner.shape == outer.shape, f"{inner.shape!r} vs {outer.shape!r}"
-            if neighbor != -1 and inner.size > 0:
-                inner_cache, outer_cache = (np.empty_like(inner), np.empty_like(outer))
-                send_req = mpi4py_autofree(
-                    tiling.comm.Send_init(inner_cache, neighbor, sendtag)
-                )
-                recv_req = mpi4py_autofree(
-                    tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
-                )
+            recv_req = mpi4py_autofree(
+                tiling.comm.Recv_init(outer_cache, neighbor, recvtag)
+            )
 
-                self.halo2name[id(outer)] = name
-                for group in [Neighbor.ALL, sendtag] + [
-                    group for (group, parts) in GROUP2PARTS.items() if sendtag in parts
-                ]:
-                    send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
-                    send_reqs.append(send_req)
-                    send_data.append((inner, inner_cache))
-                for group in [Neighbor.ALL, recvtag] + [
-                    group for (group, parts) in GROUP2PARTS.items() if recvtag in parts
-                ]:
-                    send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
-                    recv_reqs.append(recv_req)
-                    recv_data.append((outer, outer_cache))
+            for group in [Neighbor.ALL, sendtag] + [
+                group for (group, parts) in GROUP2PARTS.items() if sendtag in parts
+            ]:
+                updaters[group].add_send(name, send_req, inner, inner_cache)
+            for group in [Neighbor.ALL, recvtag] + [
+                group for (group, parts) in GROUP2PARTS.items() if recvtag in parts
+            ]:
+                updaters[group].add_recv(name, recv_req, outer, outer_cache)
 
-        in_startx = halox + overlap
-        in_starty = haloy + overlap
-        in_stopx = in_startx + halox
-        in_stopy = in_starty + haloy
-        ny, nx = field.shape[-2:]
-        add_task(
-            Neighbor.BOTTOMLEFT,
-            Neighbor.TOPRIGHT,
-            (slice(0, haloy), slice(0, halox)),
-            (slice(in_starty, in_stopy), slice(in_startx, in_stopx)),
-        )
-        add_task(
-            Neighbor.BOTTOM,
-            Neighbor.TOP,
-            (slice(0, haloy), slice(halox, nx - halox)),
-            (slice(in_starty, in_stopy), slice(halox, nx - halox)),
-        )
-        add_task(
-            Neighbor.BOTTOMRIGHT,
-            Neighbor.TOPLEFT,
-            (slice(0, haloy), slice(nx - halox, nx)),
-            (slice(in_starty, in_stopy), slice(nx - in_stopx, nx - in_startx)),
-        )
-        add_task(
-            Neighbor.LEFT,
-            Neighbor.RIGHT,
-            (slice(haloy, ny - haloy), slice(0, halox)),
-            (slice(haloy, ny - haloy), slice(in_startx, in_stopx)),
-        )
-        add_task(
-            Neighbor.RIGHT,
-            Neighbor.LEFT,
-            (slice(haloy, ny - haloy), slice(nx - halox, nx)),
-            (slice(haloy, ny - haloy), slice(nx - in_stopx, nx - in_startx)),
-        )
-        add_task(
-            Neighbor.TOPLEFT,
-            Neighbor.BOTTOMRIGHT,
-            (slice(ny - haloy, ny), slice(0, halox)),
-            (slice(ny - in_stopy, ny - in_starty), slice(in_startx, in_stopx)),
-        )
-        add_task(
-            Neighbor.TOP,
-            Neighbor.BOTTOM,
-            (slice(ny - haloy, ny), slice(halox, nx - halox)),
-            (slice(ny - in_stopy, ny - in_starty), slice(halox, nx - halox)),
-        )
-        add_task(
-            Neighbor.TOPRIGHT,
-            Neighbor.BOTTOMLEFT,
-            (slice(ny - haloy, ny), slice(nx - halox, nx)),
-            (
-                slice(ny - in_stopy, ny - in_starty),
-                slice(nx - in_stopx, nx - in_startx),
-            ),
-        )
-
-    def update_halos(self, group: Neighbor = Neighbor.ALL):
-        send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
-        Startall(recv_reqs)
-        for inner, cache in send_data:
-            cache[...] = inner
-        Startall(send_reqs)
-        Waitall(recv_reqs)
-        for outer, cache in recv_data:
-            outer[...] = cache
-        Waitall(send_reqs)
-
-    def update_halos_start(self, group: Neighbor = Neighbor.ALL):
-        send_reqs, recv_reqs, send_data, _ = self.group2task[group]
-        for inner, cache in send_data:
-            cache[...] = inner
-        Startall(send_reqs + recv_reqs)
-
-    def update_halos_finish(self, group: Neighbor = Neighbor.ALL):
-        send_reqs, recv_reqs, _, recv_data = self.group2task[group]
-        Waitall(send_reqs + recv_reqs)
-        for outer, cache in recv_data:
-            outer[...] = cache
-
-    def compare_halos(self, group: Neighbor = Neighbor.ALL) -> bool:
-        send_reqs, recv_reqs, send_data, recv_data = self.group2task[group]
-        Startall(recv_reqs)
-        for inner, cache in send_data:
-            cache[...] = inner
-        Startall(send_reqs)
-        Waitall(recv_reqs)
-        match = True
-        for outer, cache in recv_data:
-            if not np.array_equal(outer, cache, equal_nan=True):
-                delta = outer - cache
-                print(
-                    f"Rank {self.rank}: mismatch in {self.halo2name[id(outer)]} halo!"
-                    f" Maximum absolute difference: {np.abs(delta).max()}."
-                    f" Current {outer} vs. received {cache}"
-                )
-                match = False
-        Waitall(send_reqs)
-        return match
+    in_startx = halox + overlap
+    in_starty = haloy + overlap
+    in_stopx = in_startx + halox
+    in_stopy = in_starty + haloy
+    ny, nx = field.shape[-2:]
+    add_task(
+        Neighbor.BOTTOMLEFT,
+        Neighbor.TOPRIGHT,
+        (slice(0, haloy), slice(0, halox)),
+        (slice(in_starty, in_stopy), slice(in_startx, in_stopx)),
+    )
+    add_task(
+        Neighbor.BOTTOM,
+        Neighbor.TOP,
+        (slice(0, haloy), slice(halox, nx - halox)),
+        (slice(in_starty, in_stopy), slice(halox, nx - halox)),
+    )
+    add_task(
+        Neighbor.BOTTOMRIGHT,
+        Neighbor.TOPLEFT,
+        (slice(0, haloy), slice(nx - halox, nx)),
+        (slice(in_starty, in_stopy), slice(nx - in_stopx, nx - in_startx)),
+    )
+    add_task(
+        Neighbor.LEFT,
+        Neighbor.RIGHT,
+        (slice(haloy, ny - haloy), slice(0, halox)),
+        (slice(haloy, ny - haloy), slice(in_startx, in_stopx)),
+    )
+    add_task(
+        Neighbor.RIGHT,
+        Neighbor.LEFT,
+        (slice(haloy, ny - haloy), slice(nx - halox, nx)),
+        (slice(haloy, ny - haloy), slice(nx - in_stopx, nx - in_startx)),
+    )
+    add_task(
+        Neighbor.TOPLEFT,
+        Neighbor.BOTTOMRIGHT,
+        (slice(ny - haloy, ny), slice(0, halox)),
+        (slice(ny - in_stopy, ny - in_starty), slice(in_startx, in_stopx)),
+    )
+    add_task(
+        Neighbor.TOP,
+        Neighbor.BOTTOM,
+        (slice(ny - haloy, ny), slice(halox, nx - halox)),
+        (slice(ny - in_stopy, ny - in_starty), slice(halox, nx - halox)),
+    )
+    add_task(
+        Neighbor.TOPRIGHT,
+        Neighbor.BOTTOMLEFT,
+        (slice(ny - haloy, ny), slice(nx - halox, nx)),
+        (
+            slice(ny - in_stopy, ny - in_starty),
+            slice(nx - in_stopx, nx - in_startx),
+        ),
+    )
+    for updater in updaters:
+        updater.freeze()
+    return updaters
 
 
 class Gather:

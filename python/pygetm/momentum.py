@@ -863,6 +863,9 @@ class Momentum:
             idpdy: internal pressure gradient (m2 s-2) in y-direction
             viscosity: turbulent viscosity (m2 s-1)
         """
+        # Start the halo exchange for viscosity, as this needs to be interpolated
+        # to the U and V grids. For that, information from the halos is used.
+        viscosity.halo_updaters[parallel.Neighbor.TOP_AND_RIGHT].start()
 
         # Depth-integrated transports have been summed over all microtimesteps.
         # Average them, then reset depth-integrated transports that will be incremented
@@ -872,9 +875,9 @@ class Momentum:
         self._U_cum.fill(0.0)
         self._V_cum.fill(0.0)
 
-        # Do the halo exchange for viscosity, as this needs to be interpolated
-        # to the U and V grids. For that, information from the halos is used.
-        viscosity.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
+        # Ensure that viscosity is up to date in halos before advance_3d_transport
+        # interpolates it to U and V grids
+        viscosity.halo_updaters[parallel.Neighbor.TOP_AND_RIGHT].finish()
 
         def u():
             self.advance_3d_transport(
@@ -1201,6 +1204,8 @@ class Momentum:
 
         Args:
             U: 2d or 3d transport in x- or y-direction (m2 s-1)
+                This will be interpolated to the complementary velocity grid,
+                and therefore needs to be valid in the halos.
             out: array to store change in complementary transport (y or x-direction)
                 due to Coriolis force (m2 s-2)
         """

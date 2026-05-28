@@ -375,8 +375,8 @@ class BaseSimulation:
         """
 
         def _collect_info():
-            microchecks = []
-            macrochecks = []
+            microchecks: list[tuple[core.Array, np.ndarray]] = []
+            macrochecks: list[tuple[core.Array, np.ndarray]] = []
             for field in self._fields.values():
                 if field.ndim == 0:
                     continue
@@ -489,6 +489,8 @@ class Simulation(BaseSimulation):
         "open_boundaries",
         "vertical_coordinates",
         "depth",
+        "airsea_halo_update",
+        "D_halo_update",
     )
 
     @log_exceptions
@@ -704,6 +706,14 @@ class Simulation(BaseSimulation):
         self.total_volume_ref = (self.T.H * self.T.area).global_sum(where=unmasked)
         self.total_area = self.T.area.global_sum(where=unmasked)
 
+        # Halo exchange for water depth on U, V grids, needed because the very last
+        # points in the halos (x=-1 for U, y=-1 for V) are not valid after
+        # interpolating elevation from the T grid.
+        self.D_halo_update = (
+            self.U.D.halo_updaters[parallel.Neighbor.RIGHT]
+            + self.V.D.halo_updaters[parallel.Neighbor.TOP]
+        )
+
         # Configure momentum provider
         if momentum is None:
             momentum = pygetm.momentum.Momentum()
@@ -723,6 +733,13 @@ class Simulation(BaseSimulation):
             f" but is {type(self.airsea)}"
         )
         self.airsea.initialize(self.T, self.logger.getChild("airsea"))
+
+        # Halo update for airsea fields that will be interpolated from T to U and V
+        self.airsea_halo_update = (
+            self.airsea.sp.halo_updaters[parallel.Neighbor.TOP_AND_RIGHT]
+            + self.airsea.taux.halo_updaters[parallel.Neighbor.RIGHT]
+            + self.airsea.tauy.halo_updaters[parallel.Neighbor.TOP]
+        )
 
         self.ice = pygetm.ice.Ice()
         self.ice.initialize(self.T, self.logger.getChild("ice"))
@@ -1147,7 +1164,7 @@ class Simulation(BaseSimulation):
         # pressure gradients defined at time=0
         # Inputs and outputs are on U and V grids. Stresses and pressure gradients have
         # already been updated by the call to _update_forcing_and_diagnostics at the end
-        #  of the previous time step.
+        # of the previous time step.
         self.momentum.advance_depth_integrated(
             self.timestep, self.tausx, self.tausy, self.dpdx, self.dpdy
         )
@@ -1159,9 +1176,12 @@ class Simulation(BaseSimulation):
         self.advance_surface_elevation(
             self.timestep, self.momentum.U, self.momentum.V, self.fwf
         )
+        self.T.z.halo_updaters[parallel.Neighbor.ALL].start()
 
         # Track cumulative river inflow (m3) over the current macrotimestep
         self._int_river_flow += self.rivers.flow * self.timestep
+
+        self.T.z.halo_updaters[parallel.Neighbor.ALL].finish()
 
         if self.runtype > RunType.BAROTROPIC_2D and macro_active:
             # Use previous source terms for biogeochemistry (valid for the start of the
@@ -1282,23 +1302,19 @@ class Simulation(BaseSimulation):
             self.ssv_V.interp(self.ssv)
 
         if update_baroclinic:
-            # Update density, buoyancy and internal pressure to keep them in sync with
-            # T and S.
+            # Update variables that are functions of temperature and salinity:
+            # density, buoyancy and internal pressure
+            # Note that T&S are not valid in the halos at this point.
+
+            # Update density
             self.density.get_density(self.salt, self.temp, p=self.pres, out=self.rho)
 
             # Update density halos: valid rho around all U and V needed for internal
             # pressure; not yet valid because T&S were not valid in halos when rho was
             # calculated. Note BM needs only right/top, SMcW needs left/right/top/bottom
-            self.rho.update_halos(parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM)
-            self.buoy.all_values = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
-            self.internal_pressure(self.buoy)
-            if not self.delay_slow_ip:
-                self.internal_pressure.idpdx.all_values.sum(
-                    axis=0, out=self.momentum.SxB.all_values
-                )
-                self.internal_pressure.idpdy.all_values.sum(
-                    axis=0, out=self.momentum.SyB.all_values
-                )
+            self.rho.halo_updaters[
+                parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
+            ].start()
 
             # From conservative temperature to in-situ sea surface temperature,
             # needed to compute heat/momentum fluxes at the surface
@@ -1311,6 +1327,22 @@ class Simulation(BaseSimulation):
             self.density.get_buoyancy_frequency(
                 self.salt, self.temp, p=self.pres, out=self.NN
             )
+
+            # Ensure density halos are now valid
+            self.rho.halo_updaters[
+                parallel.Neighbor.LEFT_AND_RIGHT_AND_TOP_AND_BOTTOM
+            ].finish()
+
+            # Calculate buoyancy and use that to update the internal pressure gradient
+            self.buoy.all_values = (-GRAVITY / RHO0) * (self.rho.all_values - RHO0)
+            self.internal_pressure(self.buoy)
+            if not self.delay_slow_ip:
+                self.internal_pressure.idpdx.all_values.sum(
+                    axis=0, out=self.momentum.SxB.all_values
+                )
+                self.internal_pressure.idpdy.all_values.sum(
+                    axis=0, out=self.momentum.SyB.all_values
+                )
 
         # Update water depth D on all grids.
         # For grids lagging 1/2 a timestep behind (U, V, X grids), the
@@ -1349,6 +1381,9 @@ class Simulation(BaseSimulation):
         # heat and momentum
         self.ice(update_baroclinic, self.temp_sf, self.salt_sf, self.airsea)
 
+        # Start airsea halo update now that all surface fluxes are final
+        self.airsea_halo_update.start()
+
         # Update depth-integrated freshwater fluxes:
         # precipitation/evaporation/condensation from the airsea module, plus rivers
         self.fwf.all_values = self.airsea.pe.all_values
@@ -1363,18 +1398,18 @@ class Simulation(BaseSimulation):
         # This will last until the next call to update_depth!
         self.T.z.open_boundaries.update()
 
+        # Ensure relevant airsea fields (sp, taux, tauy) are valid in the halos
+        self.airsea_halo_update.finish()
+
         # Calculate the surface pressure gradient in the U and V points.
         # Note: this requires elevation and surface air pressure (both on T grid) to be
         # valid in the halos, which is guaranteed for elevation (halo exchange happens
         # just after update), and for air pressure if it is managed by the input
         # manager (e.g. read from file)
-        self.airsea.sp.update_halos(parallel.Neighbor.TOP_AND_RIGHT)
         self.update_surface_pressure_gradient(self.T.z, self.airsea.sp)
 
         # Interpolate surface stresses from T to U and V grids
-        self.airsea.taux.update_halos(parallel.Neighbor.RIGHT)
         self.airsea.taux.interp(self.tausx)
-        self.airsea.tauy.update_halos(parallel.Neighbor.TOP)
         self.airsea.tauy.interp(self.tausy)
 
         if update_3d:
@@ -1441,7 +1476,7 @@ class Simulation(BaseSimulation):
         """
         # Start updating halos for the net freshwater flux, as we need to ensure that
         # the layer heights updated as a result remain valid in the halos.
-        self.airsea.pe.update_halos_start()
+        self.airsea.pe.halo_updaters[parallel.Neighbor.ALL].start()
 
         # Local names for river-related variables
         slc = self.rivers.slice
@@ -1469,8 +1504,12 @@ class Simulation(BaseSimulation):
             np.add.at(tracer.all_values, slc, tracer_add)
             tracer.all_values[slc] *= h_new_inv
 
+        self._int_river_flow.fill(0.0)
+
+        # Ensure the freshwater flux is valid in the halos
+        self.airsea.pe.halo_updaters[parallel.Neighbor.ALL].finish()
+
         # Precipitation and evaporation (surface layer only)
-        self.airsea.pe.update_halos_finish()
         unmasked = self.T._water
         z_add_fwf = np.where(unmasked, self.airsea.pe.all_values, 0.0) * timestep
         h_sf = self.T.hn.all_values[-1, :, :]
@@ -1481,14 +1520,12 @@ class Simulation(BaseSimulation):
                 tracer.all_values[-1, :, :] *= dilution
 
             # Start tracer halo exchange (to prepare for advection)
-            tracer.update_halos_start(self.tracers._advection.halo1)
+            tracer.halo_updaters[self.tracers._advection.halo1].start()
         h_sf[:, :] = h_sf_new
 
         # Update elevation (first add river contribution to z_add_fwf)
         np.add.at(z_add_fwf, slc, z_add)
         self.T.zin.all_values += z_add_fwf
-
-        self._int_river_flow.fill(0.0)
 
     @property
     def totals(
@@ -1561,14 +1598,12 @@ class Simulation(BaseSimulation):
             V: depth-integrated velocity in y-direction (m2 s-1)
             fwf: freshwater flux (m s-1)
 
-        This also updates the surface elevation halos.
         This method does `not` update elevation on the U, V, X grids, nor water depths,
         layer thicknesses or vertical coordinates.
         This is done by :meth:`~update_depth` instead.
         """
         self.T.zo.all_values[:, :] = self.T.z.all_values
         _pygetm.advance_surface_elevation(timestep, self.T.z, U, V, fwf)
-        self.T.z.update_halos()
 
     def update_surface_pressure_gradient(self, z: core.Array, sp: core.Array):
         _pygetm.surface_pressure_gradient(z, sp, self.dpdx, self.dpdy, self.Dmin)
@@ -1627,30 +1662,30 @@ class Simulation(BaseSimulation):
         np.add(zo_T.all_values, z_T.all_values, out=z_T_half.all_values)
         z_T_half.all_values *= 0.5
 
-        # Total water depth D on U grid
+        # Total water depth D on U grid, interpolated from T grid
+        # (rightmost points in halos will be invalid)
         z_T_half.interp(z_U)
         z_T_half.mirror(z_U)
         _pygetm.elevation2depth(z_U, self.U.H, self.Dmin, self.U.D)
 
-        # Total water depth D on V grid
+        # Total water depth D on V grid, interpolated from T grid
+        # (topmost points in halos will be invalid)
         z_T_half.interp(z_V)
         z_T_half.mirror(z_V)
         _pygetm.elevation2depth(z_V, self.V.H, self.Dmin, self.V.D)
 
-        # Total water depth D on X grid
-        z_T_half.interp(z_X)
-        _pygetm.elevation2depth(z_X, self.X.H, self.Dmin, self.X.D)
-
-        # Halo exchange for water depth on U, V grids, needed because the very last
-        # points in the halos (x=-1 for U, y=-1 for V) are not valid after
-        # interpolating elevation from the T grid above.
+        # Halo exchange for water depth on U, V grids.
         # These depths are needed to later compute velocities from transports
         # These velocities will be advected, and therefore need to be valid througout
         # the halos. We do not need to halo-exchange elevation on the X grid, since
         # that needs to be be valid at the innermost halo point only, which is ensured
         # by z_T exchange.
-        self.U.D.update_halos(parallel.Neighbor.RIGHT)
-        self.V.D.update_halos(parallel.Neighbor.TOP)
+        self.D_halo_update.start()
+
+        # Total water depth D on X grid, interpolated from T grid
+        # (outermost points in halos will be invalid but are not used)
+        z_T_half.interp(z_X)
+        _pygetm.elevation2depth(z_X, self.X.H, self.Dmin, self.X.D)
 
         # Update dampening factor (0-1) for shallow water
         _pygetm.alpha(self.U.D, 2 * self.Dmin, self.Dcrit, self.U.alpha)
@@ -1665,6 +1700,8 @@ class Simulation(BaseSimulation):
         self.V.vgrid.D.all_values[:-1, :] = D_T_half.all_values[1:, :]
         self.U.vgrid.D.all_values = self.X.D.all_values[1:, 1:]
         self.V.ugrid.D.all_values = self.U.vgrid.D.all_values
+
+        self.D_halo_update.finish()
 
         if _3d:
             # Store previous layer thicknesses

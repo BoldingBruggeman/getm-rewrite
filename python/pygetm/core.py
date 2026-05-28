@@ -1,17 +1,9 @@
 import numbers
 import operator
-from typing import (
-    Optional,
-    Union,
-    Literal,
-    Mapping,
-    Any,
-    Callable,
-    Iterable,
-    TYPE_CHECKING,
-)
+from typing import Optional, Union, Literal, Any, TYPE_CHECKING
 import logging
 import functools
+from collections.abc import Iterable, Mapping, Sequence, Callable
 
 import numpy as np
 import numpy.lib.mixins
@@ -758,10 +750,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "_size",
         "_dtype",
         "values",
-        "update_halos",
-        "update_halos_start",
-        "update_halos_finish",
-        "compare_halos",
+        "halo_updaters",
         "open_boundaries",
     )
     grid: Grid
@@ -805,6 +794,32 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._dtype = dtype
         self.values = None
 
+        class Proxy(Sequence[parallel.BaseHaloUpdater]):
+            def __init__(self, target: "Array", att: str):
+                self.target = target
+                self.att = att
+
+            def _create(self) -> Sequence[parallel.BaseHaloUpdater]:
+                updaters = parallel.create_halo_updaters(
+                    self.target.grid.tiling,
+                    self.target.all_values,
+                    self.target.grid.halox,
+                    self.target.grid.haloy,
+                    overlap=self.target.grid.overlap,
+                )
+                setattr(self.target, self.att, updaters)
+                return updaters
+
+            def __getitem__(self, key: int) -> parallel.BaseHaloUpdater:
+                return self._create()[key]
+
+            def __len__(self) -> int:
+                return len(self._create())
+
+        self.halo_updaters: Sequence[parallel.BaseHaloUpdater] = Proxy(
+            self, "halo_updaters"
+        )
+
     def set_fabm_standard_name(self, fabm_standard_name):
         self.attrs.setdefault("_fabm_standard_names", set()).add(fabm_standard_name)
 
@@ -836,20 +851,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._shape = self.values.shape
         self._size = self.values.size
 
-        if not self.grid.tiling:
-            self.update_halos = _noop
-            self.update_halos_start = _noop
-            self.update_halos_finish = _noop
-            self.compare_halos = _noop
-        else:
-            self.update_halos = functools.partial(self._distribute, "update_halos")
-            self.update_halos_start = functools.partial(
-                self._distribute, "update_halos_start"
-            )
-            self.update_halos_finish = functools.partial(
-                self._distribute, "update_halos_finish"
-            )
-            self.compare_halos = functools.partial(self._distribute, "compare_halos")
+    def update_halos(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
+        self.halo_updaters[group]()
+
+    def compare_halos(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
+        return self.halo_updaters[group].compare()
 
     def register(self):
         assert self.grid is not None
@@ -863,20 +869,6 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
     def __repr__(self) -> str:
         return super().__repr__() + self.grid.postfix
-
-    def _distribute(self, method: str, *args, **kwargs) -> parallel.DistributedArray:
-        dist = parallel.DistributedArray(
-            self.grid.tiling,
-            self.all_values,
-            self.grid.halox,
-            self.grid.haloy,
-            overlap=self.grid.overlap,
-        )
-        self.update_halos = dist.update_halos
-        self.update_halos_start = dist.update_halos_start
-        self.update_halos_finish = dist.update_halos_finish
-        self.compare_halos = dist.compare_halos
-        getattr(self, method)(*args, **kwargs)
 
     def scatter(self, global_data: Optional[np.ndarray]):
         if self.grid.tiling.n == 1:
