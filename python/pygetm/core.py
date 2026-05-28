@@ -1,17 +1,9 @@
 import numbers
 import operator
-from typing import (
-    Optional,
-    Union,
-    Literal,
-    Mapping,
-    Any,
-    Callable,
-    Iterable,
-    TYPE_CHECKING,
-)
+from typing import Optional, Union, Literal, Any, Callable, TYPE_CHECKING
 import logging
 import functools
+from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 import numpy.lib.mixins
@@ -802,12 +794,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         self._dtype = dtype
         self.values = None
 
-        class retriever:
-            def __init__(self, target: "Array", att):
+        class Proxy(Sequence[parallel.BaseHaloUpdater]):
+            def __init__(self, target: "Array", att: str):
                 self.target = target
                 self.att = att
 
-            def __getitem__(self, key):
+            def _create(self) -> Sequence[parallel.BaseHaloUpdater]:
                 updaters = parallel.create_halo_updaters(
                     self.target.grid.tiling,
                     self.target.all_values,
@@ -816,9 +808,17 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
                     overlap=self.target.grid.overlap,
                 )
                 setattr(self.target, self.att, updaters)
-                return updaters[key]
+                return updaters
 
-        self.halo_updaters = retriever(self, "halo_updaters")
+            def __getitem__(self, key: int) -> parallel.BaseHaloUpdater:
+                return self._create()[key]
+
+            def __len__(self) -> int:
+                return len(self._create())
+
+        self.halo_updaters: Sequence[parallel.BaseHaloUpdater] = Proxy(
+            self, "halo_updaters"
+        )
 
     def set_fabm_standard_name(self, fabm_standard_name):
         self.attrs.setdefault("_fabm_standard_names", set()).add(fabm_standard_name)
