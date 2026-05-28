@@ -1,9 +1,10 @@
-from typing import Iterable, Mapping, Optional, Union, Any, TypeVar
+from typing import Optional, Union, Any, TypeVar
 import logging
 import functools
 import pickle
 import enum
 import weakref
+from collections.abc import Iterable, Mapping, Sequence
 
 import mpi4py
 
@@ -713,7 +714,7 @@ def create_halo_updaters(
     halox: int,
     haloy: int,
     overlap: int = 0,
-) -> list[BaseHaloUpdater]:
+) -> Sequence[BaseHaloUpdater]:
     # This seems a good candidate for using MPI's derived datatypes (DDT),
     # which allow sending/receiving halos that are non-contiguous in memory
     # without requiring data copying. However, experiments with DDTs (e.g.,
@@ -725,7 +726,8 @@ def create_halo_updaters(
     # (halo size=2). MPI implementations do not seem to optimize well for this
     # scenario. Therefore, with stick with persistent requests + manual
     # copying for now, as recommended by Nölp & Oden.
-    if tiling is None or not (tiling.n > 1 or tiling.periodic_x or tiling.periodic_y):
+    if not tiling:
+        # No tiling provided, or no neighbors
         return [no_op_updater] * (max(Neighbor) + 1)
 
     updaters: list[BaseHaloUpdater] = [

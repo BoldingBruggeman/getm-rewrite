@@ -1,9 +1,9 @@
 import numbers
 import operator
-from typing import Optional, Union, Literal, Any, Callable, TYPE_CHECKING
+from typing import Optional, Union, Literal, Any, TYPE_CHECKING
 import logging
 import functools
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence, Callable
 
 import numpy as np
 import numpy.lib.mixins
