@@ -24,6 +24,7 @@ VARIABLES = {
     "t2m": "2m_temperature",
     "d2m": "2m_dewpoint_temperature",
     "sp": "surface_pressure",
+    "mslp": "mean_sea_level_pressure",
     "tcc": "total_cloud_cover",
     "tp": "total_precipitation",
     "e": "evaporation",
