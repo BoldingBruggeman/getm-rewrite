@@ -1051,6 +1051,7 @@ def find_optimal_divison(
     mask: ArrayLike,
     *,
     ncpus: Optional[int] = None,
+    min_cpus: Optional[int] = None,
     max_aspect_ratio: int = 2,
     weight_unmasked: int = 2,
     weight_any: int = 1,
@@ -1061,6 +1062,8 @@ def find_optimal_divison(
 ) -> Optional[Mapping[str, Any]]:
     if ncpus is None:
         ncpus = (comm or MPI.COMM_WORLD).size
+    if min_cpus is None:
+        min_cpus = ncpus
 
     mask = np.asarray(mask)
     ny, nx = mask.shape
@@ -1107,8 +1110,8 @@ def find_optimal_divison(
     # Determine mask extent excluding any outer fully masked strips
     (mask_x,) = mask.any(axis=0).nonzero()
     (mask_y,) = mask.any(axis=1).nonzero()
-    imin, imax = mask_x[0], mask_x[-1]
-    jmin, jmax = mask_y[0], mask_y[-1]
+    imin, imax = int(mask_x[0]), int(mask_x[-1])
+    jmin, jmax = int(mask_y[0]), int(mask_y[-1])
 
     # Compute integral image of the mask to allow for fast computation
     # of the number of active cells in any subdomain.
@@ -1141,6 +1144,7 @@ def find_optimal_divison(
             wet_int,
             nx_sub,
             ny_sub,
+            min_cpus,
             ncpus,
             weight_unmasked,
             weight_any,
@@ -1151,9 +1155,9 @@ def find_optimal_divison(
             xoffset, yoffset, current_cost, submap = current_solution
             if cost is None or current_cost < cost:
                 solution = {
-                    "ncpus": ncpus,
-                    "nx": nx_sub,
-                    "ny": ny_sub,
+                    "ncpus": (submap > 0).sum(),
+                    "nx": int(nx_sub),
+                    "ny": int(ny_sub),
                     "xoffset": imin + xoffset,
                     "yoffset": jmin + yoffset,
                     "cost": current_cost,
@@ -1163,7 +1167,21 @@ def find_optimal_divison(
     solutions = comm.allgather(solution)
     solution = min(filter(None, solutions), key=lambda x: x["cost"], default=None)
     if logger and solution:
-        logger.info(f"Optimal subdomain decomposition: {solution}")
+        logger.info(
+            f"Optimal subdomain size: {solution['nx']} x {solution['ny']}"
+            f" (cost {solution['cost']})"
+        )
+        logger.info(
+            "First subdomain offset from first cell:"
+            f" {solution['xoffset']}, {solution['yoffset']}"
+        )
+        logger.info(
+            f"{solution['map'].shape[1]} x {solution['map'].shape[0]} subdomains"
+            f" ({solution['ncpus']} cores,"
+            f" {(solution['map'] == 0).sum()} land-only subdomains dropped):"
+        )
+        for row in solution["map"][::-1]:
+            logger.info("".join(f"{'#' if x > 0 else '-'}" for x in row))
     return solution
 
 

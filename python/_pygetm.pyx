@@ -663,7 +663,7 @@ cdef inline int check_split(int nx, int nx_sub, int offset, double max_protrude)
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.cdivision(True)
 @cython.initializedcheck(False)
-cdef int get_map(const int[:, ::1] integral_image, int mask_nx, int mask_ny, int nrow, int ncol, int nx, int ny, int xoffset, int yoffset, int[::1] map, int ncpus_max) noexcept nogil:
+cdef int get_map(const int[:, ::1] integral_image, int mask_nx, int mask_ny, int nrow, int ncol, int nx, int ny, int xoffset, int yoffset, int[::1] map, int max_cpus) noexcept nogil:
     cdef int row, col, i, istop, jstop, n, ncpus
     for i in range(nrow * ncol):
         map[i] = 0
@@ -680,7 +680,7 @@ cdef int get_map(const int[:, ::1] integral_image, int mask_nx, int mask_ny, int
             if row < nrow - 1 and col < ncol - 1: map[i + ncol + 1] += n
             if map[i] > 0:
                 ncpus += 1
-                if ncpus > ncpus_max:
+                if ncpus > max_cpus:
                     return ncpus
             i += 1
     return ncpus
@@ -718,7 +718,7 @@ cdef int get_cost(const int[::1] map, int nrow, int ncol, int nx, int ny, int we
     if nx % 4 != 0: max_cost *= 2  # penalize non-alignment
     return max_cost + weight_any * nx * ny     # add an overhead for all cells - unmasked or not
 
-def find_subdiv_solutions(const int[:, ::1] wet_int not None, int nx, int ny, int ncpus, int weight_unmasked, int weight_any, int weight_halo, double max_protrude):
+def find_subdiv_solutions(const int[:, ::1] wet_int not None, int nx, int ny, int min_cpus, int max_cpus, int weight_unmasked, int weight_any, int weight_halo, double max_protrude):
     cdef int mask_nx = <int>wet_int.shape[1]
     cdef int mask_ny = <int>wet_int.shape[0]
     cdef int[::1] map
@@ -732,9 +732,9 @@ def find_subdiv_solutions(const int[:, ::1] wet_int not None, int nx, int ny, in
             continue
         for xoffset in range(1 - nx, 1):
             ncol = check_split(mask_nx, nx, xoffset, max_protrude)
-            if nrow * ncol >= ncpus:
-                ncpus_used = get_map(wet_int, mask_nx, mask_ny, nrow, ncol, nx, ny, xoffset, yoffset, map, ncpus)
-                if ncpus_used == ncpus:
+            if nrow * ncol >= min_cpus:
+                ncpus = get_map(wet_int, mask_nx, mask_ny, nrow, ncol, nx, ny, xoffset, yoffset, map, max_cpus)
+                if ncpus >= min_cpus and ncpus <= max_cpus:
                     current_cost = get_cost(map, nrow, ncol, nx, ny, weight_unmasked, weight_any, weight_halo)
                     if cost == -1 or current_cost < cost:
                         cost = current_cost
@@ -743,5 +743,5 @@ def find_subdiv_solutions(const int[:, ::1] wet_int not None, int nx, int ny, in
     if cost != -1:
         nrow = check_split(mask_ny, ny, best_yoffset, max_protrude)
         ncol = check_split(mask_nx, nx, best_xoffset, max_protrude)
-        get_map(wet_int, mask_nx, mask_ny, nrow, ncol, nx, ny, best_xoffset, best_yoffset, map, ncpus)
+        get_map(wet_int, mask_nx, mask_ny, nrow, ncol, nx, ny, best_xoffset, best_yoffset, map, max_cpus)
         return (best_xoffset, best_yoffset, cost, numpy.asarray(map[:nrow * ncol]).reshape(nrow, ncol))
