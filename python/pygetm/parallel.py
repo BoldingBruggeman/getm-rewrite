@@ -77,6 +77,9 @@ class Tiling:
             mask: mask for the global domain (0: masked, non-zero: active)
             ncpus: number of cores to use (default: size of MPI communicator)
             logger: logger to use to write diagnostic messages
+            comm: MPI communicator to use to parallize the search for the optimal subdomain
+                division (default: MPI.COMM_WORLD). It will also be used to detect the
+                number of cores to use if ncpus is not provided.
             max_protrude: maximum fraction (0-1) of a subdomain that can protrude out of
                 the global domain
             **kwargs: additional keyword arguments to pass to :class:`Tiling`
@@ -211,7 +214,7 @@ class Tiling:
 
     def dump(self, path: str):
         """Save all information about the subdomain division to a pickle file
-        from which a :class:`Tiling` objetc can be recreated with :meth:`Tiling.load`
+        from which a :class:`Tiling` object can be recreated with :meth:`Tiling.load`
 
         Args:
             path: file to save information to
@@ -1052,7 +1055,7 @@ def find_optimal_divison(
     weight_unmasked: int = 2,
     weight_any: int = 1,
     weight_halo: int = 10,
-    max_protrude: float = 0.5,
+    max_protrude: float = 0.25,
     logger: Optional[logging.Logger] = None,
     comm: Optional[MPI.Comm] = None,
 ) -> Optional[Mapping[str, Any]]:
@@ -1107,16 +1110,18 @@ def find_optimal_divison(
     imin, imax = mask_x[0], mask_x[-1]
     jmin, jmax = mask_y[0], mask_y[-1]
 
-    # Convert to contiguous mask that the cython code expects
-    mask = np.ascontiguousarray(mask[jmin : jmax + 1, imin : imax + 1], dtype=np.intc)
+    # Compute integral image of the mask to allow for fast computation
+    # of the number of active cells in any subdomain.
+    wet_int = (mask[jmin : jmax + 1, imin : imax + 1] != 0).astype(np.intc)
+    wet_int.cumsum(axis=0, out=wet_int)
+    wet_int.cumsum(axis=1, out=wet_int)
 
     # Determine potential number of subdomain combinations
     nx_ny_combos = []
     for ny_sub in range(4, ny + 1):
-        for nx_sub in range(
-            max(4, ny_sub // max_aspect_ratio),
-            min(max_aspect_ratio * ny_sub, nx + 1),
-        ):
+        min_nx_sub = max(4, ny_sub // max_aspect_ratio)
+        max_nx_sub = min(max_aspect_ratio * ny_sub, nx + 1)
+        for nx_sub in range(min_nx_sub, max_nx_sub):
             nx_ny_combos.append((nx_sub, ny_sub))
     nx_ny_combos = np.array(nx_ny_combos, dtype=int)
 
@@ -1124,7 +1129,7 @@ def find_optimal_divison(
         logger.info(
             (
                 "Determining optimal subdomain decomposition of global domain of "
-                f"{nx} x {ny} ({(mask != 0).sum()} active cells)"
+                f"{nx} x {ny} ({wet_int[-1, -1]} active cells)"
                 f" for {ncpus} cores"
             )
         )
@@ -1133,7 +1138,7 @@ def find_optimal_divison(
     cost, solution = None, None
     for nx_sub, ny_sub in nx_ny_combos[comm.rank :: comm.size]:
         current_solution = _pygetm.find_subdiv_solutions(
-            mask,
+            wet_int,
             nx_sub,
             ny_sub,
             ncpus,

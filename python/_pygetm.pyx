@@ -37,7 +37,7 @@ cdef extern void get_array(int source_type, void* grid, const char* name, int* g
 cdef extern void* advection_create(int scheme, void* tgrid) nogil
 cdef extern void advection_finalize(void* advection) nogil
 cdef extern void advection_uv_calculate(int direction, int nk, void* advection, void* tgrid, void* ugrid, double* pu, double* Ah, double timestep, double* pD, double* pDU, double* pvar) nogil
-cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar)
+cdef extern void advection_w_calculate(void* padvection, void* tgrid, double* pw, double* pw_var, double timestep, double* ph, double* pvar) nogil
 cdef extern void* vertical_diffusion_create(void* tgrid) nogil
 cdef extern void vertical_diffusion_finalize(void* diffusion) nogil
 cdef extern void c_vertical_diffusion_prepare(void* diffusion, int nx, int ny, int nz, double molecular, double* pnuh, double timestep, double cnpar, int* pmask, double* pho, double* phn) nogil
@@ -651,67 +651,45 @@ def tridiagonal(Array nu not None, Array var not None, double dt):
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
-@cython.profile(False)
-cdef int subdomain_used(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) noexcept nogil:
-    for j in range(jstart, jstop):
-        for i in range(istart, istop):
-            if mask[j, i] != 0:
-                return True
-    return False
-
-@cython.boundscheck(False) # turn off bounds-checking for entire function
-@cython.wraparound(False)  # turn off negative index wrapping for entire function
-@cython.profile(False)
-cdef int subdomain_count_cells(const int[:, ::1] mask, int istart, int istop, int jstart, int jstop) noexcept nogil:
-    cdef int count = 0
-    for j in range(jstart, jstop):
-        for i in range(istart, istop):
-            if mask[j, i] != 0:
-                count += 1
-    return count
-
-@cython.boundscheck(False) # turn off bounds-checking for entire function
-@cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.cdivision(True)
-cdef int decomposition_is_valid(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int ncpus, double max_protrude) noexcept nogil:
-    cdef int nrow = <int>ceil((mask.shape[0] - yoffset) / float(ny))
-    cdef int ncol = <int>ceil((mask.shape[1] - xoffset) / float(nx))
-    cdef int free_cpus = ncpus
-    cdef int row, col, i, j, n
-    if xoffset <= -nx * max_protrude or xoffset + ncol * nx - mask.shape[1] >= nx * max_protrude: return False
-    if yoffset <= -ny * max_protrude or yoffset + nrow * ny - mask.shape[0] >= ny * max_protrude: return False
-    if (nrow == 1 and yoffset != 0) or (ncol == 1 and xoffset != 0): return False
-    if (nrow == 2 and yoffset != 0 and yoffset + nrow * ny > mask.shape[0]): return False
-    if (ncol == 2 and xoffset != 0 and xoffset + ncol * nx > mask.shape[1]): return False
-    if nrow * ncol < ncpus:
-        # impossible to use that many cores with the current number of rows and columns
-        return False
-    for row in range(nrow):
-        for col in range(ncol):
-            if subdomain_used(mask, max(0, xoffset + col * nx), min(<int>mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(<int>mask.shape[0], yoffset + (row + 1) * ny)):
-                if free_cpus == 0: return False
-                free_cpus -= 1
-    return free_cpus == 0
+cdef inline int check_split(int nx, int nx_sub, int offset, double max_protrude) noexcept nogil:
+    cdef int nsub = (nx - offset + nx_sub - 1) // nx_sub
+    if offset <= -nx * max_protrude or offset + nsub * nx_sub - nx >= nx * max_protrude: return 0
+    if nsub == 1 and offset != 0: return 0
+    if nsub == 2 and offset != 0 and offset + nsub * nx_sub > nx: return 0
+    return nsub
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.cdivision(True)
 @cython.initializedcheck(False)
-cdef void get_map(const int[:, ::1] mask, int nx, int ny, int xoffset, int yoffset, int[::1] map, int* nrow, int* ncol) noexcept nogil:
-    cdef int row, col, i
-    nrow[0] = <int>ceil((mask.shape[0] - yoffset) / float(ny))
-    ncol[0] = <int>ceil((mask.shape[1] - xoffset) / float(nx))
+cdef int get_map(const int[:, ::1] integral_image, int mask_nx, int mask_ny, int nrow, int ncol, int nx, int ny, int xoffset, int yoffset, int[::1] map, int ncpus_max) noexcept nogil:
+    cdef int row, col, i, istop, jstop, n, ncpus
+    for i in range(nrow * ncol):
+        map[i] = 0
     i = 0
-    for row in range(nrow[0]):
-        for col in range(ncol[0]):
-            map[i] = subdomain_count_cells(mask, max(0, xoffset + col * nx), min(<int>mask.shape[1], xoffset + (col + 1) * nx), max(0, yoffset + row * ny), min(<int>mask.shape[0], yoffset + (row + 1) * ny))
+    ncpus = 0
+    for row in range(nrow):
+        jstop = min(mask_ny, yoffset + (row + 1) * ny) - 1
+        for col in range(ncol):
+            istop = min(mask_nx, xoffset + (col + 1) * nx) - 1
+            n = integral_image[jstop, istop]
+            map[i] += n
+            if col < ncol - 1: map[i + 1] -= n
+            if row < nrow - 1: map[i + ncol] -= n
+            if row < nrow - 1 and col < ncol - 1: map[i + ncol + 1] += n
+            if map[i] > 0:
+                ncpus += 1
+                if ncpus > ncpus_max:
+                    return ncpus
             i += 1
+    return ncpus
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 @cython.profile(False)
 @cython.initializedcheck(False)
-cdef int get_from_map(const int[::1] map, int nrow, int ncol, int row, int col) noexcept nogil:
+cdef inline int get_from_map(const int[::1] map, int nrow, int ncol, int row, int col) noexcept nogil:
     if row < 0 or col < 0 or row >= nrow or col >= ncol:
         return 0
     return map[row * ncol + col]
@@ -740,20 +718,30 @@ cdef int get_cost(const int[::1] map, int nrow, int ncol, int nx, int ny, int we
     if nx % 4 != 0: max_cost *= 2  # penalize non-alignment
     return max_cost + weight_any * nx * ny     # add an overhead for all cells - unmasked or not
 
-def find_subdiv_solutions(const int[:, ::1] mask not None, int nx, int ny, int ncpus, int weight_unmasked, int weight_any, int weight_halo, double max_protrude):
+def find_subdiv_solutions(const int[:, ::1] wet_int not None, int nx, int ny, int ncpus, int weight_unmasked, int weight_any, int weight_halo, double max_protrude):
+    cdef int mask_nx = <int>wet_int.shape[1]
+    cdef int mask_ny = <int>wet_int.shape[0]
     cdef int[::1] map
     cdef int nrow, ncol
+    cdef int yoffset, xoffset
     cost = -1
-    map = numpy.empty(((mask.shape[1] // nx + 2) * (mask.shape[0] // ny + 2),), dtype=numpy.intc)
+    map = numpy.empty(((mask_nx // nx + 2) * (mask_ny // ny + 2),), dtype=numpy.intc)
     for yoffset in range(1 - ny, 1):
+        nrow = check_split(mask_ny, ny, yoffset, max_protrude)
+        if nrow == 0:
+            continue
         for xoffset in range(1 - nx, 1):
-            if decomposition_is_valid(mask, nx, ny, xoffset, yoffset, ncpus, max_protrude):
-                get_map(mask, nx, ny, xoffset, yoffset, map, &nrow, &ncol)
-                current_cost = get_cost(map, nrow, ncol, nx, ny, weight_unmasked, weight_any, weight_halo)
-                if cost == -1 or current_cost < cost:
-                    cost = current_cost
-                    best_xoffset = xoffset
-                    best_yoffset = yoffset
+            ncol = check_split(mask_nx, nx, xoffset, max_protrude)
+            if nrow * ncol >= ncpus:
+                ncpus_used = get_map(wet_int, mask_nx, mask_ny, nrow, ncol, nx, ny, xoffset, yoffset, map, ncpus)
+                if ncpus_used == ncpus:
+                    current_cost = get_cost(map, nrow, ncol, nx, ny, weight_unmasked, weight_any, weight_halo)
+                    if cost == -1 or current_cost < cost:
+                        cost = current_cost
+                        best_xoffset = xoffset
+                        best_yoffset = yoffset
     if cost != -1:
-        get_map(mask, nx, ny, best_xoffset, best_yoffset, map, &nrow, &ncol)
+        nrow = check_split(mask_ny, ny, best_yoffset, max_protrude)
+        ncol = check_split(mask_nx, nx, best_xoffset, max_protrude)
+        get_map(wet_int, mask_nx, mask_ny, nrow, ncol, nx, ny, best_xoffset, best_yoffset, map, ncpus)
         return (best_xoffset, best_yoffset, cost, numpy.asarray(map[:nrow * ncol]).reshape(nrow, ncol))

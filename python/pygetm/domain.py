@@ -873,7 +873,15 @@ class Domain:
     def z0(self, values: npt.ArrayLike):
         self._z0 = self._map_array(values)
 
-    def create_tiling(self) -> parallel.Tiling:
+    def create_tiling(self, **kwargs) -> parallel.Tiling:
+        """Create tiling object representing the domain decomposition.
+
+        Args:
+            **kwargs: Additional arguments to pass to :meth:`parallel.Tiling.autodetect`
+
+        Returns:
+            tiling
+        """
         mask = None if self.comm.rank != 0 else self._mask[1::2, 1::2]
         mask = self.comm.bcast(mask)
         return parallel.Tiling.autodetect(
@@ -882,6 +890,7 @@ class Domain:
             periodic_y=self.periodic_y,
             comm=self.comm,
             logger=self.logger.getChild("subdomain_decomposition"),
+            **kwargs,
         )
 
     def create_grids(
