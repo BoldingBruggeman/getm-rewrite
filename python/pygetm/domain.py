@@ -394,9 +394,7 @@ def _rotation(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return np.arctan2(y_dum, x_dum)
 
 
-def from_xarray(
-    ds: xr.Dataset, comm: Optional[parallel.MPI.Comm] = None, **kwargs
-) -> "Domain":
+def from_xarray(ds: xr.Dataset, **kwargs) -> "Domain":
     """Create domain from :class:`xarray.Dataset`.
     This dataset must represent the arguments to :class:`Domain` by variables
     (for 2D arrays) or attributes (for scalars) with the same names.
@@ -404,27 +402,23 @@ def from_xarray(
 
     Args:
         ds: dataset with domain data
-        comm: MPI communicator that comprises all processes that should get
-            access to the domain
         **kwargs: additional arguments passed to :class:`Domain`.
             These override corresponding values in the dataset.
 
     Returns:
         domain created from the dataset
     """
-    comm = comm or parallel.mpi4py_autofree(parallel.MPI.COMM_WORLD.Dup())
     kwargs.setdefault("coordinate_type", ds.attrs.get("coordinate_type"))
     if "periodic_x" in ds.attrs:
         kwargs.setdefault("periodic_x", bool(ds.attrs["periodic_x"]))
     if "periodic_y" in ds.attrs:
         kwargs.setdefault("periodic_y", bool(ds.attrs["periodic_y"]))
-    if comm.rank == 0:
-        for name in ("lon", "lat", "x", "y", "mask", "H", "z0", "f"):
-            if name in ds and name not in kwargs:
-                kwargs[name] = ds[name].values
+    for name in ("lon", "lat", "x", "y", "mask", "H", "z0", "f"):
+        if name in ds and name not in kwargs:
+            kwargs[name] = ds[name]
     assert "H" in ds, "Dataset must contain bathymetric depth H"
     ny_sup, nx_sup = ds["H"].shape
-    return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, comm=comm, **kwargs)
+    return Domain((nx_sup - 1) // 2, (ny_sup - 1) // 2, **kwargs)
 
 
 class Domain:
