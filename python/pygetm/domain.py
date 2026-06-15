@@ -1652,13 +1652,6 @@ class Domain:
         import matplotlib.collections
         import matplotlib.widgets
 
-        if fig is None:
-            fig, ax = matplotlib.pyplot.subplots(
-                figsize=(0.15 * self.nx, 0.15 * self.ny)
-            )
-        else:
-            ax = fig.gca()
-
         if coordinate_type is None:
             coordinate_type = self.coordinate_type
         if coordinate_type == CoordinateType.LONLAT:
@@ -1672,6 +1665,18 @@ class Domain:
             y = -0.5 + 0.5 * np.arange(1 + self.ny * 2)
             x, y = np.broadcast_arrays(x, y[:, np.newaxis])
             xlabel, ylabel = "cell index", "cell index"
+
+        xmin, xmax = np.nanmin(x), np.nanmax(x)
+        ymin, ymax = np.nanmin(y), np.nanmax(y)
+        x_extent = xmax - xmin
+        y_extent = ymax - ymin
+        if fig is None:
+            inch_per_extent = 0.15 * max(self.nx, self.ny) / max(x_extent, y_extent)
+            fig, ax = matplotlib.pyplot.subplots(
+                figsize=(inch_per_extent * x_extent, inch_per_extent * y_extent)
+            )
+        else:
+            ax = fig.gca()
 
         if show_mask or show_rivers:
             mask = self.get_final_mask()
@@ -1800,10 +1805,8 @@ class Domain:
         ax.set_ylabel(ylabel)
         if coordinate_type != CoordinateType.LONLAT:
             ax.axis("equal")
-        xmin, xmax = np.nanmin(x), np.nanmax(x)
-        ymin, ymax = np.nanmin(y), np.nanmax(y)
-        xmargin = 0.05 * (xmax - xmin)
-        ymargin = 0.05 * (ymax - ymin)
+        xmargin = 0.05 * x_extent
+        ymargin = 0.05 * y_extent
         ax.set_xlim(xmin - xmargin, xmax + xmargin)
         ax.set_ylim(ymin - ymargin, ymax + ymargin)
 
