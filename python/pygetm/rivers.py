@@ -293,8 +293,10 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
             x: x coordinate of river
             y: y coordinate of river
             coordinate_type: coordinate type of x and y
-                (LONLAT for spherical, XY for Cartesian coordinates,
-                IJ for 0-based indices into the global tracer grid)
+                (:attr:`CoordinateType.LONLAT` for spherical, :attr:`CoordinateType.XY`
+                for Cartesian coordinates, :attr:`CoordinateType.IJ` for 0-based indices
+                into the global tracer grid). If not provided, the default coordinate
+                type of the domain will be used.
             zl: lower limit (deepest point) of river penetration (m; >=0).
                 Defaults to bottom
             zu: upper limit of river penetration (m; >=0).
