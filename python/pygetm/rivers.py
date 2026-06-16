@@ -286,7 +286,16 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
         vertical_position: VerticalPosition = VerticalPosition.DistanceFromSurface,
         **attrs,
     ) -> GlobalRiver:
-        """Add a river at a location specified by the nearest coordinates
+        """Add a river at a location specified by the nearest coordinates.
+
+        By default, the river will spread over the entire water column.
+        Distance limits `zl` and `zu` can be specified to control the vertical
+        extent of river penetration. They can be identical,
+        in which case the river will only affect a single layer. For instance,
+        use `zl=zu=0.0` to have the river enter the surface layer,
+        or `zl=zu=0.0` with `vertical_position=VerticalPosition.DistanceFromBottom`
+        to have the river enter the bottom layer. If `zu` and/or `zl` exceed
+        the current water depth, they will be clipped to that water depth.
 
         Args:
             name: river name
@@ -298,11 +307,16 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
                 into the global tracer grid). If not provided, the default coordinate
                 type of the domain will be used.
             zl: lower limit (deepest point) of river penetration (m; >=0).
-                Defaults to bottom
+                This is the distance from the surface or bottom, depending on `vertical_position`.
+                Its default value corresponds to the position of the bottom.
             zu: upper limit of river penetration (m; >=0).
-                Defaults to surface
-            vertical_position: whether depth limits zl and zu are distances
-                from the surface or from the bottom
+                This is the distance from the surface or bottom, depending on `vertical_position`.
+                Its default value corresponds to the position of the water surface.
+            vertical_position: whether depth limits `zl` and `zu` are distances
+                from the surface or from the bottom. If set to
+                :attr:`VerticalPosition.DistanceFromSurface`, then `zl` must be >= `zu`.
+                If set to :attr:`VerticalPosition.DistanceFromBottom`, then `zl` must be
+                <= `zu`.
             **attrs: additional attributes for this river
 
         Returns:
