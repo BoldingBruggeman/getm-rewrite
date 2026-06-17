@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Optional, Union
 import itertools
 import os
 import logging
@@ -65,13 +65,20 @@ class GOTM(VerticalMixing):
     using the `General Ocean Turbulence Model (GOTM) <https://gotm.net>`_.
     """
 
-    def __init__(self, path: Union[None, os.PathLike[str], str] = None):
+    def __init__(
+        self,
+        path: Union[None, os.PathLike[str], str] = None,
+        nuh_max: Optional[float] = None,
+        num_max: Optional[float] = None,
+    ):
         super().__init__()
         if path is not None:
             path = Path(path)
             if not path.is_file():
                 raise Exception(f"Configuration file {path} does not exist")
         self.path = path
+        self.nuh_max = nuh_max
+        self.num_max = num_max
 
     def initialize(self, grid: core.Grid, logger: logging.Logger):
         super().initialize(grid, logger)
@@ -189,5 +196,10 @@ class GOTM(VerticalMixing):
         # can be interpolated to inward-adjacent U/V points. However, it cannot be
         # computed as the shear frequency SS is not available at the boundary.
         self.num.open_boundaries.update()
+
+        if self.nuh_max is not None:
+            np.minimum(self.nuh.all_values, self.nuh_max, out=self.nuh.all_values)
+        if self.num_max is not None:
+            np.minimum(self.num.all_values, self.num_max, out=self.num.all_values)
 
         self._log()
