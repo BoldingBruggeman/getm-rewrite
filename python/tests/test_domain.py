@@ -359,13 +359,13 @@ class TestDomain(unittest.TestCase):
         domain = pygetm.domain.create_spherical(lon, lat, H=10.0, logger=logger)
 
         # Out of bounds l, mstart or mstop
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             domain.open_boundaries.add_left_boundary("W", -1, 0, 10, t2d, t3d)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             domain.open_boundaries.add_left_boundary("W", nx, 0, 10, t2d, t3d)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             domain.open_boundaries.add_left_boundary("W", 0, -1, 10, t2d, t3d)
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             domain.open_boundaries.add_left_boundary("W", 0, 0, ny + 1, t2d, t3d)
 
         # Single point
