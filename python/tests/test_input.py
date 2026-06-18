@@ -1,5 +1,6 @@
 import unittest
 import datetime
+import logging
 
 import numpy as np
 import cftime
@@ -230,6 +231,57 @@ class TestInput(unittest.TestCase):
         self.assertTrue((a[12, :] == a2[2, :]).all())
         data_slc = a[..., 0]
         self.assertTrue((data_slc == data[..., 0]).all())
+
+
+class TestManager(unittest.TestCase):
+    def test_open_boundary(self):
+        logger = logging.getLogger()
+        logger.setLevel("ERROR")
+        domain = pygetm.domain.create_cartesian(
+            np.linspace(0, 100, 10),
+            [0.0, 1.0],
+            interfaces=True,
+            f=0,
+            H=10,
+            logger=logger,
+        )
+        domain.open_boundaries.add_right_boundary(
+            "mouth", 8, 0, 1, type_2d=pygetm.FLATHER_ELEV, type_3d=pygetm.ZERO_GRADIENT
+        )
+        grid = domain.create_grids(
+            10,
+            0,
+            0,
+            input_manager=pygetm.input.InputManager(
+                domain.root_logger.getChild("input")
+            ),
+        )
+        arr2d = grid.array("foo2d", on_boundary=True)
+        arr2d.set(1.0)
+        values = np.arange(10)[:, np.newaxis]
+        time = [
+            cftime.datetime(2015, 1, 1) + datetime.timedelta(days=i) for i in range(10)
+        ]
+        forcing2d = xr.DataArray(values, dims=["time", "bdy"], coords={"time": time})
+        arr2d.set(forcing2d)
+        grid.input_manager.update(time[0], time[0].toordinal(fractional=True))
+
+        arr3d = grid.array("foo3d", z=pygetm.CENTERS, on_boundary=True)
+        arr3d.set(1.0)
+        values = np.broadcast_to(np.arange(10)[:, np.newaxis, np.newaxis], (10, 1, 20))
+        z = xr.Variable(("z",), np.linspace(0, 10, 20), dict(axis="Z"))
+        forcing3d = xr.DataArray(
+            values, dims=["time", "bdy", "z"], coords={"time": time, "z": z}
+        )
+        arr3d.set(forcing3d)
+        grid.input_manager.update(time[0], time[0].toordinal(fractional=True))
+
+        values = np.broadcast_to(np.arange(10)[:, np.newaxis, np.newaxis], (10, 20, 1))
+        forcing3d = xr.DataArray(
+            values, dims=["time", "z", "bdy"], coords={"time": time, "z": z}
+        )
+        arr3d.set(forcing3d)
+        grid.input_manager.update(time[0], time[0].toordinal(fractional=True))
 
 
 if __name__ == "__main__":
