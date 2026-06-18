@@ -1487,7 +1487,7 @@ class Domain:
 
         subdomain = self._transform(istop - istart, jstop - jstart, extract)
         for b in self.open_boundaries:
-            if b.side in (open_boundaries.Side.NORTH, open_boundaries.Side.SOUTH):
+            if b.side in (open_boundaries.Side.TOP, open_boundaries.Side.BOTTOM):
                 moffset, loffset = istart, jstart
             else:
                 moffset, loffset = jstart, istart
@@ -1517,14 +1517,14 @@ class Domain:
 
         rotated_domain = self._transform(self.ny, self.nx, tp)
         MAP = {
-            open_boundaries.Side.WEST: open_boundaries.Side.NORTH,
-            open_boundaries.Side.NORTH: open_boundaries.Side.EAST,
-            open_boundaries.Side.EAST: open_boundaries.Side.SOUTH,
-            open_boundaries.Side.SOUTH: open_boundaries.Side.WEST,
+            open_boundaries.Side.LEFT: open_boundaries.Side.TOP,
+            open_boundaries.Side.TOP: open_boundaries.Side.RIGHT,
+            open_boundaries.Side.RIGHT: open_boundaries.Side.BOTTOM,
+            open_boundaries.Side.BOTTOM: open_boundaries.Side.LEFT,
         }
         for b in self.open_boundaries:
             mstart, mstop, l = b.mstart, b.mstop, b.l
-            if b.side in (open_boundaries.Side.NORTH, open_boundaries.Side.SOUTH):
+            if b.side in (open_boundaries.Side.TOP, open_boundaries.Side.BOTTOM):
                 mstart, mstop = (self.nx - 1 - mstart, self.nx - 1 - mstop)
             else:
                 l = self.nx - 1 - l

@@ -121,10 +121,10 @@ def load_bdyinfo(
     """
     with DatFile(path) as f:
         for side in (
-            pygetm.open_boundaries.Side.WEST,
-            pygetm.open_boundaries.Side.NORTH,
-            pygetm.open_boundaries.Side.EAST,
-            pygetm.open_boundaries.Side.SOUTH,
+            pygetm.open_boundaries.Side.LEFT,
+            pygetm.open_boundaries.Side.TOP,
+            pygetm.open_boundaries.Side.RIGHT,
+            pygetm.open_boundaries.Side.BOTTOM,
         ):
             n = int(f.get_line())
             for _ in range(n):

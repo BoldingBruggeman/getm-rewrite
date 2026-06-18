@@ -22,10 +22,15 @@ from .constants import (
 
 
 class Side(enum.IntEnum):
-    WEST = 1
-    NORTH = 2
-    EAST = 3
-    SOUTH = 4
+    LEFT = 1
+    TOP = 2
+    RIGHT = 3
+    BOTTOM = 4
+    # For backwards compatibility with legacy code:
+    WEST = LEFT
+    NORTH = TOP
+    EAST = RIGHT
+    SOUTH = BOTTOM
 
 
 class OpenBoundary:
@@ -67,12 +72,12 @@ class OpenBoundary:
         self.mstep = 1 if mstop > mstart else -1
         self.type_2d = type_2d
         self.type_3d = type_3d
-        self.inflow_sign = 1.0 if side in (Side.WEST, Side.SOUTH) else -1.0
+        self.inflow_sign = 1.0 if side in (Side.LEFT, Side.BOTTOM) else -1.0
         self.np = (mstop - mstart) // self.mstep
 
         ms = np.arange(mstart, mstop, self.mstep, dtype=np.intp)
         ls = np.broadcast_to(np.array(l, dtype=np.intp), ms.shape)
-        if side in (Side.WEST, Side.EAST):
+        if side in (Side.LEFT, Side.RIGHT):
             self.i, self.j = ls, ms
         else:
             self.i, self.j = ms, ls
@@ -88,7 +93,7 @@ class OpenBoundary:
         # Convert to indices in the T grid of the current subdomain INCLUDING halos
         xoffset = grid.tiling.xoffset - grid.halox
         yoffset = grid.tiling.yoffset - grid.haloy
-        if self.side in (Side.WEST, Side.EAST):
+        if self.side in (Side.LEFT, Side.RIGHT):
             l_offset, m_offset, l_max, m_max = (xoffset, yoffset, grid.nx_, grid.ny_)
         else:
             l_offset, m_offset, l_max, m_max = (yoffset, xoffset, grid.ny_, grid.nx_)
@@ -136,12 +141,12 @@ class LocalOpenBoundary(OpenBoundary):
         super().__init__(name, side, l, mstart, mstop, type_2d, type_3d)
         self.mskip = mskip
         mslice = slice(mstart, mstop, self.mstep)
-        if side in (Side.WEST, Side.EAST):
+        if side in (Side.LEFT, Side.RIGHT):
             self.slice_t = (Ellipsis, mslice, l)
-            self.slice_uv_in = (Ellipsis, mslice, l if side == Side.WEST else l - 1)
+            self.slice_uv_in = (Ellipsis, mslice, l if side == Side.LEFT else l - 1)
         else:
             self.slice_t = (Ellipsis, l, mslice)
-            self.slice_uv_in = (Ellipsis, l if side == Side.SOUTH else l - 1, mslice)
+            self.slice_uv_in = (Ellipsis, l if side == Side.BOTTOM else l - 1, mslice)
 
     def extract_inward(
         self, values: np.ndarray, start: int, stop: Optional[int] = None
@@ -164,11 +169,11 @@ class LocalOpenBoundary(OpenBoundary):
             ``(..., np, n)``. The last dimension then runs from the row/column closest
             to the boundary to the one furthest away.
         """
-        l_inward = {Side.WEST: 1, Side.EAST: -1, Side.SOUTH: 1, Side.NORTH: -1}[
+        l_inward = {Side.LEFT: 1, Side.RIGHT: -1, Side.BOTTOM: 1, Side.TOP: -1}[
             self.side
         ]
         mslice = slice(self.mstart, self.mstop, self.mstep)
-        ldim = -1 if self.side in (Side.WEST, Side.EAST) else -2
+        ldim = -1 if self.side in (Side.LEFT, Side.RIGHT) else -2
         lstart = self.l + l_inward * start
         assert lstart >= 0 and lstart < values.shape[ldim]
         if stop is None:
@@ -180,7 +185,7 @@ class LocalOpenBoundary(OpenBoundary):
             assert llast >= 0 and llast < values.shape[ldim]
             lstop = None if llast == 0 and l_inward == -1 else llast + l_inward
             lslice = slice(lstart, lstop, l_inward)
-        if self.side in (Side.WEST, Side.EAST):
+        if self.side in (Side.LEFT, Side.RIGHT):
             return values[..., mslice, lslice]
         else:
             if stop is not None:
@@ -200,7 +205,7 @@ class LocalOpenBoundary(OpenBoundary):
         Returns:
             2D or 3D array of velocity or transport across the boundary.
         """
-        uv = u if self.side in (Side.WEST, Side.EAST) else v
+        uv = u if self.side in (Side.LEFT, Side.RIGHT) else v
         return uv[self.slice_uv_in]
 
 
@@ -757,20 +762,33 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         mstop indicates the upper limit of the boundary - it is the first index that is
         EXcluded.
         """
-        along_y = side in (Side.WEST, Side.EAST)
+        along_y = side in (Side.LEFT, Side.RIGHT)
         if along_y:
             l_max, m_max = (self.nx, self.ny)
         else:
             l_max, m_max = (self.ny, self.nx)
 
-        assert mstart != mstop
+        if mstart == mstop:
+            raise ValueError(
+                f"Open boundary {name} has no points because mstart=mstop={mstart}"
+            )
+        if mstart < 0 or mstart >= m_max:
+            raise ValueError(
+                f"Open boundary {name} has mstart={mstart} outside valid range [0, {m_max})"
+            )
+        if mstop < -1 or mstop > m_max:
+            raise ValueError(
+                f"Open boundary {name} has mstop={mstop} outside valid range [-1, {m_max}]"
+            )
+        if l < 0 or l >= l_max:
+            raise ValueError(
+                f"Open boundary {name} has l={l} outside valid range [0, {l_max})"
+            )
         mstep = 1 if mstop > mstart else -1
         mlast = mstop - mstep
-        assert mstart >= 0 and mstart < m_max
         assert mlast >= 0 and mlast < m_max
-        assert l >= 0 and l < l_max
 
-        if side in (Side.WEST, Side.SOUTH):
+        if side in (Side.LEFT, Side.BOTTOM):
             assert l < l_max - 1, "No water points on the interior side of boundary"
         else:
             assert l > 0, "No water points on the interior side of boundary"
@@ -781,7 +799,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         mmin = min(mstart, mlast)
         mmax = max(mstart, mlast)
         for b in self._boundaries:
-            current_along_y = b.side in (Side.WEST, Side.EAST)
+            current_along_y = b.side in (Side.LEFT, Side.RIGHT)
             if along_y == current_along_y:
                 if l == b.l:
                     ostart = max(mmin, min(b.mstart, b.mstop - b.mstep))
@@ -814,7 +832,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         """Add an open boundary with the model exterior above and the model
         interior below. This is a northern open boundary in a spherical domain.
         """
-        self.add_by_index(Side.NORTH, j, istart, istop, type_2d, type_3d, name=name)
+        self.add_by_index(Side.TOP, j, istart, istop, type_2d, type_3d, name=name)
 
     def add_bottom_boundary(
         self, name: str, j: int, istart: int, istop: int, type_2d: int, type_3d: int
@@ -822,7 +840,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         """Add an open boundary with the model exterior below and the model
         interior above. This is a southern open boundary in a spherical domain.
         """
-        self.add_by_index(Side.SOUTH, j, istart, istop, type_2d, type_3d, name=name)
+        self.add_by_index(Side.BOTTOM, j, istart, istop, type_2d, type_3d, name=name)
 
     def add_left_boundary(
         self, name: str, i: int, jstart: int, jstop: int, type_2d: int, type_3d: int
@@ -831,7 +849,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         model interior to the right. This is a western open boundary in a
         spherical domain.
         """
-        self.add_by_index(Side.WEST, i, jstart, jstop, type_2d, type_3d, name=name)
+        self.add_by_index(Side.LEFT, i, jstart, jstop, type_2d, type_3d, name=name)
 
     def add_right_boundary(
         self, name: str, i: int, jstart: int, jstop: int, type_2d: int, type_3d: int
@@ -840,7 +858,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         model interior to the left. This is an eastern open boundary in a
         spherical domain.
         """
-        self.add_by_index(Side.EAST, i, jstart, jstop, type_2d, type_3d, name=name)
+        self.add_by_index(Side.RIGHT, i, jstart, jstop, type_2d, type_3d, name=name)
 
     def clear(self):
         """Delete all open boundaries."""
@@ -864,12 +882,12 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         for boundary in self._boundaries:
             l = boundary.l
             mslice = slice(boundary.mstart, boundary.mstop, boundary.mstep)
-            if boundary.side in (Side.WEST, Side.EAST):
+            if boundary.side in (Side.LEFT, Side.RIGHT):
                 bdy_tmask = tmask[mslice, l]
-                bdy_uvmask = umask[mslice, l if boundary.side == Side.WEST else l + 1]
+                bdy_uvmask = umask[mslice, l if boundary.side == Side.LEFT else l + 1]
             else:
                 bdy_tmask = tmask[l, mslice]
-                bdy_uvmask = vmask[l if boundary.side == Side.SOUTH else l + 1, mslice]
+                bdy_uvmask = vmask[l if boundary.side == Side.BOTTOM else l + 1, mslice]
 
             wet = bdy_tmask != CellType.UNRESOLVED
             if not wet.all():
@@ -929,7 +947,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         # subdomains without any open boundary
         all_i = [np.empty((0,), dtype=np.intp)]
         all_j = [np.empty((0,), dtype=np.intp)]
-        side2count = {Side.WEST: 0, Side.NORTH: 0, Side.EAST: 0, Side.SOUTH: 0}
+        side2count = {Side.LEFT: 0, Side.TOP: 0, Side.RIGHT: 0, Side.BOTTOM: 0}
         self.local_to_global: list[slice] = []
         bdy_types_2d = {}
         for global_boundary in global_collection._boundaries:
@@ -984,8 +1002,8 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
 
         self.logger.info(
             f"{sum(side2count.values())} open boundaries"
-            f" ({side2count[Side.WEST]} West, {side2count[Side.NORTH]} North,"
-            f" {side2count[Side.EAST]} East, {side2count[Side.SOUTH]} South)"
+            f" ({side2count[Side.LEFT]} left, {side2count[Side.TOP]} top,"
+            f" {side2count[Side.RIGHT]} right, {side2count[Side.BOTTOM]} bottom)"
         )
 
         if self.np > 0:
@@ -1115,7 +1133,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                         while True:
                             imatch = i_in == i_out[:, np.newaxis]
                             jmatch = j_in == j_out[:, np.newaxis]
-                            (ind_out, ind_in) = (imatch & jmatch).nonzero()
+                            ind_out, ind_in = (imatch & jmatch).nonzero()
                             if ind_out.size == 0:
                                 break
                             i_in[ind_in] = i_in[ind_out]
@@ -1143,17 +1161,17 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
             # next subdomain and (b) the current boundary neighbors another boundary
             # Note that the values in boundary.{i,j} may have stride -1, which is why
             # we use min()/max() to determine the range.
-            if boundary.side in (Side.WEST, Side.EAST):
+            if boundary.side in (Side.LEFT, Side.RIGHT):
                 j = np.arange(max(boundary.j.min() - 1, 0), boundary.j.max() + 1)
                 i_out = boundary.i[0]
-                i_in = i_out + {Side.EAST: -1, Side.WEST: 1}[boundary.side]
+                i_in = i_out + {Side.RIGHT: -1, Side.LEFT: 1}[boundary.side]
                 mirror_V.append(
                     i_in, j, i_out, j, vmask[j, i_out] == CellType.MIRROR_INT
                 )
             else:
                 i = np.arange(max(boundary.i.min() - 1, 0), boundary.i.max() + 1)
                 j_out = boundary.j[0]
-                j_in = j_out + {Side.NORTH: -1, Side.SOUTH: 1}[boundary.side]
+                j_in = j_out + {Side.TOP: -1, Side.BOTTOM: 1}[boundary.side]
                 mirror_U.append(
                     i, j_in, i, j_out, umask[j_out, i] == CellType.MIRROR_INT
                 )
@@ -1162,31 +1180,31 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
             # Values at these points will be mirrored from either the neighboring
             # inner velocity point, or from inner T point (boundary.i, boundary.j)
             # [e.g., elevations at mask = BOUNDARY]
-            if boundary.side in (Side.WEST, Side.EAST):
+            if boundary.side in (Side.LEFT, Side.RIGHT):
                 j = boundary.j
-                i_in = boundary.i[0] + {Side.WEST: 0, Side.EAST: -1}[boundary.side]
-                i_out = boundary.i[0] + {Side.WEST: -1, Side.EAST: 0}[boundary.side]
+                i_in = boundary.i[0] + {Side.LEFT: 0, Side.RIGHT: -1}[boundary.side]
+                i_out = boundary.i[0] + {Side.LEFT: -1, Side.RIGHT: 0}[boundary.side]
                 mirror_U.append(i_in, j, i_out, j, tsel, umask, CellType.MIRROR_EXT)
                 mirror_TU.append(
                     boundary.i, j, i_out, j, tsel, umask, CellType.MIRROR_EXT
                 )
             else:
                 i = boundary.i
-                j_in = boundary.j[0] + {Side.SOUTH: 0, Side.NORTH: -1}[boundary.side]
-                j_out = boundary.j[0] + {Side.SOUTH: -1, Side.NORTH: 0}[boundary.side]
+                j_in = boundary.j[0] + {Side.BOTTOM: 0, Side.TOP: -1}[boundary.side]
+                j_out = boundary.j[0] + {Side.BOTTOM: -1, Side.TOP: 0}[boundary.side]
                 mirror_V.append(i, j_in, i, j_out, tsel, vmask, CellType.MIRROR_EXT)
                 mirror_TV.append(
                     i, boundary.j, i, j_out, tsel, vmask, CellType.MIRROR_EXT
                 )
 
-            if boundary.side in (Side.WEST, Side.EAST):
+            if boundary.side in (Side.LEFT, Side.RIGHT):
                 j = boundary.j
-                i_in = boundary.i[0] + {Side.WEST: 1, Side.EAST: -1}[boundary.side]
+                i_in = boundary.i[0] + {Side.LEFT: 1, Side.RIGHT: -1}[boundary.side]
                 i_out = boundary.i[0]
                 mirror_T.append(i_in, j, i_out, j, tsel)
             else:
                 i = boundary.i
-                j_in = boundary.j[0] + {Side.SOUTH: 1, Side.NORTH: -1}[boundary.side]
+                j_in = boundary.j[0] + {Side.BOTTOM: 1, Side.TOP: -1}[boundary.side]
                 j_out = boundary.j[0]
                 mirror_T.append(i, j_in, i, j_out, tsel)
 
@@ -1213,7 +1231,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                 boundary.UV = boundary.extract_uv_in(U.all_values, V.all_values)
 
                 # Prescribed depth-integrated or depth-averaged velocity
-                if boundary.side in (Side.EAST, Side.WEST):
+                if boundary.side in (Side.RIGHT, Side.LEFT):
                     boundary.flow_ext = self.u_rot[boundary.slice_bdy]
                 else:
                     boundary.flow_ext = self.v_rot[boundary.slice_bdy]
