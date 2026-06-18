@@ -781,7 +781,8 @@ class Transpose(UnaryOperator):
                 newslices[inew] = slice(s, s + 1)
                 finalslices[inew] = 0
         oldslices = tuple(newslices[inew] for inew in self.oldaxes)
-        return self._source[oldslices].transpose(self.axes)[tuple(finalslices)]
+        values = np.asarray(self._source[oldslices]).transpose(self.axes)
+        return values[tuple(finalslices)]
 
 
 def transpose(
