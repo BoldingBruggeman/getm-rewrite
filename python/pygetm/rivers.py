@@ -292,8 +292,8 @@ class GlobalRiverCollection(Mapping[str, GlobalRiver]):
         Distance limits `zl` and `zu` can be specified to control the vertical
         extent of river penetration. They can be identical,
         in which case the river will only affect a single layer. For instance,
-        use `zl=zu=0.0` to have the river enter the surface layer,
-        or `zl=zu=0.0` with `vertical_position=VerticalPosition.DistanceFromBottom`
+        use `zl=zu=0.0` to have the river enter the surface layer, or `zl=zu=0.0`
+        with :attr:`vertical_position=VerticalPosition.DistanceFromBottom`
         to have the river enter the bottom layer. If `zu` and/or `zl` exceed
         the current water depth, they will be clipped to that water depth.
 
