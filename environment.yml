@@ -16,6 +16,7 @@ dependencies:
   - gfortran
   - cython
   - python-build
+  - setuptools
   - pip
   - mpi4py
   - pyyaml

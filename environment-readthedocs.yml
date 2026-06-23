@@ -5,10 +5,11 @@ channels:
 dependencies:
   - python>=3.8
   - cmake
-  - ninja  
+  - ninja
   - gfortran
   - cython
   - python-build
+  - setuptools
   - pip
   - mpi4py
   - mpich
