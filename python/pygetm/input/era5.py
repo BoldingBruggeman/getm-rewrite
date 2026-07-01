@@ -139,32 +139,42 @@ def get(
     )
 
 
+def get_arco_dataset(
+    url: str = "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3",
+    max_cache_size: int = 1024**3,
+    **kwargs,
+) -> xr.Dataset:
+    import zarr.storage
+
+    store: zarr.storage.BaseStore = zarr.storage.FsspecStore.from_url(
+        url, read_only=True, storage_options=dict(token="anon")
+    )
+    if max_cache_size:
+        import zarr.experimental.cache_store
+
+        cache_store = zarr.storage.MemoryStore()
+        store = zarr.experimental.cache_store.CacheStore(
+            store=store, cache_store=cache_store, max_size=max_cache_size
+        )
+    return xr.open_zarr(store, **kwargs)
+
+
 def _get_arco(
     variables: Iterable[str],
     years: Iterable[str],
     area: list[float] = [90.0, -180.0, -90.0, 180.0],
     target_dir: Path = Path("."),
     logger: Optional[logging.Logger] = None,
-    url: str = "gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3",
     **kwargs,
 ):
     logger = logger or logging.getLogger()
 
-    import zarr.storage
-    import zarr.experimental.cache_store
+    import zarr
     from dask.diagnostics import ProgressBar
-
-    remote_store = zarr.storage.FsspecStore.from_url(
-        url, read_only=True, storage_options=dict(token="anon")
-    )
-    cache_store = zarr.storage.MemoryStore()
-    cached_store = zarr.experimental.cache_store.CacheStore(
-        store=remote_store, cache_store=cache_store, max_size=1024**3
-    )
 
     maxlat, minlon, minlat, maxlon = area
     results = {}
-    with xr.open_zarr(cached_store, chunks=None) as ds:
+    with get_arco_dataset(**kwargs) as ds:
         for year in years:
             ds_current = ds.sel(time=slice(f"{year}-01-01", f"{year}-12-31T23:30:00"))
             logger.info(f"  {year}:")
