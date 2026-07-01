@@ -704,6 +704,7 @@ class HaloUpdater(BaseHaloUpdater):
         combined.recv_reqs = self.recv_reqs + other.recv_reqs
         combined.send_data = self.send_data + other.send_data
         combined.recv_data = self.recv_data + other.recv_data
+        combined.halo2name = {**self.halo2name, **other.halo2name}
         combined.freeze()
         return combined
 
