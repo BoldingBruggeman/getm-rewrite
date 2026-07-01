@@ -3,13 +3,14 @@ import tempfile
 import os
 import zipfile
 import logging
-import urllib.request
+import requests
+import tqdm
 from typing import Optional, Union
 from pathlib import Path
 
-
 URL = "https://dap.ceda.ac.uk/thredds/dodsC/bodc/gebco/global/gebco_2025/ice_surface_elevation/netcdf/GEBCO_2025.nc"
 URL = "https://dap.ceda.ac.uk/bodc/gebco/global/gebco_2025/ice_surface_elevation/netcdf/gebco_2025.zip?download=1"
+URL = "https://dap.ceda.ac.uk/bodc/gebco/global/gebco_2026/sub_ice_topography_bathymetry/netcdf/GEBCO_2026_sub_ice.zip?download=1"
 
 
 def download(
@@ -22,9 +23,20 @@ def download(
         logger = logging.getLogger()
 
     with tempfile.TemporaryFile(prefix="gebco_", suffix=".zip") as fout:
-        logger.info(f"Downloading {source} to {fout.name}...")
-        with urllib.request.urlopen(source) as response:
-            shutil.copyfileobj(response, fout)
+        logger.info(f"Downloading {source}...")
+        with requests.get(source, stream=True) as response:
+            response.raise_for_status()
+            total = int(response.headers.get("content-length", 0)) or None
+            with tqdm.tqdm(
+                total=total,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+                desc="Downloading",
+            ) as bar:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    fout.write(chunk)
+                    bar.update(len(chunk))
         fout.flush()
         fout.seek(0)
 
@@ -37,9 +49,22 @@ def download(
             if outfile is None:
                 outfile = name
             outfile = Path(outfile)
-            logger.info(f"Extracting {name} from {fout.name} to {outfile}...")
+            info = zipf.getinfo(name)
+            logger.info(f"Extracting {name} to {outfile}...")
             with zipf.open(name) as ncfile, open(outfile, "wb") as outnc:
-                shutil.copyfileobj(ncfile, outnc)
+                with tqdm.tqdm(
+                    total=info.file_size,
+                    unit="B",
+                    unit_scale=True,
+                    unit_divisor=1024,
+                    desc="Extracting",
+                ) as bar:
+                    while True:
+                        chunk = ncfile.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        outnc.write(chunk)
+                        bar.update(len(chunk))
     return outfile
 
 
