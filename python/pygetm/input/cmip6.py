@@ -45,6 +45,8 @@ METEO_VARS_ACCUM = (
     "pr",  # Precipitation
 )
 
+TS_VARS = ("thetao", "so")
+
 # CMIP6 atmospheric pCO2:
 # * historical: https://doi.org/10.5194/gmd-10-2057-2017
 #   https://metagrid.esgf-west.org/search/input4MIPs/?project=input4MIPs&activeFacets=%7B%22mip_era%22%3A%22CMIP6%22%2C%22institution_id%22%3A%22UoM%22%2C%22grid_label%22%3A%22gr-0p5x360deg%22%2C%22data_node%22%3A%22esgf-node.ornl.gov%22%2C%22target_mip_list%22%3A%22CMIP%22%2C%22variable_id%22%3A%22mole-fraction-of-carbon-dioxide-in-air%22%7D
