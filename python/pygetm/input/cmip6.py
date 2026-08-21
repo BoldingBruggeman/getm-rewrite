@@ -87,6 +87,27 @@ def _create_logger() -> logging.Logger:
     return logger
 
 
+def open_nc_with_bad_time_units(paths: Iterable[str], varname: str) -> xr.DataArray:
+    da = pygetm.input.from_nc(paths, varname, decode_times=False, concat_coord="time")
+    time_unit = da["time"].attrs["units"]
+    if time_unit.startswith("months since"):
+        ref_date = cftime.num2date(
+            0.0,
+            units=time_unit.replace("months since", "days since"),
+            calendar=da["time"].attrs["calendar"],
+        )
+        if ref_date.day == 1:
+            ref_date = ref_date.replace(day=16)
+        dates = []
+        for imonth in da["time"].values:
+            new_month = 1 + (ref_date.month + imonth - 1) % 12
+            new_year = ref_date.year + (ref_date.month + imonth - 1) // 12
+            dates.append(ref_date.replace(year=new_year, month=new_month))
+        return da.assign_coords(time=dates)
+    else:
+        return pygetm.input.from_nc(paths, varname)
+
+
 @contextlib.contextmanager
 def get_global_cmip6(
     source_id: str = "GFDL-ESM4",
@@ -96,6 +117,8 @@ def get_global_cmip6(
     variables: Iterable[str] = METEO_VARS,
     prefer_streaming: bool = True,
     frequency: str = "3hr",
+    globus_endpoint: Optional[str] = None,
+    globus_path: Optional[str] = None,
     **kwargs,
 ) -> Iterator[xr.Dataset]:
     logger = logger or _create_logger()
@@ -117,33 +140,43 @@ def get_global_cmip6(
     # open using xarray
     # ds = xr.open_zarr(mapper, consolidated=True)
 
+    if kwargs.get("project", "CMIP6") == "CMIP6":
+        kwargs["experiment_id"] = experiment_id
+
+    get_kwargs = {"prefer_streaming": prefer_streaming}
+    if globus_endpoint is not None:
+        get_kwargs["globus_endpoint"] = globus_endpoint
+    if globus_path is not None:
+        get_kwargs["globus_path"] = globus_path
+
     with _get_catalog(logger, cache_dir=cache_dir) as cat:
         result = []
         for varname in variables:
             logger.info(f"Processing variable {varname}")
 
             cat = cat.search(
-                experiment_id=experiment_id,
                 source_id=source_id,
                 variable_id=varname,
                 frequency=frequency,
                 **kwargs,
             )
-            cat.remove_ensembles()
-            paths = cat.to_path_dict(prefer_streaming=prefer_streaming)[varname]
+            if kwargs.get("project", "CMIP6") == "CMIP6":
+                cat.remove_ensembles()
+            logger.info(f"  downloading {len(cat.df)} results from ESGF")
+            paths = cat.to_path_dict(**get_kwargs)[varname]
 
             logger.info(f"  opening {len(paths)} files")
-            da = pygetm.input.from_nc(paths, varname)
+            da = open_nc_with_bad_time_units(paths, varname)
 
             result.append(da.rename(varname))
 
-        yield xr.merge(result, compat="identical")
+        yield xr.merge(result, compat="identical", join="exact")
 
 
 @contextlib.contextmanager
 def _get_catalog(
     logger: logging.Logger, cache_dir: Union[os.PathLike[str], str, None] = None
-) -> Iterator[xr.Dataset]:
+) -> Iterator[intake_esgf.ESGFCatalog]:
     purge_cache_dir = cache_dir is None
     if cache_dir is None:
         cache_dir = tempfile.mkdtemp(prefix="esgf_cache_")
@@ -177,6 +210,8 @@ def get_global_pco2(
     cache_dir: Union[os.PathLike[str], str, None] = None,
     prefer_streaming: bool = True,
     add_longitude: bool = True,
+    globus_endpoint: Optional[str] = None,
+    globus_path: Optional[str] = None,
     **kwargs,
 ) -> Iterator[xr.Dataset]:
     """Get global time- and latitude-dependent atmospheric pCO2.
@@ -207,6 +242,12 @@ def get_global_pco2(
         fn.split("_GHGConcentrations_", 1)[1].split("_", 1)[1].split("_gr-", 1)[0]
     )
 
+    get_kwargs = {"prefer_streaming": prefer_streaming}
+    if globus_endpoint is not None:
+        get_kwargs["globus_endpoint"] = globus_endpoint
+    if globus_path is not None:
+        get_kwargs["globus_path"] = globus_path
+
     with _get_catalog(logger, cache_dir=cache_dir) as cat:
         cat = cat.search(
             project="input4MIPs",
@@ -214,7 +255,7 @@ def get_global_pco2(
             variable="mole_fraction_of_carbon_dioxide_in_air",
             **kwargs,
         )
-        paths = cat.to_path_dict(prefer_streaming=prefer_streaming)
+        paths = cat.to_path_dict(**get_kwargs)
         assert len(paths) == 1, f"Expected exactly one file, but found {len(paths)}"
         path = list(paths.values())[0][0]
         if experiment_id == "historical":
@@ -335,6 +376,10 @@ if __name__ == "__main__":
         dest="default_variables",
         help="do not include default variables unless explicitly specified",
     )
+    parser.add_argument(
+        "--globus_endpoint",
+        help="Globus endpoint to use for downloads. If not specified, will download directly from ESGF nodes.",
+    )
     args = parser.parse_args()
     if args.list:
         list_available_models()
@@ -359,5 +404,6 @@ if __name__ == "__main__":
             complevel=args.complevel,
             prefer_streaming=args.prefer_streaming,
             target=args.target,
+            globus_endpoint=args.globus_endpoint,
             variables=variables,
         )
