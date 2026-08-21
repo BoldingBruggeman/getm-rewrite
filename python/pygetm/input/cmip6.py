@@ -339,16 +339,15 @@ if __name__ == "__main__":
     if args.list:
         list_available_models()
     else:
+        variables = []
         if args.default_variables:
-            variables = []
             if args.target == "meteo":
                 variables.extend(METEO_VARS)
             elif args.target == "ts":
                 variables.extend(TS_VARS)
-            for var in args.variables:
-                if var not in variables:
-                    variables.append(var)
-            args.variables = variables
+        for var in args.variables:
+            if var not in variables:
+                variables.append(var)
         get(
             args.minlon,
             args.maxlon,
@@ -360,5 +359,5 @@ if __name__ == "__main__":
             complevel=args.complevel,
             prefer_streaming=args.prefer_streaming,
             target=args.target,
-            variables=args.variables,
+            variables=variables,
         )
