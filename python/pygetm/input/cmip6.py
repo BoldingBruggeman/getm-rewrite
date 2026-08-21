@@ -273,7 +273,9 @@ def get(
                 _save(ds[name], name)
     else:
         for name in METEO_VARS:
-            with get_global_cmip6(source_id, logger, variables=[name], **kwargs) as ds:
+            with get_global_cmip6(
+                source_id, logger=logger, variables=[name], **kwargs
+            ) as ds:
                 _save(ds[name], name)
 
 
