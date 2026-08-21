@@ -241,6 +241,7 @@ def get(
     logger: Optional[logging.Logger] = None,
     complevel: int = 0,
     target: str = "meteo",
+    variables: Optional[Iterable[str]] = None,
     **kwargs,
 ):
     logger = logger or _create_logger()
@@ -261,7 +262,9 @@ def get(
         with get_global_pco2(logger=logger, **kwargs) as da:
             _save(da, "pco2")
     if target == "ts":
-        for name in ("thetao", "so"):
+        if variables is None:
+            variables = TS_VARS
+        for name in variables:
             with get_global_cmip6(
                 variables=[name],
                 source_id=source_id,
@@ -272,7 +275,9 @@ def get(
             ) as ds:
                 _save(ds[name], name)
     else:
-        for name in METEO_VARS:
+        if variables is None:
+            variables = METEO_VARS
+        for name in variables:
             with get_global_cmip6(
                 source_id, logger=logger, variables=[name], **kwargs
             ) as ds:
@@ -314,10 +319,34 @@ if __name__ == "__main__":
         default="meteo",
         help="which data to download",
     )
+    parser.add_argument(
+        "-v",
+        help=f"extra variable to download",
+        action="append",
+        dest="variables",
+        metavar="VARIABLE",
+        default=[],
+    )
+    parser.add_argument(
+        "--no_default_variables",
+        action="store_false",
+        dest="default_variables",
+        help="do not include default variables unless explicitly specified",
+    )
     args = parser.parse_args()
     if args.list:
         list_available_models()
     else:
+        if args.default_variables:
+            variables = []
+            if args.target == "meteo":
+                variables.extend(METEO_VARS)
+            elif args.target == "ts":
+                variables.extend(TS_VARS)
+            for var in args.variables:
+                if var not in variables:
+                    variables.append(var)
+            args.variables = variables
         get(
             args.minlon,
             args.maxlon,
@@ -329,4 +358,5 @@ if __name__ == "__main__":
             complevel=args.complevel,
             prefer_streaming=args.prefer_streaming,
             target=args.target,
+            variables=args.variables,
         )
