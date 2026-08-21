@@ -129,6 +129,7 @@ def from_nc(
     paths: Union[str, os.PathLike[str], Iterable[Union[str, os.PathLike[str]]]],
     name: str,
     preprocess: Optional[Callable[[xr.Dataset], xr.Dataset]] = None,
+    concat_coord: Optional[str] = None,
     **kwargs,
 ) -> xr.DataArray:
     """Obtain a variable from one or more NetCDF files that can be used as value
@@ -138,11 +139,13 @@ def from_nc(
         paths: single file path, a pathname pattern containing `*` and/or `?`, or a
             sequence of file paths. If multiple paths are provided (or the pattern
             resolves to multiple valid path names), the files will be concatenated
-            along their time dimension.
+            along the specified dimension (by default: time).
         preprocess: function that transforms the :class:`xarray.Dataset` opened for
             every path provided. This can be used to modify the datasets before
             concatenation in time is attempted, for instance, to cut off time indices
             that overlap between files.
+        concat_coord: name of the coordinate for the dimension along which to concatenate
+            multiple files. If not provided, the default is the time coordinate.
         **kwargs: additional keyword arguments to be passed to
             :func:`xarray.open_dataset`
     """
@@ -184,10 +187,20 @@ def from_nc(
     if len(arrays) == 1:
         return arrays[0]
     else:
-        assert all(array.getm.time is not None for array in arrays)
+
+        def _get_coord(array: xr.DataArray) -> Optional[xr.DataArray]:
+            if concat_coord is not None:
+                return array.coords.get(concat_coord)
+            return array.getm.time
+
+        if any(_get_coord(array) is None for array in arrays):
+            raise Exception(
+                "No time coordinate found in one or more arrays;"
+                " you should provide concat_coord"
+            )
         return xr.concat(
-            sorted(arrays, key=lambda a: a.getm.time.values.flat[0]),
-            dim=arrays[0].getm.time.dims[0],
+            sorted(arrays, key=lambda a: _get_coord(a).values.flat[0]),
+            dim=_get_coord(arrays[0]).dims[0],
             coords="minimal",
             combine_attrs="drop_conflicts",
         )
