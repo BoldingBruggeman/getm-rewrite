@@ -1180,22 +1180,25 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
             # Values at these points will be mirrored from either the neighboring
             # inner velocity point, or from inner T point (boundary.i, boundary.j)
             # [e.g., elevations at mask = BOUNDARY]
+            # Take care where borders meet:
+            # When U/V points on the outside of boundary 1 border a T point from
+            # boundary 2 (e.g. at concave corners), the mirroring will already have
+            # been handled by the above MIRROR_INT logic. Hence we only need to
+            # handle (and check for) the MIRROR_EXT cases here.
             if boundary.side in (Side.LEFT, Side.RIGHT):
                 j = boundary.j
                 i_in = boundary.i[0] + {Side.LEFT: 0, Side.RIGHT: -1}[boundary.side]
                 i_out = boundary.i[0] + {Side.LEFT: -1, Side.RIGHT: 0}[boundary.side]
-                mirror_U.append(i_in, j, i_out, j, tsel, umask, CellType.MIRROR_EXT)
-                mirror_TU.append(
-                    boundary.i, j, i_out, j, tsel, umask, CellType.MIRROR_EXT
-                )
+                usel = tsel & (umask[j, i_out] == CellType.MIRROR_EXT)
+                mirror_U.append(i_in, j, i_out, j, usel)
+                mirror_TU.append(boundary.i, j, i_out, j, usel)
             else:
                 i = boundary.i
                 j_in = boundary.j[0] + {Side.BOTTOM: 0, Side.TOP: -1}[boundary.side]
                 j_out = boundary.j[0] + {Side.BOTTOM: -1, Side.TOP: 0}[boundary.side]
-                mirror_V.append(i, j_in, i, j_out, tsel, vmask, CellType.MIRROR_EXT)
-                mirror_TV.append(
-                    i, boundary.j, i, j_out, tsel, vmask, CellType.MIRROR_EXT
-                )
+                vsel = tsel & (vmask[j_out, i] == CellType.MIRROR_EXT)
+                mirror_V.append(i, j_in, i, j_out, vsel)
+                mirror_TV.append(i, boundary.j, i, j_out, vsel)
 
             if boundary.side in (Side.LEFT, Side.RIGHT):
                 j = boundary.j
