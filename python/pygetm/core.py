@@ -1010,7 +1010,8 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """Boolean array indicating invalid data points, including halos"""
         if self._ndim == 0:
             return np.array(False)
-        valid_mask_values = self.attrs.get("_valid_at", ()) + (CellType.ACTIVE,)
+        default_valid = CellType.BOUNDARY if self.on_boundary else CellType.ACTIVE
+        valid_mask_values = self.attrs.get("_valid_at", ()) + (default_valid,)
         mask = self.grid.get_mask(valid_mask_values, self.z)
         if self.on_boundary:
             open_boundaries = self.grid.open_boundaries
