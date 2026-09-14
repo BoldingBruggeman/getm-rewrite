@@ -164,7 +164,7 @@ class Tiling:
         self.map = map
         self.nrow, self.ncol = self.map.shape
 
-        self.n_neigbors = 0
+        self.n_neighbors = 0
 
         def find_neighbor(ioffset: int, joffset: int) -> int:
             if self.irow is None:
@@ -176,7 +176,7 @@ class Tiling:
             if periodic_y:
                 i = i % self.nrow
             if i >= 0 and i < self.nrow and j >= 0 and j < self.ncol:
-                self.n_neigbors += 1
+                self.n_neighbors += 1
                 return int(self.map[i, j])
             return -1
 
@@ -303,7 +303,7 @@ class Tiling:
 
     def __bool__(self) -> bool:
         """Return True if the curent subdomain has any neighbors, False otherwise."""
-        return self.n_neigbors > 0
+        return self.n_neighbors > 0
 
     def subdomain2rawslices(
         self,
