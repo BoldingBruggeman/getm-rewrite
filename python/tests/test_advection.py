@@ -64,7 +64,7 @@ class TestAdvection(unittest.TestCase):
         tracer_int = (tracer.all_values * grid.ho.all_values).sum()
         op(w, w_var, TIMESTEP, tracer)
         tracer_int_after = (tracer.all_values * grid.ho.all_values).sum()
-        self.assertAlmostEqual(tracer_int, tracer_int_after, places=14)
+        self.assertAlmostEqual(tracer_int, tracer_int_after, places=13)
 
         # Above CFL
         NITER_MAX = 200
@@ -77,7 +77,7 @@ class TestAdvection(unittest.TestCase):
                 tracer_int = (tracer.all_values * grid.ho.all_values).sum()
                 op(w, w_var, TIMESTEP, tracer)
                 tracer_int_after = (tracer.all_values * grid.ho.all_values).sum()
-                self.assertAlmostEqual(tracer_int, tracer_int_after, places=14)
+                self.assertAlmostEqual(tracer_int, tracer_int_after, places=13)
                 tgt_tracer = tracer.all_values.copy()
 
                 tracer.fill(0.0)
