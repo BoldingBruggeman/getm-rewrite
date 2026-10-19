@@ -1,0 +1,78 @@
+name: Performance analysis
+on:
+  push:
+    branches-ignore:
+    - "devel"
+  pull_request:
+jobs:
+   gfortran:
+      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+      runs-on: ${{ matrix.os }}
+      env:
+         RDMAV_FORK_SAFE: 1
+         OMPI_MCA_rmaps_base_oversubscribe: 1 # enable OpenMPI oversubscribe (old convention)
+         PRTE_MCA_rmaps_default_mapping_policy: :oversubscribe # enable OpenMPI oversubscribe (new convention)
+         OMPI_MCA_state_base_verbose: 5
+         OMPI_MCA_mca_base_component_show_load_errors: 1
+         TMPDIR: /tmp # workaround too-long-paths for OpenMPI on Mac
+         I_MPI_FABRICS: shm #:ofi
+         FI_PROVIDER: sockets #tcp
+      defaults:
+         run:
+            shell: ${{ matrix.os == 'windows-latest' && 'cmd /C call {0}' || 'bash -el {0}' }}
+      strategy:
+         fail-fast: false
+         matrix:
+            os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+            python-version: ["3.14"]
+      steps:
+         - name: Clone
+           uses: actions/checkout@v7
+           with:
+              submodules: recursive
+         - name: Clone getm-setups
+           run: |
+              git clone https://git.code.sf.net/p/getm/getm-setups
+           env:
+              GIT_CLONE_PROTECTION_ACTIVE: false
+         - uses: conda-incubator/setup-miniconda@v4
+           with:
+              auto-update-conda: true
+              python-version: ${{ matrix.python-version }}
+              environment-file: environment.yml
+              activate-environment: pygetm
+              conda-remove-defaults: "true"
+         - name: List installed conda packages
+           run: conda export
+         - name: Compile (Linux/Mac)
+           if: matrix.os != 'windows-latest'
+           run: source ./install
+         - name: Compile (Windows)
+           if: matrix.os == 'windows-latest'
+           run: install.bat
+         - name: Run performance analysis
+           run: python .github/workflows/performance.py perf-new.log
+         - name: Clone 
+           uses: actions/checkout@v7
+           with:
+              submodules: recursive
+              ref: 'devel'
+              path: 'devel'
+         - name: Setup reference environment
+           run: |
+              conda env create -f devel/environment.yml -n pygetm-ref
+              conda activate pygetm-ref
+         - name: Compile (Linux/Mac)
+           if: matrix.os != 'windows-latest'
+           run: |
+              conda activate pygetm-ref
+              source devel/install
+         - name: Compile (Windows)
+           if: matrix.os == 'windows-latest'
+           run: |
+              conda activate pygetm-ref
+              devel/install.bat
+         - name: Run reference performance analysis
+           run: python .github/workflows/performance.py perf-ref.log
+           env:
+              CONDA_DEFAULT_ENV: pygetm-ref
