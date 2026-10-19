@@ -69,5 +69,7 @@ add_custom_command(OUTPUT _pygetm.c
 Python3_add_library(_pygetm MODULE WITH_SOABI
   "${CMAKE_CURRENT_BINARY_DIR}/_pygetm.c")
 target_link_libraries(_pygetm PRIVATE cgetm Python3::NumPy)
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT _pygetm)
+set_property(TARGET _pygetm PROPERTY VS_DEBUGGER_COMMAND "${Python3_EXECUTABLE}")
 
 install(TARGETS _pygetm DESTINATION .)
