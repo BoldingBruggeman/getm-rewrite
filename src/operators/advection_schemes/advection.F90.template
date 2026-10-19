@@ -244,8 +244,8 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
    real(real64), dimension(1:kmax-1) :: cfl0, cfls
    real(real64), dimension(1:kmax), target :: haux, faux
 #else
-   real(real64), dimension(:), allocatable, save :: flux, cfl0, cfls
-   real(real64), dimension(:), allocatable, target, save :: haux, faux
+   real(real64), dimension(:), allocatable :: flux, cfl0, cfls
+   real(real64), dimension(:), allocatable, target :: haux, faux
 #endif
    real(real64), dimension(:), pointer :: p_haux, p_faux
    real(real64) :: itersm1, dtk
@@ -253,14 +253,10 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
    real(real64) :: deltaf, deltafu, ratio
    real(real64) :: limiter
    integer :: i, j, k, it, iters, iters_new
-   logical, save :: first=.true.
 !---------------------------------------------------------------------------
-   if (first) then
 #ifndef _AUTOMATIC_
-      allocate(flux(0:kmax), cfl0(1:kmax-1), cfls(1:kmax-1), haux(1:kmax), faux(1:kmax))
+   allocate(flux(0:kmax), cfl0(1:kmax-1), cfls(1:kmax-1), haux(1:kmax), faux(1:kmax))
 #endif
-      first = .false.
-   end if
 
    flux(0   ) = 0._real64
    flux(kmax) = 0._real64
