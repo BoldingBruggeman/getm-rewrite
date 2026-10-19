@@ -18,8 +18,6 @@ logging.basicConfig(handlers=(handler,))
 
 print(f"Importing pygetm from {pygetm.__file__}")
 
-rng = np.random.default_rng()
-
 
 def create_grid(nx: int, ny: int, nz: int, **kwargs) -> pygetm.core.Grid:
     EXTENT = 50000
@@ -69,36 +67,76 @@ for grid in test_grids:
         (f"test_sinking{grid.ho.shape}", functools.partial(test_sinking, grid))
     )
 
+
+def parse_results(fn: str) -> dict[str, float]:
+    with open(fn, "r") as f:
+        return {line.split(":")[0]: float(line.split(":")[1]) for line in f}
+
+
+def write_results(outfile: str, results: dict[str, float]) -> None:
+    with open(outfile, "w") as f:
+        for name, elapsed in results.items():
+            f.write(f"{name}: {elapsed}\n")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run advection tests.")
-    parser.add_argument(
-        "outfile", type=str, help="Output file to write test results to", nargs="?"
+    subparsers = parser.add_subparsers(required=True, dest="command")
+    parser_run = subparsers.add_parser("run", help="Run the performance tests")
+    parser_run.add_argument(
+        "out", type=str, help="Output file to write test results to", nargs="?"
     )
-    parser.add_argument(
-        "--compare", type=str, help="Previous results file to compare against"
+    parser_compare = subparsers.add_parser(
+        "compare", help="Compare performance test results"
+    )
+    parser_compare.add_argument(
+        "ref", type=str, help="Reference results file to compare against"
+    )
+    parser_compare.add_argument(
+        "new", type=str, help="New results file to compare against"
+    )
+    parser_average = subparsers.add_parser(
+        "average", help="Average performance test results"
+    )
+    parser_average.add_argument(
+        "files", type=str, nargs="+", help="Performance test result files to average"
+    )
+    parser_average.add_argument(
+        "--out", type=str, help="Output file to write test results to"
     )
     args = parser.parse_args()
 
-    if args.compare:
-        with open(args.compare, "r") as f:
-            previous_results = {
-                line.split(":")[0]: float(line.split(":")[1]) for line in f
-            }
+    if args.command == "run":
+        result = {}
+        for name, test in tests:
+            elapsed = test()
+            result[name] = elapsed
+            print(f"{name}: {elapsed:.3f}", flush=True)
 
-    result = {}
-    for name, test in tests:
-        elapsed = test()
-        result[name] = elapsed
-        postfix = ""
-        if args.compare and name in previous_results:
-            change = 100 * (elapsed - previous_results[name]) / previous_results[name]
-            postfix = (
-                f" (previous: {previous_results[name]:.3f} s) Change: {change:.1f} %"
-            )
-        print(f"{name}: {elapsed:.3f} s{postfix}")
+        if args.out:
+            write_results(args.out, result)
 
-    if args.outfile:
-        with open(args.outfile, "w") as f:
-            for name, test in tests:
-                elapsed = result[name]
-                f.write(f"{name}: {elapsed}\n")
+    elif args.command == "compare":
+        previous_results = parse_results(args.ref)
+        new_results = parse_results(args.new)
+        for name in previous_results:
+            if name in new_results:
+                change = (
+                    100
+                    * (new_results[name] - previous_results[name])
+                    / previous_results[name]
+                )
+                print(
+                    f"{name}: previous = {previous_results[name]:.3f} s, new = {new_results[name]:.3f} s, change = {change:.1f} %"
+                )
+    elif args.command == "average":
+        all_results = [parse_results(fn) for fn in args.files]
+        n = len(all_results)
+        averaged_results = {}
+        for name in all_results[0]:
+            if all(name in result for result in all_results):
+                averaged_results[name] = sum(r[name] for r in all_results) / n
+        for name, avg in averaged_results.items():
+            print(f"{name}: {avg:.3f}")
+        if args.out:
+            write_results(args.out, averaged_results)

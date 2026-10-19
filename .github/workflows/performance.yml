@@ -17,9 +17,6 @@ jobs:
          TMPDIR: /tmp # workaround too-long-paths for OpenMPI on Mac
          I_MPI_FABRICS: shm #:ofi
          FI_PROVIDER: sockets #tcp
-      #defaults:
-      #   run:
-      #      shell: ${{ matrix.os == 'windows-latest' && 'cmd /C call {0}' || 'bash -el {0}' }}
       strategy:
          fail-fast: false
          matrix:
@@ -66,5 +63,12 @@ jobs:
               conda run -s -n pygetm-ref call devel/install.bat
          - name: Run performance analyses
            run: |
-              conda run -s -n pygetm-ref python .github/workflows/performance.py perf-ref.log
-              conda run -s -n pygetm python .github/workflows/performance.py perf-new.log --compare perf-ref.log
+              conda run -s -n pygetm-ref python .github/workflows/performance.py run perf-ref1.log
+              conda run -s -n pygetm python .github/workflows/performance.py run perf-new1.log
+              conda run -s -n pygetm-ref python .github/workflows/performance.py run perf-ref2.log
+              conda run -s -n pygetm python .github/workflows/performance.py run perf-new2.log
+              conda run -s -n pygetm-ref python .github/workflows/performance.py run perf-ref3.log
+              conda run -s -n pygetm python .github/workflows/performance.py run perf-new3.log
+              conda run -s -n pygetm python .github/workflows/performance.py average perf-ref*.log --out perf-ref-average.log
+              conda run -s -n pygetm python .github/workflows/performance.py average perf-new*.log --out perf-new-average.log
+              conda run -s -n pygetm python .github/workflows/performance.py compare perf-ref-average.log perf-new-average.log
