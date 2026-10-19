@@ -49,7 +49,9 @@ def for_each_grid(test_func):
 
 class TestAdvection(unittest.TestCase):
     @for_each_grid
-    def test_vertical_advection_equal_thicknesses(self, grid):
+    def test_sinking(self, grid):
+        # Tracer moves downwards due to sinking (w_var<0)
+        # but water remains stationary (w=0)
         op = pygetm.operators.VerticalAdvection(grid)
         w = grid.array(z=pygetm.INTERFACES)
         w_var = grid.array(z=pygetm.INTERFACES)
