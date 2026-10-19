@@ -3,6 +3,7 @@ import timeit
 import functools
 from collections.abc import Callable
 import argparse
+import glob
 
 import numpy as np
 
@@ -130,7 +131,9 @@ if __name__ == "__main__":
                     f"{name}: previous = {previous_results[name]:.3f} s, new = {new_results[name]:.3f} s, change = {change:.1f} %"
                 )
     elif args.command == "average":
-        all_results = [parse_results(fn) for fn in args.files]
+        all_results = []
+        for fn in args.files:
+            all_results += [parse_results(f) for f in glob.glob(fn)]
         n = len(all_results)
         averaged_results = {}
         for name in all_results[0]:
