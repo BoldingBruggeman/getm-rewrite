@@ -63,8 +63,8 @@ jobs:
          - name: Compile (Windows)
            if: matrix.os == 'windows-latest'
            run: |
-              conda run -s -n pygetm install.bat
-              conda run -s -n pygetm-ref devel/install.bat
+              conda run -s -n pygetm call install.bat
+              conda run -s -n pygetm-ref call devel/install.bat
          - name: Run performance analysis on reference code
            run: conda run -s -n pygetm-ref python .github/workflows/performance.py perf-ref.log
          - name: Run performance analysis on new code
