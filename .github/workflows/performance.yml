@@ -58,15 +58,13 @@ jobs:
          - name: Compile (Linux/Mac)
            if: matrix.os != 'windows-latest'
            run: |
-              source ./install
-              conda activate pygetm-ref
-              source devel/install
+              conda run -s -n pygetm bash ./install
+              conda run -s -n pygetm-ref bash devel/install
          - name: Compile (Windows)
            if: matrix.os == 'windows-latest'
            run: |
-              install.bat
-              conda activate pygetm-ref
-              devel/install.bat
+              conda run -s -n pygetm install.bat
+              conda run -s -n pygetm-ref devel/install.bat
          - name: Run performance analysis on reference code
            run: conda run -s -n pygetm-ref python .github/workflows/performance.py perf-ref.log
          - name: Run performance analysis on new code
