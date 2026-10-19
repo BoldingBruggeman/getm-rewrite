@@ -16,6 +16,8 @@ handler = logging.StreamHandler()
 handler.setLevel(level=logging.ERROR)
 logging.basicConfig(handlers=(handler,))
 
+print(f"Importing pygetm from {pygetm.__file__}")
+
 rng = np.random.default_rng()
 
 

@@ -17,9 +17,9 @@ jobs:
          TMPDIR: /tmp # workaround too-long-paths for OpenMPI on Mac
          I_MPI_FABRICS: shm #:ofi
          FI_PROVIDER: sockets #tcp
-      defaults:
-         run:
-            shell: ${{ matrix.os == 'windows-latest' && 'cmd /C call {0}' || 'bash -el {0}' }}
+      #defaults:
+      #   run:
+      #      shell: ${{ matrix.os == 'windows-latest' && 'cmd /C call {0}' || 'bash -el {0}' }}
       strategy:
          fail-fast: false
          matrix:
@@ -37,8 +37,7 @@ jobs:
               ref: 'devel'
               path: 'devel'
          - name: Clone getm-setups
-           run: |
-              git clone https://git.code.sf.net/p/getm/getm-setups
+           run: git clone https://git.code.sf.net/p/getm/getm-setups
            env:
               GIT_CLONE_PROTECTION_ACTIVE: false
          - uses: conda-incubator/setup-miniconda@v4
@@ -65,7 +64,7 @@ jobs:
            run: |
               conda run -s -n pygetm call install.bat
               conda run -s -n pygetm-ref call devel/install.bat
-         - name: Run performance analysis on reference code
-           run: conda run -s -n pygetm-ref python .github/workflows/performance.py perf-ref.log
-         - name: Run performance analysis on new code
-           run: conda run -s -n pygetm python .github/workflows/performance.py perf-new.log --compare perf-ref.log
+         - name: Run performance analyses
+           run: |
+              conda run -s -n pygetm-ref python .github/workflows/performance.py perf-ref.log
+              conda run -s -n pygetm python .github/workflows/performance.py perf-new.log --compare perf-ref.log
