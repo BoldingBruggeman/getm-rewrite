@@ -220,6 +220,7 @@ SUBROUTINE v2d(imin,imax,jmin,jmax,halo,vmask,dxv,idyv,hv,v,tmask,iA,apply_diffu
 !#endif
 END SUBROUTINE v2d
 
+#define _AUTOMATIC_
 SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
    ! Subroutine arguments
    integer, intent(in) :: imin, imax, jmin, jmax, kmax
@@ -240,14 +241,12 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
 
 !  Local variables
 #ifdef _AUTOMATIC_
-   real(real64), dimension(0:kmax) :: flux
-   real(real64), dimension(1:kmax-1) :: cfl0, cfls
-   real(real64), dimension(1:kmax), target :: haux, faux
+   real(real64), dimension(0:kmax)   :: flux, waux
+   real(real64), dimension(1:kmax-1) :: cfls, w_varaux
+   real(real64), dimension(1:kmax)   :: haux, faux
 #else
-   real(real64), dimension(:), allocatable :: flux, cfl0, cfls
-   real(real64), dimension(:), allocatable, target :: haux, faux
+   real(real64), dimension(:), allocatable :: flux, waux, cfls, w_varaux, haux, faux
 #endif
-   real(real64), dimension(:), pointer :: p_haux, p_faux
    real(real64) :: itersm1, dtk
    real(real64) :: cfl, fu, fuu, fd, hfo, advn
    real(real64) :: deltaf, deltafu, ratio
@@ -255,45 +254,41 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
    integer :: i, j, k, it, iters, iters_new
 !---------------------------------------------------------------------------
 #ifndef _AUTOMATIC_
-   allocate(flux(0:kmax), cfl0(1:kmax-1), cfls(1:kmax-1), haux(1:kmax), faux(1:kmax))
+   allocate(flux(0:kmax), cfls(1:kmax-1), haux(1:kmax), faux(1:kmax), w_varaux(1:kmax-1), waux(0:kmax))
 #endif
+
+   waux(0   ) = 0._real64
+   waux(kmax) = 0._real64
 
    flux(0   ) = 0._real64
    flux(kmax) = 0._real64
-
 
    do j=jmin,jmax
       do i=imin,imax
          if (tmask(i,j) .eq. 1) then
 
-            do k=1,kmax-1
-               cfl0(k) = ABS( w_var(i,j,k) ) * dt / MIN( h(i,j,k) , h(i,j,k+1) )
-            end do
-
             iters = 1
             itersm1 = 1._real64
             dtk = dt
 
-            p_haux => haux
-            p_faux => faux
-
             it = 1
+
+            waux(1:kmax-1) = w(i,j,1:kmax-1)
+            w_varaux(:) = w_var(i,j,1:kmax-1)
 
             do while (it .le. iters)
 
                if (it .eq. 1) then
                   haux = h(i,j,:)
                   faux = f(i,j,:)
-                  cfls = cfl0
-               else
-                  do k=1,kmax-1
-                     cfls(k) = ABS( w_var(i,j,k) ) * dt / MIN( haux(k) , haux(k+1) )
-                  end do
                end if
+               do k=1,kmax-1
+                  cfls(k) = ABS( w_varaux(k) ) * dt / MIN( haux(k) , haux(k+1) )
+               end do
 
                if (iters .lt. itersmax) then
 !                 estimate number of iterations by maximum cfl number in water column
-                  cfl = MAXVAL( cfls(1-0:kmax-1) )
+                  cfl = MAXVAL( cfls(1:kmax-1) )
                   iters_new = MAX( 1 , CEILING( cfl ) )
                   if (iters_new .gt. iters) then
                      if (iters_new .gt. itersmax) then
@@ -344,24 +339,22 @@ SUBROUTINE w3d(imin,imax,jmin,jmax,kmax,halo,w,w_var,tmask,dt,h,f)
 #include "limiters.h"
                      fu = fu + 0.5*limiter*(1-cfl)*deltaf
                   end if
-                  flux(k) = w_var(i,j,k)*fu
+                  flux(k) = w_varaux(k)*fu
                end do
-
-               if (it .eq. iters) then
-                  p_haux => h(i,j,:)
-                  p_faux => f(i,j,:)
-               end if
 
                do k=1,kmax
                   hfo = haux(k)*faux(k)
-                  p_haux(k) = haux(k) - dtk*(w(i,j,k  )-w(i,j,k-1))
+                  haux(k) = haux(k) - dtk*(waux(k)-waux(k-1))
                   advn = flux(k  ) - flux(k-1)
-                  p_faux(k) = ( hfo - dtk*advn ) / p_haux(k)
+                  faux(k) = ( hfo - dtk*advn ) / haux(k)
                end do
 
                it = it + 1
 
             end do
+
+            h(i,j,:) = haux
+            f(i,j,:) = faux
 
          end if
 
