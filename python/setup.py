@@ -53,12 +53,13 @@ class CMakeBuild(build_ext):
             os.makedirs(build_dir)
 
         build_type = "Debug" if self.debug else "Release"
-        cmake_args = list(ext.cmake_args) + [f"-DCMAKE_BUILD_TYPE={build_type}"]
+        cmake_args = list(ext.cmake_args)
         if self.cmake_opts is not None:
             cmake_args += shlex.split(self.cmake_opts)
+        cmake_args.append(f"-DCMAKE_BUILD_TYPE={build_type}")
         if self.compiler is not None:
             cmake_args.append(f"-DCMAKE_Fortran_COMPILER={self.compiler}")
-        build_args = ["--config", build_type]
+        build_args = ["--config", os.environ.get("CMAKE_CONFIG_TYPE", build_type)]
         if ext.fabm:
             libname = ext.name.rsplit(".", 1)[-1]
             cmake_args += [f"-DPYFABM_NAME={libname}", f"-DPYFABM_DIR={install_prefix}"]
