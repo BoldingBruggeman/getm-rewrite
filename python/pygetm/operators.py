@@ -209,6 +209,21 @@ class VerticalAdvection(_pygetm.VerticalAdvection):
         var: core.Array,
         new_h: bool = False,
     ):
+        """
+        Perform vertical advection on the given variable.
+        This method updates the vertical distribution of the variable
+        based on the vertical velocity of the water and the variable itself.
+
+        Args:
+            w: Vertical velocity of the water at layer interfaces (m s-1)
+            w_var: Vertical velocity of the variable at interfaces (m s-1).
+                This is the sum of the vertical velocity of the water and of
+                the variable moving through the water (e.g. floating or sinking)
+            timestep: Time step (s)
+            var: Variable to be advected
+            new_h: Whether to start from the grid's new layer thicknesses (`hn`)
+                or the old ones (`ho`, default)
+        """
         assert w.grid is self.grid and w.z == INTERFACES
         assert w_var.grid is self.grid and w_var.z == INTERFACES
         self.h[...] = (self.grid.hn if new_h else self.grid.ho).all_values
