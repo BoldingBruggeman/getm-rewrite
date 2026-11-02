@@ -10,7 +10,6 @@ from typing import (
     NamedTuple,
     TypeVar,
 )
-import collections
 import enum
 import functools
 
@@ -187,7 +186,7 @@ class FieldCollection(Mapping[str, Base]):
         default_dtype: Optional[DTypeLike] = None,
         sub: bool = False,
     ):
-        self.fields: MutableMapping[str, Base] = collections.OrderedDict()
+        self.fields: MutableMapping[str, Base] = {}
         self.expression2name: MutableMapping[str, str] = {}
         self.available_fields = available_fields
         self.default_dtype = default_dtype
