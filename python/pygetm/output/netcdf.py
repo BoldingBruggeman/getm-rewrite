@@ -1,8 +1,7 @@
 from typing import Optional, Mapping, Union
 import os
+from typing import Any
 import logging
-import datetime
-import sys
 from pathlib import Path
 import contextlib
 
@@ -12,15 +11,14 @@ import netCDF4
 from . import File
 from . import operators
 import pygetm.core
-import pygetm._pygetm
 
 
-def _create_file(path: Union[os.PathLike, str], **kwargs) -> netCDF4.Dataset:
+def _create_file(
+    path: Union[os.PathLike, str], attrs: Mapping[str, Any], **kwargs
+) -> netCDF4.Dataset:
     nc = netCDF4.Dataset(path, "w", **kwargs)
-    now = datetime.datetime.now()
-    cmdline = " ".join(sys.argv)
-    nc.history = f"{now:%Y-%m-%d %H:%M:%S} {cmdline}"
-    nc.source = f"pygetm {pygetm._pygetm.get_version()}"
+    for k, v in attrs.items():
+        setattr(nc, k, v)
     return nc
 
 
@@ -163,7 +161,7 @@ class NetCDFFile(File):
         if self.is_root or self.sub:
             included_fields = self.select_nonempty_fields()
             if included_fields:
-                self.nc = _create_file(self.path, format=self.format)
+                self.nc = _create_file(self.path, attrs=self.attrs, format=self.format)
                 has_time, has_time_bounds = _create_dimensions(self.nc, included_fields)
                 if has_time:
                     time_reference = self.time_reference or default_time_reference
@@ -215,6 +213,12 @@ class NetCDFFile(File):
             and self.itime % self.sync_interval == 0
         ):
             self.nc.sync()
+
+    def update_attributes(self, **new_attrs):
+        super().update_attributes(**new_attrs)
+        if self.nc is not None:
+            for k, v in new_attrs.items():
+                setattr(self.nc, k, v)
 
     def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         if self.nc is not None:

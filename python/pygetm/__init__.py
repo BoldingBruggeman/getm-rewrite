@@ -3,6 +3,7 @@ from . import parallel
 from . import core
 from . import domain
 from . import input
+from . import output
 from . import airsea
 from . import radiation
 from . import vertical_mixing
@@ -23,3 +24,5 @@ from .airsea import NET_FLUX, DOWNWARD_FLUX
 from .output import TimeUnit
 from .momentum import CoriolisScheme
 from .radiation import Jerlov
+
+output.SOURCE = f"pygetm {_pygetm.get_version()}"

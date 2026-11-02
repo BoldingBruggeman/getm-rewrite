@@ -1,8 +1,9 @@
 import logging
-from typing import Mapping, Optional, Union, TYPE_CHECKING
+from typing import Mapping, Optional, Union, TYPE_CHECKING, Any
 import datetime
 import enum
 import os
+import sys
 
 from numpy.typing import DTypeLike
 import cftime
@@ -32,6 +33,8 @@ time_unit2seconds = {
     TimeUnit.HOURS: 3600,
     TimeUnit.DAYS: 86400,
 }
+
+SOURCE = None
 
 
 class File(operators.FieldCollection):
@@ -87,6 +90,7 @@ class File(operators.FieldCollection):
         save_initial: bool = True,
         sub: bool = False,
         add_coordinates: bool = True,
+        attrs: Mapping[str, Any] = {},
     ):
         """
         Args:
@@ -123,6 +127,12 @@ class File(operators.FieldCollection):
         self._stop = stop
         self._start_seconds = 0.0
         self._stop_seconds: Optional[float] = None
+
+        now = datetime.datetime.now()
+        cmdline = " ".join(sys.argv)
+        self.attrs = dict(attrs, history=f"{now:%Y-%m-%d %H:%M:%S} {cmdline}")
+        if SOURCE is not None:
+            self.attrs["source"] = SOURCE
 
     def _next_time(
         self,
@@ -198,6 +208,9 @@ class File(operators.FieldCollection):
 
     def save_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         raise NotImplementedError
+
+    def update_attributes(self, **new_attrs):
+        self.attrs.update(new_attrs)
 
     def close_now(self, seconds_passed: float, time: Optional[cftime.datetime]):
         pass
