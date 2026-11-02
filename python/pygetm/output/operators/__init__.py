@@ -339,8 +339,12 @@ class FieldCollection(Mapping[str, Base]):
         return final_name
 
     def add_coordinates(self):
-        for field in list(self.fields.values()):
-            field.coordinates.extend(self.require(f) for f in field.coords)
+        todo = list(self.fields.values())
+        while todo:
+            previous = frozenset(self.fields.keys())
+            for field in todo:
+                field.coordinates.extend(self.require(f) for f in field.coords)
+            todo = [v for n, v in self.fields.items() if n not in previous]
 
     def require(self, field: Base) -> str:
         """Ensure that the specified variable (or expression of variables) is included
