@@ -199,7 +199,8 @@ class ZarrGroup(File):
         for field, cache in self._varying_fields:
             field.get(cache[self._ncache, ...])
         self.itime += 1
-        self._ncache += 1
+        if self.root is not None:
+            self._ncache += 1
         if self._ncache == self._chunk_size:
             self._empty_cache()
 
