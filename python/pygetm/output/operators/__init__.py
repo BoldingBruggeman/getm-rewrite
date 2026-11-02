@@ -135,7 +135,7 @@ class Base:
 
 
 class WrappedArray(Base):
-    __slots__ = ("_name", "values", "_global_field")
+    __slots__ = ("_name", "values", "_global_field", "_coords")
 
     def __init__(
         self,
@@ -143,6 +143,7 @@ class WrappedArray(Base):
         name: str,
         dims: tuple[str, ...],
         global_field: Optional[Base] = None,
+        coords: Iterable[Base] = (),
         **kwargs,
     ):
         super().__init__(
@@ -151,6 +152,7 @@ class WrappedArray(Base):
         self._name = name
         self.values = values
         self._global_field = global_field or self
+        self._coords = tuple(coords)
 
     def gather(self) -> Base:
         return self._global_field
@@ -161,7 +163,7 @@ class WrappedArray(Base):
 
     @property
     def coords(self) -> Iterable[Base]:
-        return ()
+        yield from self._coords
 
     def get(
         self, out: Optional[ArrayLike] = None, slice_spec: tuple[int, ...] = ()
