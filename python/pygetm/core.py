@@ -744,11 +744,11 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         "_name",
         "attrs",
         "_fill_value",
-        "saved",
         "_shape",
         "_ndim",
         "_size",
         "_dtype",
+        "_initialization_callbacks",
         "values",
         "halo_updaters",
         "open_boundaries",
@@ -787,12 +787,12 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
             if fill_value is None or dtype is None
             else np.array(fill_value, dtype=dtype)
         )
-        self.saved = False  #: to be set if this variable is requested for output
         self._shape = shape
         self._ndim = None if shape is None else len(shape)
         self._size = None if shape is None else np.prod(shape)
         self._dtype = dtype
         self.values = None
+        self._initialization_callbacks: list[Callable[[], None]] = []
 
         class Proxy(Sequence[parallel.BaseHaloUpdater]):
             def __init__(self, target: "Array", att: str):
@@ -850,6 +850,10 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
 
         self._shape = self.values.shape
         self._size = self.values.size
+
+        for cb in self._initialization_callbacks:
+            cb()
+        self._initialization_callbacks.clear()
 
     def update_halos(self, group: parallel.Neighbor = parallel.Neighbor.ALL):
         self.halo_updaters[group]()
@@ -1033,6 +1037,17 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """
         return np.ma.array(self.values, mask=self.mask)
 
+    @property
+    def saved(self) -> bool:
+        """Whether the values of this variable are needed for output (or any internal purpose).
+        Set this to `True` to ensure values for this array are computed.
+        """
+        return self.attrs.get("_saved", False)
+
+    @saved.setter
+    def saved(self, value: bool):
+        self.attrs["_saved"] = value
+
     def plot(self, mask: bool = True, **kwargs):
         """Plot the array with :meth:`xarray.DataArray.plot`
 
@@ -1112,17 +1127,7 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         """
         if self._ndim != 3:
             raise NotImplementedError
-        if self.units is not None:
-            kwargs.setdefault("units", self.units)
-        if self.long_name is not None:
-            kwargs.setdefault("long_name", f"{self.long_name} @ k={z}")
-        kwargs["attrs"] = kwargs.get("attrs", {}).copy()
-        for att in ("_mask_output", "_valid_at"):
-            if att in self.attrs:
-                kwargs["attrs"][att] = self.attrs[att]
-        ar = Array(grid=self.grid, fill_value=self.fill_value, **kwargs)
-        ar.wrap_ndarray(self.all_values[z, ...])
-        return ar
+        return ZSlice(self, z, **kwargs)
 
     def __getitem__(self, key) -> np.ndarray:
         """Retrieve values from the interior of the array (excluding halos).
@@ -1271,3 +1276,41 @@ class Array(_pygetm.Array, numpy.lib.mixins.NDArrayOperatorsMixin):
         return _xarray
 
     xarray = property(as_xarray)
+
+
+class ZSlice(Array):
+    __slots__ = ("_base", "_k")
+
+    def __init__(self, base: "Array", k: int, **kwargs):
+        assert base.ndim == 3
+        if base.units is not None:
+            kwargs.setdefault("units", base.units)
+        if base.long_name is not None:
+            kwargs.setdefault("long_name", f"{base.long_name} @ k={k}")
+        kwargs["attrs"] = kwargs.get("attrs", {}).copy()
+        for att in ("_mask_output", "_valid_at"):
+            if att in base.attrs:
+                kwargs["attrs"][att] = base.attrs[att]
+
+        super().__init__(
+            grid=base.grid,
+            shape=base.shape[1:],
+            dtype=base.dtype,
+            fill_value=base.fill_value,
+            **kwargs,
+        )
+        self._base = base
+        self._k = k
+        if base.all_values is not None:
+            # Base array has data assigned; retrieve our slice now
+            self._get_data_from_base()
+        else:
+            # Postpone initialization until base array is assigned data
+            base._initialization_callbacks.append(self._get_data_from_base)
+
+    @Array.saved.setter
+    def saved(self, value: bool):
+        self._base.saved = value
+
+    def _get_data_from_base(self):
+        self.wrap_ndarray(self._base.all_values[self._k, ...])
