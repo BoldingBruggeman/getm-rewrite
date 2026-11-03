@@ -145,9 +145,12 @@ class WrappedArray(Base):
         coords: Iterable[Base] = (),
         **kwargs,
     ):
-        super().__init__(
-            name, values.shape, dims, values.dtype, time_varying=False, **kwargs
-        )
+        dtype = values.dtype
+        if dtype == object and all(isinstance(v, str) for v in values.ravel()):
+            # The array has object dtype but all elements are strings. Present as str
+            # instead, which is understood by both netCDF4 and zarr.
+            dtype = str
+        super().__init__(name, values.shape, dims, dtype, time_varying=False, **kwargs)
         self._name = name
         self.values = values
         self._global_field = global_field or self
