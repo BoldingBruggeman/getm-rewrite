@@ -599,7 +599,7 @@ class Relaxation(NamedTuple):
     where: np.ndarray
 
 
-class ArrayOpenBoundaries:
+class ArrayOpenBoundaries(Sequence[ArrayOpenBoundary]):
     """All open boundaries for a single array.
     The values prescribed at all boundaries combined are accessible
     as :attr:`values`. The type of open boundary condition can be
@@ -642,6 +642,17 @@ class ArrayOpenBoundaries:
             bdy.type = value
 
     type = property(fset=_set_type)
+
+    def __getitem__(self, key: Union[int, str]) -> ArrayOpenBoundary:
+        if isinstance(key, str):
+            for bdy in self._bdy:
+                if bdy._boundary.name == key:
+                    return bdy
+            raise KeyError(f"No boundary with name {key}")
+        return self._bdy[key]
+
+    def __len__(self) -> int:
+        return len(self._bdy)
 
     def initialize(self) -> Iterable[BoundaryCondition]:
         bcs: set[BoundaryCondition] = set()
@@ -1251,7 +1262,12 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         for array_open_boundaries in self._arrays:
             self.bcs.update(array_open_boundaries.initialize())
 
-    def __getitem__(self, key: int) -> LocalOpenBoundary:
+    def __getitem__(self, key: Union[int, str]) -> LocalOpenBoundary:
+        if isinstance(key, str):
+            for bdy in self._boundaries:
+                if bdy.name == key:
+                    return bdy
+            raise KeyError(f"No boundary with name {key}")
         return self._boundaries[key]
 
     def __len__(self) -> int:
