@@ -1,5 +1,6 @@
 import enum
-from typing import Optional, Sequence, Callable, Iterable, Union, NamedTuple
+from typing import Optional, Union, NamedTuple
+from collections.abc import Mapping, Sequence, Iterable, Callable
 import functools
 import logging
 
@@ -88,6 +89,8 @@ class OpenBoundary:
             f" {self.l}, {self.mstart}, {self.mstop})"
         )
 
+
+class GlobalOpenBoundary(OpenBoundary):
     def to_local_grid(self, grid: core.Grid) -> Optional["LocalOpenBoundary"]:
         """Convert global indices to local indices of the current subdomain."""
         # Convert to indices in the T grid of the current subdomain INCLUDING halos
@@ -126,7 +129,7 @@ class OpenBoundary:
         return local_bdy
 
 
-class LocalOpenBoundary(OpenBoundary):
+class LocalOpenBoundary(OpenBoundary, Mapping[str, "ArrayOpenBoundary"]):
     def __init__(
         self,
         name: str,
@@ -147,6 +150,7 @@ class LocalOpenBoundary(OpenBoundary):
         else:
             self.slice_t = (Ellipsis, l, mslice)
             self.slice_uv_in = (Ellipsis, l if side == Side.BOTTOM else l - 1, mslice)
+        self._arrays: Mapping[str, ArrayOpenBoundary] = {}
 
     def extract_inward(
         self, values: np.ndarray, start: int, stop: Optional[int] = None
@@ -207,6 +211,15 @@ class LocalOpenBoundary(OpenBoundary):
         """
         uv = u if self.side in (Side.LEFT, Side.RIGHT) else v
         return uv[self.slice_uv_in]
+
+    def __getitem__(self, key) -> "ArrayOpenBoundary":
+        return self._arrays[key]
+
+    def __len__(self):
+        return len(self._arrays)
+
+    def __iter__(self):
+        return iter(self._arrays)
 
 
 class BoundaryCondition:
@@ -623,15 +636,16 @@ class ArrayOpenBoundaries(Sequence[ArrayOpenBoundary]):
             type = array.grid.open_boundaries._make_bc(type)
         self._bdy: list[ArrayOpenBoundary] = []
         for bdy in array.grid.open_boundaries:
-            self._bdy.append(
-                ArrayOpenBoundary(
-                    array.grid.open_boundaries,
-                    bdy,
-                    self.values.all_values[bdy.slice_bdy],
-                    array.all_values[bdy.slice_t],
-                    type or (bdy.type_2d if array.ndim == 2 else bdy.type_3d),
-                )
+            aob = ArrayOpenBoundary(
+                array.grid.open_boundaries,
+                bdy,
+                self.values.all_values[bdy.slice_bdy],
+                array.all_values[bdy.slice_t],
+                type or (bdy.type_2d if array.ndim == 2 else bdy.type_3d),
             )
+            self._bdy.append(aob)
+            if array.name is not None:
+                bdy._arrays[array.name] = aob
         self.updaters: list[Callable[[], None]] = []
         self.relaxation: list[Relaxation] = []
         array.grid.open_boundaries._arrays.append(self)
@@ -712,7 +726,7 @@ class ArrayOpenBoundaries(Sequence[ArrayOpenBoundary]):
             np.add(relax.local, delta, out=relax.local, where=relax.where)
 
 
-class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
+class GlobalOpenBoundaryCollection(Sequence[GlobalOpenBoundary]):
     def __init__(
         self,
         nx: int,
@@ -727,7 +741,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         self.ny = ny
         self.logger = logger
         self.allow_on_land = False
-        self._boundaries: list[OpenBoundary] = []
+        self._boundaries: list[GlobalOpenBoundary] = []
         self._x = x
         self._y = y
         self._lon = lon
@@ -834,7 +848,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
                         f"New boundary {name} crosses existing boundary {b.name}"
                         f" at i={i}, j={j}"
                     )
-        bdy = OpenBoundary(name, side, l, mstart, mstop, type_2d, type_3d)
+        bdy = GlobalOpenBoundary(name, side, l, mstart, mstop, type_2d, type_3d)
         self._boundaries.append(bdy)
 
     def add_top_boundary(
@@ -922,7 +936,7 @@ class GlobalOpenBoundaryCollection(Sequence[OpenBoundary]):
         umask[:, 1:-1][tbdy[:, :-1] & tbdy[:, 1:]] = CellType.MIRROR_INT
         vmask[1:-1, :][tbdy[:-1, :] & tbdy[1:, :]] = CellType.MIRROR_INT
 
-    def __getitem__(self, key: int) -> OpenBoundary:
+    def __getitem__(self, key: int) -> GlobalOpenBoundary:
         return self._boundaries[key]
 
     def __len__(self) -> int:
