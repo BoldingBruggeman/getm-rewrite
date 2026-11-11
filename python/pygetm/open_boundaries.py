@@ -992,7 +992,6 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         self._arrays: list[ArrayOpenBoundaries] = []
 
         self.sponge = Sponge()
-        self.zero_gradient = ZeroGradient()
         self.bcs: set[BoundaryCondition] = set()
 
         # Indices of T point in open boundary into arrays that INCLUDE halos.
@@ -1135,19 +1134,24 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
 
     def _make_bc(self, value: Union[int, BoundaryCondition]) -> BoundaryCondition:
         if isinstance(value, BoundaryCondition):
-            return value
-        if value == ZERO_GRADIENT:
-            return self.zero_gradient
+            bc = value
+        elif value == ZERO_GRADIENT:
+            bc = ZeroGradient()
         elif value == SPONGE:
-            return self.sponge
+            bc = self.sponge
         elif value == CLAMPED:
-            return Clamped()
+            bc = Clamped()
         elif value == FLATHER_ELEV:
-            return Flather()
+            bc = Flather()
         elif value == FLATHER_TRANSPORT:
-            return Flather(transport=True)
+            bc = Flather(transport=True)
         else:
             raise Exception(f"Unknown boundary type {value} specified")
+        for existing_bc in self.bcs:
+            if bc == existing_bc:
+                return existing_bc
+        self.bcs.add(bc)
+        return bc
 
     def _configure_mirroring(self, grid: core.Grid):
         """Set up indices for mirroring across boundaries on U and V grids"""
@@ -1301,6 +1305,8 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
                 # Inward velocity (to be calculated from uv and inward sign)
                 boundary.uv_in = self.uv_in.all_values[boundary.slice_bdy]
 
+        # Keep only the boundary conditions assigned to one or more arrays
+        self.bcs.clear()
         for array_open_boundaries in self._arrays:
             self.bcs.update(array_open_boundaries.initialize())
 
