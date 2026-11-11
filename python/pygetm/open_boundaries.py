@@ -653,7 +653,9 @@ class ArrayOpenBoundaries(Sequence[ArrayOpenBoundary]):
 
     __slots__ = "_array", "values", "_bdy", "updaters", "relaxation"
 
-    def __init__(self, array: core.Array, type=None):
+    def __init__(
+        self, array: core.Array, type: Union[int, BoundaryCondition, None] = None
+    ):
         self._array = array
         self.values = array.grid.array(
             name=f"{array.name}_bdy",
