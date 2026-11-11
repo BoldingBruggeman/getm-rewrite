@@ -557,8 +557,8 @@ class Flather(BoundaryCondition):
     def __init__(self, transport: bool = False):
         """
         Args:
-            transport: use prescribed transport at the boundary instead of
-                prescribed velocity
+            transport: prescribe depth-integrated velocity [transport] at the
+                boundary instead of depth-averaged velocity
         """
         super().__init__(transport=transport)
         self.transport = transport
