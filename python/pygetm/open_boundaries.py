@@ -422,6 +422,12 @@ class Sponge(Clamped):
         if tmrlx_umin is None:
             tmrlx_umin = -0.25 * tmrlx_ucut
         self.tmrlx_umin = tmrlx_umin
+
+        if self.tmrlx and self.tmrlx_ucut == self.tmrlx_umin:
+            raise ValueError(
+                f"tmrlx_ucut ({self.tmrlx_ucut}) and tmrlx_umin ({self.tmrlx_umin}) "
+                "cannot be equal"
+            )
         self.rlxcoef: Optional[core.Array] = None
         self.inflow: Optional[np.ndarray] = None
 
