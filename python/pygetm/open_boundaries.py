@@ -305,11 +305,13 @@ class BoundaryCondition:
         if isinstance(valid_max, np.ndarray):
             valid_max = valid_max[slc]
         if valid_min is not None and valid_max is not None:
-            return functools.partial(np.clip, valid_min, valid_max, out, **kwargs)
+            return functools.partial(
+                np.clip, a_min=valid_min, a_max=valid_max, out=out, **kwargs
+            )
         elif valid_min is not None:
             return functools.partial(np.maximum, valid_min, out=out, **kwargs)
         elif valid_max is not None:
-            return functools.partial(np.minimum, valid_min, out=out, **kwargs)
+            return functools.partial(np.minimum, valid_max, out=out, **kwargs)
         elif "where" in kwargs:
             return functools.partial(np.copyto, out, **kwargs)
         else:
