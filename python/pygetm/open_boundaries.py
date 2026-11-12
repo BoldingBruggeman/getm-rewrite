@@ -361,6 +361,7 @@ class Sponge(Clamped):
 
     def __init__(
         self,
+        *,
         n: int = 3,
         tmrlx: bool = False,
         tmrlx_max: float = 0.25,
@@ -423,11 +424,19 @@ class Sponge(Clamped):
             tmrlx_umin = -0.25 * tmrlx_ucut
         self.tmrlx_umin = tmrlx_umin
 
-        if self.tmrlx and self.tmrlx_ucut == self.tmrlx_umin:
+        if tmrlx_min < 0.0 or tmrlx_min > 1.0:
+            raise ValueError(f"tmrlx_min ({tmrlx_min}) must be between 0 and 1")
+        if tmrlx_max < 0.0 or tmrlx_max > 1.0:
+            raise ValueError(f"tmrlx_max ({tmrlx_max}) must be between 0 and 1")
+        if tmrlx_min > tmrlx_max:
             raise ValueError(
-                f"tmrlx_ucut ({self.tmrlx_ucut}) and tmrlx_umin ({self.tmrlx_umin}) "
-                "cannot be equal"
+                f"tmrlx_min ({tmrlx_min}) cannot exceed tmrlx_max ({tmrlx_max})"
             )
+        if tmrlx_ucut <= tmrlx_umin:
+            raise ValueError(
+                f"tmrlx_ucut ({tmrlx_ucut}) must exceed tmrlx_umin ({tmrlx_umin})"
+            )
+
         self.rlxcoef: Optional[core.Array] = None
         self.inflow: Optional[np.ndarray] = None
 
@@ -562,7 +571,7 @@ class Flather(BoundaryCondition):
     9(3), 231–252. `10.1016/j.ocemod.2004.07.001 <https://doi.org/10.1016/j.ocemod.2004.07.001>`_
     """
 
-    def __init__(self, transport: bool = False):
+    def __init__(self, *, transport: bool = False):
         """
         Args:
             transport: prescribe depth-integrated velocity [transport] at the
@@ -1001,7 +1010,16 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         self._boundaries: list[LocalOpenBoundary] = []
         self._arrays: list[ArrayOpenBoundaries] = []
 
-        self.sponge = Sponge()
+        class SpongePlaceholder:
+            def __setattr__(self, name, value):
+                raise AttributeError(
+                    "Please configure sponge settings by assigning Sponge(**kwargs) as open boundary type"
+                )
+
+        # Temporary for backward compatibility with code that configure sponge settings
+        # by changing attributes on self.sponge
+        self.sponge = SpongePlaceholder()
+
         self.bcs: set[BoundaryCondition] = set()
 
         # Indices of T point in open boundary into arrays that INCLUDE halos.
@@ -1148,7 +1166,7 @@ class LocalOpenBoundaryCollection(Sequence[LocalOpenBoundary]):
         elif value == ZERO_GRADIENT:
             bc = ZeroGradient()
         elif value == SPONGE:
-            bc = self.sponge
+            bc = Sponge()
         elif value == CLAMPED:
             bc = Clamped()
         elif value == FLATHER_ELEV:
