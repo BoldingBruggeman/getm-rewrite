@@ -42,10 +42,10 @@ sim.open_boundaries.u.set(pygetm.input.from_nc(bdy_2d_path, "u"))
 sim.open_boundaries.v.set(pygetm.input.from_nc(bdy_2d_path, "v"))
 
 bdy_3d_path = args.setup_dir / "Forcing/3D/bound_3D.CFSR.2006.nc"
-sim.open_boundaries.sponge.tmrlx = True
-sim.temp.open_boundaries.type = pygetm.SPONGE
+sponge = pygetm.open_boundaries.Sponge(tmrlx=True)
+sim.temp.open_boundaries.type = sponge
 sim.temp.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "temp"))
-sim.salt.open_boundaries.type = pygetm.SPONGE
+sim.salt.open_boundaries.type = sponge
 sim.salt.open_boundaries.values.set(pygetm.input.from_nc(bdy_3d_path, "salt"))
 
 river_path = args.setup_dir / "Forcing/River/rivers.nc"

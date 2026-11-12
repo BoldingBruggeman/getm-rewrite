@@ -63,7 +63,6 @@ def create_simulation(
     sim = pygetm.Simulation(domain, runtype=runtype, **final_kwargs)
 
     if domain.open_boundaries:
-        sim.open_boundaries.sponge.tmrlx = True
         if not tpxo9_dir:
             sim.logger.info("Reading 2D boundary data from file")
             bdy_2d_path = setup_dir / "Forcing/2D/bdy.2d.2006.nc"
@@ -83,12 +82,13 @@ def create_simulation(
             )
 
         if sim.runtype == pygetm.RunType.BAROCLINIC:
+            sponge = pygetm.open_boundaries.Sponge(tmrlx=True)
             bdy_3d_path = setup_dir / "Forcing/3D/bound_3D.CFSR.2006.nc"
-            sim.temp.open_boundaries.type = pygetm.SPONGE
+            sim.temp.open_boundaries.type = sponge
             sim.temp.open_boundaries.values.set(
                 pygetm.input.from_nc(bdy_3d_path, "temp")
             )
-            sim.salt.open_boundaries.type = pygetm.SPONGE
+            sim.salt.open_boundaries.type = sponge
             sim.salt.open_boundaries.values.set(
                 pygetm.input.from_nc(bdy_3d_path, "salt")
             )
